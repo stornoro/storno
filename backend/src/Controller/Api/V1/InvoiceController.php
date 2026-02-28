@@ -386,16 +386,24 @@ class InvoiceController extends AbstractController
                 $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
 
                 $balance = $invoice->getBalance();
-                if (bccomp($balance, '0', 2) <= 0) {
+                if (bccomp($balance, '0', 2) === 0) {
                     $errors[] = ['id' => $id, 'error' => 'Invoice is already fully paid.'];
                     continue;
                 }
 
-                $this->paymentService->recordPayment($invoice, [
-                    'amount' => $balance,
-                    'paymentMethod' => $paymentMethod,
-                    'paymentDate' => $paidAt,
-                ], $user);
+                if (bccomp($balance, '0', 2) < 0) {
+                    // Negative invoice (storno/credit note) — mark as settled directly
+                    $invoice->setAmountPaid($invoice->getTotal());
+                    $invoice->setPaidAt(new \DateTimeImmutable($paidAt ?? 'now'));
+                    $invoice->setPaymentMethod($paymentMethod);
+                    $this->entityManager->flush();
+                } else {
+                    $this->paymentService->recordPayment($invoice, [
+                        'amount' => $balance,
+                        'paymentMethod' => $paymentMethod,
+                        'paymentDate' => $paidAt,
+                    ], $user);
+                }
 
                 $marked++;
             } catch (\Throwable $e) {
