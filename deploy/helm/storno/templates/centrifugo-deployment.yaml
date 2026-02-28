@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "storno.fullname" . }}-centrifugo
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "centrifugo" "context" .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "storno.componentSelectorLabels" (dict "component" "centrifugo" "context" .) | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "storno.componentLabels" (dict "component" "centrifugo" "context" .) | nindent 8 }}
+      {{- with .Values.centrifugo.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "storno.imagePullSecrets" . | nindent 6 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: centrifugo
+          image: "{{ .Values.centrifugo.image.repository }}:{{ .Values.centrifugo.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          # --health enables the /health HTTP endpoint used for probes.
+          command: ["centrifugo", "--health", "--config", "/centrifugo/config.json"]
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: CENTRIFUGO_API_KEY
+              value: {{ .Values.centrifugo.env.CENTRIFUGO_API_KEY | quote }}
+            - name: CENTRIFUGO_TOKEN_HMAC_SECRET_KEY
+              value: {{ .Values.centrifugo.env.CENTRIFUGO_TOKEN_HMAC_SECRET_KEY | quote }}
+            - name: CENTRIFUGO_ADMIN
+              value: {{ .Values.centrifugo.env.CENTRIFUGO_ADMIN | quote }}
+            - name: CENTRIFUGO_ADMIN_PASSWORD
+              value: {{ .Values.centrifugo.env.CENTRIFUGO_ADMIN_PASSWORD | quote }}
+            - name: CENTRIFUGO_ADMIN_SECRET
+              # Default the admin secret to the API key when not explicitly set.
+              value: {{ default .Values.centrifugo.env.CENTRIFUGO_API_KEY .Values.centrifugo.env.CENTRIFUGO_ADMIN_SECRET | quote }}
+            - name: CENTRIFUGO_ALLOWED_ORIGINS
+              value: {{ .Values.centrifugo.env.CENTRIFUGO_ALLOWED_ORIGINS | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.centrifugo.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /centrifugo/config.json
+              subPath: config.json
+              readOnly: true
+            - name: data
+              mountPath: /centrifugo/data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "storno.fullname" . }}-centrifugo-config
+        - name: data
+          {{- if .Values.centrifugo.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "storno.centrifugoPvcName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.centrifugo.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.centrifugo.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.centrifugo.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

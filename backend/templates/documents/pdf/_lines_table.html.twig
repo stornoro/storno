@@ -1,0 +1,56 @@
+<table class="lines">
+    <thead>
+        <tr>
+            <th style="width: 30px;">#</th>
+            {% if hasProductCodes|default(false) %}
+                <th style="width: 80px;">{{ 'code'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            {% endif %}
+            <th>{{ 'description'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            <th class="text-center" style="width: 60px;">{{ 'quantity'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            <th class="text-center" style="width: 50px;">{{ 'unit'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            {% if showPrices|default(true) %}
+                <th class="text-right" style="width: 90px;">{{ 'unit_price'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                {% if hasLineDiscounts|default(false) %}
+                    <th class="text-right" style="width: 70px;">{{ 'discount'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                {% endif %}
+                {% if not (hideVat|default(false)) %}
+                    <th class="text-center" style="width: 50px;">{{ 'vat_percent'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                    <th class="text-right" style="width: 90px;">{{ 'vat'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                {% endif %}
+                <th class="text-right" style="width: 100px;">{{ 'total_col'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in invoice.lines %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            {% if hasProductCodes|default(false) %}
+                <td>{{ line.productCode|default('') }}</td>
+            {% endif %}
+            <td>{{ line.description }}</td>
+            <td class="text-center{% if negativeValues|default(false) %} negative{% endif %}">{{ line.quantity }}</td>
+            <td class="text-center">{{ line.unitOfMeasure }}</td>
+            {% if showPrices|default(true) %}
+                <td class="text-right">{{ line.unitPrice|number_format(2, ',', '.') }}</td>
+                {% if hasLineDiscounts|default(false) %}
+                    <td class="text-right">
+                        {% if line.discount is defined and line.discount and line.discount != '0.00' %}
+                            {% if line.discountPercent is defined and line.discountPercent and line.discountPercent != '0.00' %}
+                                {{ line.discountPercent }}%
+                            {% else %}
+                                {{ line.discount|number_format(2, ',', '.') }}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                {% endif %}
+                {% if not (hideVat|default(false)) %}
+                    <td class="text-center">{{ line.vatRate }}%</td>
+                    <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.vatAmount|number_format(2, ',', '.') }}</td>
+                {% endif %}
+                <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.lineTotal|number_format(2, ',', '.') }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

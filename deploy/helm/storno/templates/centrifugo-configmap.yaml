@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "storno.fullname" . }}-centrifugo-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "centrifugo" "context" .) | nindent 4 }}
+data:
+  config.json: |
+    {
+      "channel": {
+        "without_namespace": {
+          "presence": false,
+          "allow_subscribe_for_client": true,
+          "allow_publish_for_client": false,
+          "allow_presence_for_client": false,
+          "allow_history_for_client": false
+        },
+        "namespaces": [
+          {
+            "name": "invoices",
+            "allow_subscribe_for_client": true,
+            "allow_publish_for_client": false,
+            "allow_presence_for_client": false,
+            "allow_history_for_client": true,
+            "history_size": 20,
+            "history_ttl": "120s"
+          },
+          {
+            "name": "notifications",
+            "presence": true,
+            "allow_subscribe_for_client": true,
+            "allow_publish_for_client": false,
+            "allow_presence_for_client": true,
+            "allow_history_for_client": true,
+            "force_recovery": true,
+            "history_size": 50,
+            "history_ttl": "3600s"
+          },
+          {
+            "name": "dashboard",
+            "presence": true,
+            "allow_subscribe_for_client": true,
+            "allow_publish_for_client": false,
+            "allow_presence_for_client": true,
+            "allow_history_for_client": false
+          },
+          {
+            "name": "user",
+            "allow_subscribe_for_client": true,
+            "allow_publish_for_client": false,
+            "allow_presence_for_client": false,
+            "allow_history_for_client": true,
+            "history_size": 10,
+            "history_ttl": "60s"
+          }
+        ]
+      },
+      "client": {
+        "subscription_token": {
+          "enabled": true
+        },
+        "stale_close_delay": "10s",
+        "ping_interval": "25s",
+        "pong_timeout": "10s"
+      },
+      "log": {
+        "level": "info"
+      }
+    }

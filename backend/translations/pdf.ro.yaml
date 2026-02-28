@@ -1,0 +1,87 @@
+# PDF document labels — Romanian (default)
+supplier: 'Furnizor'
+client: 'Client'
+cui: 'CUI'
+cnp: 'CNP'
+reg_number: 'Nr. Reg. Com.'
+phone: 'Tel'
+email: 'Email'
+contact_person: 'Persoana de contact'
+
+# Lines table
+code: 'Cod'
+description: 'Descriere'
+quantity: 'Cant.'
+unit: 'U.M.'
+unit_price: 'Pret unitar'
+discount: 'Discount'
+vat_percent: 'TVA %'
+vat: 'TVA'
+total_col: 'Total'
+
+# Totals
+subtotal: 'Subtotal'
+vat_label: 'TVA'
+discount_label: 'Discount'
+total: 'TOTAL'
+exchange_rate: 'Curs valutar'
+
+# Bank
+bank_account: 'Cont bancar'
+
+# Details
+order_number: 'Nr. comanda'
+contract_number: 'Nr. contract'
+project_reference: 'Referinta proiect'
+payment_method: 'Modalitate de plata'
+payment_cash: 'Numerar'
+payment_bank_transfer: 'Transfer bancar'
+payment_card: 'Card'
+payment_cheque: 'Cec / Bilet la ordin'
+delivery_location: 'Loc de livrare'
+delegate: 'Delegat'
+identity_document: 'Act identitate'
+transport_vehicle: 'Mijloc de transport'
+penalties: 'Penalitati'
+penalty_per_day: '%s%% pe zi'
+penalty_grace_days: 'dupa %s zile de gratie'
+mentions_title: 'Mentiuni'
+prepared_by: 'Intocmit de'
+sales_agent: 'Agent vanzari'
+
+# Footer
+footer_text: 'Emisa prin'
+
+# Invoice
+invoice_title: 'FACTURA'
+date_label: 'Data'
+due_date: 'Scadenta'
+anaf_upload_index: 'Index incarcare'
+anaf_upload_date: 'Data incarcare'
+notes: 'Observatii'
+payment_terms: 'Conditii de plata'
+
+# Proforma
+proforma_title: 'FACTURA PROFORMA'
+proforma_watermark: 'PROFORMA'
+valid_until: 'Valabila pana la'
+proforma_disclaimer: 'Aceasta factura proforma nu constituie document fiscal. Valabilitate: %validity%.'
+proforma_validity_until: 'pana la %date%'
+proforma_validity_default: '30 de zile de la data emiterii'
+
+# Storno / Credit note
+credit_note_title: 'FACTURA DE RAMBURSARE'
+refund_for_invoice: 'Rambursare pentru factura'
+refund_reason: 'Motiv rambursare'
+
+# Delivery note
+delivery_note_title: 'AVIZ DE INSOTIRE A MARFII'
+supplier_sender: 'Furnizor / Expeditor'
+client_receiver: 'Client / Destinatar'
+supplier_signature: 'Semnatura furnizor'
+client_signature: 'Semnatura client'
+
+# Receipt (bon fiscal)
+receipt_title: 'BON FISCAL'
+fiscal_number: 'Nr. fiscal'
+cash_register: 'Casa de marcat'

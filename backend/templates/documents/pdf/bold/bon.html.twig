@@ -1,0 +1,194 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.page { padding: 35px 45px; }
+.header-bar {
+    background: {{ primaryColor|default('#2563eb') }};
+    color: #fff;
+    margin: -35px -45px 32px -45px;
+    padding: 28px 45px;
+    overflow: hidden;
+}
+.header-bar-left {
+    float: left;
+}
+.header-bar-right {
+    float: right;
+    text-align: right;
+}
+.doc-title {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    line-height: 1.2;
+}
+.doc-number {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+}
+.doc-meta {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    line-height: 2;
+}
+.parties {
+    overflow: hidden;
+    margin-bottom: 28px;
+    gap: 20px;
+}
+.party {
+    width: 48%;
+}
+.party-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: {{ primaryColor|default('#2563eb') }};
+    margin-bottom: 6px;
+    font-weight: 800;
+    border-bottom: 3px solid {{ primaryColor|default('#2563eb') }};
+    padding-bottom: 4px;
+}
+.party-name {
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    color: #111;
+}
+.party-detail {
+    font-size: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+table.lines {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+table.lines thead th {
+    background: {{ primaryColor|default('#2563eb') }};
+    color: #fff;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+table.lines tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 11px;
+    color: #222;
+    font-weight: 500;
+}
+table.lines tbody tr:nth-child(even) td {
+    background: #f3f6fb;
+}
+table.lines tbody tr:last-child td {
+    border-bottom: 3px solid {{ primaryColor|default('#2563eb') }};
+}
+.payment-info {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: #f3f6fb;
+    border-left: 3px solid {{ primaryColor|default('#2563eb') }};
+    font-size: 10px;
+    color: #444;
+    font-weight: 500;
+}
+.payment-info-title {
+    font-weight: 800;
+    margin-bottom: 5px;
+    color: #222;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+.notes {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: #f3f6fb;
+    border-left: 3px solid {{ primaryColor|default('#2563eb') }};
+    font-size: 10px;
+    color: #444;
+    font-weight: 500;
+}
+.notes-title {
+    font-weight: 800;
+    margin-bottom: 5px;
+    color: #222;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+.footer {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 3px solid {{ primaryColor|default('#2563eb') }};
+    font-size: 9px;
+    color: #888;
+    text-align: center;
+    font-weight: 600;
+}
+{% endblock %}
+
+{% block content %}
+    <div class="header-bar">
+        <div class="header-bar-left">
+            {% if showLogo|default(true) and logoDataUri %}
+                <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
+            {% endif %}
+            <div class="doc-title">{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-number">{{ invoice.number }}</div>
+        </div>
+        <div class="header-bar-right">
+            <div class="doc-meta">
+                <div>{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
+                {% if invoice.fiscalNumber %}
+                    <div>{{ 'fiscal_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.fiscalNumber }}</div>
+                {% endif %}
+                {% if invoice.cashRegisterName %}
+                    <div>{{ 'cash_register'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.cashRegisterName }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'documents/pdf/_parties.html.twig' with {supplierLabel: 'supplier_sender'|trans({}, 'pdf', locale|default('ro')), clientLabel: 'client_receiver'|trans({}, 'pdf', locale|default('ro'))} %}
+
+    {% include 'documents/pdf/_lines_table.html.twig' with {showPrices: true, hideVat: false, hasProductCodes: hasProductCodes|default(false), hasLineDiscounts: hasLineDiscounts|default(false)} %}
+
+    {% include 'documents/pdf/_totals.html.twig' %}
+
+    {% if invoice.paymentMethod is defined and invoice.paymentMethod %}
+    <div class="payment-info">
+        <div class="payment-info-title">{{ 'payment_method'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {% if invoice.paymentMethod == 'cash' %}Numerar
+        {% elseif invoice.paymentMethod == 'card' %}Card
+        {% elseif invoice.paymentMethod == 'meal_ticket' %}Tichete de masa
+        {% elseif invoice.paymentMethod == 'mixed' %}Mixt
+        {% else %}{{ invoice.paymentMethod }}
+        {% endif %}
+        {% if invoice.paymentMethod == 'mixed' %}
+            <br>
+            {% if invoice.cashPayment %}Numerar: {{ invoice.cashPayment }} {{ invoice.currency }}{% endif %}
+            {% if invoice.cardPayment %} | Card: {{ invoice.cardPayment }} {{ invoice.currency }}{% endif %}
+            {% if invoice.otherPayment %} | Altele: {{ invoice.otherPayment }} {{ invoice.currency }}{% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if invoice.notes is defined and invoice.notes %}
+    <div class="notes">
+        <div class="notes-title">{{ 'notes'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {{ invoice.notes }}
+    </div>
+    {% endif %}
+
+    {% include 'documents/pdf/_footer.html.twig' %}
+{% endblock %}

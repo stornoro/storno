@@ -1,0 +1,104 @@
+# ── Backend PVCs ───────────────────────────────────────────────────────────────
+# jwt-keys — JWT key-pair generated on first boot; must persist across restarts.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.jwtKeysPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "backend" "context" .) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.jwtKeys.size | quote }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+---
+# backend-var — Symfony var directory (cache, logs, sessions).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.backendVarPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "backend" "context" .) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.backendVar.size | quote }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+---
+# backend-storage — user-uploaded files and generated documents.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.backendStoragePvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "backend" "context" .) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.backendStorage.size | quote }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+---
+# ── Redis PVC ─────────────────────────────────────────────────────────────────
+{{- if .Values.redis.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.redisPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "redis" "context" .) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.redis.persistence.size | quote }}
+  {{- if or .Values.redis.persistence.storageClass .Values.persistence.storageClass }}
+  storageClassName: {{ default .Values.persistence.storageClass .Values.redis.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}
+---
+# ── Centrifugo PVC ────────────────────────────────────────────────────────────
+{{- if .Values.centrifugo.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.centrifugoPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "centrifugo" "context" .) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.centrifugo.persistence.size | quote }}
+  {{- if or .Values.centrifugo.persistence.storageClass .Values.persistence.storageClass }}
+  storageClassName: {{ default .Values.persistence.storageClass .Values.centrifugo.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

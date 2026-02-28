@@ -1,0 +1,18 @@
+nelmio_cors:
+    defaults:
+        origin_regex: true
+        allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+        allow_credentials: true
+        allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
+        allow_headers: ['Content-Type', 'Authorization', 'X-Stripe-App-Token', 'X-Company', 'X-Organization']
+        expose_headers: ['Link']
+        max_age: 3600
+    paths:
+        # Stripe App runs in sandboxed iframe with origin "null"
+        '^/api/v1/stripe-app/':
+            origin_regex: false
+            allow_origin: ['*']
+            allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
+            allow_headers: ['Content-Type', 'X-Stripe-App-Token', 'X-Company']
+            max_age: 3600
+        '^/': null

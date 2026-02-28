@@ -1,0 +1,11 @@
+.git
+.env.local
+.env.dev
+.env.test
+var/cache
+var/log
+vendor
+config/jwt/*.pem
+tests
+phpunit.xml.dist
+.php-cs-fixer.cache

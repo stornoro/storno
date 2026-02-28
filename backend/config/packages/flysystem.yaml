@@ -1,0 +1,8 @@
+flysystem:
+    storages:
+        default.storage:
+            adapter: 'aws'
+            options:
+                client: 'Aws\S3\S3Client'
+                bucket: '%env(AWS_S3_BUCKET)%'
+                prefix: 'documents'

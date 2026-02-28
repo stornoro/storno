@@ -1,0 +1,21 @@
+{{- if and .Values.mysql.enabled .Values.mysql.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "storno.mysqlPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "mysql" "context" .) | nindent 4 }}
+  annotations:
+    # Retain the PVC when the chart is uninstalled to prevent data loss.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.mysql.persistence.size | quote }}
+  {{- if or .Values.mysql.persistence.storageClass .Values.persistence.storageClass }}
+  storageClassName: {{ default .Values.persistence.storageClass .Values.mysql.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

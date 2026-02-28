@@ -1,0 +1,40 @@
+# Separate repos
+docs/
+landing/
+mobile/
+status/
+storno-cli/
+stripe-app/
+
+# OS / IDE
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# MCP config
+.mcp.json
+
+# Git config
+.gitconfig
+
+# Secrets & credentials
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs
+*.log

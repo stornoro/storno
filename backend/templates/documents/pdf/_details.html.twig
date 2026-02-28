@@ -1,0 +1,82 @@
+{# Document references #}
+{% if invoice.orderNumber is defined and invoice.orderNumber or invoice.contractNumber is defined and invoice.contractNumber or invoice.projectReference is defined and invoice.projectReference %}
+<div class="details-section">
+    {% if invoice.orderNumber is defined and invoice.orderNumber %}
+        <div class="detail-row"><span class="detail-label">{{ 'order_number'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.orderNumber }}</div>
+    {% endif %}
+    {% if invoice.contractNumber is defined and invoice.contractNumber %}
+        <div class="detail-row"><span class="detail-label">{{ 'contract_number'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.contractNumber }}</div>
+    {% endif %}
+    {% if invoice.projectReference is defined and invoice.projectReference %}
+        <div class="detail-row"><span class="detail-label">{{ 'project_reference'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.projectReference }}</div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Payment method #}
+{% if invoice.paymentMethod is defined and invoice.paymentMethod %}
+<div class="details-section">
+    <div class="detail-row"><span class="detail-label">{{ 'payment_method'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        {% if invoice.paymentMethod == 'cash' %}{{ 'payment_cash'|trans({}, 'pdf', locale|default('ro')) }}
+        {% elseif invoice.paymentMethod == 'bank_transfer' %}{{ 'payment_bank_transfer'|trans({}, 'pdf', locale|default('ro')) }}
+        {% elseif invoice.paymentMethod == 'card' %}{{ 'payment_card'|trans({}, 'pdf', locale|default('ro')) }}
+        {% elseif invoice.paymentMethod == 'cheque' %}{{ 'payment_cheque'|trans({}, 'pdf', locale|default('ro')) }}
+        {% else %}{{ invoice.paymentMethod }}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# Delivery location #}
+{% if invoice.deliveryLocation is defined and invoice.deliveryLocation %}
+<div class="details-section">
+    <div class="detail-row"><span class="detail-label">{{ 'delivery_location'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.deliveryLocation }}</div>
+</div>
+{% endif %}
+
+{# Delegate / Transport info #}
+{% if invoice.deputyName is defined and invoice.deputyName %}
+<div class="details-section">
+    <div class="detail-row"><span class="detail-label">{{ 'delegate'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.deputyName }}</div>
+    {% if invoice.deputyIdentityCard is defined and invoice.deputyIdentityCard %}
+        <div class="detail-row"><span class="detail-label">{{ 'identity_document'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.deputyIdentityCard }}</div>
+    {% endif %}
+    {% if invoice.deputyAuto is defined and invoice.deputyAuto %}
+        <div class="detail-row"><span class="detail-label">{{ 'transport_vehicle'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.deputyAuto }}</div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Penalty info #}
+{% if invoice.penaltyEnabled is defined and invoice.penaltyEnabled %}
+<div class="details-section">
+    <div class="detail-row"><span class="detail-label">{{ 'penalties'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        {{ 'penalty_per_day'|trans({}, 'pdf', locale|default('ro'))|replace({'%s': invoice.penaltyPercentPerDay}) }}
+        {% if invoice.penaltyGraceDays is defined and invoice.penaltyGraceDays %}
+            ({{ 'penalty_grace_days'|trans({}, 'pdf', locale|default('ro'))|replace({'%s': invoice.penaltyGraceDays}) }})
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# Legal mentions #}
+{% if invoice.mentions is defined and invoice.mentions %}
+<div class="notes">
+    <div class="notes-title">{{ 'mentions_title'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+    {{ invoice.mentions }}
+</div>
+{% endif %}
+
+{# Issuer & Sales agent #}
+{% set hasIssuer = invoice.issuerName is defined and invoice.issuerName %}
+{% set hasSalesAgent = invoice.salesAgent is defined and invoice.salesAgent %}
+{% if hasIssuer or hasSalesAgent %}
+<div class="details-section">
+    {% if hasIssuer %}
+        <div class="detail-row"><span class="detail-label">{{ 'prepared_by'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.issuerName }}{% if invoice.issuerId is defined and invoice.issuerId %} ({{ invoice.issuerId }}){% endif %}</div>
+    {% endif %}
+    {% if hasSalesAgent %}
+        <div class="detail-row"><span class="detail-label">{{ 'sales_agent'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ invoice.salesAgent }}</div>
+    {% endif %}
+</div>
+{% endif %}

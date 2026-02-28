@@ -1,0 +1,38 @@
+# ── Stage 1: Build ───────────────────────────────────────────────
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+ARG NUXT_PUBLIC_API_BASE=https://api.storno.ro
+ARG NUXT_PUBLIC_GOOGLE_CLIENT_ID=
+ARG NUXT_PUBLIC_TURNSTILE_SITE_KEY=
+ARG NUXT_PUBLIC_CHATWOOT_BASE_URL=
+ARG NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN=
+ENV NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_API_BASE}
+ENV NUXT_PUBLIC_GOOGLE_CLIENT_ID=${NUXT_PUBLIC_GOOGLE_CLIENT_ID}
+ENV NUXT_PUBLIC_TURNSTILE_SITE_KEY=${NUXT_PUBLIC_TURNSTILE_SITE_KEY}
+ENV NUXT_PUBLIC_CHATWOOT_BASE_URL=${NUXT_PUBLIC_CHATWOOT_BASE_URL}
+ENV NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN=${NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN}
+
+ENV NODE_OPTIONS=--max-old-space-size=4096
+RUN npm run build
+
+# ── Stage 2: Production ─────────────────────────────────────────
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/.output .output
+
+ENV HOST=0.0.0.0
+ENV PORT=3000
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]

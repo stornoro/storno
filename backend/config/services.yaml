@@ -1,0 +1,338 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+    app.jwt_refresh_token_cookie_name: "%env(JWT_REFRESH_COOKIE_NAME)%"
+    redirect_after_oauth2: '%env(REDIRECT_AFTER_OAUTH)%'
+    app.anaf_oauth2_client_id: "%env(OAUTH_ANAF_CLIENT_ID)%"
+    app.anaf_oauth2_client_secret: "%env(OAUTH_ANAF_CLIENT_SECRET)%"
+    app.anaf_oauth2_redirect_uri: "%env(OAUTH_ANAF_CLIENT_REDIRECT_URI)%"
+    app.google_oauth2_client_id: "%env(OAUTH_GOOGLE_CLIENT_ID)%"
+    app.google_oauth2_client_secret: "%env(OAUTH_GOOGLE_CLIENT_SECRET)%"
+    app.google_oauth2_client_redirect_uri: "%env(OAUTH_GOOGLE_CLIENT_REDIRECT_URI)%"
+    app.android_passkey_origin: "%env(default::ANDROID_PASSKEY_ORIGIN)%"
+    app.passkey_allowed_origins: "%env(default::PASSKEY_ALLOWED_ORIGINS)%"
+    app.default_contact_email: "contact@storno.ro"
+
+services:
+    Aws\S3\S3Client:
+        factory: ['App\Factory\S3ClientFactory', 'create']
+        arguments:
+            $region: '%env(AWS_DEFAULT_REGION)%'
+            $accessKeyId: '%env(AWS_ACCESS_KEY_ID)%'
+            $secretAccessKey: '%env(AWS_SECRET_ACCESS_KEY)%'
+
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+          $projectDir: "%kernel.project_dir%"
+          $storageDir: "%kernel.project_dir%/var/documents"
+          $env: "%kernel.environment%"
+          $mailFrom: "%env(MAIL_FROM)%"
+          $frontendUrl: "%env(FRONTEND_URL)%"
+          $appSecret: "%env(APP_SECRET)%"
+          $javaPath: "%env(JAVA_PATH)%"
+          $javaServiceUrl: "%env(JAVA_SERVICE_URL)%"
+        
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\EventSubscriber\Auth\AuthenticationSuccessSubscriber:
+      arguments:
+        [
+          "%gesdinet_jwt_refresh_token.ttl%",
+          "%gesdinet_jwt_refresh_token.token_parameter_name%",
+          "%app.jwt_refresh_token_cookie_name%",
+        ]
+
+    App\EventSubscriber\Auth\RefreshJwtTokenSubscriber:
+      arguments:
+        [
+          "%gesdinet_jwt_refresh_token.token_parameter_name%",
+          "%app.jwt_refresh_token_cookie_name%",
+        ]
+
+    App\Service\Centrifugo\CentrifugoService:
+        arguments:
+            $apiUrl: '%env(CENTRIFUGO_API_URL)%'
+            $apiKey: '%env(CENTRIFUGO_API_KEY)%'
+            $hmacSecret: '%env(CENTRIFUGO_TOKEN_HMAC_SECRET)%'
+
+    App\Controller\HealthController:
+        arguments:
+            $centrifugoApiUrl: '%env(CENTRIFUGO_API_URL)%'
+            $centrifugoWsUrl: '%env(CENTRIFUGO_WS_URL)%'
+            $centrifugoApiKey: '%env(CENTRIFUGO_API_KEY)%'
+
+    # ---------------------------------------------------------------------------
+    # Import system — tag all implementations so the orchestrator can
+    # receive them as named iterator arguments via !tagged_iterator.
+    # ---------------------------------------------------------------------------
+
+    # Tag every FileParserInterface implementation
+    App\Service\Import\Parser\CsvParser:
+        tags: ['app.import_parser']
+
+    App\Service\Import\Parser\SagaXmlParser:
+        tags: ['app.import_parser']
+
+    # Tag every ColumnMapperInterface implementation
+    App\Service\Import\Mapper\GenericClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\GenericProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\SmartBillClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\SmartBillProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\SagaClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\SagaProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\OblioClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\OblioProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FgoClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FgoProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FacturisOnlineClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FacturisOnlineProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\EasyBillClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\EasyBillProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\CielClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\CielProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FactureazaClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FactureazaProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FacturazeProClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FacturazeProProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\IceFactClientMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\IceFactProductMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\BoltInvoiceMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FacturisInvoiceMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\EmagInvoiceMapper:
+        tags: ['app.import_mapper']
+
+    App\Service\Import\Mapper\FgoRecurringInvoiceMapper:
+        tags: ['app.import_mapper']
+
+    # Tag every EntityPersisterInterface implementation
+    App\Service\Import\Persister\ClientPersister:
+        tags: ['app.import_persister']
+
+    App\Service\Import\Persister\ProductPersister:
+        tags: ['app.import_persister']
+
+    App\Service\Import\Persister\InvoicePersister:
+        tags: ['app.import_persister']
+
+    App\Service\Import\Persister\RecurringInvoicePersister:
+        tags: ['app.import_persister']
+
+    # Wire the orchestrator — inject tagged collections for each interface group
+    App\Service\Import\ImportOrchestrator:
+        arguments:
+            $parsers: !tagged_iterator app.import_parser
+            $mappers: !tagged_iterator app.import_mapper
+            $persisters: !tagged_iterator app.import_persister
+
+    # ---------------------------------------------------------------------------
+    # Borderou system — parsers and import service
+    # ---------------------------------------------------------------------------
+
+    # Tag every BorderouParserInterface implementation
+    App\Service\Borderou\Parser\FanCourierBordParser:
+        tags: ['app.borderou_parser']
+
+    App\Service\Borderou\Parser\GenericBordParser:
+        tags: ['app.borderou_parser']
+
+    App\Service\Borderou\Parser\GenericBankStatementParser:
+        tags: ['app.borderou_parser']
+
+    App\Service\Borderou\Parser\BcrBankStatementParser:
+        tags: ['app.borderou_parser']
+
+    # Wire the borderou import service with tagged parsers
+    App\Service\Borderou\BorderouImportService:
+        arguments:
+            $parsers: !tagged_iterator app.borderou_parser
+            $fileParsers: !tagged_iterator app.import_parser
+
+    # ---------------------------------------------------------------------------
+    # Stripe
+    # ---------------------------------------------------------------------------
+    App\Service\StripeService:
+        arguments:
+            $stripeSecretKey: '%stripe.secret_key%'
+            $stripeWebhookSecret: '%stripe.webhook_secret%'
+            $earlyAdopterCouponId: '%env(string:default::STRIPE_EARLY_ADOPTER_COUPON_ID)%'
+
+    App\Service\StripeConnectService:
+        arguments:
+            $stripeSecretKey: '%stripe.secret_key%'
+            $stripeConnectWebhookSecret: '%stripe.connect_webhook_secret%'
+            $platformFeePercent: '%stripe.platform_fee_percent%'
+
+    App\Controller\Api\V1\PublicPlansController:
+        arguments:
+            $earlyAdopterCouponId: '%env(string:default::STRIPE_EARLY_ADOPTER_COUPON_ID)%'
+
+    App\Controller\Api\V1\BillingController:
+        arguments:
+            $stripePublishableKey: '%stripe.publishable_key%'
+
+    App\Service\StripeAppInvoiceService:
+        arguments:
+            $stripeSecretKey: '%stripe.secret_key%'
+
+    App\Controller\Webhook\StripeAppWebhookController:
+        arguments:
+            $stripeAppWebhookSecret: '%stripe.app_webhook_secret%'
+
+    App\Service\BillingInvoiceService:
+        arguments:
+            $billingCompanyId: '%stripe.billing_company_id%'
+
+    App\Service\LicenseManager:
+        arguments:
+            $stripeSecretKey: '%stripe.secret_key%'
+
+    App\Service\LicenseValidationService:
+        arguments:
+            $licenseKey: '%licensing.license_key%'
+            $licenseServerUrl: '%licensing.server_url%'
+
+    App\Controller\Api\V1\LicensingController:
+        arguments:
+            $jwtPrivateKeyPath: '%licensing.jwt_private_key_path%'
+            $jwtIssuer: '%licensing.jwt_issuer%'
+
+    App\Service\JwtLicenseDecoder:
+        arguments:
+            $jwtIssuer: '%licensing.jwt_issuer%'
+
+    App\Service\SystemHealthService:
+        arguments:
+            $centrifugoApiUrl: '%env(CENTRIFUGO_API_URL)%'
+            $centrifugoApiKey: '%env(CENTRIFUGO_API_KEY)%'
+            $dependencyFactory: '@doctrine.migrations.dependency_factory'
+
+    # ---------------------------------------------------------------------------
+    # Storage — credential encryption + org-aware filesystem decorator
+    # ---------------------------------------------------------------------------
+    App\Service\Storage\CredentialEncryptor:
+        arguments:
+            $storageEncryptionKey: '%env(STORAGE_ENCRYPTION_KEY)%'
+
+    App\Service\Storage\OrganizationAwareFilesystem:
+        decorates: 'default.storage'
+        arguments:
+            $platformStorage: '@.inner'
+
+    App\Service\Storage\OrganizationStorageResolver:
+        arguments:
+            $defaultStorage: '@App\Service\Storage\OrganizationAwareFilesystem.inner'
+
+    App\Controller\Api\UserController:
+        arguments:
+            $platformStorage: '@App\Service\Storage\OrganizationAwareFilesystem.inner'
+
+    # ---------------------------------------------------------------------------
+    # Contact form — Cloudflare Turnstile
+    # ---------------------------------------------------------------------------
+    App\Controller\Api\Auth\RegisterController:
+        arguments:
+            $registrationEnabled: '%env(bool:default::REGISTRATION_ENABLED)%'
+
+    App\Service\TurnstileVerifier:
+        arguments:
+            $turnstileSecretKey: '%env(default::TURNSTILE_SECRET_KEY)%'
+
+    App\Controller\Api\V1\ContactController:
+        arguments:
+            $turnstileSecretKey: '%env(default::TURNSTILE_SECRET_KEY)%'
+            $contactEmail: '%env(default:app.default_contact_email:CONTACT_EMAIL)%'
+
+    # ---------------------------------------------------------------------------
+    # E-Invoice provider strategy pattern — submission handlers
+    # ---------------------------------------------------------------------------
+    # Each handler class is tagged via #[AutoconfigureTag] with ['provider' => '<value>'].
+    # The service locator below exposes them keyed by provider enum value so that
+    # SubmitEInvoiceHandler can look up the right strategy with a single O(1) call.
+
+    App\MessageHandler\EInvoice\SubmitEInvoiceHandler:
+        arguments:
+            $submissionHandlers: !tagged_locator
+                tag: 'app.einvoice_submission_handler'
+                index_by: 'provider'
+
+    # ---------------------------------------------------------------------------
+    # E-Invoice provider strategy pattern — status checkers
+    # ---------------------------------------------------------------------------
+    App\MessageHandler\EInvoice\CheckEInvoiceStatusHandler:
+        arguments:
+            $statusCheckers: !tagged_locator
+                tag: 'app.einvoice_status_checker'
+                index_by: 'provider'
+
+    # ---------------------------------------------------------------------------
+    # E-Invoice provider strategy pattern — connection testers
+    # ---------------------------------------------------------------------------
+    App\Controller\Api\V1\EInvoiceController:
+        arguments:
+            $connectionTesters: !tagged_locator
+                tag: 'app.einvoice_connection_tester'
+                index_by: 'provider'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones

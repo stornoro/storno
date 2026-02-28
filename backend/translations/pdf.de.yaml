@@ -1,0 +1,87 @@
+# PDF document labels — German
+supplier: 'Lieferant'
+client: 'Kunde'
+cui: 'Steuer-Nr.'
+cnp: 'Personen-Nr.'
+reg_number: 'Handelsreg.-Nr.'
+phone: 'Tel.'
+email: 'E-Mail'
+contact_person: 'Ansprechpartner'
+
+# Lines table
+code: 'Code'
+description: 'Beschreibung'
+quantity: 'Menge'
+unit: 'Einheit'
+unit_price: 'Einzelpreis'
+discount: 'Rabatt'
+vat_percent: 'MwSt. %'
+vat: 'MwSt.'
+total_col: 'Gesamt'
+
+# Totals
+subtotal: 'Zwischensumme'
+vat_label: 'MwSt.'
+discount_label: 'Rabatt'
+total: 'GESAMT'
+exchange_rate: 'Wechselkurs'
+
+# Bank
+bank_account: 'Bankkonto'
+
+# Details
+order_number: 'Bestellnr.'
+contract_number: 'Vertragsnr.'
+project_reference: 'Projektreferenz'
+payment_method: 'Zahlungsart'
+payment_cash: 'Bargeld'
+payment_bank_transfer: 'Bankuberweisung'
+payment_card: 'Karte'
+payment_cheque: 'Scheck / Wechsel'
+delivery_location: 'Lieferort'
+delegate: 'Beauftragter'
+identity_document: 'Ausweis'
+transport_vehicle: 'Transportmittel'
+penalties: 'Vertragsstrafen'
+penalty_per_day: '%s%% pro Tag'
+penalty_grace_days: 'nach %s Karenztagen'
+mentions_title: 'Hinweise'
+prepared_by: 'Erstellt von'
+sales_agent: 'Vertriebsmitarbeiter'
+
+# Footer
+footer_text: 'Erstellt mit'
+
+# Invoice
+invoice_title: 'RECHNUNG'
+date_label: 'Datum'
+due_date: 'Falligkeitsdatum'
+anaf_upload_index: 'Upload-Index'
+anaf_upload_date: 'Upload-Datum'
+notes: 'Anmerkungen'
+payment_terms: 'Zahlungsbedingungen'
+
+# Proforma
+proforma_title: 'PROFORMA-RECHNUNG'
+proforma_watermark: 'PROFORMA'
+valid_until: 'Gultig bis'
+proforma_disclaimer: 'Diese Proforma-Rechnung ist kein steuerliches Dokument. Gultigkeit: %validity%.'
+proforma_validity_until: 'bis %date%'
+proforma_validity_default: '30 Tage ab Ausstellungsdatum'
+
+# Storno / Credit note
+credit_note_title: 'GUTSCHRIFT'
+refund_for_invoice: 'Erstattung fur Rechnung'
+refund_reason: 'Erstattungsgrund'
+
+# Delivery note
+delivery_note_title: 'LIEFERSCHEIN'
+supplier_sender: 'Lieferant / Absender'
+client_receiver: 'Kunde / Empfanger'
+supplier_signature: 'Unterschrift Lieferant'
+client_signature: 'Unterschrift Kunde'
+
+# Receipt (Kassenbon)
+receipt_title: 'KASSENBON'
+fiscal_number: 'Fiskalnr.'
+cash_register: 'Kasse'
