@@ -397,10 +397,12 @@ class InvoiceRepository extends ServiceEntityRepository
             ->getDQL();
 
         return $this->createQueryBuilder('i')
+            ->join('i.company', 'c')
             ->where('i.status = :status')
             ->andWhere('i.scheduledSendAt <= :now')
             ->andWhere('i.direction = :direction')
             ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('c.deletedAt IS NULL')
             ->andWhere(sprintf('NOT EXISTS (%s)', $subQuery))
             ->setParameter('status', DocumentStatus::ISSUED)
             ->setParameter('now', $now)
