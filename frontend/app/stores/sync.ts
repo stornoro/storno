@@ -126,22 +126,19 @@ export const useSyncStore = defineStore('sync', () => {
 
   async function triggerSync(days?: number): Promise<boolean> {
     const { post } = useApi()
-    // Cache composables before await to avoid losing Nuxt async context
-    const toast = useToast()
-    const { t } = useI18n()
     syncing.value = true
     error.value = null
     lastSyncResult.value = null
     lastSyncError.value = null
-    syncProgress.value = null
+    syncProgress.value = { processed: 0, total: 0 }
     _toastShownForCurrentSync = false
 
     try {
       const body = days !== undefined ? { days } : undefined
       await post('/v1/sync/trigger', body)
       // 202 returned — sync is running in background
-      // Real-time updates come via Centrifugo
-      toast.add({ title: t('sync.syncStarted'), color: 'info' })
+      // Real-time updates via Centrifugo will update syncProgress with real totals
+      useToast().add({ title: useNuxtApp().$i18n.t('sync.syncStarted'), color: 'info' })
       return true
     }
     catch (err: any) {
@@ -151,7 +148,8 @@ export const useSyncStore = defineStore('sync', () => {
       error.value = message
       lastSyncError.value = { message, code }
       syncing.value = false
-      toast.add({ title: message, color: 'error' })
+      syncProgress.value = null
+      useToast().add({ title: message, color: 'error' })
       return false
     }
   }
@@ -172,7 +170,7 @@ export const useSyncStore = defineStore('sync', () => {
         lastSyncResult.value = { success: true, stats: data.stats }
         if (!_toastShownForCurrentSync) {
           _toastShownForCurrentSync = true
-          useToast().add({ title: useI18n().t('sync.syncComplete'), color: 'success' })
+          useToast().add({ title: useNuxtApp().$i18n.t('sync.syncComplete'), color: 'success' })
         }
         fetchStatus()
         fetchLog()

@@ -2,9 +2,6 @@ services:
   # ── Backend (PHP + Nginx) ────────────────────────────────────────
   backend:
     image: ghcr.io/stornoro/backend:latest
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-8900}:80"
@@ -24,21 +21,15 @@ services:
       CENTRIFUGO_TOKEN_HMAC_SECRET: ${CENTRIFUGO_TOKEN_HMAC_SECRET}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAIL_FROM: ${MAIL_FROM:-noreply@storno.ro}
-      SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://app.storno.ro}
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https://((app|api|www)\.)?storno\.ro$}
-      WKHTMLTOPDF_PATH: /usr/bin/wkhtmltopdf
-      WKHTMLTOIMAGE_PATH: /usr/bin/wkhtmltoimage
-      JAVA_PATH: /usr/bin/java
-      JAVA_SERVICE_URL: http://127.0.0.1:8082
       LICENSE_KEY: ${LICENSE_KEY:-}
       LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://app.storno.ro}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-storno-documents}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-west-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       OAUTH_ANAF_CLIENT_ID: ${OAUTH_ANAF_CLIENT_ID:-}
@@ -48,23 +39,13 @@ services:
       OAUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_REDIRECT_URI: ${OAUTH_GOOGLE_CLIENT_REDIRECT_URI:-https://api.storno.ro/api/connect/google/check}
-      STRIPE_PLATFORM_FEE_PERCENT: ${STRIPE_PLATFORM_FEE_PERCENT:-2.0}
-      BILLING_COMPANY_ID: ${BILLING_COMPANY_ID:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-1}
-      LICENSING_JWT_PRIVATE_KEY_PATH: ${LICENSING_JWT_PRIVATE_KEY_PATH:-}
-      LICENSE_JWT_ISSUER: ${LICENSE_JWT_ISSUER:-storno.ro}
-      STRIPE_APP_WEBHOOK_SECRET: ${STRIPE_APP_WEBHOOK_SECRET:-}
     volumes:
       - jwt_keys:/app/config/jwt
       - backend_var:/app/var
       - backend_storage:/app/storage
-      - ../backend/src:/app/src:ro
-      - ../backend/config:/app/config
-      - ../backend/templates:/app/templates:ro
-      - ../backend/migrations:/app/migrations:ro
-      - ../backend/translations:/app/translations:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -79,15 +60,6 @@ services:
   # ── Frontend (Nuxt SSR) ──────────────────────────────────────────
   frontend:
     image: ghcr.io/stornoro/frontend:latest
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
-        NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-        NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
-        NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
-        NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-8901}:3000"
@@ -97,25 +69,8 @@ services:
       NUXT_PUBLIC_CENTRIFUGO_WS: ${PUBLIC_CENTRIFUGO_WS:-wss://app.storno.ro/connection/websocket}
       NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
-      NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
-      NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
-      NUXT_CHATWOOT_IDENTITY_TOKEN: ${CHATWOOT_IDENTITY_TOKEN:-}
     depends_on:
       - backend
-    networks:
-      - storno
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  # ── Docs Site (Next.js) — SaaS only ────────────────────────────
-  docs:
-    image: ghcr.io/stornoro/docs:latest
-    restart: unless-stopped
-    ports:
-      - "${DOCS_PORT:-8903}:3000"
     networks:
       - storno
     healthcheck:
@@ -175,7 +130,7 @@ services:
     command: centrifugo --health --config /centrifugo/config.json
     volumes:
       - centrifugo_data:/centrifugo
-      - ../backend/config/centrifugo.json:/centrifugo/config.json:ro
+      - ./centrifugo.json:/centrifugo/config.json:ro
     networks:
       - storno
 

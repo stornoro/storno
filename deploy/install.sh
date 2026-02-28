@@ -130,6 +130,17 @@ if ! curl -fsSL "${GITHUB_RAW}/docker-compose.yml" -o "${STORNO_DIR}/docker-comp
 fi
 ok "docker-compose.yml ready"
 
+# Always refresh centrifugo.json (Centrifugo WebSocket config)
+info "Fetching centrifugo.json..."
+if ! curl -fsSL "${GITHUB_RAW}/centrifugo.json" -o "${STORNO_DIR}/centrifugo.json"; then
+  if [ -f "${STORNO_DIR}/centrifugo.json" ]; then
+    warn "Could not download latest centrifugo.json — using existing file."
+  else
+    error "Failed to download centrifugo.json from GitHub. Check your internet connection."
+  fi
+fi
+ok "centrifugo.json ready"
+
 # Only download .env.example on first install; never overwrite an existing .env
 if [ "${IS_FIRST_INSTALL}" = true ]; then
   info "Fetching .env.example..."
@@ -243,7 +254,9 @@ if [ "${IS_FIRST_INSTALL}" = true ]; then
   sedit "s|CORS_ALLOW_ORIGIN=.*|CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN}|" "${STORNO_DIR}/.env"
   sedit "s|CENTRIFUGO_ALLOWED_ORIGINS=.*|CENTRIFUGO_ALLOWED_ORIGINS=${CENTRIFUGO_ALLOWED_ORIGINS}|" "${STORNO_DIR}/.env"
   sedit "s|PUBLIC_CENTRIFUGO_WS=.*|PUBLIC_CENTRIFUGO_WS=${PUBLIC_CENTRIFUGO_WS}|" "${STORNO_DIR}/.env"
-  sedit "s|DATABASE_URL=.*|DATABASE_URL=${DATABASE_URL}|" "${STORNO_DIR}/.env"
+  # DATABASE_URL is commented out by default (compose provides a fallback).
+  # Uncomment it with the generated password so the .env is explicit.
+  sedit "s|^# DATABASE_URL=.*|DATABASE_URL=${DATABASE_URL}|" "${STORNO_DIR}/.env"
   sedit "s|MAIL_FROM=.*|MAIL_FROM=${MAIL_FROM}|" "${STORNO_DIR}/.env"
 
   # License

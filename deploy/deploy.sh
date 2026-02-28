@@ -93,8 +93,15 @@ fi
 cd "$SCRIPT_DIR"
 
 # Wrap docker compose to always use the resolved .env file
+# Include dev overrides when available (SaaS production has the full monorepo)
+COMPOSE_FILES="-f docker-compose.yml"
+if [ -f "$SCRIPT_DIR/docker-compose.dev.yml" ] && [ -d "$PROJECT_ROOT/backend" ]; then
+    COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.dev.yml"
+fi
+
 docker_compose() {
-    docker compose --env-file "$ENV_FILE" "$@"
+    # shellcheck disable=SC2086
+    docker compose $COMPOSE_FILES --env-file "$ENV_FILE" "$@"
 }
 
 # Docker network name = <project_name>_storno (project name = directory name)

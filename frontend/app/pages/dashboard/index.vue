@@ -93,6 +93,21 @@ async function triggerSync() {
   await syncStore.triggerSync()
 }
 
+// Drive NuxtLoadingIndicator with sync progress
+const { start: startLoading, finish: finishLoading, set: setLoading } = useLoadingIndicator()
+
+watch(() => syncStore.syncing, (isSyncing) => {
+  if (isSyncing) startLoading()
+  else finishLoading()
+})
+
+watch(() => syncStore.syncProgress?.processed, () => {
+  const p = syncStore.syncProgress
+  if (p && p.total > 0) {
+    setLoading(Math.round((p.processed / p.total) * 100))
+  }
+})
+
 // Refresh dashboard stats only when sync completes (not on each progress event)
 watch(() => syncStore.lastSyncResult, (result) => {
   if (result?.success) {
@@ -194,19 +209,14 @@ watch(() => companyStore.currentCompanyId, () => {
       <!-- Read-only company banner -->
       <SharedCompanyReadOnlyBanner />
 
-      <!-- Sync progress (live during sync) -->
-      <UCard v-if="syncStore.syncProgress">
+      <!-- Sync progress stats (live during sync) -->
+      <UCard v-if="syncStore.syncProgress?.stats">
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h3 class="font-semibold">{{ $t('efactura.syncProgressTitle') }}</h3>
-            <span class="text-sm text-muted">{{ syncStore.syncProgress.processed }} / {{ syncStore.syncProgress.total }}</span>
+            <span v-if="syncStore.syncProgress.total > 0" class="text-sm text-muted">{{ syncStore.syncProgress.processed }} / {{ syncStore.syncProgress.total }}</span>
           </div>
-          <UProgress
-            :model-value="syncStore.syncProgress.processed"
-            :max="syncStore.syncProgress.total"
-            size="sm"
-          />
-          <div v-if="syncStore.syncProgress.stats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div class="text-center">
               <div class="text-lg font-bold">{{ syncStore.syncProgress.stats.newInvoices }}</div>
               <div class="text-xs text-muted">{{ $t('efactura.newInvoices') }}</div>
