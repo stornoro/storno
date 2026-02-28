@@ -93,16 +93,9 @@ async function triggerSync() {
   await syncStore.triggerSync()
 }
 
-// Refresh dashboard stats when sync completes
+// Refresh dashboard stats only when sync completes (not on each progress event)
 watch(() => syncStore.lastSyncResult, (result) => {
   if (result?.success) {
-    fetchWithPeriod()
-  }
-})
-
-// Refresh dashboard stats on each sync progress update (data changes after batch flushes)
-watch(() => syncStore.syncProgress?.processed, () => {
-  if (syncStore.syncProgress) {
     fetchWithPeriod()
   }
 })
