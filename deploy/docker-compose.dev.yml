@@ -1,0 +1,64 @@
+# Development / SaaS overrides — adds build contexts, source bind mounts,
+# SaaS-only services, and internal environment variables.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Self-hosters do NOT need this file. It is used only when you have the
+# full monorepo checked out (backend/, frontend/ directories alongside deploy/).
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    environment:
+      SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
+      WKHTMLTOPDF_PATH: /usr/bin/wkhtmltopdf
+      WKHTMLTOIMAGE_PATH: /usr/bin/wkhtmltoimage
+      JAVA_PATH: /usr/bin/java
+      JAVA_SERVICE_URL: http://127.0.0.1:8082
+      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
+      STRIPE_PLATFORM_FEE_PERCENT: ${STRIPE_PLATFORM_FEE_PERCENT:-2.0}
+      BILLING_COMPANY_ID: ${BILLING_COMPANY_ID:-}
+      LICENSING_JWT_PRIVATE_KEY_PATH: ${LICENSING_JWT_PRIVATE_KEY_PATH:-}
+      LICENSE_JWT_ISSUER: ${LICENSE_JWT_ISSUER:-storno.ro}
+      STRIPE_APP_WEBHOOK_SECRET: ${STRIPE_APP_WEBHOOK_SECRET:-}
+    volumes:
+      - ../backend/src:/app/src:ro
+      - ../backend/config:/app/config
+      - ../backend/templates:/app/templates:ro
+      - ../backend/migrations:/app/migrations:ro
+      - ../backend/translations:/app/translations:ro
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
+        NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+        NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
+        NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
+    environment:
+      NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
+      NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
+      NUXT_CHATWOOT_IDENTITY_TOKEN: ${CHATWOOT_IDENTITY_TOKEN:-}
+
+  docs:
+    image: ghcr.io/stornoro/docs:latest
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-8903}:3000"
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  centrifugo:
+    volumes:
+      - ../backend/config/centrifugo.json:/centrifugo/config.json:ro
