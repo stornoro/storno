@@ -5,7 +5,6 @@ framework:
         transports:
             async: 'doctrine://default?queue_name=async'
             failed: 'doctrine://default?queue_name=failed'
-            scheduler_default: 'doctrine://default?queue_name=scheduler'
             sync: 'sync://'
 
 when@prod:
@@ -13,7 +12,6 @@ when@prod:
         messenger:
             transports:
                 async: '%env(MESSENGER_TRANSPORT_DSN)%'
-                scheduler_default: '%env(resolve:REDIS_URL)%/scheduler'
 
             routing:
                 'App\Message\EInvoice\SubmitEInvoiceMessage': async
