@@ -126,6 +126,9 @@ export const useSyncStore = defineStore('sync', () => {
 
   async function triggerSync(days?: number): Promise<boolean> {
     const { post } = useApi()
+    // Cache composables before await to avoid losing Nuxt async context
+    const toast = useToast()
+    const { t } = useI18n()
     syncing.value = true
     error.value = null
     lastSyncResult.value = null
@@ -138,7 +141,7 @@ export const useSyncStore = defineStore('sync', () => {
       await post('/v1/sync/trigger', body)
       // 202 returned — sync is running in background
       // Real-time updates come via Centrifugo
-      useToast().add({ title: useI18n().t('sync.syncStarted'), color: 'info' })
+      toast.add({ title: t('sync.syncStarted'), color: 'info' })
       return true
     }
     catch (err: any) {
@@ -148,7 +151,7 @@ export const useSyncStore = defineStore('sync', () => {
       error.value = message
       lastSyncError.value = { message, code }
       syncing.value = false
-      useToast().add({ title: message, color: 'error' })
+      toast.add({ title: message, color: 'error' })
       return false
     }
   }
