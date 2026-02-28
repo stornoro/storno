@@ -101,9 +101,6 @@ RUN mkdir -p var/cache var/log var/jwt config/jwt storage tools/pdf-generator/tm
     && chmod -R o+r . \
     && find . -type d -exec chmod o+x {} \;
 
-# Generate JWT keys if they don't exist (overridable via volume mount)
-RUN APP_ENV=prod php bin/console lexik:jwt:generate-keypair --skip-if-exists 2>/dev/null || true
-
 EXPOSE 80
 
 ENTRYPOINT ["/entrypoint.sh"]
