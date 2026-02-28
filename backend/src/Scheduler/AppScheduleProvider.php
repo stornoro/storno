@@ -21,6 +21,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
     {
         return (new Schedule())
             ->stateful($this->cache)
+            // TEST — every minute (remove after testing)
+            ->add(RecurringMessage::cron('* * * * *', new RunCommandMessage('app:license:sync')))
             // e-Factura — every 5 minutes
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:check-status')))
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:submit-scheduled')))
