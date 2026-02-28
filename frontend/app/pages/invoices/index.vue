@@ -174,7 +174,10 @@ function onFormSaved(invoice: Invoice, validation: ValidationResponse | null) {
 
 async function openEditSlideover(uuid: string) {
   const invoice = await invoicesStore.fetchInvoice(uuid)
-  if (!invoice) return
+  if (!invoice) {
+    toast.add({ title: $t('common.error'), color: 'error' })
+    return
+  }
   if (invoice.status !== 'draft') {
     toast.add({ title: $t('invoices.notEditable'), color: 'warning' })
     router.replace(`/invoices/${uuid}`)
@@ -288,7 +291,10 @@ async function handleDeleteInvoice(uuid: string) {
   const success = await invoicesStore.deleteInvoice(uuid)
   if (success) {
     toast.add({ title: $t('invoices.deleteSuccess'), color: 'success' })
-    fetchInvoices()
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('invoices.deleteError'), color: 'error' })
   }
 }
 
@@ -371,7 +377,10 @@ async function handleBulkDelete() {
       toast.add({ title: $t('bulk.deleteSuccess', { count: result.deleted }), color: 'success' })
     }
     clearSelection()
-    fetchInvoices()
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('common.error'), color: 'error' })
   }
 }
 
@@ -392,7 +401,10 @@ async function handleBulkCancel() {
       toast.add({ title: $t('bulk.cancelSuccess', { count: result.cancelled }), color: 'success' })
     }
     clearSelection()
-    fetchInvoices()
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('common.error'), color: 'error' })
   }
 }
 
@@ -423,7 +435,10 @@ async function handleBulkStorno() {
       toast.add({ title: $t('bulk.stornoSuccess', { count: result.created }), color: 'success' })
     }
     clearSelection()
-    fetchInvoices()
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('common.error'), color: 'error' })
   }
 }
 
