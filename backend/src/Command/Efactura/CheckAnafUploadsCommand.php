@@ -61,7 +61,13 @@ class CheckAnafUploadsCommand extends Command
                 continue;
             }
 
-            $company = $invoice->getCompany();
+            try {
+                $company = $invoice->getCompany();
+            } catch (\Doctrine\ORM\EntityNotFoundException) {
+                // Company was soft-deleted, skip
+                continue;
+            }
+
             $token = $this->tokenResolver->resolve($company);
             if (!$token) {
                 $this->logger->warning('No token for company during status check', [
