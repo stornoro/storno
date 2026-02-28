@@ -329,6 +329,9 @@ export const useInvoiceStore = defineStore('invoices', () => {
     const { del } = useApi()
     try {
       await del(`/v1/invoices/${uuid}`)
+      // Optimistically remove from local list
+      items.value = items.value.filter(i => i.id !== uuid)
+      total.value = Math.max(0, total.value - 1)
       return true
     }
     catch (err: any) {

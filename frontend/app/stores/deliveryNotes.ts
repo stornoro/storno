@@ -122,6 +122,8 @@ export const useDeliveryNoteStore = defineStore('deliveryNotes', () => {
     const { del } = useApi()
     try {
       await del(`/v1/delivery-notes/${uuid}`)
+      items.value = items.value.filter(i => i.id !== uuid)
+      total.value = Math.max(0, total.value - 1)
       return true
     }
     catch (err: any) {

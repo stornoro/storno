@@ -35,7 +35,10 @@ function openCreateSlideover() {
 
 async function openEditSlideover(uuid: string) {
   const proforma = await proformaStore.fetchProforma(uuid)
-  if (!proforma) return
+  if (!proforma) {
+    toast.add({ title: $t('common.error'), color: 'error' })
+    return
+  }
   if (proforma.status !== 'draft') {
     toast.add({ title: $t('proformaInvoices.notEditable'), color: 'warning' })
     router.replace(`/proforma-invoices/${uuid}`)
@@ -132,7 +135,10 @@ async function handleBulkDelete() {
       toast.add({ title: $t('bulk.deleteSuccess', { count: result.deleted }), color: 'success' })
     }
     clearSelection()
-    fetchProformas()
+    await fetchProformas()
+  }
+  else {
+    toast.add({ title: proformaStore.error || $t('common.error'), color: 'error' })
   }
 }
 

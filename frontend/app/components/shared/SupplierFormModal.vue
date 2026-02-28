@@ -404,6 +404,9 @@ async function onSave() {
       open.value = false
       emit('saved', supplier)
     }
+    else {
+      useToast().add({ title: store.error || 'Eroare la salvare.', color: 'error' })
+    }
     return
   }
 

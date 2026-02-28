@@ -35,7 +35,10 @@ function openCreateSlideover() {
 
 async function openEditSlideover(uuid: string) {
   const receipt = await receiptStore.fetchReceipt(uuid)
-  if (!receipt) return
+  if (!receipt) {
+    toast.add({ title: $t('common.error'), color: 'error' })
+    return
+  }
   if (!['draft', 'issued'].includes(receipt.status)) {
     toast.add({ title: $t('receipts.notEditable'), color: 'warning' })
     router.replace(`/receipts/${uuid}`)

@@ -35,7 +35,10 @@ async function handleBulkDelete() {
       toast.add({ title: $t('bulk.deleteSuccess', { count: result.deleted }), color: 'success' })
     }
     clearSelection()
-    fetchClients()
+    await fetchClients()
+  }
+  else {
+    toast.add({ title: clientsStore.error || $t('common.error'), color: 'error' })
   }
 }
 

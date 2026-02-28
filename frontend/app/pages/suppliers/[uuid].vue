@@ -234,6 +234,9 @@ async function handleDelete() {
     toast.add({ title: $t('suppliers.supplierDeleted'), color: 'success' })
     router.push('/suppliers')
   }
+  else {
+    toast.add({ title: store.error || $t('common.error'), color: 'error' })
+  }
   deleteConfirmOpen.value = false
 }
 

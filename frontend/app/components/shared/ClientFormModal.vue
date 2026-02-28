@@ -468,6 +468,9 @@ async function onSave() {
       open.value = false
       emit('saved', client)
     }
+    else {
+      useToast().add({ title: clientStore.error || 'Eroare la salvare.', color: 'error' })
+    }
     return
   }
 

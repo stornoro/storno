@@ -101,6 +101,8 @@ export const useRecurringInvoiceStore = defineStore('recurringInvoices', () => {
     const { del } = useApi()
     try {
       await del(`/v1/recurring-invoices/${uuid}`)
+      items.value = items.value.filter(i => i.id !== uuid)
+      total.value = Math.max(0, total.value - 1)
       return true
     }
     catch (err: any) {

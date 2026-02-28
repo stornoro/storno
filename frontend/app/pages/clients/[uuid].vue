@@ -368,6 +368,9 @@ async function confirmDelete() {
     toast.add({ title: $t('clients.clientDeleted'), color: 'success' })
     router.push('/clients')
   }
+  else {
+    toast.add({ title: clientStore.error || $t('common.error'), color: 'error' })
+  }
 }
 
 onMounted(fetchClientData)

@@ -35,7 +35,10 @@ function openCreateSlideover() {
 
 async function openEditSlideover(uuid: string) {
   const deliveryNote = await deliveryNoteStore.fetchDeliveryNote(uuid)
-  if (!deliveryNote) return
+  if (!deliveryNote) {
+    toast.add({ title: $t('common.error'), color: 'error' })
+    return
+  }
   if (!['draft', 'issued'].includes(deliveryNote.status)) {
     toast.add({ title: $t('deliveryNotes.notEditable'), color: 'warning' })
     router.replace(`/delivery-notes/${uuid}`)
@@ -143,7 +146,10 @@ async function handleBulkDelete() {
       toast.add({ title: $t('bulk.deleteSuccess', { count: result.deleted }), color: 'success' })
     }
     clearSelection()
-    fetchDeliveryNotes()
+    await fetchDeliveryNotes()
+  }
+  else {
+    toast.add({ title: deliveryNoteStore.error || $t('common.error'), color: 'error' })
   }
 }
 
