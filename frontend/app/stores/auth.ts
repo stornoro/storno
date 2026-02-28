@@ -305,6 +305,13 @@ export const useAuthStore = defineStore('auth', () => {
       originalToken.value = token.value
       token.value = response.token
       await fetchUser()
+
+      // Reset company store and re-fetch for the impersonated user
+      const companyStore = useCompanyStore()
+      companyStore.companies = []
+      companyStore.currentCompanyId = null
+      await companyStore.fetchCompanies()
+
       return true
     }
     catch {
@@ -317,6 +324,13 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = originalToken.value
     originalToken.value = null
     await fetchUser()
+
+    // Reset company store and re-fetch for the admin user
+    const companyStore = useCompanyStore()
+    companyStore.companies = []
+    companyStore.currentCompanyId = null
+    await companyStore.fetchCompanies()
+
     navigateTo('/admin/users')
   }
 
