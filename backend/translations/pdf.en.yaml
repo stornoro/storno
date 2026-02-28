@@ -1,0 +1,87 @@
+# PDF document labels — English
+supplier: 'Supplier'
+client: 'Client'
+cui: 'Tax ID'
+cnp: 'Personal ID'
+reg_number: 'Reg. No.'
+phone: 'Phone'
+email: 'Email'
+contact_person: 'Contact person'
+
+# Lines table
+code: 'Code'
+description: 'Description'
+quantity: 'Qty.'
+unit: 'Unit'
+unit_price: 'Unit price'
+discount: 'Discount'
+vat_percent: 'VAT %'
+vat: 'VAT'
+total_col: 'Total'
+
+# Totals
+subtotal: 'Subtotal'
+vat_label: 'VAT'
+discount_label: 'Discount'
+total: 'TOTAL'
+exchange_rate: 'Exchange rate'
+
+# Bank
+bank_account: 'Bank account'
+
+# Details
+order_number: 'Order no.'
+contract_number: 'Contract no.'
+project_reference: 'Project reference'
+payment_method: 'Payment method'
+payment_cash: 'Cash'
+payment_bank_transfer: 'Bank transfer'
+payment_card: 'Card'
+payment_cheque: 'Cheque / Promissory note'
+delivery_location: 'Delivery location'
+delegate: 'Delegate'
+identity_document: 'Identity document'
+transport_vehicle: 'Transport vehicle'
+penalties: 'Penalties'
+penalty_per_day: '%s%% per day'
+penalty_grace_days: 'after %s grace days'
+mentions_title: 'Mentions'
+prepared_by: 'Prepared by'
+sales_agent: 'Sales agent'
+
+# Footer
+footer_text: 'Issued via'
+
+# Invoice
+invoice_title: 'INVOICE'
+date_label: 'Date'
+due_date: 'Due date'
+anaf_upload_index: 'Upload index'
+anaf_upload_date: 'Upload date'
+notes: 'Notes'
+payment_terms: 'Payment terms'
+
+# Proforma
+proforma_title: 'PROFORMA INVOICE'
+proforma_watermark: 'PROFORMA'
+valid_until: 'Valid until'
+proforma_disclaimer: 'This proforma invoice is not a fiscal document. Validity: %validity%.'
+proforma_validity_until: 'until %date%'
+proforma_validity_default: '30 days from the issue date'
+
+# Storno / Credit note
+credit_note_title: 'CREDIT NOTE'
+refund_for_invoice: 'Refund for invoice'
+refund_reason: 'Refund reason'
+
+# Delivery note
+delivery_note_title: 'DELIVERY NOTE'
+supplier_sender: 'Supplier / Sender'
+client_receiver: 'Client / Receiver'
+supplier_signature: 'Supplier signature'
+client_signature: 'Client signature'
+
+# Receipt
+receipt_title: 'FISCAL RECEIPT'
+fiscal_number: 'Fiscal no.'
+cash_register: 'Cash register'

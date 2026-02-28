@@ -1,0 +1,55 @@
+@import "tailwindcss" theme(static);
+@import "@nuxt/ui";
+@plugin "@tailwindcss/typography";
+
+@theme static {
+  --font-sans: 'Public Sans', sans-serif;
+}
+
+/* ── XML syntax highlighting ────────────────────────────────────────── */
+.xml-tag { color: var(--ui-text-muted); }
+.xml-tag-name { color: var(--ui-primary); font-weight: 500; }
+.xml-attr-name { color: var(--color-orange-500); }
+.xml-attr-value { color: var(--color-green-500); }
+.xml-comment { color: var(--ui-text-dimmed); font-style: italic; }
+.xml-prolog { color: var(--ui-text-muted); }
+
+/* ── Chatwoot ─────────────────────────────────────────────────────── */
+.woot-widget-bubble,
+.woot--bubble-holder,
+.woot-widget-holder {
+  z-index: 40 !important;
+}
+
+/* Hide Chatwoot bubble when a slideover or modal overlay is open */
+body:has([data-slot="overlay"]) .woot-widget-bubble,
+body:has([data-slot="overlay"]) .woot--bubble-holder {
+  display: none !important;
+}
+
+/* ── Print styles ───────────────────────────────────────────────────── */
+@media print {
+  body > *:not(.invoice-print-root),
+  header, nav, aside, footer,
+  [data-radix-popper-content-wrapper],
+  .print-hidden {
+    display: none !important;
+  }
+
+  .invoice-print-root {
+    position: absolute;
+    inset: 0;
+    padding: 2rem;
+    background: white;
+    color: black;
+  }
+
+  .invoice-print-root table {
+    border-collapse: collapse;
+  }
+
+  .invoice-print-root th,
+  .invoice-print-root td {
+    border-bottom: 1px solid #ccc;
+  }
+}

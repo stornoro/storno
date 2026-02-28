@@ -1,0 +1,6 @@
+services:
+    Google\Client:
+        class: Google\Client
+        calls:
+            - [setClientId, ['%env(OAUTH_GOOGLE_CLIENT_ID)%']]
+            - [setClientSecret, ['%env(OAUTH_GOOGLE_CLIENT_SECRET)%']]

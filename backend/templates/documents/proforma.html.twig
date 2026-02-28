@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.5; }
+        .page { padding: 30px 40px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #8b5cf6; padding-bottom: 15px; }
+        .doc-title { font-size: 24px; font-weight: bold; color: #8b5cf6; margin-bottom: 5px; }
+        .doc-number { font-size: 14px; color: #666; }
+        .doc-type { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
+        .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 80px; color: rgba(139, 92, 246, 0.08); font-weight: bold; z-index: -1; }
+        .parties { display: flex; justify-content: space-between; margin-bottom: 25px; }
+        .party { width: 48%; }
+        .party-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 5px; font-weight: bold; }
+        .party-name { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+        .party-detail { font-size: 10px; color: #555; }
+        table.lines { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table.lines thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        table.lines tbody td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+        table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .totals { margin-left: auto; width: 280px; }
+        .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+        .totals-row.total { font-size: 14px; font-weight: bold; border-top: 2px solid #8b5cf6; padding-top: 8px; margin-top: 5px; color: #8b5cf6; }
+        .notes { margin-top: 30px; padding: 15px; background: #f8fafc; border-radius: 4px; font-size: 10px; color: #555; }
+        .notes-title { font-weight: bold; margin-bottom: 5px; }
+        .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #999; text-align: center; }
+        .bank-info { margin-top: 20px; font-size: 10px; }
+        .bank-info .label { color: #999; }
+        .validity { margin-top: 15px; padding: 10px 15px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 4px; font-size: 10px; color: #7c3aed; }
+    </style>
+</head>
+<body>
+    <div class="watermark">PROFORMA</div>
+    <div class="page">
+        <div class="header">
+            <div>
+                <div class="doc-title">FACTURA PROFORMA</div>
+                <div class="doc-number">{{ invoice.number }}</div>
+            </div>
+            <div style="text-align: right;">
+                <div class="doc-type">PROFORMA</div>
+                <div class="doc-number">Data: {{ invoice.issueDate|date('d.m.Y') }}</div>
+                {% if invoice.dueDate %}
+                    <div class="doc-number">Valabila pana la: {{ invoice.dueDate|date('d.m.Y') }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="parties">
+            <div class="party">
+                <div class="party-label">Furnizor</div>
+                {% set company = invoice.company %}
+                <div class="party-name">{{ company.name }}</div>
+                <div class="party-detail">CUI: {{ company.cif }}</div>
+                {% if company.registrationNumber %}
+                    <div class="party-detail">Nr. Reg. Com.: {{ company.registrationNumber }}</div>
+                {% endif %}
+                <div class="party-detail">{{ company.address }}, {{ company.city }}</div>
+            </div>
+            <div class="party">
+                <div class="party-label">Client</div>
+                {% set client = invoice.client %}
+                {% if client %}
+                    <div class="party-name">{{ client.name }}</div>
+                    {% if client.cui %}
+                        <div class="party-detail">CUI: {{ client.cui }}</div>
+                    {% endif %}
+                    <div class="party-detail">{{ client.address }}, {{ client.city }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <table class="lines">
+            <thead>
+                <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Descriere</th>
+                    <th class="text-center" style="width: 60px;">Cant.</th>
+                    <th class="text-center" style="width: 50px;">U.M.</th>
+                    <th class="text-right" style="width: 90px;">Pret unitar</th>
+                    <th class="text-center" style="width: 50px;">TVA %</th>
+                    <th class="text-right" style="width: 90px;">TVA</th>
+                    <th class="text-right" style="width: 100px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in invoice.lines %}
+                <tr>
+                    <td>{{ line.position }}</td>
+                    <td>{{ line.description }}</td>
+                    <td class="text-center">{{ line.quantity }}</td>
+                    <td class="text-center">{{ line.unitOfMeasure }}</td>
+                    <td class="text-right">{{ line.unitPrice|number_format(2, ',', '.') }}</td>
+                    <td class="text-center">{{ line.vatRate }}%</td>
+                    <td class="text-right">{{ line.vatAmount|number_format(2, ',', '.') }}</td>
+                    <td class="text-right">{{ line.lineTotal|number_format(2, ',', '.') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <div class="totals-row">
+                <span>Subtotal:</span>
+                <span>{{ invoice.subtotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+            <div class="totals-row">
+                <span>TVA:</span>
+                <span>{{ invoice.vatTotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+            <div class="totals-row total">
+                <span>TOTAL:</span>
+                <span>{{ invoice.total|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+        </div>
+
+        {% if company.bankAccount %}
+        <div class="bank-info">
+            <span class="label">Cont bancar:</span> {{ company.bankAccount }}
+            {% if company.bankName %} - {{ company.bankName }}{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="validity">
+            Aceasta factura proforma nu constituie document fiscal. Valabilitate: {% if invoice.dueDate %}pana la {{ invoice.dueDate|date('d.m.Y') }}{% else %}30 de zile de la data emiterii{% endif %}.
+        </div>
+
+        {% if invoice.notes %}
+        <div class="notes">
+            <div class="notes-title">Observatii:</div>
+            {{ invoice.notes }}
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            Proforma generata electronic. Nu constituie document fiscal.
+        </div>
+    </div>
+</body>
+</html>

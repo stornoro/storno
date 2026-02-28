@@ -1,0 +1,47 @@
+<div class="parties" style="overflow: hidden; margin-bottom: 25px;">
+    <div class="party" style="float: left; width: 48%;">
+        <div class="party-label">{{ supplierLabel|default('supplier'|trans({}, 'pdf', locale|default('ro'))) }}</div>
+        <div class="party-name">{{ company.name }}</div>
+        <div class="party-detail">{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.cif }}</div>
+        {% if company.registrationNumber %}
+            <div class="party-detail">{{ 'reg_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.registrationNumber }}</div>
+        {% endif %}
+        <div class="party-detail">{{ company.address }}</div>
+        <div class="party-detail">{{ company.city }}{% if company.state %}, {{ company.state }}{% endif %}{% if company.country is defined and company.country and company.country != 'RO' %}, {{ company.country }}{% endif %}</div>
+        {% if company.phone %}
+            <div class="party-detail">{{ 'phone'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.phone }}</div>
+        {% endif %}
+        {% if company.email %}
+            <div class="party-detail">{{ 'email'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.email }}</div>
+        {% endif %}
+    </div>
+    <div class="party" style="float: right; width: 48%;">
+        <div class="party-label">{{ clientLabel|default('client'|trans({}, 'pdf', locale|default('ro'))) }}</div>
+        {% if client %}
+            <div class="party-name">{{ client.name }}</div>
+            {% if client.type is defined and client.type == 'individual' %}
+                {% if client.cnp is defined and client.cnp %}
+                    <div class="party-detail">{{ 'cnp'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.cnp }}</div>
+                {% endif %}
+            {% else %}
+                {% if client.cui %}
+                    <div class="party-detail">{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.cui }}</div>
+                {% endif %}
+                {% if client.registrationNumber is defined and client.registrationNumber %}
+                    <div class="party-detail">{{ 'reg_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.registrationNumber }}</div>
+                {% endif %}
+            {% endif %}
+            <div class="party-detail">{{ client.address }}</div>
+            <div class="party-detail">{{ client.city }}{% if client.county is defined and client.county %}, {{ client.county }}{% endif %}{% if client.postalCode is defined and client.postalCode %}, {{ client.postalCode }}{% endif %}{% if client.country is defined and client.country and client.country != 'RO' %}, {{ client.country }}{% endif %}</div>
+            {% if client.phone is defined and client.phone %}
+                <div class="party-detail">{{ 'phone'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.phone }}</div>
+            {% endif %}
+            {% if client.email is defined and client.email %}
+                <div class="party-detail">{{ 'email'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.email }}</div>
+            {% endif %}
+            {% if client.contactPerson is defined and client.contactPerson %}
+                <div class="party-detail">{{ 'contact_person'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.contactPerson }}</div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.5; }
+        .page { padding: 30px 40px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #059669; padding-bottom: 15px; }
+        .doc-title { font-size: 24px; font-weight: bold; color: #059669; margin-bottom: 5px; }
+        .doc-number { font-size: 14px; color: #666; }
+        .parties { display: flex; justify-content: space-between; margin-bottom: 25px; }
+        .party { width: 48%; }
+        .party-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 5px; font-weight: bold; }
+        .party-name { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+        .party-detail { font-size: 10px; color: #555; }
+        table.lines { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table.lines thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        table.lines tbody td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+        table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .transport { margin-top: 20px; padding: 15px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; }
+        .transport-title { font-weight: bold; margin-bottom: 8px; color: #059669; font-size: 12px; }
+        .transport-row { display: flex; margin-bottom: 3px; font-size: 10px; }
+        .transport-label { width: 150px; color: #999; font-weight: bold; }
+        .notes { margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 4px; font-size: 10px; color: #555; }
+        .notes-title { font-weight: bold; margin-bottom: 5px; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 40px; }
+        .signature-box { width: 45%; text-align: center; padding-top: 60px; border-top: 1px solid #ccc; font-size: 10px; color: #666; }
+        .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #999; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div>
+                <div class="doc-title">AVIZ DE INSOTIRE A MARFII</div>
+                <div class="doc-number">{{ invoice.number }}</div>
+            </div>
+            <div style="text-align: right;">
+                <div class="doc-number">Data: {{ invoice.issueDate|date('d.m.Y') }}</div>
+            </div>
+        </div>
+
+        <div class="parties">
+            <div class="party">
+                <div class="party-label">Furnizor / Expeditor</div>
+                {% set company = invoice.company %}
+                <div class="party-name">{{ company.name }}</div>
+                <div class="party-detail">CUI: {{ company.cif }}</div>
+                <div class="party-detail">{{ company.address }}, {{ company.city }}</div>
+            </div>
+            <div class="party">
+                <div class="party-label">Client / Destinatar</div>
+                {% set client = invoice.client %}
+                {% if client %}
+                    <div class="party-name">{{ client.name }}</div>
+                    {% if client.cui %}
+                        <div class="party-detail">CUI: {{ client.cui }}</div>
+                    {% endif %}
+                    <div class="party-detail">{{ client.address }}, {{ client.city }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <table class="lines">
+            <thead>
+                <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Descriere</th>
+                    <th class="text-center" style="width: 80px;">Cantitate</th>
+                    <th class="text-center" style="width: 80px;">U.M.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in invoice.lines %}
+                <tr>
+                    <td>{{ line.position }}</td>
+                    <td>{{ line.description }}</td>
+                    <td class="text-center">{{ line.quantity }}</td>
+                    <td class="text-center">{{ line.unitOfMeasure }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if invoice.notes %}
+        <div class="notes">
+            <div class="notes-title">Observatii:</div>
+            {{ invoice.notes }}
+        </div>
+        {% endif %}
+
+        <div class="signatures">
+            <div class="signature-box">
+                Semnatura furnizor
+            </div>
+            <div class="signature-box">
+                Semnatura client
+            </div>
+        </div>
+
+        <div class="footer">
+            Aviz de insotire a marfii generat electronic.
+        </div>
+    </div>
+</body>
+</html>

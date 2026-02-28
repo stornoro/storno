@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "storno.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.componentLabels" (dict "component" "frontend" "context" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "storno.componentSelectorLabels" (dict "component" "frontend" "context" .) | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "storno.componentLabels" (dict "component" "frontend" "context" .) | nindent 8 }}
+      {{- with .Values.frontend.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "storno.imagePullSecrets" . | nindent 6 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NUXT_API_BASE
+              value: {{ include "storno.nuxtApiBase" . | quote }}
+            - name: NUXT_PUBLIC_API_BASE
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_API_BASE | quote }}
+            - name: NUXT_PUBLIC_CENTRIFUGO_WS
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_CENTRIFUGO_WS | quote }}
+            - name: NUXT_PUBLIC_GOOGLE_CLIENT_ID
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID | quote }}
+            - name: NUXT_PUBLIC_TURNSTILE_SITE_KEY
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY | quote }}
+            - name: NUXT_PUBLIC_CHATWOOT_BASE_URL
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_CHATWOOT_BASE_URL | quote }}
+            - name: NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN
+              value: {{ .Values.frontend.env.NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN | quote }}
+            - name: NUXT_CHATWOOT_IDENTITY_TOKEN
+              value: {{ .Values.frontend.env.NUXT_CHATWOOT_IDENTITY_TOKEN | quote }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+      {{- with .Values.frontend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

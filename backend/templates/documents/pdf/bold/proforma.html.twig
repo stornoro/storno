@@ -1,0 +1,228 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.page { padding: 35px 45px; }
+.watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 90px;
+    font-weight: 900;
+    color: rgba(0,0,0,0.04);
+    letter-spacing: 6px;
+    z-index: -1;
+    white-space: nowrap;
+}
+.header-bar {
+    background: {{ primaryColor|default('#2563eb') }};
+    color: #fff;
+    margin: -35px -45px 32px -45px;
+    padding: 28px 45px;
+    overflow: hidden;
+}
+.header-bar-left { float: left; }
+.header-bar-right { float: right; text-align: right; }
+.doc-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+    line-height: 1.1;
+}
+.doc-number {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+}
+.doc-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    line-height: 2;
+}
+.doc-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 4px;
+}
+.party-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: {{ primaryColor|default('#2563eb') }};
+    margin-bottom: 6px;
+    font-weight: 800;
+    border-bottom: 3px solid {{ primaryColor|default('#2563eb') }};
+    padding-bottom: 4px;
+}
+.party-name {
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    color: #111;
+}
+.party-detail {
+    font-size: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+table.lines {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+table.lines thead th {
+    background: {{ primaryColor|default('#2563eb') }};
+    color: #fff;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+table.lines tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 11px;
+    color: #222;
+    font-weight: 500;
+}
+table.lines tbody tr:nth-child(even) td {
+    background: #f3f6fb;
+}
+table.lines tbody tr:last-child td {
+    border-bottom: 3px solid {{ primaryColor|default('#2563eb') }};
+}
+.totals {
+    width: 320px;
+    margin-left: auto;
+    background: {{ primaryColor|default('#2563eb') }};
+    padding: 18px 22px;
+}
+.totals-row {
+    overflow: hidden;
+    padding: 5px 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.85);
+    font-weight: 600;
+}
+.totals-row span:first-child { float: left; }
+.totals-row span:last-child { float: right; }
+.totals-row.total {
+    font-size: 20px;
+    font-weight: 900;
+    border-top: 3px solid rgba(255,255,255,0.4);
+    padding-top: 10px;
+    margin-top: 8px;
+    color: #fff;
+}
+.bank-info {
+    margin-top: 18px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #444;
+    padding: 10px 14px;
+    border-left: 3px solid {{ primaryColor|default('#2563eb') }};
+    background: #f3f6fb;
+}
+.bank-info .label {
+    color: {{ primaryColor|default('#2563eb') }};
+    font-weight: 700;
+}
+.validity {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: {{ primaryColor|default('#2563eb') }};
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+.notes {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: #f3f6fb;
+    border-left: 3px solid {{ primaryColor|default('#2563eb') }};
+    font-size: 10px;
+    color: #444;
+    font-weight: 500;
+}
+.notes-title {
+    font-weight: 800;
+    margin-bottom: 5px;
+    color: #222;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+.footer {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 3px solid {{ primaryColor|default('#2563eb') }};
+    font-size: 9px;
+    color: #888;
+    text-align: center;
+    font-weight: 600;
+}
+{% endblock %}
+
+{% block content %}
+    <div class="watermark">{{ 'proforma_watermark'|trans({}, 'pdf', locale|default('ro')) }}</div>
+
+    <div class="header-bar">
+        <div class="header-bar-left">
+            {% if showLogo|default(true) and logoDataUri %}
+                <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
+            {% endif %}
+            <div class="doc-title">{{ 'proforma_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-number">{{ invoice.number }}</div>
+        </div>
+        <div class="header-bar-right">
+            <div class="doc-type">{{ 'proforma_watermark'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-meta">{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
+            {% if invoice.dueDate %}
+                <div class="doc-meta">{{ 'valid_until'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.dueDate|date('d.m.Y') }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include 'documents/pdf/_parties.html.twig' %}
+
+    {% include 'documents/pdf/_lines_table.html.twig' with {hasProductCodes: hasProductCodes|default(false), hasLineDiscounts: hasLineDiscounts|default(false)} %}
+
+    {% include 'documents/pdf/_totals.html.twig' %}
+
+    {% include 'documents/pdf/_bank_info.html.twig' %}
+
+    {% include 'documents/pdf/_details.html.twig' %}
+
+    <div class="validity">
+        {% if invoice.dueDate %}
+            {% set validityText = 'proforma_validity_until'|trans({}, 'pdf', locale|default('ro'))|replace({'%date%': invoice.dueDate|date('d.m.Y')}) %}
+        {% else %}
+            {% set validityText = 'proforma_validity_default'|trans({}, 'pdf', locale|default('ro')) %}
+        {% endif %}
+        {{ 'proforma_disclaimer'|trans({}, 'pdf', locale|default('ro'))|replace({'%validity%': validityText}) }}
+    </div>
+
+    {% if invoice.notes is defined and invoice.notes %}
+    <div class="notes">
+        <div class="notes-title">{{ 'notes'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {{ invoice.notes }}
+    </div>
+    {% endif %}
+
+    {% if invoice.paymentTerms is defined and invoice.paymentTerms %}
+    <div class="notes">
+        <div class="notes-title">{{ 'payment_terms'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {{ invoice.paymentTerms }}
+    </div>
+    {% endif %}
+
+    {% include 'documents/pdf/_footer.html.twig' %}
+{% endblock %}

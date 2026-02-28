@@ -1,0 +1,35 @@
+api_platform:
+    title: Storno.ro API Platform
+    description: Storno.ro API este o platformă avansată care oferă funcționalități de programare a aplicațiilor (API) pentru automatizarea importului și exportului facturilor în cadrul serviciului ANAF pentru E-Factura. Acest API permite integrarea ușoară a proceselor de facturare în aplicațiile și sistemele existente, facilitând importul rapid și precis al facturilor în Storno.ro și exportul automat către serviciul ANAF. Soluția contribuie la eficientizarea gestionării documentelor fiscale, eliminând intervenția manuală și riscul de erori.
+    version: '0.1.0'
+
+    show_webby: false
+
+    mapping:
+        paths: [ "%kernel.project_dir%/src/Entity" ]    
+
+    formats:
+        jsonapi:  ['application/json']
+        jsonld: ['application/ld+json']
+        multipart: [ "multipart/form-data" ]
+
+    docs_formats:
+        jsonld: ['application/ld+json']
+        jsonopenapi: ['application/vnd.openapi+json']
+        html: ['text/html']
+
+    defaults:
+        pagination_client_items_per_page: true
+        pagination_maximum_items_per_page: 1
+        collection:
+            pagination:
+                items_per_page_parameter_name: 1 # Default value        
+
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+        extra_properties:
+            standard_put: true
+            rfc_7807_compliant_errors: true
+    event_listeners_backward_compatibility_layer: false
+    keep_legacy_inflector: false

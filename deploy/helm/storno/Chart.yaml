@@ -1,0 +1,14 @@
+apiVersion: v2
+name: storno
+description: "Storno.ro - Self-hosted invoicing platform"
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - invoicing
+  - accounting
+  - self-hosted
+home: https://storno.ro
+maintainers:
+  - name: Storno Team
+    url: https://storno.ro

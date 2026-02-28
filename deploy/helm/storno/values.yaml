@@ -1,0 +1,293 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Storno.ro — Helm Values
+# ──────────────────────────────────────────────────────────────────────────────
+
+# -- Global image pull secrets applied to all pods.
+imagePullSecrets: []
+# - name: ghcr-credentials
+
+# -- Override the chart name.
+nameOverride: ""
+# -- Override the full release name.
+fullnameOverride: ""
+
+# ── Backend (PHP + Nginx) ─────────────────────────────────────────────────────
+backend:
+  image:
+    repository: ghcr.io/stornoro/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # -- Pod-level annotations (e.g. for Prometheus scraping).
+  podAnnotations: {}
+
+  # -- Node selector for backend pods.
+  nodeSelector: {}
+
+  # -- Tolerations for backend pods.
+  tolerations: []
+
+  # -- Affinity rules for backend pods.
+  affinity: {}
+
+  env:
+    # ── Symfony core ────────────────────────────────────────────────────────
+    APP_ENV: prod
+    APP_SECRET: ""
+
+    # ── Database ─────────────────────────────────────────────────────────────
+    # When mysql.enabled=true this is auto-constructed in the deployment template.
+    # Set this explicitly when using an external database.
+    DATABASE_URL: ""
+
+    # ── JWT ──────────────────────────────────────────────────────────────────
+    JWT_PASSPHRASE: ""
+
+    # ── Redis ────────────────────────────────────────────────────────────────
+    # Auto-constructed from the release name when left empty.
+    REDIS_URL: ""
+    LOCK_DSN: ""
+    MESSENGER_TRANSPORT_DSN: ""
+
+    # ── Centrifugo ───────────────────────────────────────────────────────────
+    # Auto-constructed from the release name when left empty.
+    CENTRIFUGO_API_URL: ""
+    CENTRIFUGO_API_KEY: ""
+    CENTRIFUGO_TOKEN_HMAC_SECRET: ""
+
+    # ── Mailer ───────────────────────────────────────────────────────────────
+    MAILER_DSN: "null://null"
+    MAIL_FROM: "noreply@storno.ro"
+
+    # ── URLs ─────────────────────────────────────────────────────────────────
+    FRONTEND_URL: "https://app.storno.ro"
+    CORS_ALLOW_ORIGIN: "^https://((app|api|www)\\.)?storno\\.ro$"
+
+    # ── Licensing ────────────────────────────────────────────────────────────
+    LICENSE_KEY: ""
+    LICENSE_SERVER_URL: "https://app.storno.ro"
+
+    # ── Stripe ───────────────────────────────────────────────────────────────
+    STRIPE_SECRET_KEY: ""
+    STRIPE_PUBLISHABLE_KEY: ""
+    STRIPE_WEBHOOK_SECRET: ""
+    STRIPE_CONNECT_WEBHOOK_SECRET: ""
+    STRIPE_PLATFORM_FEE_PERCENT: "2.0"
+    BILLING_COMPANY_ID: ""
+
+    # ── Storage ──────────────────────────────────────────────────────────────
+    STORAGE_ENCRYPTION_KEY: ""
+
+    # ── AWS S3 ───────────────────────────────────────────────────────────────
+    AWS_S3_BUCKET: "storno-documents"
+    AWS_DEFAULT_REGION: "us-east-1"
+    AWS_ACCESS_KEY_ID: ""
+    AWS_SECRET_ACCESS_KEY: ""
+
+    # ── ANAF OAuth (e-Factura) ────────────────────────────────────────────────
+    OAUTH_ANAF_CLIENT_ID: ""
+    OAUTH_ANAF_CLIENT_SECRET: ""
+    OAUTH_ANAF_CLIENT_REDIRECT_URI: "https://app.storno.ro/auth/callback/anaf"
+    REDIRECT_AFTER_OAUTH: "https://app.storno.ro/auth/callback"
+
+    # ── Google OAuth (same value as frontend.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID) ──
+    OAUTH_GOOGLE_CLIENT_ID: ""
+    OAUTH_GOOGLE_CLIENT_SECRET: ""
+    OAUTH_GOOGLE_CLIENT_REDIRECT_URI: "https://api.storno.ro/api/connect/google/check"
+
+    # ── Cloudflare Turnstile ──────────────────────────────────────────────────
+    TURNSTILE_SECRET_KEY: ""
+
+    # ── Registration ─────────────────────────────────────────────────────────
+    REGISTRATION_ENABLED: "1"
+
+    # ── Binary paths (baked into the container image) ────────────────────────
+    WKHTMLTOPDF_PATH: "/usr/bin/wkhtmltopdf"
+    WKHTMLTOIMAGE_PATH: "/usr/bin/wkhtmltoimage"
+    JAVA_PATH: "/usr/bin/java"
+    JAVA_SERVICE_URL: "http://127.0.0.1:8082"
+
+# ── Frontend (Nuxt SSR) ───────────────────────────────────────────────────────
+frontend:
+  image:
+    repository: ghcr.io/stornoro/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    # Server-side API base (internal cluster DNS, set automatically when empty).
+    NUXT_API_BASE: ""
+    # Public API base (browser-facing).
+    NUXT_PUBLIC_API_BASE: "https://api.storno.ro"
+    # WebSocket endpoint for Centrifugo.
+    NUXT_PUBLIC_CENTRIFUGO_WS: "wss://app.storno.ro/connection/websocket"
+    # Google OAuth client ID (same value as backend.env.OAUTH_GOOGLE_CLIENT_ID).
+    NUXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+    # Cloudflare Turnstile site key (public).
+    NUXT_PUBLIC_TURNSTILE_SITE_KEY: ""
+    # Chatwoot integration (optional).
+    NUXT_PUBLIC_CHATWOOT_BASE_URL: "https://chat.storno.ro"
+    NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ""
+    NUXT_CHATWOOT_IDENTITY_TOKEN: ""
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis:
+  image:
+    repository: redis
+    tag: "7-alpine"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  persistence:
+    enabled: true
+    # -- Storage class; leave empty to use the cluster default.
+    storageClass: ""
+    size: 2Gi
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Centrifugo (WebSockets) ───────────────────────────────────────────────────
+centrifugo:
+  image:
+    repository: centrifugo/centrifugo
+    tag: "v5"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    CENTRIFUGO_API_KEY: ""
+    CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ""
+    CENTRIFUGO_ADMIN: "true"
+    CENTRIFUGO_ADMIN_PASSWORD: "admin"
+    # CENTRIFUGO_ADMIN_SECRET defaults to CENTRIFUGO_API_KEY in the template.
+    CENTRIFUGO_ALLOWED_ORIGINS: "https://app.storno.ro"
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 1Gi
+
+# ── MySQL (optional — disable when using an external database) ────────────────
+mysql:
+  enabled: true
+
+  image:
+    repository: mysql
+    tag: "8.0"
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  auth:
+    rootPassword: "changeme"
+    database: "storno"
+    username: "storno"
+    password: "changeme"
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 10Gi
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  # -- IngressClass name (e.g. nginx, traefik).
+  className: "nginx"
+  annotations: {}
+  # kubernetes.io/tls-acme: "true"
+  # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+  hosts:
+    - host: app.storno.ro
+      paths:
+        # Frontend — catch-all
+        - path: /
+          pathType: Prefix
+          service: frontend
+        # Backend API — must be listed before / so the ingress controller
+        # evaluates it first (nginx uses longest-prefix matching).
+        - path: /api
+          pathType: Prefix
+          service: backend
+
+    - host: api.storno.ro
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+
+  tls: []
+  # - secretName: storno-tls
+  #   hosts:
+  #     - app.storno.ro
+  #     - api.storno.ro
+
+# ── Persistent Volume Claims ──────────────────────────────────────────────────
+persistence:
+  # Shared storageClass for all PVCs (can be overridden per-service above).
+  storageClass: ""
+
+  jwtKeys:
+    size: 50Mi
+
+  backendVar:
+    size: 2Gi
+
+  backendStorage:
+    size: 10Gi

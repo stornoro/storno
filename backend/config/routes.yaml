@@ -1,0 +1,13 @@
+controllers:
+  resource:
+    path: ../src/Controller/
+    namespace: App\Controller
+  type: attribute
+
+jwt_auth:
+  path: /api/auth
+  methods: ["POST"]
+
+jwt_refresh:
+  path: /api/auth/refresh
+  methods: ["POST"]

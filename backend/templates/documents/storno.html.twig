@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.5; }
+        .page { padding: 30px 40px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #dc2626; padding-bottom: 15px; }
+        .doc-title { font-size: 24px; font-weight: bold; color: #dc2626; margin-bottom: 5px; }
+        .doc-number { font-size: 14px; color: #666; }
+        .refund-ref { margin-bottom: 20px; padding: 10px 15px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; color: #991b1b; }
+        .parties { display: flex; justify-content: space-between; margin-bottom: 25px; }
+        .party { width: 48%; }
+        .party-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 5px; font-weight: bold; }
+        .party-name { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+        .party-detail { font-size: 10px; color: #555; }
+        table.lines { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table.lines thead th { background: #fef2f2; border-bottom: 2px solid #fecaca; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; color: #991b1b; font-weight: 600; }
+        table.lines tbody td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+        table.lines tbody tr:last-child td { border-bottom: 2px solid #fecaca; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .negative { color: #dc2626; }
+        .totals { margin-left: auto; width: 280px; }
+        .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+        .totals-row.total { font-size: 14px; font-weight: bold; border-top: 2px solid #dc2626; padding-top: 8px; margin-top: 5px; color: #dc2626; }
+        .notes { margin-top: 30px; padding: 15px; background: #f8fafc; border-radius: 4px; font-size: 10px; color: #555; }
+        .notes-title { font-weight: bold; margin-bottom: 5px; }
+        .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #999; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div>
+                <div class="doc-title">FACTURA DE RAMBURSARE</div>
+                <div class="doc-number">{{ invoice.number }}</div>
+            </div>
+            <div style="text-align: right;">
+                <div class="doc-number">Data: {{ invoice.issueDate|date('d.m.Y') }}</div>
+            </div>
+        </div>
+
+        {% if invoice.parentDocument %}
+        <div class="refund-ref">
+            <strong>Rambursare pentru factura:</strong> {{ invoice.parentDocument.number }}
+            din {{ invoice.parentDocument.issueDate|date('d.m.Y') }}
+        </div>
+        {% endif %}
+
+        <div class="parties">
+            <div class="party">
+                <div class="party-label">Furnizor</div>
+                {% set company = invoice.company %}
+                <div class="party-name">{{ company.name }}</div>
+                <div class="party-detail">CUI: {{ company.cif }}</div>
+                {% if company.registrationNumber %}
+                    <div class="party-detail">Nr. Reg. Com.: {{ company.registrationNumber }}</div>
+                {% endif %}
+                <div class="party-detail">{{ company.address }}, {{ company.city }}</div>
+            </div>
+            <div class="party">
+                <div class="party-label">Client</div>
+                {% set client = invoice.client %}
+                {% if client %}
+                    <div class="party-name">{{ client.name }}</div>
+                    {% if client.cui %}
+                        <div class="party-detail">CUI: {{ client.cui }}</div>
+                    {% endif %}
+                    <div class="party-detail">{{ client.address }}, {{ client.city }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <table class="lines">
+            <thead>
+                <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Descriere</th>
+                    <th class="text-center" style="width: 60px;">Cant.</th>
+                    <th class="text-center" style="width: 50px;">U.M.</th>
+                    <th class="text-right" style="width: 90px;">Pret unitar</th>
+                    <th class="text-center" style="width: 50px;">TVA %</th>
+                    <th class="text-right" style="width: 90px;">TVA</th>
+                    <th class="text-right" style="width: 100px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in invoice.lines %}
+                <tr>
+                    <td>{{ line.position }}</td>
+                    <td>{{ line.description }}</td>
+                    <td class="text-center negative">{{ line.quantity }}</td>
+                    <td class="text-center">{{ line.unitOfMeasure }}</td>
+                    <td class="text-right">{{ line.unitPrice|number_format(2, ',', '.') }}</td>
+                    <td class="text-center">{{ line.vatRate }}%</td>
+                    <td class="text-right negative">{{ line.vatAmount|number_format(2, ',', '.') }}</td>
+                    <td class="text-right negative">{{ line.lineTotal|number_format(2, ',', '.') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <div class="totals-row">
+                <span>Subtotal:</span>
+                <span class="negative">{{ invoice.subtotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+            <div class="totals-row">
+                <span>TVA:</span>
+                <span class="negative">{{ invoice.vatTotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+            <div class="totals-row total">
+                <span>TOTAL:</span>
+                <span>{{ invoice.total|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+            </div>
+        </div>
+
+        {% if invoice.notes %}
+        <div class="notes">
+            <div class="notes-title">Motiv rambursare:</div>
+            {{ invoice.notes }}
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            Factura de rambursare generata electronic. Nu necesita semnatura si stampila conform Legii 227/2015.
+        </div>
+    </div>
+</body>
+</html>

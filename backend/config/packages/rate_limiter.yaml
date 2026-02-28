@@ -1,0 +1,118 @@
+framework:
+    rate_limiter:
+        web_api:
+            policy: 'token_bucket'
+            limit: 999999
+            rate: { interval: '1 minute', amount: 999999 }
+        authenticated_api:
+            policy: 'token_bucket'
+            limit: 999999
+            rate: { interval: '1 minute', amount: 999999 }
+        login:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        register:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_global:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_lista:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_descarcare_message:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_stare_message:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_upload_rasp:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        password_reset:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        mfa_verify:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        oauth_login:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        contact:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        license_validate:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+
+when@prod:
+    framework:
+        rate_limiter:
+            web_api:
+                policy: 'token_bucket'
+                limit: 10000
+                rate: { interval: '5 minutes', amount: 100 }
+            authenticated_api:
+                policy: 'token_bucket'
+                limit: 50000
+                rate: { interval: '2 minutes', amount: 500 }
+            login:
+                policy: 'sliding_window'
+                limit: 5
+                interval: '1 minute'
+            register:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '1 hour'
+            anaf_global:
+                policy: 'sliding_window'
+                limit: 1000
+                interval: '1 minute'
+            anaf_lista:
+                policy: 'sliding_window'
+                limit: 1500
+                interval: '1 day'
+            anaf_descarcare_message:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '1 day'
+            anaf_stare_message:
+                policy: 'sliding_window'
+                limit: 100
+                interval: '1 day'
+            anaf_upload_rasp:
+                policy: 'sliding_window'
+                limit: 1000
+                interval: '1 day'
+            password_reset:
+                policy: 'sliding_window'
+                limit: 3
+                interval: '15 minutes'
+            mfa_verify:
+                policy: 'sliding_window'
+                limit: 5
+                interval: '1 minute'
+            oauth_login:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '1 minute'
+            contact:
+                policy: 'sliding_window'
+                limit: 3
+                interval: '1 hour'
+            license_validate:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '1 hour'

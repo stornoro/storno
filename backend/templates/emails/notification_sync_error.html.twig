@@ -1,0 +1,50 @@
+{% extends 'emails/notification_base.html.twig' %}
+
+{% block icon_emoji %}
+    <div style="display: inline-block; width: 56px; height: 56px; border-radius: 50%; background-color: #fef2f2; text-align: center; line-height: 56px; font-size: 28px;">
+        &#9888;&#65039;
+    </div>
+{% endblock %}
+
+{% block heading %}Eroare sincronizare{% endblock %}
+
+{% block content %}
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin-bottom: 16px;">
+        <tr>
+            <td style="padding: 16px;">
+                <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #991b1b;">Eroare sincronizare e-Factura</p>
+                <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{{ message }}</p>
+            </td>
+        </tr>
+    </table>
+
+    {% if data.errors is defined and data.errors|length > 0 %}
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
+        <tr>
+            <td style="background-color: #f8f8fa; padding: 10px 16px; border-bottom: 1px solid #e0e0e0;">
+                <strong style="font-size: 13px; color: #333;">Detalii erori</strong>
+            </td>
+        </tr>
+        {% for error in data.errors %}
+        <tr>
+            <td style="padding: 8px 16px; font-size: 13px; color: #666;{% if not loop.last %} border-bottom: 1px solid #f0f0f0;{% endif %}">
+                {{ error }}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+{% endblock %}
+
+{% block cta %}
+    {% if data.companyId is defined %}
+    <tr>
+        <td style="padding: 0 32px 24px 32px;" align="center">
+            <a href="{{ frontendUrl }}/companies/{{ data.companyId }}/anaf" target="_blank"
+               style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 32px; border-radius: 6px;">
+                Verifica setarile ANAF
+            </a>
+        </td>
+    </tr>
+    {% endif %}
+{% endblock %}

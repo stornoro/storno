@@ -1,0 +1,80 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.header { overflow: hidden; margin-bottom: 30px; border-bottom: 2px solid {{ primaryColor|default('#2563eb') }}; padding-bottom: 15px; }
+.header-left { float: left; }
+.header-right { float: right; text-align: right; }
+.doc-title { font-size: 24px; font-weight: bold; color: {{ primaryColor|default('#2563eb') }}; margin-bottom: 5px; }
+.doc-number { font-size: 14px; color: #666; }
+.doc-meta { font-size: 12px; color: #666; text-align: right; line-height: 1.8; }
+.parties { overflow: hidden; margin-bottom: 25px; }
+.party { width: 48%; }
+.party-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 5px; font-weight: bold; }
+.party-name { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+.party-detail { font-size: 10px; color: #555; }
+table.lines { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+table.lines thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+table.lines tbody td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
+.payment-info { margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 4px; font-size: 10px; color: #555; }
+.payment-info-title { font-weight: bold; margin-bottom: 5px; }
+.notes { margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 4px; font-size: 10px; color: #555; }
+.notes-title { font-weight: bold; margin-bottom: 5px; }
+.footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #999; text-align: center; }
+{% endblock %}
+
+{% block content %}
+    <div class="header">
+        <div class="header-left">
+            {% if showLogo|default(true) and logoDataUri %}
+                <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
+            {% endif %}
+            <div class="doc-title">{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-number">{{ invoice.number }}</div>
+        </div>
+        <div class="header-right">
+            <div class="doc-meta">
+                <div>{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
+                {% if invoice.fiscalNumber %}
+                    <div>{{ 'fiscal_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.fiscalNumber }}</div>
+                {% endif %}
+                {% if invoice.cashRegisterName %}
+                    <div>{{ 'cash_register'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.cashRegisterName }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'documents/pdf/_parties.html.twig' with {supplierLabel: 'supplier_sender'|trans({}, 'pdf', locale|default('ro')), clientLabel: 'client_receiver'|trans({}, 'pdf', locale|default('ro'))} %}
+
+    {% include 'documents/pdf/_lines_table.html.twig' with {showPrices: true, hideVat: false, hasProductCodes: hasProductCodes|default(false), hasLineDiscounts: hasLineDiscounts|default(false)} %}
+
+    {% include 'documents/pdf/_totals.html.twig' %}
+
+    {% if invoice.paymentMethod is defined and invoice.paymentMethod %}
+    <div class="payment-info">
+        <div class="payment-info-title">{{ 'payment_method'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {% if invoice.paymentMethod == 'cash' %}Numerar
+        {% elseif invoice.paymentMethod == 'card' %}Card
+        {% elseif invoice.paymentMethod == 'meal_ticket' %}Tichete de masa
+        {% elseif invoice.paymentMethod == 'mixed' %}Mixt
+        {% else %}{{ invoice.paymentMethod }}
+        {% endif %}
+        {% if invoice.paymentMethod == 'mixed' %}
+            <br>
+            {% if invoice.cashPayment %}Numerar: {{ invoice.cashPayment }} {{ invoice.currency }}{% endif %}
+            {% if invoice.cardPayment %} | Card: {{ invoice.cardPayment }} {{ invoice.currency }}{% endif %}
+            {% if invoice.otherPayment %} | Altele: {{ invoice.otherPayment }} {{ invoice.currency }}{% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if invoice.notes is defined and invoice.notes %}
+    <div class="notes">
+        <div class="notes-title">{{ 'notes'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {{ invoice.notes }}
+    </div>
+    {% endif %}
+
+    {% include 'documents/pdf/_footer.html.twig' %}
+{% endblock %}

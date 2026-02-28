@@ -1,0 +1,7 @@
+{% if showBankInfo|default(true) and company.bankAccount %}
+<div class="bank-info">
+    <span class="label">{{ 'bank_account'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ company.bankAccount }}
+    {% if company.bankName %} - {{ company.bankName }}{% endif %}
+    {% if company.bankBic %} (BIC: {{ company.bankBic }}){% endif %}
+</div>
+{% endif %}

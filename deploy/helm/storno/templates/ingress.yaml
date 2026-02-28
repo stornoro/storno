@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "storno.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "storno.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path | quote }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                {{- if eq .service "backend" }}
+                name: {{ include "storno.backendServiceName" $ }}
+                port:
+                  number: 80
+                {{- else if eq .service "frontend" }}
+                name: {{ include "storno.frontendServiceName" $ }}
+                port:
+                  number: 3000
+                {{- else if eq .service "centrifugo" }}
+                name: {{ include "storno.centrifugoServiceName" $ }}
+                port:
+                  number: 8000
+                {{- else }}
+                name: {{ .service | quote }}
+                port:
+                  number: {{ .port | default 80 }}
+                {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,87 @@
+# PDF document labels — French
+supplier: 'Fournisseur'
+client: 'Client'
+cui: 'N° TVA'
+cnp: 'N° personnel'
+reg_number: 'N° immatriculation'
+phone: 'Tel.'
+email: 'E-mail'
+contact_person: 'Personne de contact'
+
+# Lines table
+code: 'Code'
+description: 'Description'
+quantity: 'Qte'
+unit: 'Unite'
+unit_price: 'Prix unitaire'
+discount: 'Remise'
+vat_percent: 'TVA %'
+vat: 'TVA'
+total_col: 'Total'
+
+# Totals
+subtotal: 'Sous-total'
+vat_label: 'TVA'
+discount_label: 'Remise'
+total: 'TOTAL'
+exchange_rate: 'Taux de change'
+
+# Bank
+bank_account: 'Compte bancaire'
+
+# Details
+order_number: 'N° commande'
+contract_number: 'N° contrat'
+project_reference: 'Reference projet'
+payment_method: 'Mode de paiement'
+payment_cash: 'Especes'
+payment_bank_transfer: 'Virement bancaire'
+payment_card: 'Carte'
+payment_cheque: 'Cheque / Billet a ordre'
+delivery_location: 'Lieu de livraison'
+delegate: 'Delegue'
+identity_document: "Piece d'identite"
+transport_vehicle: 'Moyen de transport'
+penalties: 'Penalites'
+penalty_per_day: '%s%% par jour'
+penalty_grace_days: "apres %s jours de grace"
+mentions_title: 'Mentions'
+prepared_by: 'Etabli par'
+sales_agent: 'Agent commercial'
+
+# Footer
+footer_text: 'Emise via'
+
+# Invoice
+invoice_title: 'FACTURE'
+date_label: 'Date'
+due_date: "Date d'echeance"
+anaf_upload_index: "Index de chargement"
+anaf_upload_date: 'Date de chargement'
+notes: 'Observations'
+payment_terms: 'Conditions de paiement'
+
+# Proforma
+proforma_title: 'FACTURE PROFORMA'
+proforma_watermark: 'PROFORMA'
+valid_until: "Valable jusqu'au"
+proforma_disclaimer: "Cette facture proforma n'est pas un document fiscal. Validite : %validity%."
+proforma_validity_until: "jusqu'au %date%"
+proforma_validity_default: "30 jours a compter de la date d'emission"
+
+# Storno / Credit note
+credit_note_title: 'AVOIR'
+refund_for_invoice: 'Remboursement pour la facture'
+refund_reason: 'Motif du remboursement'
+
+# Delivery note
+delivery_note_title: 'BON DE LIVRAISON'
+supplier_sender: 'Fournisseur / Expediteur'
+client_receiver: 'Client / Destinataire'
+supplier_signature: 'Signature fournisseur'
+client_signature: 'Signature client'
+
+# Receipt (ticket de caisse)
+receipt_title: 'TICKET DE CAISSE'
+fiscal_number: 'N° fiscal'
+cash_register: 'Caisse'

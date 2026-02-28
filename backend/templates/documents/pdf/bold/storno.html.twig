@@ -1,0 +1,232 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.page { padding: 35px 45px; }
+.header-bar {
+    background: #b91c1c;
+    color: #fff;
+    margin: -35px -45px 32px -45px;
+    padding: 28px 45px;
+    overflow: hidden;
+}
+.header-bar-left {
+    float: left;
+}
+.header-bar-right {
+    float: right;
+    text-align: right;
+}
+.doc-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+    line-height: 1.1;
+}
+.doc-number {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+}
+.doc-meta {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    line-height: 2;
+}
+.refund-ref {
+    margin-bottom: 26px;
+    padding: 14px 18px;
+    background: #fef2f2;
+    border-left: 5px solid #b91c1c;
+    font-size: 11px;
+    color: #7f1d1d;
+    font-weight: 700;
+}
+.refund-ref strong {
+    color: #b91c1c;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+.parties {
+    overflow: hidden;
+    margin-bottom: 28px;
+    gap: 20px;
+}
+.party {
+    width: 48%;
+}
+.party-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #b91c1c;
+    margin-bottom: 6px;
+    font-weight: 800;
+    border-bottom: 3px solid #b91c1c;
+    padding-bottom: 4px;
+}
+.party-name {
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    color: #111;
+}
+.party-detail {
+    font-size: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+table.lines {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+table.lines thead th {
+    background: #b91c1c;
+    color: #fff;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+table.lines tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #fee2e2;
+    font-size: 11px;
+    color: #222;
+    font-weight: 500;
+}
+table.lines tbody tr:nth-child(even) td {
+    background: #fff5f5;
+}
+table.lines tbody tr:last-child td {
+    border-bottom: 3px solid #b91c1c;
+}
+.totals {
+    width: 320px;
+    background: #b91c1c;
+    padding: 18px 22px;
+    margin-left: auto;
+    margin-bottom: 22px;
+}
+.totals-row {
+    overflow: hidden;
+    padding: 5px 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.85);
+    font-weight: 600;
+}
+.totals-row span:first-child {
+    float: left;
+}
+.totals-row span:last-child {
+    float: right;
+}
+.totals-row .negative {
+    color: rgba(255,255,255,0.85);
+}
+.totals-row.total {
+    font-size: 20px;
+    font-weight: 900;
+    border-top: 3px solid rgba(255,255,255,0.4);
+    padding-top: 10px;
+    margin-top: 8px;
+    color: #fff;
+}
+.notes {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: #fff5f5;
+    border-left: 3px solid #b91c1c;
+    font-size: 10px;
+    color: #444;
+    font-weight: 500;
+}
+.notes-title {
+    font-weight: 800;
+    margin-bottom: 5px;
+    color: #b91c1c;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+.footer {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 3px solid #b91c1c;
+    font-size: 9px;
+    color: #888;
+    text-align: center;
+    font-weight: 600;
+}
+.header-meta { border-collapse: collapse; margin-top: 4px; }
+.header-meta td { padding: 3px 0; font-size: 12px; color: rgba(255,255,255,0.92); font-weight: 600; }
+.header-meta .meta-label { text-align: right; padding-right: 10px; white-space: nowrap; }
+.header-meta .meta-value { text-align: right; font-weight: bold; white-space: nowrap; }
+.header-meta .meta-spacer { width: 25px; }
+{% endblock %}
+
+{% block content %}
+    <div class="header-bar">
+        <div class="header-bar-left">
+            {% if showLogo|default(true) and logoDataUri %}
+                <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
+            {% endif %}
+            <div class="doc-title">{{ 'credit_note_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-number">{{ invoice.number }}</div>
+        </div>
+        <div class="header-bar-right">
+            <table class="header-meta">
+                <tr>
+                    <td class="meta-label">{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}:</td>
+                    <td class="meta-value">{{ invoice.issueDate|date('d.m.Y') }}</td>
+                    {% if invoice.anafUploadId|default %}
+                    <td class="meta-spacer"></td>
+                    <td class="meta-label">{{ 'anaf_upload_index'|trans({}, 'pdf', locale|default('ro')) }}:</td>
+                    <td class="meta-value">{{ invoice.anafUploadId }}</td>
+                    {% endif %}
+                </tr>
+                {% if invoice.anafUploadId|default and invoice.syncedAt|default %}
+                <tr>
+                    <td class="meta-label"></td>
+                    <td class="meta-value"></td>
+                    <td class="meta-spacer"></td>
+                    <td class="meta-label">{{ 'anaf_upload_date'|trans({}, 'pdf', locale|default('ro')) }}:</td>
+                    <td class="meta-value">{{ invoice.syncedAt|date('d.m.Y H:i') }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {% if invoice.parentDocument is defined and invoice.parentDocument %}
+    <div class="refund-ref">
+        <strong>{{ 'refund_for_invoice'|trans({}, 'pdf', locale|default('ro')) }}:</strong>&nbsp;
+        {{ invoice.parentDocument.number }}
+        din {{ invoice.parentDocument.issueDate|date('d.m.Y') }}
+    </div>
+    {% endif %}
+
+    {% include 'documents/pdf/_parties.html.twig' %}
+
+    {% include 'documents/pdf/_lines_table.html.twig' with {negativeValues: true, hasProductCodes: hasProductCodes|default(false), hasLineDiscounts: hasLineDiscounts|default(false)} %}
+
+    {% include 'documents/pdf/_totals.html.twig' with {negativeValues: true} %}
+
+    {% include 'documents/pdf/_details.html.twig' %}
+
+    {% if invoice.notes is defined and invoice.notes %}
+    <div class="notes">
+        <div class="notes-title">{{ 'refund_reason'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+        {{ invoice.notes }}
+    </div>
+    {% endif %}
+
+    {% include 'documents/pdf/_footer.html.twig' %}
+{% endblock %}

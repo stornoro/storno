@@ -1,0 +1,17 @@
+parameters:
+    stripe.secret_key: '%env(STRIPE_SECRET_KEY)%'
+    stripe.publishable_key: '%env(STRIPE_PUBLISHABLE_KEY)%'
+    stripe.webhook_secret: '%env(STRIPE_WEBHOOK_SECRET)%'
+    stripe.connect_webhook_secret: '%env(STRIPE_CONNECT_WEBHOOK_SECRET)%'
+    stripe.app_webhook_secret: '%env(default::STRIPE_APP_WEBHOOK_SECRET)%'
+    stripe.platform_fee_percent: '%env(float:default::STRIPE_PLATFORM_FEE_PERCENT)%'
+    # UUID of the Storno.ro company entity used for issuing subscription invoices (SaaS only)
+    stripe.billing_company_id: '%env(default::BILLING_COMPANY_ID)%'
+    # Self-hosted licensing
+    licensing.license_key: '%env(string:default::LICENSE_KEY)%'
+    licensing.server_url: '%env(string:default:licensing.default_server_url:LICENSE_SERVER_URL)%'
+    licensing.default_server_url: 'http://localhost:8000'
+    licensing.jwt_issuer: '%env(string:default:licensing.default_jwt_issuer:LICENSE_JWT_ISSUER)%'
+    licensing.default_jwt_issuer: 'storno.ro'
+    # JWT signing key for offline licenses (SaaS only — path to PEM private key)
+    licensing.jwt_private_key_path: '%env(string:default::LICENSING_JWT_PRIVATE_KEY_PATH)%'

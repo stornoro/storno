@@ -1,0 +1,10 @@
+framework:
+    notifier:
+        chatter_transports: []
+        texter_transports: []
+
+# To enable Telegram/Twilio notifications, set real DSNs in .env.local and uncomment:
+#    chatter_transports:
+#        telegram: '%env(TELEGRAM_DSN)%'
+#    texter_transports:
+#        twilio: '%env(TWILIO_DSN)%'

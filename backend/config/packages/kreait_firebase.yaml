@@ -1,0 +1,4 @@
+kreait_firebase:
+    projects:
+        storno:
+            credentials: '%env(default::FIREBASE_CREDENTIALS)%'

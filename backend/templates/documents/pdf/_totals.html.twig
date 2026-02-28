@@ -1,0 +1,28 @@
+<div class="totals">
+    <div class="totals-row">
+        <span>{{ 'subtotal'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        <span{% if negativeValues|default(false) %} class="negative"{% endif %}>{{ invoice.subtotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+    </div>
+    {% if not (hideVat|default(false)) %}
+    <div class="totals-row">
+        <span>{{ 'vat_label'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        <span{% if negativeValues|default(false) %} class="negative"{% endif %}>{{ invoice.vatTotal|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+    </div>
+    {% endif %}
+    {% if invoice.discount is defined and invoice.discount and invoice.discount != '0.00' %}
+    <div class="totals-row">
+        <span>{{ 'discount_label'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        <span>-{{ invoice.discount|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+    </div>
+    {% endif %}
+    <div class="totals-row total">
+        <span>{{ 'total'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        <span>{{ invoice.total|number_format(2, ',', '.') }} {{ invoice.currency }}</span>
+    </div>
+    {% if invoice.exchangeRate is defined and invoice.exchangeRate and invoice.currency is defined and invoice.currency != 'RON' %}
+    <div class="totals-row" style="font-size: 9px; color: #888; margin-top: 4px;">
+        <span>{{ 'exchange_rate'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+        <span>1 {{ invoice.currency }} = {{ invoice.exchangeRate }} RON</span>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,192 @@
+services:
+  # ── Backend (PHP + Nginx) ────────────────────────────────────────
+  backend:
+    image: ghcr.io/stornoro/backend:latest
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8900}:80"
+    environment:
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      DATABASE_URL: ${DATABASE_URL:-mysql://${MYSQL_USER:-storno}:${MYSQL_PASSWORD:-changeme}@db:3306/${MYSQL_DATABASE:-storno}?serverVersion=8.0&charset=utf8mb4}
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE}
+      JWT_SECRET_KEY: /app/config/jwt/private.pem
+      JWT_PUBLIC_KEY: /app/config/jwt/public.pem
+      JWT_REFRESH_COOKIE_NAME: ${JWT_REFRESH_COOKIE_NAME:-__refresh__token}
+      REDIS_URL: redis://redis:6379
+      LOCK_DSN: redis://redis:6379
+      MESSENGER_TRANSPORT_DSN: redis://redis:6379/messages
+      CENTRIFUGO_API_URL: http://centrifugo:8000/api
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
+      CENTRIFUGO_TOKEN_HMAC_SECRET: ${CENTRIFUGO_TOKEN_HMAC_SECRET}
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      MAIL_FROM: ${MAIL_FROM:-noreply@storno.ro}
+      SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
+      FRONTEND_URL: ${FRONTEND_URL:-https://app.storno.ro}
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https://((app|api|www)\.)?storno\.ro$}
+      WKHTMLTOPDF_PATH: /usr/bin/wkhtmltopdf
+      WKHTMLTOIMAGE_PATH: /usr/bin/wkhtmltoimage
+      JAVA_PATH: /usr/bin/java
+      JAVA_SERVICE_URL: http://127.0.0.1:8082
+      LICENSE_KEY: ${LICENSE_KEY:-}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://app.storno.ro}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-storno-documents}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      OAUTH_ANAF_CLIENT_ID: ${OAUTH_ANAF_CLIENT_ID:-}
+      OAUTH_ANAF_CLIENT_SECRET: ${OAUTH_ANAF_CLIENT_SECRET:-}
+      OAUTH_ANAF_CLIENT_REDIRECT_URI: ${OAUTH_ANAF_CLIENT_REDIRECT_URI:-https://api.storno.ro/auth/callback/anaf}
+      REDIRECT_AFTER_OAUTH: ${REDIRECT_AFTER_OAUTH:-https://app.storno.ro/auth/callback}
+      OAUTH_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      OAUTH_GOOGLE_CLIENT_REDIRECT_URI: ${OAUTH_GOOGLE_CLIENT_REDIRECT_URI:-https://api.storno.ro/api/connect/google/check}
+      STRIPE_PLATFORM_FEE_PERCENT: ${STRIPE_PLATFORM_FEE_PERCENT:-2.0}
+      BILLING_COMPANY_ID: ${BILLING_COMPANY_ID:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-1}
+      LICENSING_JWT_PRIVATE_KEY_PATH: ${LICENSING_JWT_PRIVATE_KEY_PATH:-}
+      LICENSE_JWT_ISSUER: ${LICENSE_JWT_ISSUER:-storno.ro}
+      STRIPE_APP_WEBHOOK_SECRET: ${STRIPE_APP_WEBHOOK_SECRET:-}
+    volumes:
+      - jwt_keys:/app/config/jwt
+      - backend_var:/app/var
+      - backend_storage:/app/storage
+      - ../backend/src:/app/src:ro
+      - ../backend/config:/app/config
+      - ../backend/templates:/app/templates:ro
+      - ../backend/migrations:/app/migrations:ro
+      - ../backend/translations:/app/translations:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend (Nuxt SSR) ──────────────────────────────────────────
+  frontend:
+    image: ghcr.io/stornoro/frontend:latest
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
+        NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+        NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
+        NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8901}:3000"
+    environment:
+      NUXT_API_BASE: http://backend
+      NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
+      NUXT_PUBLIC_CENTRIFUGO_WS: ${PUBLIC_CENTRIFUGO_WS:-wss://app.storno.ro/connection/websocket}
+      NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      NUXT_PUBLIC_CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-https://chat.storno.ro}
+      NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN: ${CHATWOOT_WEBSITE_TOKEN:-}
+      NUXT_CHATWOOT_IDENTITY_TOKEN: ${CHATWOOT_IDENTITY_TOKEN:-}
+    depends_on:
+      - backend
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Docs Site (Next.js) — SaaS only ────────────────────────────
+  docs:
+    image: ghcr.io/stornoro/docs:latest
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-8903}:3000"
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── MySQL (optional — only needed if not using external DATABASE_URL) ──
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    profiles: ["local-db"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-storno}
+      MYSQL_USER: ${MYSQL_USER:-storno}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # ── Redis ────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Centrifugo (WebSockets) ──────────────────────────────────────
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    restart: unless-stopped
+    ports:
+      - "${CENTRIFUGO_PORT:-8445}:8000"
+    environment:
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET}
+      CENTRIFUGO_ADMIN: "true"
+      CENTRIFUGO_ADMIN_PASSWORD: ${CENTRIFUGO_ADMIN_PASSWORD:-admin}
+      CENTRIFUGO_ADMIN_SECRET: ${CENTRIFUGO_API_KEY}
+      CENTRIFUGO_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGINS:-https://app.storno.ro}
+    command: centrifugo --health --config /centrifugo/config.json
+    volumes:
+      - centrifugo_data:/centrifugo
+      - ../backend/config/centrifugo.json:/centrifugo/config.json:ro
+    networks:
+      - storno
+
+volumes:
+  db_data:
+  redis_data:
+  jwt_keys:
+  backend_var:
+  backend_storage:
+  centrifugo_data:
+
+networks:
+  storno:
+    driver: bridge

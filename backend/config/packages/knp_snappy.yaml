@@ -1,0 +1,13 @@
+knp_snappy:
+    temporary_folder:    '/tmp'
+    pdf:
+        enabled:    true
+        binary:     '%env(WKHTMLTOPDF_PATH)%'
+        options:
+            print-media-type:  true
+            no-outline:        true
+            orientation:       Portrait
+    image:
+        enabled:    true
+        binary:     '%env(WKHTMLTOIMAGE_PATH)%'
+        options:    []

@@ -1,0 +1,35 @@
+framework:
+    messenger:
+        failure_transport: failed
+
+        transports:
+            async: 'doctrine://default?queue_name=async'
+            failed: 'doctrine://default?queue_name=failed'
+            scheduler_default: 'doctrine://default?queue_name=scheduler'
+            sync: 'sync://'
+
+when@prod:
+    framework:
+        messenger:
+            transports:
+                async: '%env(MESSENGER_TRANSPORT_DSN)%'
+                scheduler_default: '%env(resolve:REDIS_URL)%/scheduler'
+
+            routing:
+                'App\Message\EInvoice\SubmitEInvoiceMessage': async
+                'App\Message\EInvoice\CheckEInvoiceStatusMessage': async
+                'App\Message\Anaf\SyncCompanyMessage': async
+                'App\Message\GeneratePdfMessage': async
+                'App\Message\GenerateZipExportMessage': async
+                'App\Message\SendExternalNotificationMessage': async
+                'App\Message\SendPushNotificationMessage': async
+                'App\Message\DeleteUserAccountMessage': async
+                'App\Message\DeleteCompanyDataMessage': async
+                'App\Message\ResetCompanyDataMessage': async
+                'App\Message\SendInvitationEmailMessage': async
+                'App\Message\SendEmailConfirmationMessage': async
+                'App\Message\ProcessImportMessage': async
+                'App\Message\DispatchWebhookMessage': async
+                'App\Message\Anaf\SubmitETransportMessage': async
+                'App\Message\Anaf\CheckETransportStatusMessage': async
+                'App\Message\ProcessTrialBalanceMessage': async
