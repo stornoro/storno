@@ -544,4 +544,30 @@ class InvoiceRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    /**
+     * Find outgoing invoices not yet submitted to ANAF whose issue date
+     * is exactly $days days ago (approaching the 5-day submission deadline).
+     *
+     * @return Invoice[]
+     */
+    public function findApproachingAnafDeadline(int $days): array
+    {
+        $targetDate = new \DateTime(sprintf('-%d days', $days));
+
+        return $this->createQueryBuilder('i')
+            ->leftJoin('i.company', 'c')->addSelect('c')
+            ->leftJoin('i.client', 'cl')->addSelect('cl')
+            ->where('i.issueDate >= :start')
+            ->andWhere('i.issueDate < :end')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.status IN (:statuses)')
+            ->andWhere('c.syncEnabled = true')
+            ->setParameter('start', $targetDate->format('Y-m-d') . ' 00:00:00')
+            ->setParameter('end', $targetDate->format('Y-m-d') . ' 23:59:59')
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('statuses', [DocumentStatus::ISSUED, DocumentStatus::REJECTED])
+            ->getQuery()
+            ->getResult();
+    }
 }

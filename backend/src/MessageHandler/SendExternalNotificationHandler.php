@@ -39,6 +39,7 @@ class SendExternalNotificationHandler
         'token.refresh_failed' => 'emails/notification_token_refresh_failed.html.twig',
         'efactura.new_documents' => 'emails/notification_efactura_new_documents.html.twig',
         'sync.error' => 'emails/notification_sync_error.html.twig',
+        'invoice.anaf_deadline' => 'emails/notification_anaf_deadline.html.twig',
         'export_ready' => 'emails/notification_export_ready.html.twig',
         'payment.received' => 'emails/notification_payment_received.html.twig',
     ];
@@ -191,6 +192,14 @@ class SendExternalNotificationHandler
         return match ($eventType) {
             'invoice.validated' => implode("\n", array_filter([
                 "\u{2705} *Factura validata ANAF*",
+                $invoiceNumber ? "\u{1F4C4} Factura: *{$invoiceNumber}*" : null,
+                '',
+                $message,
+                $invoiceLink ? "\n\u{1F517} {$invoiceLink}" : null,
+            ])),
+
+            'invoice.anaf_deadline' => implode("\n", array_filter([
+                "\u{23F0} *Termen ANAF expira maine*",
                 $invoiceNumber ? "\u{1F4C4} Factura: *{$invoiceNumber}*" : null,
                 '',
                 $message,
