@@ -5,6 +5,53 @@ interface LineBase {
   vatRate: string
 }
 
+/**
+ * Maps VAT category codes to their corresponding invoice type codes.
+ * Used to auto-update invoiceTypeCode when the dominant VAT category changes.
+ */
+export const vatCategoryToTypeCode: Record<string, string> = {
+  AE: 'reverse_charge',
+  K: 'exempt_art_294_ab',
+  G: 'exempt_art_294_cd',
+  E: 'exempt_with_deduction',
+  O: 'non_taxable',
+}
+
+const autoSetTypeCodes = new Set(Object.values(vatCategoryToTypeCode))
+
+/**
+ * Determines the appropriate invoiceTypeCode based on the dominant VAT category
+ * across all lines. Only resets to 'standard' if the current type was previously
+ * auto-set from a VAT category (avoids overwriting manual choices like
+ * self_billing, simplified, etc.).
+ *
+ * @param lines - Array of line objects with a vatCategoryCode string field
+ * @param currentTypeCode - The current invoiceTypeCode value
+ * @returns The new invoiceTypeCode to use
+ */
+export function resolveInvoiceTypeCode(
+  lines: { vatCategoryCode: string }[],
+  currentTypeCode: string | undefined,
+): string {
+  if (!lines.length) return currentTypeCode ?? 'standard'
+
+  const freq: Record<string, number> = {}
+  for (const l of lines) {
+    freq[l.vatCategoryCode] = (freq[l.vatCategoryCode] || 0) + 1
+  }
+  const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0]
+  if (!dominant) return currentTypeCode ?? 'standard'
+
+  const mapped = vatCategoryToTypeCode[dominant]
+  if (mapped) {
+    return mapped
+  }
+  if (autoSetTypeCodes.has(currentTypeCode!)) {
+    return 'standard'
+  }
+  return currentTypeCode ?? 'standard'
+}
+
 export function useLineCalc() {
   function formatMoney(amount: number, currency = 'RON') {
     return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(amount)
