@@ -66,7 +66,26 @@ class OrganizationContext
             return $basePermission && $apiToken->hasScope($permission);
         }
 
+        // If authenticated via OAuth2 token, intersect with token scopes
+        $oauth2Token = $request?->attributes->get('_oauth2_access_token');
+        if ($oauth2Token instanceof \App\Entity\OAuth2AccessToken) {
+            return $basePermission && $oauth2Token->hasScope($permission);
+        }
+
         return $basePermission;
+    }
+
+    /**
+     * Returns true if the current request was authenticated via API key or OAuth2 token
+     * (as opposed to a JWT session). Used to block programmatic access to credential
+     * management endpoints — only interactive sessions can create/manage tokens and apps.
+     */
+    public function isTokenAuth(): bool
+    {
+        $request = $this->requestStack->getCurrentRequest();
+
+        return $request?->attributes->get('_api_token') instanceof \App\Entity\ApiToken
+            || $request?->attributes->get('_oauth2_access_token') instanceof \App\Entity\OAuth2AccessToken;
     }
 
     public function resolveCompany(?Request $request = null): ?Company

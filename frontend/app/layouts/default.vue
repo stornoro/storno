@@ -170,6 +170,11 @@ const links = computed(() => {
       to: '/settings/api-keys',
       onSelect: close,
     },
+    can(P.OAUTH2_APP_VIEW) && {
+      label: $t('oauth2.title'),
+      to: '/settings/oauth-apps',
+      onSelect: close,
+    },
     can(P.ORG_MANAGE_BILLING) && !authStore.isSelfHosted && {
       label: $t('settings.billingPage.stripeConnect'),
       to: '/settings/payments',

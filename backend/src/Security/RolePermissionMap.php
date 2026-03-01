@@ -77,6 +77,7 @@ final class RolePermissionMap
             Permission::ORG_VIEW_AUDIT,
             Permission::WEBHOOK_VIEW, Permission::WEBHOOK_MANAGE,
             Permission::API_KEY_VIEW, Permission::API_KEY_MANAGE,
+            Permission::OAUTH2_APP_VIEW, Permission::OAUTH2_APP_MANAGE,
             Permission::BACKUP_MANAGE,
         ]);
 

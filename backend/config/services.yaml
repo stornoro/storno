@@ -337,5 +337,13 @@ services:
                 tag: 'app.einvoice_connection_tester'
                 index_by: 'provider'
 
+    # ---------------------------------------------------------------------------
+    # OAuth2 — make JWT authenticator skip storno_oat_* Bearer tokens
+    # ---------------------------------------------------------------------------
+    App\Security\OAuth2AwareTokenExtractor:
+        decorates: 'lexik_jwt_authentication.extractor.chain_extractor'
+        arguments:
+            $inner: '@.inner'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

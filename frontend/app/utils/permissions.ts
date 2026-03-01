@@ -69,6 +69,10 @@ export const P = {
   API_KEY_VIEW: 'api_key.view',
   API_KEY_MANAGE: 'api_key.manage',
 
+  // OAuth2 Apps
+  OAUTH2_APP_VIEW: 'oauth2_app.view',
+  OAUTH2_APP_MANAGE: 'oauth2_app.manage',
+
   // Backup
   BACKUP_MANAGE: 'backup.manage',
 
@@ -94,6 +98,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[]> = {
   '/settings/payments': P.ORG_MANAGE_BILLING,
   '/settings/webhooks': P.WEBHOOK_VIEW,
   '/settings/api-keys': P.API_KEY_VIEW,
+  '/settings/oauth-apps': P.OAUTH2_APP_VIEW,
   '/settings/backup': P.BACKUP_MANAGE,
   '/settings/import-export': P.IMPORT_MANAGE,
   '/settings/team': P.ORG_MANAGE_MEMBERS,
