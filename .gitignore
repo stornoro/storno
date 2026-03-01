@@ -5,6 +5,7 @@ mobile/
 status/
 storno-cli/
 stripe-app/
+zapier-app/
 
 # OS / IDE
 .DS_Store
