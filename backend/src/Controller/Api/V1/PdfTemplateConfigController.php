@@ -123,6 +123,43 @@ class PdfTemplateConfigController extends AbstractController
             $config->setCustomCss($data['customCss']);
         }
 
+        if (array_key_exists('labelOverrides', $data)) {
+            $raw = $data['labelOverrides'];
+            if ($raw !== null && is_array($raw)) {
+                $allowedKeys = [
+                    'invoice_title', 'proforma_title', 'credit_note_title', 'delivery_note_title', 'receipt_title',
+                    'date_label', 'due_date', 'subtotal', 'vat_label', 'discount_label', 'total', 'exchange_rate',
+                    'payment_method', 'notes', 'payment_terms', 'bank_account', 'footer_text',
+                    'supplier', 'supplier_cui', 'supplier_reg_number', 'supplier_address', 'supplier_county',
+                    'supplier_phone', 'supplier_email', 'supplier_website',
+                    'client', 'client_cui', 'client_reg_number', 'client_cnp', 'client_address', 'client_county',
+                    'client_phone', 'client_email', 'client_contact',
+                    'col_description', 'col_code', 'col_unit', 'col_quantity', 'col_unit_price',
+                    'col_line_total', 'col_vat_percent', 'col_vat', 'col_total',
+                ];
+                $sanitized = [];
+                foreach ($raw as $key => $entry) {
+                    if (!in_array($key, $allowedKeys, true) || !is_array($entry)) {
+                        continue;
+                    }
+                    $item = [];
+                    if (isset($entry['visible'])) {
+                        $item['visible'] = (bool) $entry['visible'];
+                    }
+                    if (array_key_exists('text', $entry)) {
+                        $text = $entry['text'];
+                        $item['text'] = ($text !== null && $text !== '') ? mb_substr((string) $text, 0, 200) : null;
+                    }
+                    if (!empty($item)) {
+                        $sanitized[$key] = $item;
+                    }
+                }
+                $config->setLabelOverrides(!empty($sanitized) ? $sanitized : null);
+            } else {
+                $config->setLabelOverrides(null);
+            }
+        }
+
         $this->entityManager->flush();
 
         return $this->json($this->serializeConfig($config));
@@ -171,6 +208,7 @@ class PdfTemplateConfigController extends AbstractController
             'defaultPaymentMethod' => $config->getDefaultPaymentMethod(),
             'footerText' => $config->getFooterText(),
             'customCss' => $config->getCustomCss(),
+            'labelOverrides' => $config->getLabelOverrides(),
         ];
     }
 }

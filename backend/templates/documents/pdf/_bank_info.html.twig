@@ -1,7 +1,7 @@
-{% if (showBankInfo is not defined or showBankInfo) and (bankDisplaySection|default('both') == 'payment' or bankDisplaySection|default('both') == 'both') %}
+{% if (showBankInfo is not defined or showBankInfo) and (bankDisplaySection|default('both') == 'payment' or bankDisplaySection|default('both') == 'both') and pdf_visible('bank_account', labelOverrides|default(null)) %}
     {% if invoiceBankAccounts|default([])|length > 0 %}
         <div class="bank-info">
-            <span class="label">{{ 'bank_accounts'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+            <span class="label">{{ pdf_label('bank_account', labelOverrides|default(null), locale|default('ro'), 'bank_accounts') }}:</span>
             {% if bankDisplayMode|default('stacked') == 'inline' %}
                 {% for account in invoiceBankAccounts %}
                     <span>{{ account.iban }}{% if account.bankName %} - {{ account.bankName }}{% endif %}</span>{% if not loop.last %} | {% endif %}
@@ -16,7 +16,7 @@
         </div>
     {% elseif company.bankAccount %}
         <div class="bank-info">
-            <span class="label">{{ 'bank_account'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ company.bankAccount }}
+            <span class="label">{{ pdf_label('bank_account', labelOverrides|default(null), locale|default('ro'), 'bank_account') }}:</span> {{ company.bankAccount }}
             {% if company.bankName %} - {{ company.bankName }}{% endif %}
             {% if company.bankBic %} (BIC: {{ company.bankBic }}){% endif %}
         </div>

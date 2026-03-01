@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PdfTemplateConfig, PdfTemplateInfo } from '~/types'
+import type { PdfLabelOverride, PdfTemplateConfig, PdfTemplateInfo } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -26,6 +26,96 @@ const localBankDisplayMode = ref<'stacked' | 'inline'>('stacked')
 const localDefaultNotes = ref<string | null>(null)
 const localDefaultPaymentTerms = ref<string | null>(null)
 const localDefaultPaymentMethod = ref<string | null>(null)
+const localLabelOverrides = ref<Record<string, PdfLabelOverride>>({})
+
+// Label definitions for Texte tab
+interface LabelDef {
+  key: string
+  label: string
+  hideable: boolean
+}
+
+const generalLabels: LabelDef[] = [
+  { key: 'invoice_title', label: 'FACTURA', hideable: false },
+  { key: 'proforma_title', label: 'FACTURA PROFORMA', hideable: false },
+  { key: 'credit_note_title', label: 'FACTURA DE RAMBURSARE', hideable: false },
+  { key: 'delivery_note_title', label: 'AVIZ DE INSOTIRE A MARFII', hideable: false },
+  { key: 'receipt_title', label: 'BON FISCAL', hideable: false },
+  { key: 'date_label', label: 'Data', hideable: false },
+  { key: 'due_date', label: 'Scadenta', hideable: false },
+  { key: 'subtotal', label: 'Subtotal', hideable: false },
+  { key: 'vat_label', label: 'TVA', hideable: false },
+  { key: 'discount_label', label: 'Discount', hideable: false },
+  { key: 'total', label: 'TOTAL', hideable: false },
+  { key: 'exchange_rate', label: 'Curs valutar', hideable: false },
+  { key: 'payment_method', label: 'Modalitate de plata', hideable: true },
+  { key: 'notes', label: 'Observatii', hideable: true },
+  { key: 'payment_terms', label: 'Conditii de plata', hideable: true },
+  { key: 'bank_account', label: 'Cont bancar', hideable: true },
+  { key: 'footer_text', label: 'Factura circula fara semnatura si stampila...', hideable: true },
+]
+
+const supplierLabels: LabelDef[] = [
+  { key: 'supplier', label: 'Furnizor', hideable: false },
+  { key: 'supplier_cui', label: 'CUI', hideable: true },
+  { key: 'supplier_reg_number', label: 'Nr. Reg. Com.', hideable: true },
+  { key: 'supplier_address', label: 'Adresa', hideable: true },
+  { key: 'supplier_county', label: 'Judet', hideable: true },
+  { key: 'supplier_phone', label: 'Tel', hideable: true },
+  { key: 'supplier_email', label: 'Email', hideable: true },
+  { key: 'supplier_website', label: 'Web', hideable: true },
+]
+
+const clientLabels: LabelDef[] = [
+  { key: 'client', label: 'Client', hideable: false },
+  { key: 'client_cui', label: 'CUI', hideable: true },
+  { key: 'client_reg_number', label: 'Nr. Reg. Com.', hideable: true },
+  { key: 'client_cnp', label: 'CNP', hideable: true },
+  { key: 'client_address', label: 'Adresa', hideable: true },
+  { key: 'client_county', label: 'Judet', hideable: true },
+  { key: 'client_phone', label: 'Tel', hideable: true },
+  { key: 'client_email', label: 'Email', hideable: true },
+  { key: 'client_contact', label: 'Persoana de contact', hideable: true },
+]
+
+const tableLabels: LabelDef[] = [
+  { key: 'col_description', label: 'Articol', hideable: false },
+  { key: 'col_code', label: 'Cod', hideable: true },
+  { key: 'col_unit', label: 'U.M.', hideable: true },
+  { key: 'col_quantity', label: 'Cant.', hideable: true },
+  { key: 'col_unit_price', label: 'Pret unitar', hideable: true },
+  { key: 'col_line_total', label: 'Valoare', hideable: true },
+  { key: 'col_vat_percent', label: 'Procent TVA', hideable: true },
+  { key: 'col_vat', label: 'TVA', hideable: true },
+  { key: 'col_total', label: 'Total', hideable: true },
+]
+
+const labelSubTabs = computed(() => [
+  { label: $t('pdfTemplates.labelsGeneral'), slot: 'labelsGeneral' },
+  { label: $t('pdfTemplates.labelsSupplier'), slot: 'labelsSupplier' },
+  { label: $t('pdfTemplates.labelsClient'), slot: 'labelsClient' },
+  { label: $t('pdfTemplates.labelsTable'), slot: 'labelsTable' },
+])
+
+function getLabelOverride(key: string): PdfLabelOverride {
+  return localLabelOverrides.value[key] || {}
+}
+
+function setLabelVisible(key: string, visible: boolean) {
+  const current = localLabelOverrides.value[key] || {}
+  localLabelOverrides.value = {
+    ...localLabelOverrides.value,
+    [key]: { ...current, visible },
+  }
+}
+
+function setLabelText(key: string, text: string) {
+  const current = localLabelOverrides.value[key] || {}
+  localLabelOverrides.value = {
+    ...localLabelOverrides.value,
+    [key]: { ...current, text: text || null },
+  }
+}
 
 // Logo
 const logoFile = ref<File | null>(null)
@@ -38,12 +128,19 @@ const tabItems = computed(() => [
   { label: $t('pdfTemplates.tabStyle'), slot: 'style', icon: 'i-lucide-paintbrush' },
   { label: $t('pdfTemplates.tabOptions'), slot: 'options', icon: 'i-lucide-settings' },
   { label: $t('pdfTemplates.tabLogo'), slot: 'logo', icon: 'i-lucide-image' },
+  { label: $t('pdfTemplates.tabLabels'), slot: 'labels', icon: 'i-lucide-type' },
 ])
 
 const fontOptions = [
   { label: 'DejaVu Sans (implicit)', value: null },
   { label: 'DejaVu Serif', value: 'DejaVu Serif' },
   { label: 'DejaVu Sans Mono', value: 'DejaVu Sans Mono' },
+  { label: 'PT Sans', value: 'PT Sans' },
+  { label: 'Arial', value: 'Arial' },
+  { label: 'Verdana', value: 'Verdana' },
+  { label: 'Tahoma', value: 'Tahoma' },
+  { label: 'Trebuchet MS', value: 'Trebuchet MS' },
+  { label: 'Poppins', value: 'Poppins' },
 ]
 
 const colorPresets = [
@@ -64,6 +161,7 @@ watch(config, (cfg) => {
     localDefaultNotes.value = cfg.defaultNotes
     localDefaultPaymentTerms.value = cfg.defaultPaymentTerms
     localDefaultPaymentMethod.value = cfg.defaultPaymentMethod
+    localLabelOverrides.value = cfg.labelOverrides ? { ...cfg.labelOverrides } : {}
   }
 }, { immediate: true })
 
@@ -80,6 +178,7 @@ function previewOverrides(): Partial<PdfTemplateConfig> {
     defaultNotes: localDefaultNotes.value,
     defaultPaymentTerms: localDefaultPaymentTerms.value,
     defaultPaymentMethod: localDefaultPaymentMethod.value,
+    labelOverrides: Object.keys(localLabelOverrides.value).length > 0 ? localLabelOverrides.value : null,
   }
 }
 
@@ -94,8 +193,9 @@ function requestPreview() {
 }
 
 watch(
-  [localSlug, localColor, localFont, localShowLogo, localShowBankInfo, localBankDisplaySection, localBankDisplayMode, localDefaultNotes, localDefaultPaymentTerms, localDefaultPaymentMethod],
+  [localSlug, localColor, localFont, localShowLogo, localShowBankInfo, localBankDisplaySection, localBankDisplayMode, localDefaultNotes, localDefaultPaymentTerms, localDefaultPaymentMethod, localLabelOverrides],
   () => requestPreview(),
+  { deep: true },
 )
 
 async function saveConfig() {
@@ -110,6 +210,7 @@ async function saveConfig() {
     defaultNotes: localDefaultNotes.value,
     defaultPaymentTerms: localDefaultPaymentTerms.value,
     defaultPaymentMethod: localDefaultPaymentMethod.value,
+    labelOverrides: Object.keys(localLabelOverrides.value).length > 0 ? localLabelOverrides.value : null,
   })
   if (!store.error) {
     toast.add({ title: $t('pdfTemplates.saveSuccess'), color: 'success' })
@@ -421,6 +522,115 @@ onMounted(async () => {
                 />
               </div>
               <p class="text-xs text-gray-400">{{ $t('pdfTemplates.logoHint') }}</p>
+            </div>
+          </template>
+
+          <!-- Labels tab -->
+          <template #labels>
+            <div class="p-4 sm:p-5">
+              <UTabs :items="labelSubTabs" class="w-full" variant="link">
+                <template #labelsGeneral>
+                  <div class="flex flex-col gap-3 pt-3">
+                    <div
+                      v-for="def in generalLabels"
+                      :key="def.key"
+                      class="flex items-center gap-3"
+                    >
+                      <USwitch
+                        v-if="def.hideable"
+                        :model-value="getLabelOverride(def.key).visible !== false"
+                        size="xs"
+                        @update:model-value="setLabelVisible(def.key, $event)"
+                      />
+                      <div v-else class="w-9" />
+                      <UInput
+                        :model-value="getLabelOverride(def.key).text || ''"
+                        :placeholder="def.label"
+                        size="sm"
+                        class="flex-1"
+                        @update:model-value="setLabelText(def.key, $event)"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <template #labelsSupplier>
+                  <div class="flex flex-col gap-3 pt-3">
+                    <div
+                      v-for="def in supplierLabels"
+                      :key="def.key"
+                      class="flex items-center gap-3"
+                    >
+                      <USwitch
+                        v-if="def.hideable"
+                        :model-value="getLabelOverride(def.key).visible !== false"
+                        size="xs"
+                        @update:model-value="setLabelVisible(def.key, $event)"
+                      />
+                      <div v-else class="w-9" />
+                      <UInput
+                        :model-value="getLabelOverride(def.key).text || ''"
+                        :placeholder="def.label"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county')"
+                        @update:model-value="setLabelText(def.key, $event)"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <template #labelsClient>
+                  <div class="flex flex-col gap-3 pt-3">
+                    <div
+                      v-for="def in clientLabels"
+                      :key="def.key"
+                      class="flex items-center gap-3"
+                    >
+                      <USwitch
+                        v-if="def.hideable"
+                        :model-value="getLabelOverride(def.key).visible !== false"
+                        size="xs"
+                        @update:model-value="setLabelVisible(def.key, $event)"
+                      />
+                      <div v-else class="w-9" />
+                      <UInput
+                        :model-value="getLabelOverride(def.key).text || ''"
+                        :placeholder="def.label"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county')"
+                        @update:model-value="setLabelText(def.key, $event)"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <template #labelsTable>
+                  <div class="flex flex-col gap-3 pt-3">
+                    <div
+                      v-for="def in tableLabels"
+                      :key="def.key"
+                      class="flex items-center gap-3"
+                    >
+                      <USwitch
+                        v-if="def.hideable"
+                        :model-value="getLabelOverride(def.key).visible !== false"
+                        size="xs"
+                        @update:model-value="setLabelVisible(def.key, $event)"
+                      />
+                      <div v-else class="w-9" />
+                      <UInput
+                        :model-value="getLabelOverride(def.key).text || ''"
+                        :placeholder="def.label"
+                        size="sm"
+                        class="flex-1"
+                        @update:model-value="setLabelText(def.key, $event)"
+                      />
+                    </div>
+                  </div>
+                </template>
+              </UTabs>
             </div>
           </template>
         </UTabs>

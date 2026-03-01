@@ -177,6 +177,9 @@ class DocumentPdfService
         if (array_key_exists('footerText', $overrides)) {
             $config->setFooterText($overrides['footerText']);
         }
+        if (array_key_exists('labelOverrides', $overrides)) {
+            $config->setLabelOverrides($overrides['labelOverrides']);
+        }
 
         $sampleData = $this->buildSampleInvoiceData($company, $config);
 
@@ -230,6 +233,7 @@ class DocumentPdfService
         $context['customCss'] = $config->getCustomCss();
         $context['bankDisplaySection'] = $config->getBankDisplaySection();
         $context['bankDisplayMode'] = $config->getBankDisplayMode();
+        $context['labelOverrides'] = $config->getLabelOverrides();
 
         // Fetch bank accounts marked for invoice display
         $company = $context['company'] ?? null;

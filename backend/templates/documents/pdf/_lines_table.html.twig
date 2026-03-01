@@ -2,22 +2,34 @@
     <thead>
         <tr>
             <th style="width: 30px;">#</th>
-            {% if hasProductCodes|default(false) %}
-                <th style="width: 80px;">{{ 'code'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            {% if hasProductCodes|default(false) and pdf_visible('col_code', labelOverrides|default(null)) %}
+                <th style="width: 80px;">{{ pdf_label('col_code', labelOverrides|default(null), locale|default('ro'), 'code') }}</th>
             {% endif %}
-            <th>{{ 'description'|trans({}, 'pdf', locale|default('ro')) }}</th>
-            <th class="text-center" style="width: 60px;">{{ 'quantity'|trans({}, 'pdf', locale|default('ro')) }}</th>
-            <th class="text-center" style="width: 50px;">{{ 'unit'|trans({}, 'pdf', locale|default('ro')) }}</th>
+            <th>{{ pdf_label('col_description', labelOverrides|default(null), locale|default('ro'), 'description') }}</th>
+            {% if pdf_visible('col_quantity', labelOverrides|default(null)) %}
+                <th class="text-center" style="width: 60px;">{{ pdf_label('col_quantity', labelOverrides|default(null), locale|default('ro'), 'quantity') }}</th>
+            {% endif %}
+            {% if pdf_visible('col_unit', labelOverrides|default(null)) %}
+                <th class="text-center" style="width: 50px;">{{ pdf_label('col_unit', labelOverrides|default(null), locale|default('ro'), 'unit') }}</th>
+            {% endif %}
             {% if showPrices|default(true) %}
-                <th class="text-right" style="width: 90px;">{{ 'unit_price'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                {% if pdf_visible('col_unit_price', labelOverrides|default(null)) %}
+                    <th class="text-right" style="width: 90px;">{{ pdf_label('col_unit_price', labelOverrides|default(null), locale|default('ro'), 'unit_price') }}</th>
+                {% endif %}
                 {% if hasLineDiscounts|default(false) %}
-                    <th class="text-right" style="width: 70px;">{{ 'discount'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                    <th class="text-right" style="width: 70px;">{{ pdf_label('discount_label', labelOverrides|default(null), locale|default('ro'), 'discount') }}</th>
                 {% endif %}
                 {% if not (hideVat|default(false)) %}
-                    <th class="text-center" style="width: 50px;">{{ 'vat_percent'|trans({}, 'pdf', locale|default('ro')) }}</th>
-                    <th class="text-right" style="width: 90px;">{{ 'vat'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                    {% if pdf_visible('col_vat_percent', labelOverrides|default(null)) %}
+                        <th class="text-center" style="width: 50px;">{{ pdf_label('col_vat_percent', labelOverrides|default(null), locale|default('ro'), 'vat_percent') }}</th>
+                    {% endif %}
+                    {% if pdf_visible('col_vat', labelOverrides|default(null)) %}
+                        <th class="text-right" style="width: 90px;">{{ pdf_label('col_vat', labelOverrides|default(null), locale|default('ro'), 'vat') }}</th>
+                    {% endif %}
                 {% endif %}
-                <th class="text-right" style="width: 100px;">{{ 'total_col'|trans({}, 'pdf', locale|default('ro')) }}</th>
+                {% if pdf_visible('col_total', labelOverrides|default(null)) %}
+                    <th class="text-right" style="width: 100px;">{{ pdf_label('col_total', labelOverrides|default(null), locale|default('ro'), 'total_col') }}</th>
+                {% endif %}
             {% endif %}
         </tr>
     </thead>
@@ -25,14 +37,20 @@
         {% for line in invoice.lines %}
         <tr>
             <td>{{ loop.index }}</td>
-            {% if hasProductCodes|default(false) %}
+            {% if hasProductCodes|default(false) and pdf_visible('col_code', labelOverrides|default(null)) %}
                 <td>{{ line.productCode|default('') }}</td>
             {% endif %}
             <td>{{ line.description }}</td>
-            <td class="text-center{% if negativeValues|default(false) %} negative{% endif %}">{{ line.quantity }}</td>
-            <td class="text-center">{{ line.unitOfMeasure }}</td>
+            {% if pdf_visible('col_quantity', labelOverrides|default(null)) %}
+                <td class="text-center{% if negativeValues|default(false) %} negative{% endif %}">{{ line.quantity }}</td>
+            {% endif %}
+            {% if pdf_visible('col_unit', labelOverrides|default(null)) %}
+                <td class="text-center">{{ line.unitOfMeasure }}</td>
+            {% endif %}
             {% if showPrices|default(true) %}
-                <td class="text-right">{{ line.unitPrice|number_format(2, ',', '.') }}</td>
+                {% if pdf_visible('col_unit_price', labelOverrides|default(null)) %}
+                    <td class="text-right">{{ line.unitPrice|number_format(2, ',', '.') }}</td>
+                {% endif %}
                 {% if hasLineDiscounts|default(false) %}
                     <td class="text-right">
                         {% if line.discount is defined and line.discount and line.discount != '0.00' %}
@@ -45,10 +63,16 @@
                     </td>
                 {% endif %}
                 {% if not (hideVat|default(false)) %}
-                    <td class="text-center">{{ line.vatRate }}%</td>
-                    <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.vatAmount|number_format(2, ',', '.') }}</td>
+                    {% if pdf_visible('col_vat_percent', labelOverrides|default(null)) %}
+                        <td class="text-center">{{ line.vatRate }}%</td>
+                    {% endif %}
+                    {% if pdf_visible('col_vat', labelOverrides|default(null)) %}
+                        <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.vatAmount|number_format(2, ',', '.') }}</td>
+                    {% endif %}
                 {% endif %}
-                <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.lineTotal|number_format(2, ',', '.') }}</td>
+                {% if pdf_visible('col_total', labelOverrides|default(null)) %}
+                    <td class="text-right{% if negativeValues|default(false) %} negative{% endif %}">{{ line.lineTotal|number_format(2, ',', '.') }}</td>
+                {% endif %}
             {% endif %}
         </tr>
         {% endfor %}

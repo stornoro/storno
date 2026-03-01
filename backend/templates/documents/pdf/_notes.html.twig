@@ -1,16 +1,16 @@
 {% set effectiveNotes = (invoice.notes is defined and invoice.notes) ? invoice.notes : ((config is defined and config.defaultNotes) ? config.defaultNotes : null) %}
 {% set effectivePaymentTerms = (invoice.paymentTerms is defined and invoice.paymentTerms) ? invoice.paymentTerms : ((config is defined and config.defaultPaymentTerms) ? config.defaultPaymentTerms : null) %}
 
-{% if effectiveNotes %}
+{% if effectiveNotes and pdf_visible('notes', labelOverrides|default(null)) %}
 <div class="notes">
-    <div class="notes-title">{{ (notesLabel|default('notes'))|trans({}, 'pdf', locale|default('ro')) }}:</div>
+    <div class="notes-title">{{ pdf_label('notes', labelOverrides|default(null), locale|default('ro'), notesLabel|default('notes')) }}:</div>
     {{ effectiveNotes }}
 </div>
 {% endif %}
 
-{% if effectivePaymentTerms %}
+{% if effectivePaymentTerms and pdf_visible('payment_terms', labelOverrides|default(null)) %}
 <div class="notes">
-    <div class="notes-title">{{ 'payment_terms'|trans({}, 'pdf', locale|default('ro')) }}:</div>
+    <div class="notes-title">{{ pdf_label('payment_terms', labelOverrides|default(null), locale|default('ro')) }}:</div>
     {{ effectivePaymentTerms }}
 </div>
 {% endif %}

@@ -53,6 +53,7 @@ sales_agent: 'Agent vanzari'
 
 # Footer
 footer_text: 'Emisa prin'
+legal_disclaimer: 'Factura circula fara semnatura si stampila cf. art.V, alin (2) din Ordonanta nr.17/2015 si art. 319 alin (29) din Legea nr. 227/2015 privind Codul fiscal.'
 
 # Invoice
 invoice_title: 'FACTURA'

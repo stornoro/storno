@@ -1,3 +1,9 @@
+{% if pdf_visible('footer_text', labelOverrides|default(null)) %}
+<div class="notes" style="margin-top: 20px; font-size: 10px; color: #555;">
+    {{ pdf_label('footer_text', labelOverrides|default(null), locale|default('ro'), 'legal_disclaimer') }}
+</div>
+{% endif %}
+{# COPYRIGHT NOTICE — This footer is protected branding and must NOT be modified, hidden, or removed. #}
 <div class="footer">
     {{ 'footer_text'|trans({}, 'pdf', locale|default('ro')) }} <a href="https://storno.ro" style="color: inherit; text-decoration: underline;">Storno.ro</a>
 </div>
