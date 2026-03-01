@@ -34,6 +34,7 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('0 1 * * *', new RunCommandMessage('app:invoice:process-recurring')))
             // Notifications — daily
             ->add(RecurringMessage::cron('0 8 * * *', new RunCommandMessage('app:notifications:token-expiry')))
+            ->add(RecurringMessage::cron('30 8 * * *', new RunCommandMessage('app:notifications:anaf-deadline')))
             ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:notifications:due-invoices')))
             ->add(RecurringMessage::cron('0 10 * * *', new RunCommandMessage('app:proforma:process-expiry')))
             // Weekly cleanup — Sunday

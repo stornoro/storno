@@ -7,9 +7,11 @@ use App\Entity\EInvoiceSubmission;
 use App\Enum\DocumentStatus;
 use App\Enum\EInvoiceSubmissionStatus;
 use App\Message\EInvoice\CheckEInvoiceStatusMessage;
+use App\Repository\OrganizationMembershipRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Anaf\EFacturaClient;
 use App\Service\EInvoice\EInvoiceStatusCheckerInterface;
+use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
@@ -39,6 +41,8 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
+        private readonly NotificationService $notificationService,
+        private readonly OrganizationMembershipRepository $membershipRepository,
     ) {}
 
     public function check(EInvoiceSubmission $submission, CheckEInvoiceStatusMessage $message): void
@@ -61,6 +65,13 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $this->logger->warning('AnafStatusChecker: Invoice not found for submission.', [
                 'submissionId' => $message->submissionId,
             ]);
+            return;
+        }
+
+        // Skip if the cron command already handled this invoice
+        if ($invoice->getStatus() !== DocumentStatus::SENT_TO_PROVIDER) {
+            $submission->setStatus(EInvoiceSubmissionStatus::ACCEPTED);
+            $this->entityManager->flush();
             return;
         }
 
@@ -104,6 +115,12 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $invoice->addEvent($event);
 
             $this->entityManager->flush();
+
+            $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
+                'Factura %s a fost validată de ANAF',
+                $invoice->getNumber(),
+            ));
+
             return;
         }
 
@@ -126,6 +143,13 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $invoice->addEvent($event);
 
             $this->entityManager->flush();
+
+            $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(
+                'Factura %s a fost respinsă de ANAF: %s',
+                $invoice->getNumber(),
+                $statusResponse->errorMessage ?? 'Eroare necunoscută',
+            ));
+
             return;
         }
 
@@ -139,5 +163,27 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             ),
             [new DelayStamp($delay)]
         );
+    }
+
+    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message): void
+    {
+        try {
+            $company = $invoice->getCompany();
+            $users = $this->membershipRepository->findActiveUsersByCompany($company);
+
+            foreach ($users as $user) {
+                $this->notificationService->createNotification($user, $type, $title, $message, [
+                    'invoiceId' => $invoice->getId()->toRfc4122(),
+                    'invoiceNumber' => $invoice->getNumber(),
+                    'companyId' => $company->getId()->toRfc4122(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Failed to send notification for invoice status change', [
+                'invoiceId' => $invoice->getId(),
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

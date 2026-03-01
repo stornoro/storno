@@ -1546,6 +1546,12 @@ async function refreshInvoiceData() {
   events.value = evts
   payments.value = pmts
   emailLogs.value = logs
+
+  // Invalidate cached XML so it's re-fetched when the XML tab is viewed
+  xmlContent.value = null
+  if (activeTab.value === '3') {
+    fetchXmlContent()
+  }
 }
 
 const invoiceRealtime = useInvoiceRealtime(() => refreshInvoiceData())
