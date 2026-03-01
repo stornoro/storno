@@ -887,6 +887,47 @@ class InvoiceController extends AbstractController
         ]);
     }
 
+    #[Route('/invoices/{uuid}/anaf-response', methods: ['GET'])]
+    public function downloadAnafResponse(
+        string $uuid,
+        \App\Service\Anaf\AnafTokenResolver $tokenResolver,
+        \App\Service\Anaf\EFacturaClient $eFacturaClient,
+    ): Response {
+        $invoice = $this->findInvoice($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
+
+        $downloadId = $invoice->getAnafDownloadId();
+        if (!$downloadId) {
+            return $this->json(['error' => 'No ANAF response available for this invoice.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $company = $invoice->getCompany();
+        $token = $tokenResolver->resolve($company);
+        if (!$token) {
+            return $this->json(['error' => 'No valid ANAF token. Reconnect ANAF from settings.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        try {
+            $content = $eFacturaClient->download($downloadId, $token);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'Failed to download from ANAF: ' . $e->getMessage()], Response::HTTP_BAD_GATEWAY);
+        }
+
+        // ANAF returns a ZIP — detect content type
+        $isZip = str_starts_with($content, "PK");
+        $ext = $isZip ? 'zip' : 'xml';
+        $mime = $isZip ? 'application/zip' : 'application/xml';
+
+        return new Response($content, 200, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => sprintf('attachment; filename="anaf-response-%s.%s"', $invoice->getNumber(), $ext),
+        ]);
+    }
+
     #[Route('/invoices/{uuid}/signature', methods: ['GET'])]
     public function downloadSignature(string $uuid): Response
     {

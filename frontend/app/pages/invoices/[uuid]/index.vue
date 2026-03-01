@@ -438,10 +438,20 @@
                   <!-- Rejection error callout -->
                   <div
                     v-if="event.metadata?.action === 'anaf_rejected' && event.metadata?.error"
-                    class="mt-2 flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2"
+                    class="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2"
                   >
-                    <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 text-red-500 mt-0.5" />
-                    <p class="text-xs text-red-700 dark:text-red-300 break-words">{{ event.metadata.error }}</p>
+                    <div class="flex items-start gap-2">
+                      <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 text-red-500 mt-0.5" />
+                      <p class="text-xs text-red-700 dark:text-red-300 break-words">{{ event.metadata.error }}</p>
+                    </div>
+                    <button
+                      v-if="invoice?.anafDownloadId"
+                      class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+                      @click="downloadAnafResponse"
+                    >
+                      <UIcon name="i-lucide-download" class="size-3.5" />
+                      {{ $t('invoices.downloadAnafError') }}
+                    </button>
                   </div>
                   <!-- Cancellation reason callout -->
                   <div
@@ -1407,6 +1417,21 @@ async function downloadSignature() {
     URL.revokeObjectURL(url)
   } catch {
     useToast().add({ title: $t('invoices.noSignature'), color: 'warning' })
+  }
+}
+
+async function downloadAnafResponse() {
+  const { get } = useApi()
+  try {
+    const data = await get<Blob>(`/v1/invoices/${route.params.uuid}/anaf-response`, { responseType: 'blob' })
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `anaf-response-${invoice.value?.number || 'download'}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    useToast().add({ title: $t('invoices.anafResponseUnavailable'), color: 'error' })
   }
 }
 

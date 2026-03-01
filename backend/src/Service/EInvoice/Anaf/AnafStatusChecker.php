@@ -114,6 +114,9 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $previousStatus = $invoice->getStatus();
             $invoice->setAnafStatus('nok');
             $invoice->setAnafErrorMessage($statusResponse->errorMessage);
+            if ($statusResponse->downloadId) {
+                $invoice->setAnafDownloadId($statusResponse->downloadId);
+            }
             $invoice->setStatus(DocumentStatus::REJECTED);
 
             $event = new DocumentEvent();
