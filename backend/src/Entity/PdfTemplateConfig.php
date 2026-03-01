@@ -43,6 +43,26 @@ class PdfTemplateConfig
     #[Groups(['pdf_config'])]
     private bool $showBankInfo = true;
 
+    #[ORM\Column(length: 20)]
+    #[Groups(['pdf_config'])]
+    private string $bankDisplaySection = 'both';
+
+    #[ORM\Column(length: 20)]
+    #[Groups(['pdf_config'])]
+    private string $bankDisplayMode = 'stacked';
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['pdf_config'])]
+    private ?string $defaultNotes = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['pdf_config'])]
+    private ?string $defaultPaymentTerms = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['pdf_config'])]
+    private ?string $defaultPaymentMethod = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['pdf_config'])]
     private ?string $footerText = null;
@@ -129,6 +149,66 @@ class PdfTemplateConfig
     public function setShowBankInfo(bool $showBankInfo): static
     {
         $this->showBankInfo = $showBankInfo;
+
+        return $this;
+    }
+
+    public function getBankDisplaySection(): string
+    {
+        return $this->bankDisplaySection;
+    }
+
+    public function setBankDisplaySection(string $bankDisplaySection): static
+    {
+        $this->bankDisplaySection = $bankDisplaySection;
+
+        return $this;
+    }
+
+    public function getBankDisplayMode(): string
+    {
+        return $this->bankDisplayMode;
+    }
+
+    public function setBankDisplayMode(string $bankDisplayMode): static
+    {
+        $this->bankDisplayMode = $bankDisplayMode;
+
+        return $this;
+    }
+
+    public function getDefaultNotes(): ?string
+    {
+        return $this->defaultNotes;
+    }
+
+    public function setDefaultNotes(?string $defaultNotes): static
+    {
+        $this->defaultNotes = $defaultNotes;
+
+        return $this;
+    }
+
+    public function getDefaultPaymentTerms(): ?string
+    {
+        return $this->defaultPaymentTerms;
+    }
+
+    public function setDefaultPaymentTerms(?string $defaultPaymentTerms): static
+    {
+        $this->defaultPaymentTerms = $defaultPaymentTerms;
+
+        return $this;
+    }
+
+    public function getDefaultPaymentMethod(): ?string
+    {
+        return $this->defaultPaymentMethod;
+    }
+
+    public function setDefaultPaymentMethod(?string $defaultPaymentMethod): static
+    {
+        $this->defaultPaymentMethod = $defaultPaymentMethod;
 
         return $this;
     }

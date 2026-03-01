@@ -26,7 +26,7 @@ table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
 {% block content %}
     <div class="header">
         <div class="header-left">
-            {% if showLogo|default(true) and logoDataUri %}
+            {% if (showLogo is not defined or showLogo) and logoDataUri %}
                 <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
             {% endif %}
             <div class="doc-title">{{ 'delivery_note_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
@@ -43,12 +43,7 @@ table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
 
     {% include 'documents/pdf/_details.html.twig' %}
 
-    {% if invoice.notes is defined and invoice.notes %}
-    <div class="notes">
-        <div class="notes-title">{{ 'notes'|trans({}, 'pdf', locale|default('ro')) }}:</div>
-        {{ invoice.notes }}
-    </div>
-    {% endif %}
+    {% include 'documents/pdf/_notes.html.twig' %}
 
     <div class="signatures">
         <div class="signature-box">{{ 'supplier_signature'|trans({}, 'pdf', locale|default('ro')) }}</div>

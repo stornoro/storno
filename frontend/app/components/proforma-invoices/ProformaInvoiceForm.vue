@@ -374,6 +374,7 @@ const emit = defineEmits<{
 const { t: $t } = useI18n()
 const proformaStore = useProformaInvoiceStore()
 const clientStore = useClientStore()
+const pdfConfigStore = usePdfTemplateConfigStore()
 const {
   defaults,
   fetchDefaults,
@@ -689,6 +690,17 @@ onMounted(async () => {
   if (!props.proforma) {
     autoSelectFirst(form)
     form.currency = defaultCurrency.value
+    // Pre-fill notes and payment terms from PDF template config defaults
+    await pdfConfigStore.fetchConfig()
+    const cfg = pdfConfigStore.config
+    if (cfg?.defaultNotes && !form.notes) {
+      form.notes = cfg.defaultNotes
+      showNotes.value = true
+    }
+    if (cfg?.defaultPaymentTerms && !form.paymentTerms) {
+      form.paymentTerms = cfg.defaultPaymentTerms
+      showNotes.value = true
+    }
   }
 
   // Pre-fill from source proforma for copy

@@ -6,6 +6,7 @@ cnp: 'CNP'
 reg_number: 'Nr. Reg. Com.'
 phone: 'Tel'
 email: 'Email'
+website: 'Web'
 contact_person: 'Persoana de contact'
 
 # Lines table
@@ -28,6 +29,7 @@ exchange_rate: 'Curs valutar'
 
 # Bank
 bank_account: 'Cont bancar'
+bank_accounts: 'Conturi bancare'
 
 # Details
 order_number: 'Nr. comanda'

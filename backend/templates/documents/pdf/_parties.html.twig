@@ -14,6 +14,24 @@
         {% if company.email %}
             <div class="party-detail">{{ 'email'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.email }}</div>
         {% endif %}
+        {% if company.website %}
+            <div class="party-detail">{{ 'website'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.website }}</div>
+        {% endif %}
+        {% if (showBankInfo is not defined or showBankInfo) and (bankDisplaySection|default('both') == 'supplier' or bankDisplaySection|default('both') == 'both') %}
+            {% if invoiceBankAccounts|default([])|length > 0 %}
+                {% for account in invoiceBankAccounts %}
+                    <div class="party-detail">
+                        {% if bankDisplayMode|default('stacked') == 'inline' %}
+                            {{ account.iban }}{% if account.bankName %} - {{ account.bankName }}{% endif %}
+                        {% else %}
+                            {% if account.bankName %}{{ account.bankName }}: {% endif %}{{ account.iban }}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% elseif company.bankAccount %}
+                <div class="party-detail">{{ company.bankAccount }}{% if company.bankName %} - {{ company.bankName }}{% endif %}</div>
+            {% endif %}
+        {% endif %}
     </div>
     <div class="party" style="float: right; width: 48%;">
         <div class="party-label">{{ clientLabel|default('client'|trans({}, 'pdf', locale|default('ro'))) }}</div>

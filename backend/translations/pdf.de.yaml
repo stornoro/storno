@@ -6,6 +6,7 @@ cnp: 'Personen-Nr.'
 reg_number: 'Handelsreg.-Nr.'
 phone: 'Tel.'
 email: 'E-Mail'
+website: 'Web'
 contact_person: 'Ansprechpartner'
 
 # Lines table
@@ -28,6 +29,7 @@ exchange_rate: 'Wechselkurs'
 
 # Bank
 bank_account: 'Bankkonto'
+bank_accounts: 'Bankkonten'
 
 # Details
 order_number: 'Bestellnr.'

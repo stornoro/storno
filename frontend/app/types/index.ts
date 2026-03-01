@@ -445,6 +445,7 @@ export interface BankAccount {
   bankName: string | null
   currency: string
   isDefault: boolean
+  showOnInvoice: boolean
   source: string
   createdAt: string
   updatedAt: string | null
@@ -1384,6 +1385,11 @@ export interface PdfTemplateConfig {
   fontFamily: string | null
   showLogo: boolean
   showBankInfo: boolean
+  bankDisplaySection: 'supplier' | 'payment' | 'both'
+  bankDisplayMode: 'stacked' | 'inline'
+  defaultNotes: string | null
+  defaultPaymentTerms: string | null
+  defaultPaymentMethod: string | null
   footerText: string | null
   customCss: string | null
 }
