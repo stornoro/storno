@@ -70,8 +70,8 @@ class BorderouController extends AbstractController
         }
 
         $sourceType = $request->request->get('sourceType');
-        if (!in_array($sourceType, ['borderou', 'bank_statement'], true)) {
-            return $this->json(['error' => 'Invalid sourceType. Must be "borderou" or "bank_statement".'], Response::HTTP_BAD_REQUEST);
+        if (!in_array($sourceType, ['borderou', 'bank_statement', 'marketplace'], true)) {
+            return $this->json(['error' => 'Invalid sourceType. Must be "borderou", "bank_statement", or "marketplace".'], Response::HTTP_BAD_REQUEST);
         }
 
         $provider = $request->request->get('provider');

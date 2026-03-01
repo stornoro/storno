@@ -70,6 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
         {
           baseURL: apiBase,
           method: 'POST',
+          credentials: 'include',
           body: { email, password, turnstileToken },
         },
       )
@@ -148,6 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
         {
           baseURL: apiBase,
           method: 'POST',
+          credentials: 'include',
           body: { credential },
         },
       )
@@ -183,6 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await fetchFn<User>('/v1/me', {
         baseURL: apiBase,
+        credentials: 'include',
         headers: {
           Authorization: `Bearer ${token.value}`,
           Accept: 'application/json',
@@ -218,6 +221,7 @@ export const useAuthStore = defineStore('auth', () => {
             // Retry fetchUser with new token
             const retryResponse = await fetchFn<User>('/v1/me', {
               baseURL: apiBase,
+              credentials: 'include',
               headers: {
                 Authorization: `Bearer ${token.value}`,
                 Accept: 'application/json',
@@ -264,6 +268,7 @@ export const useAuthStore = defineStore('auth', () => {
         {
           baseURL: apiBase,
           method: 'POST',
+          credentials: 'include',
           body: { mfaToken: mfaToken.value, code, type },
         },
       )

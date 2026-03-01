@@ -263,6 +263,7 @@ class BorderouImportService
             'ramburs' => 'cash',
             'transfer' => 'bank_transfer',
             'card' => 'card',
+            'marketplace' => 'marketplace',
             default => 'bank_transfer',
         };
 
@@ -435,6 +436,9 @@ class BorderouImportService
                 ['key' => 'revolut', 'label' => 'Revolut', 'formats' => ['csv', 'xlsx']],
                 ['key' => 'unicredit', 'label' => 'UniCredit Bank SA', 'formats' => ['csv', 'xlsx']],
                 ['key' => 'generic_bank', 'label' => 'Alta banca', 'formats' => ['csv', 'xlsx']],
+            ],
+            'marketplace' => [
+                ['key' => 'emag', 'label' => 'eMag', 'formats' => ['xlsx']],
             ],
         ];
     }
