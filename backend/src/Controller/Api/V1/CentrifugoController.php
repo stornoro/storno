@@ -48,6 +48,24 @@ class CentrifugoController extends AbstractController
         $user = $this->getUser();
         $payload = json_decode($request->getContent(), true) ?? [];
         $channel = $payload['channel'] ?? '';
+        $channels = $payload['channels'] ?? [];
+
+        // Batch mode: multiple channels in one request
+        if (!empty($channels) && is_array($channels)) {
+            $expiry = time() + 3600;
+            $tokens = [];
+            foreach ($channels as $ch) {
+                if (is_string($ch) && $ch !== '') {
+                    $tokens[$ch] = $this->centrifugo->generateSubscriptionToken(
+                        (string) $user->getId(),
+                        $ch,
+                        $expiry,
+                    );
+                }
+            }
+
+            return $this->json(['tokens' => $tokens]);
+        }
 
         if (!$channel) {
             return $this->json(['error' => 'Channel is required'], 400);
