@@ -958,10 +958,12 @@ function normalizeVatRate(rate: string | number): string {
   return isNaN(num) ? '21.00' : num.toFixed(2)
 }
 
-// [BR-S-05] Standard rate (S) must have rate > 0; auto-correct to Z if 0%
+// EN16931 schematron: normalize VAT category code based on rate
+// S requires rate > 0; Z/E/AE/K/G require rate = 0
 function normalizeVatCategoryCode(code: string, rate: string): string {
-  if (code === 'S' && parseFloat(rate) === 0) return 'Z'
-  if (code === 'Z' && parseFloat(rate) > 0) return 'S'
+  const r = parseFloat(rate)
+  if (code === 'S' && r === 0) return 'Z'
+  if (['Z', 'E', 'AE', 'K', 'G'].includes(code) && r > 0) return 'S'
   return code
 }
 

@@ -545,7 +545,9 @@ class UblXmlGenerator
 
             $taxCat = $dom->createElement('cac:TaxCategory');
             $this->addElement($dom, $taxCat, 'cbc:ID', $group['categoryCode']);
-            $this->addElement($dom, $taxCat, 'cbc:Percent', $group['rate']);
+            if (!$this->shouldOmitPercent($group['categoryCode'])) {
+                $this->addElement($dom, $taxCat, 'cbc:Percent', $group['rate']);
+            }
 
             // [BR-E-10, BR-AE-10, BR-O-10, BR-IC-10, BR-G-10] VAT exemption reason
             // [BR-S-10, BR-Z-10] Must NOT have exemption reason for S and Z categories
@@ -679,7 +681,9 @@ class UblXmlGenerator
         $normalizedCode = $this->normalizeVatCategoryCode($line->getVatCategoryCode(), $line->getVatRate());
         $taxCategory = $dom->createElement('cac:ClassifiedTaxCategory');
         $this->addElement($dom, $taxCategory, 'cbc:ID', $normalizedCode);
-        $this->addElement($dom, $taxCategory, 'cbc:Percent', $line->getVatRate());
+        if (!$this->shouldOmitPercent($normalizedCode)) {
+            $this->addElement($dom, $taxCategory, 'cbc:Percent', $line->getVatRate());
+        }
         $lineTaxScheme = $dom->createElement('cac:TaxScheme');
         $this->addElement($dom, $lineTaxScheme, 'cbc:ID', 'VAT');
         $taxCategory->appendChild($lineTaxScheme);
@@ -758,9 +762,16 @@ class UblXmlGenerator
     }
 
     /**
-     * [BR-S-05] Standard rated lines must have rate > 0.
-     * [BR-Z-05] Zero rated lines must have rate = 0.
-     * Auto-correct mismatched category code / rate combinations.
+     * Normalize VAT category code based on EN16931 schematron rules:
+     *   BR-S-05:  S (Standard)       → Percent > 0
+     *   BR-Z-05:  Z (Zero rate)      → Percent = 0
+     *   BR-E-05:  E (Exempt)         → Percent = 0
+     *   BR-AE-05: AE (Reverse charge)→ Percent = 0
+     *   BR-IC-05: K (Intra-community)→ Percent = 0
+     *   BR-G-05:  G (Export)         → Percent = 0
+     *   BR-O-05:  O (Not subject)    → Percent must NOT exist
+     *   BR-IG-05: L (Canary Islands) → Percent >= 0
+     *   BR-IP-05: M (Tax for prod.)  → Percent >= 0
      */
     private function normalizeVatCategoryCode(string $categoryCode, string $vatRate): string
     {
@@ -771,12 +782,20 @@ class UblXmlGenerator
             return 'Z';
         }
 
-        // Z (Zero rate) with rate > 0 → should be S (Standard)
-        if ($categoryCode === 'Z' && $rate > 0.0) {
+        // These codes require Percent = 0; if rate > 0, they're likely meant to be S
+        if (in_array($categoryCode, ['Z', 'E', 'AE', 'K', 'G'], true) && $rate > 0.0) {
             return 'S';
         }
 
         return $categoryCode;
+    }
+
+    /**
+     * [BR-O-05/06/07] Category O must NOT have a Percent element.
+     */
+    private function shouldOmitPercent(string $categoryCode): bool
+    {
+        return $categoryCode === 'O';
     }
 
     /**

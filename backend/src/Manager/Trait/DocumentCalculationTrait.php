@@ -28,6 +28,10 @@ trait DocumentCalculationTrait
         if ($categoryCode === 'S' && $rate === 0.0) {
             $categoryCode = 'Z';
         }
+        // [BR-Z/E/AE/K/G-05] These codes require rate = 0; if rate > 0, must be S
+        if (in_array($categoryCode, ['Z', 'E', 'AE', 'K', 'G'], true) && $rate > 0.0) {
+            $categoryCode = 'S';
+        }
         $line->setVatCategoryCode($categoryCode);
         $line->setDiscount($data['discount'] ?? '0.00');
         $line->setDiscountPercent($data['discountPercent'] ?? '0.00');
