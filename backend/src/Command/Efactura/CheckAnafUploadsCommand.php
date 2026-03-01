@@ -77,6 +77,12 @@ class CheckAnafUploadsCommand extends Command
             }
 
             try {
+                // Refresh to detect if the message handler already processed this invoice
+                $this->entityManager->refresh($invoice);
+                if ($invoice->getStatus() !== DocumentStatus::SENT_TO_PROVIDER) {
+                    continue;
+                }
+
                 $statusResponse = $this->eFacturaClient->checkStatus($uploadId, $token);
 
                 if ($statusResponse->isOk()) {

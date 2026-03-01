@@ -2,7 +2,6 @@
 
 namespace App\Service\EInvoice\Anaf;
 
-use App\Entity\DocumentEvent;
 use App\Entity\EInvoiceSubmission;
 use App\Entity\Invoice;
 use App\Enum\DocumentStatus;
@@ -107,7 +106,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
             return;
         }
 
-        // Success — sync back to Invoice and create DocumentEvent
+        // Success — sync back to Invoice (event already created by InvoiceManager::sendToAnaf)
         $submission->setExternalId($uploadResponse->uploadId);
         $submission->setStatus(EInvoiceSubmissionStatus::SUBMITTED);
         $submission->setXmlPath($invoice->getXmlPath());
@@ -116,17 +115,9 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
             'submittedAt' => (new \DateTimeImmutable())->format('c'),
         ]);
 
-        $previousStatus = $invoice->getStatus();
         $invoice->setAnafUploadId($uploadResponse->uploadId);
         $invoice->setAnafStatus('uploaded');
         $invoice->setSyncedAt(new \DateTimeImmutable());
-        $invoice->setStatus(DocumentStatus::SENT_TO_PROVIDER);
-
-        $event = new DocumentEvent();
-        $event->setPreviousStatus($previousStatus);
-        $event->setNewStatus(DocumentStatus::SENT_TO_PROVIDER);
-        $event->setMetadata(['action' => 'submitted_to_anaf', 'uploadId' => $uploadResponse->uploadId]);
-        $invoice->addEvent($event);
 
         $this->entityManager->flush();
 
