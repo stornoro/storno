@@ -16,7 +16,11 @@
 
 /* ── Chatwoot ─────────────────────────────────────────────────────── */
 .woot-widget-bubble,
-.woot--bubble-holder,
+.woot--bubble-holder {
+  z-index: 40 !important;
+  bottom: 60px !important;
+}
+
 .woot-widget-holder {
   z-index: 40 !important;
 }
