@@ -80,7 +80,7 @@ class InvoiceShareController extends AbstractController
             'senderCif' => $this->formatCifWithPrefix($invoice->getSenderCif(), $company?->isVatPayer() ?? false),
             'receiverName' => $invoice->getReceiverName(),
             'receiverCif' => $this->formatCifWithPrefix($invoice->getReceiverCif(), $invoice->getClient()?->isVatPayer() ?? false),
-            'hasPdf' => $invoice->getPdfPath() !== null || $invoice->getXmlPath() !== null,
+            'hasPdf' => $this->documentPdfService->isOutgoingInvoice($invoice) || $invoice->getPdfPath() !== null || $invoice->getXmlPath() !== null,
             'hasXml' => $invoice->getXmlPath() !== null,
             'expiresAt' => $shareToken->getExpiresAt()?->format('c'),
             'paymentEnabled' => $paymentEnabled,
