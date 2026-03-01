@@ -79,6 +79,7 @@ class BankAccountController extends AbstractController
         $account->setBankName($data['bankName'] ?? null);
         $account->setCurrency($data['currency'] ?? 'RON');
         $account->setIsDefault($data['isDefault'] ?? false);
+        $account->setShowOnInvoice($data['showOnInvoice'] ?? false);
 
         // If setting as default, unset others
         if ($account->isDefault()) {
@@ -116,6 +117,9 @@ class BankAccountController extends AbstractController
             if ($account->isDefault()) {
                 $this->unsetOtherDefaults($account->getCompany(), $account);
             }
+        }
+        if (isset($data['showOnInvoice'])) {
+            $account->setShowOnInvoice((bool) $data['showOnInvoice']);
         }
 
         $this->entityManager->flush();

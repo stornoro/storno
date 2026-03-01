@@ -50,16 +50,12 @@ export const usePdfTemplateConfigStore = defineStore('pdfTemplateConfig', () => 
     }
   }
 
-  async function fetchPreviewHtml(slug: string, color?: string | null, font?: string | null): Promise<void> {
+  async function fetchPreviewHtml(overrides: Partial<PdfTemplateConfig> = {}): Promise<void> {
     const { post } = useApi()
     previewLoading.value = true
 
     try {
-      const html = await post<string>('/v1/pdf-template-config/preview', {
-        templateSlug: slug,
-        primaryColor: color,
-        fontFamily: font,
-      })
+      const html = await post<string>('/v1/pdf-template-config/preview', overrides)
       previewHtml.value = typeof html === 'string' ? html : ''
     } catch {
       previewHtml.value = ''

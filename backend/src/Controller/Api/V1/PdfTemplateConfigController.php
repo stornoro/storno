@@ -86,6 +86,35 @@ class PdfTemplateConfigController extends AbstractController
             $config->setShowBankInfo((bool) $data['showBankInfo']);
         }
 
+        if (isset($data['bankDisplaySection'])) {
+            $validSections = ['supplier', 'payment', 'both'];
+            if (in_array($data['bankDisplaySection'], $validSections, true)) {
+                $config->setBankDisplaySection($data['bankDisplaySection']);
+            }
+        }
+
+        if (isset($data['bankDisplayMode'])) {
+            $validModes = ['stacked', 'inline'];
+            if (in_array($data['bankDisplayMode'], $validModes, true)) {
+                $config->setBankDisplayMode($data['bankDisplayMode']);
+            }
+        }
+
+        if (array_key_exists('defaultNotes', $data)) {
+            $config->setDefaultNotes($data['defaultNotes']);
+        }
+
+        if (array_key_exists('defaultPaymentTerms', $data)) {
+            $config->setDefaultPaymentTerms($data['defaultPaymentTerms']);
+        }
+
+        if (array_key_exists('defaultPaymentMethod', $data)) {
+            $validMethods = ['bank_transfer', 'cash', 'card', 'cheque', 'other', null];
+            if (in_array($data['defaultPaymentMethod'], $validMethods, true)) {
+                $config->setDefaultPaymentMethod($data['defaultPaymentMethod']);
+            }
+        }
+
         if (array_key_exists('footerText', $data)) {
             $config->setFooterText($data['footerText']);
         }
@@ -113,13 +142,10 @@ class PdfTemplateConfigController extends AbstractController
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $slug = $data['templateSlug'] ?? 'classic';
-        $color = $data['primaryColor'] ?? null;
-        $font = $data['fontFamily'] ?? null;
+        $data = json_decode($request->getContent(), true) ?? [];
 
         try {
-            $html = $this->documentPdfService->renderSampleHtml($company, $slug, $color, $font);
+            $html = $this->documentPdfService->renderSampleHtml($company, $data);
         } catch (\Throwable $e) {
             return $this->json(['error' => 'Preview generation failed.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -138,6 +164,11 @@ class PdfTemplateConfigController extends AbstractController
             'fontFamily' => $config->getFontFamily(),
             'showLogo' => $config->isShowLogo(),
             'showBankInfo' => $config->isShowBankInfo(),
+            'bankDisplaySection' => $config->getBankDisplaySection(),
+            'bankDisplayMode' => $config->getBankDisplayMode(),
+            'defaultNotes' => $config->getDefaultNotes(),
+            'defaultPaymentTerms' => $config->getDefaultPaymentTerms(),
+            'defaultPaymentMethod' => $config->getDefaultPaymentMethod(),
             'footerText' => $config->getFooterText(),
             'customCss' => $config->getCustomCss(),
         ];

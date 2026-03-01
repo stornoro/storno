@@ -28,6 +28,18 @@ class BankAccountRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function findForInvoice(Company $company): array
+    {
+        return $this->createQueryBuilder('ba')
+            ->where('ba.company = :company')
+            ->andWhere('ba.showOnInvoice = true')
+            ->setParameter('company', $company)
+            ->orderBy('ba.isDefault', 'DESC')
+            ->addOrderBy('ba.createdAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findByIban(Company $company, string $iban): ?BankAccount
     {
         $normalizedIban = strtoupper(preg_replace('/\s+/', '', $iban));

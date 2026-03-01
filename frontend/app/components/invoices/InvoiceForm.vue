@@ -668,6 +668,7 @@ function localizeValidationMessage(message: string): string {
 const invoiceStore = useInvoiceStore()
 const clientStore = useClientStore()
 const seriesStore = useDocumentSeriesStore()
+const pdfConfigStore = usePdfTemplateConfigStore()
 const {
   defaults,
   fetchDefaults,
@@ -1284,12 +1285,23 @@ onMounted(async () => {
   if (!props.invoice && !form.documentSeriesId && seriesOptions.value.length > 0) {
     form.documentSeriesId = seriesOptions.value[0]?.value
   }
-  // Set default currency from company settings when creating
+  // Set defaults when creating
   if (!props.invoice) {
     form.currency = defaultCurrency.value
     // Default plataOnline from Stripe Connect paymentEnabledByDefault
     if (companyStore.currentCompany?.stripeConnect?.paymentEnabledByDefault) {
       form.plataOnline = true
+    }
+    // Pre-fill notes and payment terms from PDF template config defaults
+    await pdfConfigStore.fetchConfig()
+    const cfg = pdfConfigStore.config
+    if (cfg?.defaultNotes && !form.notes) {
+      form.notes = cfg.defaultNotes
+      showNotes.value = true
+    }
+    if (cfg?.defaultPaymentTerms && !form.paymentTerms) {
+      form.paymentTerms = cfg.defaultPaymentTerms
+      showEfacturaInfo.value = true
     }
   }
   clients.value = clientStore.items

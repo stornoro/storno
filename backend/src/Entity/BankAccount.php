@@ -40,6 +40,10 @@ class BankAccount
     #[Groups(['bankaccount:list', 'bankaccount:detail'])]
     private bool $isDefault = false;
 
+    #[ORM\Column]
+    #[Groups(['bankaccount:list', 'bankaccount:detail'])]
+    private bool $showOnInvoice = false;
+
     #[ORM\Column(length: 20)]
     #[Groups(['bankaccount:detail'])]
     private string $source = 'manual';
@@ -110,6 +114,18 @@ class BankAccount
     public function setIsDefault(bool $isDefault): static
     {
         $this->isDefault = $isDefault;
+
+        return $this;
+    }
+
+    public function isShowOnInvoice(): bool
+    {
+        return $this->showOnInvoice;
+    }
+
+    public function setShowOnInvoice(bool $showOnInvoice): static
+    {
+        $this->showOnInvoice = $showOnInvoice;
 
         return $this;
     }

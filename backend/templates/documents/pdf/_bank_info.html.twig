@@ -1,7 +1,24 @@
-{% if showBankInfo|default(true) and company.bankAccount %}
-<div class="bank-info">
-    <span class="label">{{ 'bank_account'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ company.bankAccount }}
-    {% if company.bankName %} - {{ company.bankName }}{% endif %}
-    {% if company.bankBic %} (BIC: {{ company.bankBic }}){% endif %}
-</div>
+{% if (showBankInfo is not defined or showBankInfo) and (bankDisplaySection|default('both') == 'payment' or bankDisplaySection|default('both') == 'both') %}
+    {% if invoiceBankAccounts|default([])|length > 0 %}
+        <div class="bank-info">
+            <span class="label">{{ 'bank_accounts'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+            {% if bankDisplayMode|default('stacked') == 'inline' %}
+                {% for account in invoiceBankAccounts %}
+                    <span>{{ account.iban }}{% if account.bankName %} - {{ account.bankName }}{% endif %}</span>{% if not loop.last %} | {% endif %}
+                {% endfor %}
+            {% else %}
+                {% for account in invoiceBankAccounts %}
+                    <div>
+                        {% if account.bankName %}<span>{{ account.bankName }}: </span>{% endif %}{{ account.iban }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    {% elseif company.bankAccount %}
+        <div class="bank-info">
+            <span class="label">{{ 'bank_account'|trans({}, 'pdf', locale|default('ro')) }}:</span> {{ company.bankAccount }}
+            {% if company.bankName %} - {{ company.bankName }}{% endif %}
+            {% if company.bankBic %} (BIC: {{ company.bankBic }}){% endif %}
+        </div>
+    {% endif %}
 {% endif %}

@@ -9,6 +9,7 @@ use App\Entity\PdfTemplateConfig;
 use App\Entity\ProformaInvoice;
 use App\Entity\Receipt;
 use App\Enum\InvoiceDirection;
+use App\Repository\BankAccountRepository;
 use App\Repository\PdfTemplateConfigRepository;
 use App\Service\Storage\OrganizationStorageResolver;
 use Knp\Snappy\Pdf;
@@ -57,6 +58,7 @@ class DocumentPdfService
         private readonly Environment $twig,
         private readonly Pdf $snappy,
         private readonly PdfTemplateConfigRepository $configRepository,
+        private readonly BankAccountRepository $bankAccountRepository,
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly LoggerInterface $logger,
@@ -138,19 +140,45 @@ class DocumentPdfService
         return $this->convertToPdf($html);
     }
 
-    public function renderSampleHtml(Company $company, string $slug, ?string $color, ?string $font): string
+    public function renderSampleHtml(Company $company, array $overrides = []): string
     {
         $config = $this->resolveConfig($company);
         // Override with preview values
-        $config->setTemplateSlug($slug);
-        if ($color !== null) {
-            $config->setPrimaryColor($color);
+        if (isset($overrides['templateSlug'])) {
+            $config->setTemplateSlug($overrides['templateSlug']);
         }
-        if ($font !== null) {
-            $config->setFontFamily($font);
+        if (isset($overrides['primaryColor'])) {
+            $config->setPrimaryColor($overrides['primaryColor']);
+        }
+        if (isset($overrides['fontFamily'])) {
+            $config->setFontFamily($overrides['fontFamily']);
+        }
+        if (isset($overrides['showLogo'])) {
+            $config->setShowLogo((bool) $overrides['showLogo']);
+        }
+        if (isset($overrides['showBankInfo'])) {
+            $config->setShowBankInfo((bool) $overrides['showBankInfo']);
+        }
+        if (isset($overrides['bankDisplaySection'])) {
+            $config->setBankDisplaySection($overrides['bankDisplaySection']);
+        }
+        if (isset($overrides['bankDisplayMode'])) {
+            $config->setBankDisplayMode($overrides['bankDisplayMode']);
+        }
+        if (array_key_exists('defaultNotes', $overrides)) {
+            $config->setDefaultNotes($overrides['defaultNotes']);
+        }
+        if (array_key_exists('defaultPaymentTerms', $overrides)) {
+            $config->setDefaultPaymentTerms($overrides['defaultPaymentTerms']);
+        }
+        if (array_key_exists('defaultPaymentMethod', $overrides)) {
+            $config->setDefaultPaymentMethod($overrides['defaultPaymentMethod']);
+        }
+        if (array_key_exists('footerText', $overrides)) {
+            $config->setFooterText($overrides['footerText']);
         }
 
-        $sampleData = $this->buildSampleInvoiceData($company);
+        $sampleData = $this->buildSampleInvoiceData($company, $config);
 
         return $this->renderTemplate($config, 'invoice', array_merge($sampleData, [
             'config' => $config,
@@ -200,6 +228,16 @@ class DocumentPdfService
         $context['showLogo'] = $config->isShowLogo();
         $context['showBankInfo'] = $config->isShowBankInfo();
         $context['customCss'] = $config->getCustomCss();
+        $context['bankDisplaySection'] = $config->getBankDisplaySection();
+        $context['bankDisplayMode'] = $config->getBankDisplayMode();
+
+        // Fetch bank accounts marked for invoice display
+        $company = $context['company'] ?? null;
+        if ($company instanceof Company) {
+            $context['invoiceBankAccounts'] = $this->bankAccountRepository->findForInvoice($company);
+        } else {
+            $context['invoiceBankAccounts'] = [];
+        }
 
         return $this->twig->render($templatePath, $context);
     }
@@ -275,7 +313,7 @@ class DocumentPdfService
         ];
     }
 
-    private function buildSampleInvoiceData(Company $company): array
+    private function buildSampleInvoiceData(Company $company, ?PdfTemplateConfig $config = null): array
     {
         return [
             'invoice' => (object) [
@@ -288,9 +326,9 @@ class DocumentPdfService
                 'discount' => '0.00',
                 'total' => '1785.00',
                 'exchangeRate' => null,
-                'notes' => 'Aceasta este o factura demonstrativa pentru previzualizare.',
-                'paymentTerms' => 'Transfer bancar in 30 de zile.',
-                'paymentMethod' => 'bank_transfer',
+                'notes' => null,
+                'paymentTerms' => null,
+                'paymentMethod' => null,
                 'parentDocument' => null,
                 'documentType' => (object) ['value' => 'invoice'],
                 'orderNumber' => null,

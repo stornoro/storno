@@ -100,6 +100,7 @@ const columns = [
   { accessorKey: 'bankName', header: $t('bankAccounts.bankName') },
   { accessorKey: 'currency', header: $t('bankAccounts.currency') },
   { accessorKey: 'isDefault', header: $t('bankAccounts.isDefault') },
+  { accessorKey: 'showOnInvoice', header: $t('bankAccounts.showOnInvoice') },
   { accessorKey: 'source', header: $t('bankAccounts.source') },
   { id: 'actions', header: $t('common.actions') },
 ]
@@ -221,6 +222,13 @@ onMounted(() => {
           <UBadge v-if="row.original.isDefault" color="success" variant="subtle" size="sm">
             {{ $t('bankAccounts.isDefault') }}
           </UBadge>
+        </template>
+        <template #showOnInvoice-cell="{ row }">
+          <USwitch
+            :model-value="row.original.showOnInvoice"
+            size="sm"
+            @update:model-value="(val: boolean) => store.updateBankAccount(row.original.id, { showOnInvoice: val })"
+          />
         </template>
         <template #actions-cell="{ row }">
           <div class="flex gap-1">
