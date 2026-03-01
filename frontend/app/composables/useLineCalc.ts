@@ -19,11 +19,19 @@ export const vatCategoryToTypeCode: Record<string, string> = {
 
 const autoSetTypeCodes = new Set(Object.values(vatCategoryToTypeCode))
 
+/** Reverse mapping: invoiceTypeCode → vatCategoryCode for 0% lines */
+export const typeCodeToVatCategory: Record<string, string> = Object.fromEntries(
+  Object.entries(vatCategoryToTypeCode).map(([cat, type]) => [type, cat]),
+)
+
 /**
- * Determines the appropriate invoiceTypeCode based on the dominant VAT category
- * across all lines. Only resets to 'standard' if the current type was previously
- * auto-set from a VAT category (avoids overwriting manual choices like
- * self_billing, simplified, etc.).
+ * Determines the appropriate invoiceTypeCode based on VAT categories across all lines.
+ *
+ * Rules:
+ * - If ALL lines share a special category (AE/K/G/E/O), set the matching type code
+ * - If lines are mixed or all standard (S/Z), reset to 'standard' only if the
+ *   current type was previously auto-set (avoids overwriting manual choices like
+ *   self_billing, simplified, etc.)
  *
  * @param lines - Array of line objects with a vatCategoryCode string field
  * @param currentTypeCode - The current invoiceTypeCode value
@@ -35,17 +43,17 @@ export function resolveInvoiceTypeCode(
 ): string {
   if (!lines.length) return currentTypeCode ?? 'standard'
 
-  const freq: Record<string, number> = {}
-  for (const l of lines) {
-    freq[l.vatCategoryCode] = (freq[l.vatCategoryCode] || 0) + 1
-  }
-  const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0]
-  if (!dominant) return currentTypeCode ?? 'standard'
+  // Collect unique VAT category codes across all lines
+  const categories = new Set(lines.map(l => l.vatCategoryCode))
 
-  const mapped = vatCategoryToTypeCode[dominant]
-  if (mapped) {
-    return mapped
+  // If all lines share a single special category, auto-set the type code
+  if (categories.size === 1) {
+    const only = [...categories][0]
+    const mapped = vatCategoryToTypeCode[only]
+    if (mapped) return mapped
   }
+
+  // Lines are mixed or all standard (S/Z) — reset only if previously auto-set
   if (autoSetTypeCodes.has(currentTypeCode!)) {
     return 'standard'
   }

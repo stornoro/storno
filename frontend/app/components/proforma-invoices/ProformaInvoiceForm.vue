@@ -563,6 +563,17 @@ function syncInvoiceTypeFromVat() {
   form.invoiceTypeCode = resolveInvoiceTypeCode(form.lines, form.invoiceTypeCode)
 }
 
+// Reverse sync: when invoice regime changes, update VAT category codes on 0% lines
+watch(() => form.invoiceTypeCode, (newTypeCode) => {
+  const targetCategory = typeCodeToVatCategory[newTypeCode!]
+  for (const line of form.lines) {
+    const rate = parseFloat(line.vatRate) || 0
+    if (rate === 0) {
+      line.vatCategoryCode = targetCategory || 'Z'
+    }
+  }
+})
+
 // Product picker
 function openProductPicker(index: number) {
   productPickerLineIndex.value = index
