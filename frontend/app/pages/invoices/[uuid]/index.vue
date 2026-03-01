@@ -248,7 +248,12 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
             <UCard>
               <template #header>
-                <h3 class="font-semibold">{{ $t('invoices.seller') }}</h3>
+                <div class="flex items-center justify-between">
+                  <h3 class="font-semibold">{{ $t('invoices.seller') }}</h3>
+                  <UButton v-if="invoice.supplier" variant="ghost" size="xs" :to="`/suppliers/${invoice.supplier.id}`">
+                    {{ $t('common.view') }}
+                  </UButton>
+                </div>
               </template>
               <dl class="space-y-2 text-sm">
                 <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.senderName || '-' }}</dd></div>
@@ -257,7 +262,12 @@
             </UCard>
             <UCard>
               <template #header>
-                <h3 class="font-semibold">{{ $t('invoices.buyer') }}</h3>
+                <div class="flex items-center justify-between">
+                  <h3 class="font-semibold">{{ $t('invoices.buyer') }}</h3>
+                  <UButton v-if="invoice.client" variant="ghost" size="xs" :to="`/clients/${invoice.client.id}`">
+                    {{ $t('common.view') }}
+                  </UButton>
+                </div>
               </template>
               <dl class="space-y-2 text-sm">
                 <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.receiverName || '-' }}</dd></div>
