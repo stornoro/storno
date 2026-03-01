@@ -372,6 +372,9 @@ class InvoiceManager
         // Recalculate totals
         $this->recalculateTotals($invoice);
 
+        // Invalidate cached XML — it must be regenerated to reflect changes
+        $invoice->setXmlPath(null);
+
         $this->entityManager->flush();
 
         return $invoice;
