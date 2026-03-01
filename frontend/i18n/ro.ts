@@ -2993,6 +2993,17 @@ export default defineI18nLocale(async () => {
       howToGetFile: 'Cum obtin fisierul de incarcat?',
     },
 
+    // ── Marketplace ─────────────────────────────────────────────
+    marketplace: {
+      title: 'Incasari marketplace',
+      description: 'Importa rapoarte de vanzari din marketplace-uri pentru a asocia automat incasarile cu facturile emise',
+      importButton: 'Import vanzari',
+      importTitle: 'Import vanzari marketplace',
+      providerLabel: 'Marketplace',
+      card: 'Marketplace',
+      cardDesc: 'eMag si alte marketplace-uri',
+    },
+
     // ── E-Invoice Config ──────────────────────────────────────────
     einvoiceConfig: {
       title: 'Furnizori e-Factura',

@@ -381,7 +381,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <!-- Courier borderou card -->
         <NuxtLink
           to="/settings/borderou"
@@ -408,6 +408,21 @@ onMounted(() => {
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium">{{ $t('borderou.bankCard') }}</p>
             <p class="text-xs text-(--ui-text-muted)">{{ $t('borderou.bankCardDesc') }}</p>
+          </div>
+          <UIcon name="i-lucide-chevron-right" class="w-4 h-4 text-(--ui-text-muted) shrink-0" />
+        </NuxtLink>
+
+        <!-- Marketplace card -->
+        <NuxtLink
+          to="/settings/marketplace"
+          class="flex items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50/50 dark:hover:bg-orange-900/10 transition-colors"
+        >
+          <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+            <UIcon name="i-lucide-store" class="w-5 h-5 text-orange-600 dark:text-orange-400" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium">{{ $t('marketplace.card') }}</p>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('marketplace.cardDesc') }}</p>
           </div>
           <UIcon name="i-lucide-chevron-right" class="w-4 h-4 text-(--ui-text-muted) shrink-0" />
         </NuxtLink>

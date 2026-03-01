@@ -202,6 +202,9 @@ services:
     App\Service\Borderou\Parser\BcrBankStatementParser:
         tags: ['app.borderou_parser']
 
+    App\Service\Borderou\Parser\EmagMarketplaceParser:
+        tags: ['app.borderou_parser']
+
     # Wire the borderou import service with tagged parsers
     App\Service\Borderou\BorderouImportService:
         arguments:

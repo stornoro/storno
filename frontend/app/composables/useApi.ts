@@ -65,6 +65,7 @@ export function useApi() {
     try {
       return await fetchFn<T>(endpoint, {
         baseURL: apiBase,
+        credentials: 'include',
         ...fetchOptions,
         headers,
       })
@@ -89,6 +90,7 @@ export function useApi() {
           headers.Authorization = `Bearer ${authStore.token}`
           return await fetchFn<T>(endpoint, {
             baseURL: apiBase,
+            credentials: 'include',
             ...fetchOptions,
             headers,
           })

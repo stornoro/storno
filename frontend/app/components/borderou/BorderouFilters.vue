@@ -9,7 +9,7 @@ const emit = defineEmits<{
 const providerOptions = computed(() => {
   const items: { label: string, value: string }[] = []
   if (store.providers) {
-    const sourceType = (store.filters.sourceType as 'borderou' | 'bank_statement') || 'borderou'
+    const sourceType = (store.filters.sourceType as 'borderou' | 'bank_statement' | 'marketplace') || 'borderou'
     const list = store.providers[sourceType] || []
     for (const p of list) {
       items.push({ label: p.label, value: p.key })

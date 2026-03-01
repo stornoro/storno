@@ -6,12 +6,13 @@ const toast = useToast()
 const { fetchDefaults, currencyOptions } = useInvoiceDefaults()
 
 const props = defineProps<{
-  sourceType: 'borderou' | 'bank_statement'
+  sourceType: 'borderou' | 'bank_statement' | 'marketplace'
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const isBankStatement = computed(() => props.sourceType === 'bank_statement')
+const isMarketplace = computed(() => props.sourceType === 'marketplace')
 
 // ── Form state ──
 const provider = ref<string | null>(null)
@@ -34,7 +35,8 @@ const courierLogos: Record<string, string> = {
 // ── Options ──
 const providerOptions = computed(() => {
   if (!store.providers) return []
-  const list = store.providers.borderou || []
+  const sourceKey = isMarketplace.value ? 'marketplace' : 'borderou'
+  const list = store.providers[sourceKey] || []
   return list.map(p => ({
     label: p.label,
     value: p.key,
@@ -112,7 +114,11 @@ const canImport = computed(() => {
 })
 
 const modalTitle = computed(() =>
-  isBankStatement.value ? $t('bankStatement.importTitle') : $t('borderou.importButton'),
+  isBankStatement.value
+    ? $t('bankStatement.importTitle')
+    : isMarketplace.value
+      ? $t('marketplace.importTitle')
+      : $t('borderou.importButton'),
 )
 
 // ── File handling ──
@@ -203,21 +209,21 @@ onMounted(() => {
           />
         </div>
 
-        <!-- Provider (borderou only) -->
+        <!-- Provider (borderou + marketplace) -->
         <div v-if="!isBankStatement">
           <label class="block text-sm font-medium mb-1.5">
-            <span class="text-red-500">*</span> {{ $t('borderou.providerLabel') }}
+            <span class="text-red-500">*</span> {{ isMarketplace ? $t('marketplace.providerLabel') : $t('borderou.providerLabel') }}
           </label>
           <USelectMenu
             v-model="provider"
             :items="providerOptions"
             value-key="value"
-            :placeholder="$t('borderou.providerLabel')"
+            :placeholder="isMarketplace ? $t('marketplace.providerLabel') : $t('borderou.providerLabel')"
           />
         </div>
 
         <!-- Currency (borderou only) -->
-        <div v-if="!isBankStatement">
+        <div v-if="!isBankStatement && !isMarketplace">
           <label class="block text-sm font-medium mb-1.5">{{ $t('borderou.currencyLabel') }}</label>
           <USelectMenu
             v-model="currency"
@@ -226,8 +232,8 @@ onMounted(() => {
           />
         </div>
 
-        <!-- Reference number -->
-        <div>
+        <!-- Reference number (not for marketplace) -->
+        <div v-if="!isMarketplace">
           <label class="block text-sm font-medium mb-1.5">
             {{ isBankStatement ? $t('bankStatement.statementNumberLabel') : $t('borderou.bordereauNumberLabel') }}
           </label>

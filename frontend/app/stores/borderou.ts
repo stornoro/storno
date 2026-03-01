@@ -51,6 +51,7 @@ interface AvailableInvoice {
 interface BorderouProviders {
   borderou: Array<{ key: string; label: string; formats: string[] }>
   bank_statement: Array<{ key: string; label: string; formats: string[] }>
+  marketplace: Array<{ key: string; label: string; formats: string[] }>
 }
 
 interface SaveResult {
