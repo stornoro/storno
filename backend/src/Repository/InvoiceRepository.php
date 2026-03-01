@@ -507,6 +507,28 @@ class InvoiceRepository extends ServiceEntityRepository
     /**
      * Count outgoing invoices created this calendar month for the given company.
      */
+    /**
+     * Find invoices scheduled for auto-email delivery.
+     * ANAF gate: only send if not submitted to ANAF, or if ANAF validated.
+     *
+     * @return Invoice[]
+     */
+    public function findScheduledForEmail(\DateTimeImmutable $now, int $limit = 100): array
+    {
+        return $this->createQueryBuilder('i')
+            ->join('i.company', 'c')->addSelect('c')
+            ->leftJoin('i.client', 'cl')->addSelect('cl')
+            ->where('i.scheduledEmailAt <= :now')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('(i.anafUploadId IS NULL OR i.status = :validated)')
+            ->setParameter('now', $now)
+            ->setParameter('validated', DocumentStatus::VALIDATED)
+            ->orderBy('i.scheduledEmailAt', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function countThisMonth(Company $company): int
     {
         $firstOfMonth = new \DateTimeImmutable('first day of this month midnight');

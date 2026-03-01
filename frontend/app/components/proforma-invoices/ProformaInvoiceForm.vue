@@ -385,7 +385,7 @@ const {
   defaultUnitOfMeasure,
   exchangeRates,
 } = useInvoiceDefaults()
-const { formatMoney, formatLineTotal, computeSimpleTotals } = useLineCalc()
+const { formatMoney, formatLineTotal, computeSimpleTotals, normalizeVatRate, normalizeVatCategoryCode } = useLineCalc()
 const seriesStore = useDocumentSeriesStore()
 const { loadSeries, autoSelectFirst } = useSeriesSelection('proforma')
 
@@ -504,7 +504,7 @@ if (props.proforma) {
         unitOfMeasure: l.unitOfMeasure,
         unitPrice: l.unitPrice,
         vatRate: l.vatRate,
-        vatCategoryCode: l.vatCategoryCode,
+        vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
       }))
@@ -564,11 +564,6 @@ function openProductPicker(index: number) {
   productPickerOpen.value = true
 }
 
-function normalizeVatRate(rate: string | number): string {
-  const num = parseFloat(String(rate))
-  return isNaN(num) ? '21.00' : num.toFixed(2)
-}
-
 function onProductSelected(product: Product) {
   const index = productPickerLineIndex.value
   const line = form.lines[index]
@@ -576,7 +571,7 @@ function onProductSelected(product: Product) {
   line.description = product.description || product.name
   line.unitPrice = product.defaultPrice
   line.vatRate = normalizeVatRate(product.vatRate)
-  line.vatCategoryCode = product.vatCategoryCode
+  line.vatCategoryCode = normalizeVatCategoryCode(product.vatCategoryCode, line.vatRate)
   line.unitOfMeasure = product.unitOfMeasure
 }
 
@@ -699,7 +694,7 @@ onMounted(async () => {
             unitOfMeasure: l.unitOfMeasure,
             unitPrice: l.unitPrice,
             vatRate: l.vatRate,
-            vatCategoryCode: l.vatCategoryCode || 'S',
+            vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode || 'S', l.vatRate),
             discount: l.discount || '0.00',
             discountPercent: l.discountPercent || '0.00',
           }))

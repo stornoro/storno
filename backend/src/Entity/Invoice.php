@@ -23,6 +23,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'idx_invoice_company_direction', columns: ['company_id', 'direction', 'deleted_at'])]
 #[ORM\Index(name: 'idx_invoice_anaf_status', columns: ['status', 'anaf_upload_id'])]
 #[ORM\Index(name: 'idx_invoice_scheduled_send', columns: ['status', 'scheduled_send_at', 'direction', 'deleted_at'])]
+#[ORM\Index(name: 'idx_invoice_scheduled_email', columns: ['scheduled_email_at', 'status', 'deleted_at'])]
 #[ORM\Index(name: 'idx_invoice_company_sender_cif', columns: ['company_id', 'sender_cif'])]
 #[ORM\Index(name: 'idx_invoice_company_receiver_cif', columns: ['company_id', 'receiver_cif'])]
 class Invoice
@@ -199,6 +200,11 @@ class Invoice
     #[ORM\Column(nullable: true)]
     #[Groups(['invoice:list', 'invoice:detail'])]
     private ?\DateTimeImmutable $scheduledSendAt = null;
+
+    // Scheduled auto-email (from recurring invoices)
+    #[ORM\Column(nullable: true)]
+    #[Groups(['invoice:list', 'invoice:detail'])]
+    private ?\DateTimeImmutable $scheduledEmailAt = null;
 
     // UBL BT-71: Delivery location
     #[ORM\Column(length: 500, nullable: true)]
@@ -985,6 +991,18 @@ class Invoice
     public function setScheduledSendAt(?\DateTimeImmutable $scheduledSendAt): static
     {
         $this->scheduledSendAt = $scheduledSendAt;
+
+        return $this;
+    }
+
+    public function getScheduledEmailAt(): ?\DateTimeImmutable
+    {
+        return $this->scheduledEmailAt;
+    }
+
+    public function setScheduledEmailAt(?\DateTimeImmutable $scheduledEmailAt): static
+    {
+        $this->scheduledEmailAt = $scheduledEmailAt;
 
         return $this;
     }

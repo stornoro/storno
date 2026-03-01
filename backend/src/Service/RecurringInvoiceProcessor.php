@@ -238,7 +238,7 @@ class RecurringInvoiceProcessor
             $scheduledAt = new \DateTimeImmutable(
                 $sendDate->format('Y-m-d') . ' ' . $hour . ':' . $minute . ':00'
             );
-            $invoice->setScheduledSendAt($scheduledAt);
+            $invoice->setScheduledEmailAt($scheduledAt);
         }
 
         // Update recurring invoice metadata

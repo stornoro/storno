@@ -39,11 +39,25 @@ export function useLineCalc() {
     return { subtotal, vat, discount, total: subtotal + vat }
   }
 
+  function normalizeVatRate(rate: string | number): string {
+    const num = parseFloat(String(rate))
+    return isNaN(num) ? '21.00' : num.toFixed(2)
+  }
+
+  function normalizeVatCategoryCode(code: string, rate: string): string {
+    const r = parseFloat(rate)
+    if (code === 'S' && r === 0) return 'Z'
+    if (['Z', 'E', 'AE', 'K', 'G'].includes(code) && r > 0) return 'S'
+    return code
+  }
+
   return {
     formatMoney,
     lineNet,
     lineVat,
     formatLineTotal,
     computeSimpleTotals,
+    normalizeVatRate,
+    normalizeVatCategoryCode,
   }
 }
