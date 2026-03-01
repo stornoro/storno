@@ -48,7 +48,7 @@ class Client
     private ?string $vatCode = null;
 
     #[ORM\Column]
-    #[Groups(['client:list', 'client:detail', 'invoice:detail'])]
+    #[Groups(['client:list', 'client:detail', 'invoice:list', 'invoice:detail'])]
     private bool $isVatPayer = false;
 
     #[ORM\Column(length: 50, nullable: true)]

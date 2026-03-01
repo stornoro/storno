@@ -383,6 +383,7 @@ class DocumentPdfService
                 'type' => 'company',
                 'name' => 'SC Exemplu Client SRL',
                 'cui' => '12345678',
+                'isVatPayer' => true,
                 'registrationNumber' => 'J40/1234/2020',
                 'address' => 'Str. Exemplu nr. 1',
                 'city' => 'Bucuresti',

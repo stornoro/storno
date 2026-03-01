@@ -28,12 +28,12 @@
           <div>
             <h3 class="text-sm font-semibold text-(--ui-text-muted) uppercase tracking-wide mb-2">{{ $t('invoices.seller') }}</h3>
             <div class="text-base font-medium">{{ invoice.senderName || '-' }}</div>
-            <div class="text-sm text-(--ui-text-muted)">CIF: {{ invoice.senderCif || '-' }}</div>
+            <div class="text-sm text-(--ui-text-muted)">CIF: {{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</div>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-(--ui-text-muted) uppercase tracking-wide mb-2">{{ $t('invoices.buyer') }}</h3>
             <div class="text-base font-medium">{{ invoice.receiverName || '-' }}</div>
-            <div class="text-sm text-(--ui-text-muted)">CIF: {{ invoice.receiverCif || '-' }}</div>
+            <div class="text-sm text-(--ui-text-muted)">CIF: {{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || '-' }}</div>
           </div>
         </div>
 
@@ -109,6 +109,7 @@ defineProps<{
 const { t: $t } = useI18n()
 const { formatMoney, formatNumber } = useMoney()
 const { formatDate } = useDate()
+const companyStore = useCompanyStore()
 
 const open = ref(false)
 
