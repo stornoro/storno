@@ -129,7 +129,7 @@
       </div>
 
       <!-- Non-editable banner — only for invoices sent to ANAF, not already refunded -->
-      <UCard v-if="invoice.anafUploadId && invoice.direction === 'outgoing' && !invoice.cancelledAt && !invoice.parentDocumentId && !invoice.refundInvoices?.length" class="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+      <UCard v-if="invoice.anafUploadId && invoice.anafStatus !== 'rejected' && invoice.direction === 'outgoing' && !invoice.cancelledAt && !invoice.parentDocumentId && !invoice.refundInvoices?.length" class="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 text-sm">
             <UIcon name="i-lucide-info" class="text-amber-500 mt-0.5 shrink-0 size-5" />

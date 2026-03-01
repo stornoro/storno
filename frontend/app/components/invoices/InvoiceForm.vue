@@ -2,11 +2,9 @@
   <div class="space-y-4">
     <!-- Invoice header -->
     <div class="space-y-2">
-      <div class="grid gap-x-2 gap-y-0.5" style="grid-template-columns: 1.2fr 1fr 1fr 1fr 0.7fr 1fr;">
+      <div class="grid gap-x-2 gap-y-0.5" :style="{ gridTemplateColumns: (!invoice || invoice.status === 'draft') ? '1.2fr 1fr 0.7fr 1fr' : '1.2fr 0.7fr 1fr' }">
         <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.invoiceTypeCode') }}</span>
         <span v-if="!invoice || invoice.status === 'draft'" class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.selectSeries') }}</span>
-        <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.issueDate') }}</span>
-        <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.dueDate') }}</span>
         <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.currency') }}</span>
         <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.documentLanguage') }}</span>
 
@@ -42,8 +40,6 @@
           </div>
         </template>
 
-        <UInput v-model="form.issueDate" type="date" size="sm" />
-        <UInput v-model="form.dueDate" type="date" size="sm" />
         <USelectMenu
           v-model="form.currency"
           :items="currencyOptions"
@@ -56,6 +52,13 @@
           value-key="value"
           size="sm"
         />
+      </div>
+
+      <div class="grid gap-x-2 gap-y-0.5" style="grid-template-columns: 1fr 1fr;">
+        <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.issueDate') }}</span>
+        <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.dueDate') }}</span>
+        <UInput v-model="form.issueDate" type="date" size="sm" />
+        <UInput v-model="form.dueDate" type="date" size="sm" />
       </div>
 
       <!-- No series — inline quick-create -->
@@ -676,6 +679,7 @@ const {
   defaultUnitOfMeasure,
   exchangeRates,
 } = useInvoiceDefaults()
+const { formatMoney, lineNet, lineVat, normalizeVatRate, normalizeVatCategoryCode } = useLineCalc()
 
 const documentLanguageOptions = [
   { label: 'Romana', value: 'ro' },
@@ -953,20 +957,6 @@ function openProductPicker(index: number) {
   productPickerOpen.value = true
 }
 
-function normalizeVatRate(rate: string | number): string {
-  const num = parseFloat(String(rate))
-  return isNaN(num) ? '21.00' : num.toFixed(2)
-}
-
-// EN16931 schematron: normalize VAT category code based on rate
-// S requires rate > 0; Z/E/AE/K/G require rate = 0
-function normalizeVatCategoryCode(code: string, rate: string): string {
-  const r = parseFloat(rate)
-  if (code === 'S' && r === 0) return 'Z'
-  if (['Z', 'E', 'AE', 'K', 'G'].includes(code) && r > 0) return 'S'
-  return code
-}
-
 function normalizeUnitOfMeasure(unit: string): string {
   const options = unitOfMeasureOptions.value as { value: string; code?: string }[]
   // If it's already a known short label, return as-is
@@ -1115,25 +1105,8 @@ async function checkAnafVatStatus(cif: string, autoFill = true) {
 }
 
 // Totals
-function formatMoney(amount: number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(amount)
-}
-
-function lineNet(line: LineForm): number {
-  const qty = parseFloat(line.quantity) || 0
-  const price = parseFloat(line.unitPrice) || 0
-  const disc = parseFloat(line.discount) || 0
-  return (qty * price) - disc
-}
-
-function lineVat(line: LineForm): number {
-  return lineNet(line) * ((parseFloat(line.vatRate) || 0) / 100)
-}
-
 function formatLineTotal(line: LineForm): string {
-  const net = lineNet(line)
-  const vat = lineVat(line)
-  return formatMoney(net + vat, form.currency)
+  return formatMoney(lineNet(line) + lineVat(line), form.currency)
 }
 
 const computedTotals = computed(() => {

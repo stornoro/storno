@@ -24,6 +24,7 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // e-Factura — every 5 minutes
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:check-status')))
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:submit-scheduled')))
+            ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:invoice:send-scheduled-emails')))
             ->add(RecurringMessage::cron('*/30 * * * *', new RunCommandMessage('app:efactura:sync')))
             // ANAF token refresh — every hour
             ->add(RecurringMessage::cron('0 * * * *', new RunCommandMessage('app:anaf:refresh-tokens')))

@@ -584,6 +584,7 @@ class InvoiceManager
         $invoice->setCancelledAt(new \DateTimeImmutable());
         $invoice->setCancellationReason($reason);
         $invoice->setScheduledSendAt(null);
+        $invoice->setScheduledEmailAt(null);
 
         // Add document event
         $event = new DocumentEvent();
