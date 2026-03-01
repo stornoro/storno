@@ -1,7 +1,9 @@
 {% extends 'emails/notification_base.html.twig' %}
 
+{% block accent_gradient %}background: linear-gradient(90deg, #ea580c 0%, #f97316 50%, #fb923c 100%);{% endblock %}
+
 {% block icon_emoji %}
-    <div style="display: inline-block; width: 56px; height: 56px; border-radius: 50%; background-color: #fff7ed; text-align: center; line-height: 56px; font-size: 28px;">
+    <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba(234,88,12,0.15);">
         &#128276;
     </div>
 {% endblock %}
@@ -9,18 +11,27 @@
 {% block heading %}Factura scadenta astazi{% endblock %}
 
 {% block content %}
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; margin-bottom: 16px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; margin-bottom: 20px;">
         <tr>
-            <td style="padding: 16px;">
-                <p style="margin: 0; font-size: 14px; color: #9a3412;">{{ message }}</p>
+            <td style="padding: 18px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                        <td style="width: 24px; vertical-align: top; padding-top: 1px;">
+                            <div style="width: 20px; height: 20px; border-radius: 50%; background: #ea580c; text-align: center; line-height: 20px; font-size: 12px; color: #fff;">!</div>
+                        </td>
+                        <td style="padding-left: 12px;">
+                            <p style="margin: 0; font-size: 14px; color: #9a3412; line-height: 1.5;">{{ message }}</p>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
-        <tr>
-            <td style="padding: 10px 16px; font-size: 14px; color: #666;">Numar factura</td>
-            <td style="padding: 10px 16px; font-size: 14px; color: #333; font-weight: 600; text-align: right;">{{ data.invoiceNumber|default('—') }}</td>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+        <tr style="background-color: #f9fafb;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">Numar factura</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.invoiceNumber|default('—') }}</td>
         </tr>
     </table>
 {% endblock %}
@@ -28,9 +39,9 @@
 {% block cta %}
     {% if data.invoiceId is defined and data.companyId is defined %}
     <tr>
-        <td style="padding: 0 32px 24px 32px;" align="center">
+        <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/invoices/{{ data.invoiceId }}?company={{ data.companyId }}" target="_blank"
-               style="display: inline-block; background-color: #ea580c; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 32px; border-radius: 6px;">
+               style="display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #f97316 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(234,88,12,0.3);">
                 Vizualizeaza factura
             </a>
         </td>

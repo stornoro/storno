@@ -4,44 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        .email-body p { margin: 0 0 12px 0; }
-        .email-body h1 { font-size: 22px; font-weight: 700; margin: 0 0 16px 0; color: #1a1a2e; }
-        .email-body h2 { font-size: 18px; font-weight: 700; margin: 0 0 12px 0; color: #1a1a2e; }
-        .email-body h3 { font-size: 16px; font-weight: 600; margin: 0 0 10px 0; color: #1a1a2e; }
-        .email-body strong { font-weight: 700; }
+        .email-body p { margin: 0 0 14px 0; }
+        .email-body h1 { font-size: 22px; font-weight: 700; margin: 0 0 16px 0; color: #111827; }
+        .email-body h2 { font-size: 18px; font-weight: 700; margin: 0 0 12px 0; color: #111827; }
+        .email-body h3 { font-size: 16px; font-weight: 600; margin: 0 0 10px 0; color: #111827; }
+        .email-body strong { font-weight: 700; color: #1a1a2e; }
         .email-body em { font-style: italic; }
         .email-body ul, .email-body ol { margin: 0 0 12px 0; padding-left: 24px; }
         .email-body li { margin-bottom: 4px; }
-        .email-body hr { border: none; border-top: 1px solid #e0e0e0; margin: 20px 0; }
-        .email-body a { color: #1a73e8; text-decoration: underline; }
-        .email-body blockquote { margin: 12px 0; padding: 8px 16px; border-left: 3px solid #e0e0e0; color: #666; }
+        .email-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
+        .email-body a { color: #6366f1; text-decoration: underline; }
+        .email-body blockquote { margin: 12px 0; padding: 8px 16px; border-left: 3px solid #e5e7eb; color: #6b7280; }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f4f4f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f7;">
+<body style="margin: 0; padding: 0; background-color: #f0f0f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <!-- Preview text -->
+    <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; color: #f0f0f5;">Factura {{ invoiceNumber }} in valoare de {{ total }} {{ currency }}{% if dueDate %} — scadenta {{ dueDate }}{% endif %}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0f0f5;">
         <tr>
-            <td align="center" style="padding: 24px 0;">
-                <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+            <td align="center" style="padding: 32px 16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 16px rgba(0,0,0,0.06);">
                     <!-- Header -->
                     <tr>
-                        <td style="background-color: #1a1a2e; padding: 24px 32px;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;">{{ companyName }}</h1>
+                        <td style="background: linear-gradient(135deg, #1a1a2e 0%, #2d2b55 100%); padding: 28px 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td>
+                                        <h1 style="margin: 0; color: #ffffff; font-size: 21px; font-weight: 700; letter-spacing: -0.3px;">{{ companyName }}</h1>
+                                    </td>
+                                    <td align="right" style="vertical-align: middle;">
+                                        <div style="display: inline-block; background: rgba(255,255,255,0.12); border-radius: 6px; padding: 5px 14px;">
+                                            <span style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); letter-spacing: 0.5px;">FACTURA</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
+                    </tr>
+
+                    <!-- Accent Line -->
+                    <tr>
+                        <td style="height: 3px; background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);"></td>
                     </tr>
 
                     <!-- Body -->
                     <tr>
-                        <td style="padding: 32px;">
-                            <div style="font-size: 15px; line-height: 1.6; color: #333333;" class="email-body">
+                        <td style="padding: 36px;">
+                            <div style="font-size: 15px; line-height: 1.7; color: #374151;" class="email-body">
                                 {{ body|raw }}
                             </div>
 
                             <!-- View Invoice button -->
                             {% if invoiceUrl is defined and invoiceUrl %}
-                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 24px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 28px;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{{ invoiceUrl }}" target="_blank" style="display: inline-block; background-color: #1a1a2e; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 32px; border-radius: 6px;">
+                                        <a href="{{ invoiceUrl }}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(99,102,241,0.3);">
                                             Vizualizeaza factura
                                         </a>
                                     </td>
@@ -50,29 +68,29 @@
                             {% endif %}
 
                             <!-- Invoice summary -->
-                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 24px; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 28px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
                                 <tr>
-                                    <td colspan="2" style="background-color: #f8f8fa; padding: 12px 16px; border-bottom: 1px solid #e0e0e0;">
-                                        <strong style="font-size: 14px; color: #333;">Detalii factura</strong>
+                                    <td colspan="2" style="background-color: #f9fafb; padding: 14px 20px; border-bottom: 1px solid #e5e7eb;">
+                                        <strong style="font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Detalii factura</strong>
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #f0f0f0;">Numar factura</td>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #333; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">{{ invoiceNumber }}</td>
+                                <tr style="background-color: #ffffff;">
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Numar factura</td>
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">{{ invoiceNumber }}</td>
                                 </tr>
-                                <tr>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #f0f0f0;">Data emiterii</td>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #333; text-align: right; border-bottom: 1px solid #f0f0f0;">{{ issueDate }}</td>
+                                <tr style="background-color: #fafafa;">
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Data emiterii</td>
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #111827; text-align: right; border-bottom: 1px solid #f3f4f6;">{{ issueDate }}</td>
                                 </tr>
                                 {% if dueDate %}
-                                <tr>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #666; border-bottom: 1px solid #f0f0f0;">Data scadentei</td>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #333; text-align: right; border-bottom: 1px solid #f0f0f0;">{{ dueDate }}</td>
+                                <tr style="background-color: #ffffff;">
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Data scadentei</td>
+                                    <td style="padding: 13px 20px; font-size: 14px; color: #111827; text-align: right; border-bottom: 1px solid #f3f4f6;">{{ dueDate }}</td>
                                 </tr>
                                 {% endif %}
-                                <tr>
-                                    <td style="padding: 10px 16px; font-size: 14px; color: #666;">Total</td>
-                                    <td style="padding: 10px 16px; font-size: 16px; color: #1a1a2e; font-weight: 700; text-align: right;">{{ total }} {{ currency }}</td>
+                                <tr style="background-color: #f9fafb;">
+                                    <td style="padding: 15px 20px; font-size: 14px; color: #6b7280;">Total</td>
+                                    <td style="padding: 15px 20px; font-size: 18px; color: #1a1a2e; font-weight: 800; text-align: right; letter-spacing: -0.3px;">{{ total }} {{ currency }}</td>
                                 </tr>
                             </table>
                         </td>
@@ -80,14 +98,14 @@
 
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 20px 32px; background-color: #f8f8fa; border-top: 1px solid #e0e0e0;">
-                            <p style="margin: 0; font-size: 12px; color: #999; text-align: center;">
-                                Trimis prin Storno.ro
+                        <td style="padding: 24px 36px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center;">
+                                Trimis prin <a href="https://storno.ro" style="color: #6366f1; text-decoration: none; font-weight: 500;">Storno.ro</a>
                                 {% if companyName %} &middot; {{ companyName }}{% endif %}
                             </p>
                             {% if unsubscribeUrl is defined and unsubscribeUrl %}
-                            <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb; text-align: center;">
-                                <a href="{{ unsubscribeUrl }}" style="color: #bbb; text-decoration: underline;">Dezaboneaza-te</a>
+                            <p style="margin: 6px 0 0 0; font-size: 11px; color: #d1d5db; text-align: center;">
+                                <a href="{{ unsubscribeUrl }}" style="color: #d1d5db; text-decoration: underline;">Dezaboneaza-te</a>
                             </p>
                             {% endif %}
                         </td>
