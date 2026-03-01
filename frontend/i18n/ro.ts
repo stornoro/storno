@@ -676,6 +676,8 @@ export default defineI18nLocale(async () => {
       eventSentToAnaf: 'Trimisa in SPV',
       eventAnafValidated: 'Validata de ANAF',
       eventAnafRejected: 'Respinsa de ANAF',
+      downloadAnafError: 'Descarca raspuns ANAF',
+      anafResponseUnavailable: 'Raspunsul ANAF nu este disponibil',
       eventCreatedFromRecurring: 'Generata din sablon recurent',
       // Options section
       optionsSection: 'Optiuni',

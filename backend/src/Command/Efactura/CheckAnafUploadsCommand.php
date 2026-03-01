@@ -104,6 +104,9 @@ class CheckAnafUploadsCommand extends Command
                     $invoice->setStatus(DocumentStatus::REJECTED);
                     $invoice->setAnafStatus('rejected');
                     $invoice->setAnafErrorMessage($statusResponse->errorMessage);
+                    if ($statusResponse->downloadId) {
+                        $invoice->setAnafDownloadId($statusResponse->downloadId);
+                    }
 
                     $event = new DocumentEvent();
                     $event->setPreviousStatus($previousStatus);
