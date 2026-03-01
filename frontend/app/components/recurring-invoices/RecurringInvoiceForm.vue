@@ -339,6 +339,7 @@
               v-model="line.priceRule"
               :items="priceRuleOptions"
               value-key="value"
+              class="w-1/2"
             />
           </UFormField>
 
