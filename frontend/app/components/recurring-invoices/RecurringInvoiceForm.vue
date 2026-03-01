@@ -835,6 +835,11 @@ function selectVatRate(index: number, vr: { value: string, categoryCode: string 
   if (!line) return
   line.vatRate = vr.value
   line.vatCategoryCode = vr.categoryCode
+  syncInvoiceTypeFromVat()
+}
+
+function syncInvoiceTypeFromVat() {
+  form.invoiceTypeCode = resolveInvoiceTypeCode(form.lines, form.invoiceTypeCode)
 }
 
 // Product picker
@@ -854,6 +859,7 @@ function onProductSelected(product: Product) {
     line.vatRate = normalizeVatRate(product.vatRate)
     line.vatCategoryCode = normalizeVatCategoryCode(product.vatCategoryCode, line.vatRate)
     line.unitOfMeasure = product.unitOfMeasure
+    syncInvoiceTypeFromVat()
   }
 }
 
