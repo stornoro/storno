@@ -95,8 +95,13 @@ class BankAccountController extends AbstractController
     #[Route('/bank-accounts/{uuid}', methods: ['PATCH'])]
     public function update(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $account = $this->bankAccountRepository->find($uuid);
-        if (!$account) {
+        if (!$account || $account->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Bank account not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -128,10 +133,15 @@ class BankAccountController extends AbstractController
     }
 
     #[Route('/bank-accounts/{uuid}', methods: ['DELETE'])]
-    public function delete(string $uuid): JsonResponse
+    public function delete(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $account = $this->bankAccountRepository->find($uuid);
-        if (!$account) {
+        if (!$account || $account->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Bank account not found.'], Response::HTTP_NOT_FOUND);
         }
 

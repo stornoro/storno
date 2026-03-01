@@ -4,6 +4,7 @@ namespace App\Security\Voter;
 
 use App\Entity\Client;
 use App\Entity\User;
+use App\Enum\OrganizationRole;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
@@ -42,6 +43,17 @@ class ClientVoter extends Voter
         $org = $this->organizationContext->getOrganization();
         if ($org === null || $client->getCompany()?->getOrganization() !== $org) {
             return false;
+        }
+
+        // Per-company access check for non-OWNER/ADMIN roles
+        $membership = $this->organizationContext->getMembership();
+        if ($membership) {
+            $role = $membership->getRole();
+            if ($role !== OrganizationRole::OWNER && $role !== OrganizationRole::ADMIN) {
+                if ($client->getCompany() && !$membership->hasAccessToCompany($client->getCompany())) {
+                    return false;
+                }
+            }
         }
 
         return match ($attribute) {

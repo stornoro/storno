@@ -97,10 +97,11 @@ class OrganizationContext
             $company = $this->companyRepository->find(Uuid::fromString($companyId));
 
             // Validate per-company access for non-OWNER/ADMIN
-            if ($company && $this->currentMembership) {
-                $role = $this->currentMembership->getRole();
+            $membership = $this->getMembership();
+            if ($company && $membership) {
+                $role = $membership->getRole();
                 if ($role !== OrganizationRole::OWNER && $role !== OrganizationRole::ADMIN) {
-                    if (!$this->currentMembership->hasAccessToCompany($company)) {
+                    if (!$membership->hasAccessToCompany($company)) {
                         return null;
                     }
                 }

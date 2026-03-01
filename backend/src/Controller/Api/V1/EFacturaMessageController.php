@@ -42,10 +42,15 @@ class EFacturaMessageController extends AbstractController
     }
 
     #[Route('/efactura-messages/{uuid}', methods: ['GET'])]
-    public function show(string $uuid): JsonResponse
+    public function show(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $message = $this->messageRepository->find($uuid);
-        if (!$message) {
+        if (!$message || $message->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Message not found.'], Response::HTTP_NOT_FOUND);
         }
 

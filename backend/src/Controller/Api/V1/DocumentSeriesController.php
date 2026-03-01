@@ -93,8 +93,13 @@ class DocumentSeriesController extends AbstractController
     #[Route('/document-series/{uuid}', methods: ['PATCH'])]
     public function update(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $series = $this->documentSeriesRepository->find($uuid);
-        if (!$series) {
+        if (!$series || $series->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Document series not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -133,10 +138,15 @@ class DocumentSeriesController extends AbstractController
     }
 
     #[Route('/document-series/{uuid}/set-default', methods: ['POST'])]
-    public function setDefault(string $uuid): JsonResponse
+    public function setDefault(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $series = $this->documentSeriesRepository->find($uuid);
-        if (!$series) {
+        if (!$series || $series->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Document series not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -152,10 +162,15 @@ class DocumentSeriesController extends AbstractController
     }
 
     #[Route('/document-series/{uuid}', methods: ['DELETE'])]
-    public function delete(string $uuid): JsonResponse
+    public function delete(string $uuid, Request $request): JsonResponse
     {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         $series = $this->documentSeriesRepository->find($uuid);
-        if (!$series) {
+        if (!$series || $series->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Document series not found.'], Response::HTTP_NOT_FOUND);
         }
 
