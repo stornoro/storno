@@ -1,7 +1,9 @@
 {% extends 'emails/notification_base.html.twig' %}
 
+{% block accent_gradient %}background: linear-gradient(90deg, #ef4444 0%, #f87171 50%, #fca5a5 100%);{% endblock %}
+
 {% block icon_emoji %}
-    <div style="display: inline-block; width: 56px; height: 56px; border-radius: 50%; background-color: #fef2f2; text-align: center; line-height: 56px; font-size: 28px;">
+    <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba(239,68,68,0.15);">
         &#9888;&#65039;
     </div>
 {% endblock %}
@@ -9,25 +11,34 @@
 {% block heading %}Eroare sincronizare{% endblock %}
 
 {% block content %}
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin-bottom: 16px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: 20px;">
         <tr>
-            <td style="padding: 16px;">
-                <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #991b1b;">Eroare sincronizare e-Factura</p>
-                <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{{ message }}</p>
+            <td style="padding: 18px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                        <td style="width: 24px; vertical-align: top; padding-top: 1px;">
+                            <div style="width: 20px; height: 20px; border-radius: 50%; background: #ef4444; text-align: center; line-height: 20px; font-size: 12px; color: #fff;">!</div>
+                        </td>
+                        <td style="padding-left: 12px;">
+                            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #991b1b;">Eroare sincronizare e-Factura</p>
+                            <p style="margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">{{ message }}</p>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
 
     {% if data.errors is defined and data.errors|length > 0 %}
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         <tr>
-            <td style="background-color: #f8f8fa; padding: 10px 16px; border-bottom: 1px solid #e0e0e0;">
-                <strong style="font-size: 13px; color: #333;">Detalii erori</strong>
+            <td style="background-color: #f9fafb; padding: 13px 20px; border-bottom: 1px solid #e5e7eb;">
+                <strong style="font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Detalii erori</strong>
             </td>
         </tr>
         {% for error in data.errors %}
-        <tr>
-            <td style="padding: 8px 16px; font-size: 13px; color: #666;{% if not loop.last %} border-bottom: 1px solid #f0f0f0;{% endif %}">
+        <tr style="background-color: {% if loop.index is odd %}#ffffff{% else %}#fafafa{% endif %};">
+            <td style="padding: 10px 20px; font-size: 13px; color: #6b7280;{% if not loop.last %} border-bottom: 1px solid #f3f4f6;{% endif %}">
                 {{ error }}
             </td>
         </tr>
@@ -39,9 +50,9 @@
 {% block cta %}
     {% if data.companyId is defined %}
     <tr>
-        <td style="padding: 0 32px 24px 32px;" align="center">
+        <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/companies/{{ data.companyId }}/anaf" target="_blank"
-               style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 32px; border-radius: 6px;">
+               style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(220,38,38,0.3);">
                 Verifica setarile ANAF
             </a>
         </td>
