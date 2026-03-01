@@ -71,6 +71,10 @@ class PdfTemplateConfig
     #[Groups(['pdf_config'])]
     private ?string $customCss = null;
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['pdf_config'])]
+    private ?array $labelOverrides = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -233,6 +237,18 @@ class PdfTemplateConfig
     public function setCustomCss(?string $customCss): static
     {
         $this->customCss = $customCss;
+
+        return $this;
+    }
+
+    public function getLabelOverrides(): ?array
+    {
+        return $this->labelOverrides;
+    }
+
+    public function setLabelOverrides(?array $labelOverrides): static
+    {
+        $this->labelOverrides = $labelOverrides;
 
         return $this;
     }

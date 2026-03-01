@@ -174,13 +174,13 @@ table.lines tbody tr:last-child td {
             {% if (showLogo is not defined or showLogo) and logoDataUri %}
                 <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
             {% endif %}
-            <div class="doc-title">{{ 'credit_note_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-title">{{ pdf_label('credit_note_title', labelOverrides|default(null), locale|default('ro')) }}</div>
             <div class="doc-number">{{ invoice.number }}</div>
         </div>
         <div class="header-bar-right">
             <table class="header-meta">
                 <tr>
-                    <td class="meta-label">{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}:</td>
+                    <td class="meta-label">{{ pdf_label('date_label', labelOverrides|default(null), locale|default('ro')) }}:</td>
                     <td class="meta-value">{{ invoice.issueDate|date('d.m.Y') }}</td>
                     {% if invoice.anafUploadId|default %}
                     <td class="meta-spacer"></td>

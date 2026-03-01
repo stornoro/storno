@@ -1371,6 +1371,11 @@ export interface StorageConfig {
   updatedAt: string | null
 }
 
+export interface PdfLabelOverride {
+  visible?: boolean
+  text?: string | null
+}
+
 export interface PdfTemplateInfo {
   slug: string
   name: string
@@ -1392,6 +1397,7 @@ export interface PdfTemplateConfig {
   defaultPaymentMethod: string | null
   footerText: string | null
   customCss: string | null
+  labelOverrides: Record<string, PdfLabelOverride> | null
 }
 
 // ── Balance Analysis ───────────────────────────────────────────────

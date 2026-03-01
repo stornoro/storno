@@ -165,12 +165,12 @@ table.lines tbody tr:last-child td {
             {% if (showLogo is not defined or showLogo) and logoDataUri %}
                 <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
             {% endif %}
-            <div class="doc-title">{{ 'proforma_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-title">{{ pdf_label('proforma_title', labelOverrides|default(null), locale|default('ro')) }}</div>
             <div class="doc-number">{{ invoice.number }}</div>
         </div>
         <div class="header-bar-right">
             <div class="doc-type">{{ 'proforma_watermark'|trans({}, 'pdf', locale|default('ro')) }}</div>
-            <div class="doc-meta">{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
+            <div class="doc-meta">{{ pdf_label('date_label', labelOverrides|default(null), locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
             {% if invoice.dueDate %}
                 <div class="doc-meta">{{ 'valid_until'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.dueDate|date('d.m.Y') }}</div>
             {% endif %}

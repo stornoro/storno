@@ -29,12 +29,12 @@ table.lines tbody tr:last-child td { border-bottom: 2px solid #e2e8f0; }
             {% if (showLogo is not defined or showLogo) and logoDataUri %}
                 <div class="header-logo"><img src="{{ logoDataUri }}" alt="Logo"></div>
             {% endif %}
-            <div class="doc-title">{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            <div class="doc-title">{{ pdf_label('receipt_title', labelOverrides|default(null), locale|default('ro')) }}</div>
             <div class="doc-number">{{ invoice.number }}</div>
         </div>
         <div class="header-right">
             <div class="doc-meta">
-                <div>{{ 'date_label'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
+                <div>{{ pdf_label('date_label', labelOverrides|default(null), locale|default('ro')) }}: {{ invoice.issueDate|date('d.m.Y') }}</div>
                 {% if invoice.fiscalNumber %}
                     <div>{{ 'fiscal_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.fiscalNumber }}</div>
                 {% endif %}

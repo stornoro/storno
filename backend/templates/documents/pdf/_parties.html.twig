@@ -1,21 +1,33 @@
 <div class="parties" style="overflow: hidden; margin-bottom: 25px;">
     <div class="party" style="float: left; width: 48%;">
-        <div class="party-label">{{ supplierLabel|default('supplier'|trans({}, 'pdf', locale|default('ro'))) }}</div>
+        <div class="party-label">{{ supplierLabel|default(pdf_label('supplier', labelOverrides|default(null), locale|default('ro'), 'supplier')) }}</div>
         <div class="party-name">{{ company.name }}</div>
-        <div class="party-detail">{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.cif }}</div>
-        {% if company.registrationNumber %}
-            <div class="party-detail">{{ 'reg_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.registrationNumber }}</div>
+        {% if pdf_visible('supplier_cui', labelOverrides|default(null)) %}
+            <div class="party-detail">{{ pdf_label('supplier_cui', labelOverrides|default(null), locale|default('ro'), 'cui') }}: {{ company.cif }}</div>
         {% endif %}
-        <div class="party-detail">{{ company.address }}</div>
-        <div class="party-detail">{{ company.city }}{% if company.state %}, {{ company.state }}{% endif %}{% if company.country is defined and company.country and company.country != 'RO' %}, {{ company.country }}{% endif %}</div>
+        {% if company.registrationNumber %}
+            {% if pdf_visible('supplier_reg_number', labelOverrides|default(null)) %}
+                <div class="party-detail">{{ pdf_label('supplier_reg_number', labelOverrides|default(null), locale|default('ro'), 'reg_number') }}: {{ company.registrationNumber }}</div>
+            {% endif %}
+        {% endif %}
+        {% if pdf_visible('supplier_address', labelOverrides|default(null)) %}
+            <div class="party-detail">{{ company.address }}</div>
+            <div class="party-detail">{{ company.city }}{% if company.state %}, {{ company.state }}{% endif %}{% if company.country is defined and company.country and company.country != 'RO' %}, {{ company.country }}{% endif %}</div>
+        {% endif %}
         {% if company.phone %}
-            <div class="party-detail">{{ 'phone'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.phone }}</div>
+            {% if pdf_visible('supplier_phone', labelOverrides|default(null)) %}
+                <div class="party-detail">{{ pdf_label('supplier_phone', labelOverrides|default(null), locale|default('ro'), 'phone') }}: {{ company.phone }}</div>
+            {% endif %}
         {% endif %}
         {% if company.email %}
-            <div class="party-detail">{{ 'email'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.email }}</div>
+            {% if pdf_visible('supplier_email', labelOverrides|default(null)) %}
+                <div class="party-detail">{{ pdf_label('supplier_email', labelOverrides|default(null), locale|default('ro'), 'email') }}: {{ company.email }}</div>
+            {% endif %}
         {% endif %}
         {% if company.website %}
-            <div class="party-detail">{{ 'website'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.website }}</div>
+            {% if pdf_visible('supplier_website', labelOverrides|default(null)) %}
+                <div class="party-detail">{{ pdf_label('supplier_website', labelOverrides|default(null), locale|default('ro'), 'website') }}: {{ company.website }}</div>
+            {% endif %}
         {% endif %}
         {% if (showBankInfo is not defined or showBankInfo) and (bankDisplaySection|default('both') == 'supplier' or bankDisplaySection|default('both') == 'both') %}
             {% if invoiceBankAccounts|default([])|length > 0 %}
@@ -34,31 +46,45 @@
         {% endif %}
     </div>
     <div class="party" style="float: right; width: 48%;">
-        <div class="party-label">{{ clientLabel|default('client'|trans({}, 'pdf', locale|default('ro'))) }}</div>
+        <div class="party-label">{{ clientLabel|default(pdf_label('client', labelOverrides|default(null), locale|default('ro'), 'client')) }}</div>
         {% if client %}
             <div class="party-name">{{ client.name }}</div>
             {% if client.type is defined and client.type == 'individual' %}
                 {% if client.cnp is defined and client.cnp %}
-                    <div class="party-detail">{{ 'cnp'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.cnp }}</div>
+                    {% if pdf_visible('client_cnp', labelOverrides|default(null)) %}
+                        <div class="party-detail">{{ pdf_label('client_cnp', labelOverrides|default(null), locale|default('ro'), 'cnp') }}: {{ client.cnp }}</div>
+                    {% endif %}
                 {% endif %}
             {% else %}
                 {% if client.cui %}
-                    <div class="party-detail">{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.cui }}</div>
+                    {% if pdf_visible('client_cui', labelOverrides|default(null)) %}
+                        <div class="party-detail">{{ pdf_label('client_cui', labelOverrides|default(null), locale|default('ro'), 'cui') }}: {{ client.cui }}</div>
+                    {% endif %}
                 {% endif %}
                 {% if client.registrationNumber is defined and client.registrationNumber %}
-                    <div class="party-detail">{{ 'reg_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.registrationNumber }}</div>
+                    {% if pdf_visible('client_reg_number', labelOverrides|default(null)) %}
+                        <div class="party-detail">{{ pdf_label('client_reg_number', labelOverrides|default(null), locale|default('ro'), 'reg_number') }}: {{ client.registrationNumber }}</div>
+                    {% endif %}
                 {% endif %}
             {% endif %}
-            <div class="party-detail">{{ client.address }}</div>
-            <div class="party-detail">{{ client.city }}{% if client.county is defined and client.county %}, {{ client.county }}{% endif %}{% if client.postalCode is defined and client.postalCode %}, {{ client.postalCode }}{% endif %}{% if client.country is defined and client.country and client.country != 'RO' %}, {{ client.country }}{% endif %}</div>
+            {% if pdf_visible('client_address', labelOverrides|default(null)) %}
+                <div class="party-detail">{{ client.address }}</div>
+                <div class="party-detail">{{ client.city }}{% if client.county is defined and client.county %}, {{ client.county }}{% endif %}{% if client.postalCode is defined and client.postalCode %}, {{ client.postalCode }}{% endif %}{% if client.country is defined and client.country and client.country != 'RO' %}, {{ client.country }}{% endif %}</div>
+            {% endif %}
             {% if client.phone is defined and client.phone %}
-                <div class="party-detail">{{ 'phone'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.phone }}</div>
+                {% if pdf_visible('client_phone', labelOverrides|default(null)) %}
+                    <div class="party-detail">{{ pdf_label('client_phone', labelOverrides|default(null), locale|default('ro'), 'phone') }}: {{ client.phone }}</div>
+                {% endif %}
             {% endif %}
             {% if client.email is defined and client.email %}
-                <div class="party-detail">{{ 'email'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.email }}</div>
+                {% if pdf_visible('client_email', labelOverrides|default(null)) %}
+                    <div class="party-detail">{{ pdf_label('client_email', labelOverrides|default(null), locale|default('ro'), 'email') }}: {{ client.email }}</div>
+                {% endif %}
             {% endif %}
             {% if client.contactPerson is defined and client.contactPerson %}
-                <div class="party-detail">{{ 'contact_person'|trans({}, 'pdf', locale|default('ro')) }}: {{ client.contactPerson }}</div>
+                {% if pdf_visible('client_contact', labelOverrides|default(null)) %}
+                    <div class="party-detail">{{ pdf_label('client_contact', labelOverrides|default(null), locale|default('ro'), 'contact_person') }}: {{ client.contactPerson }}</div>
+                {% endif %}
             {% endif %}
         {% endif %}
     </div>

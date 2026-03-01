@@ -15,9 +15,9 @@
 
 {# Payment method #}
 {% set effectivePaymentMethod = (invoice.paymentMethod is defined and invoice.paymentMethod) ? invoice.paymentMethod : ((config is defined and config.defaultPaymentMethod) ? config.defaultPaymentMethod : null) %}
-{% if effectivePaymentMethod %}
+{% if effectivePaymentMethod and pdf_visible('payment_method', labelOverrides|default(null)) %}
 <div class="details-section">
-    <div class="detail-row"><span class="detail-label">{{ 'payment_method'|trans({}, 'pdf', locale|default('ro')) }}:</span>
+    <div class="detail-row"><span class="detail-label">{{ pdf_label('payment_method', labelOverrides|default(null), locale|default('ro')) }}:</span>
         {% if effectivePaymentMethod == 'cash' %}{{ 'payment_cash'|trans({}, 'pdf', locale|default('ro')) }}
         {% elseif effectivePaymentMethod == 'bank_transfer' %}{{ 'payment_bank_transfer'|trans({}, 'pdf', locale|default('ro')) }}
         {% elseif effectivePaymentMethod == 'card' %}{{ 'payment_card'|trans({}, 'pdf', locale|default('ro')) }}
