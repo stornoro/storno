@@ -98,8 +98,15 @@ class SyncEFacturaCommand extends Command
             }
         }
 
-        $io->success(sprintf('Sync complete. New invoices: %d, Errors: %d', $totalNew, $totalErrors));
+        if ($totalErrors > 0) {
+            $io->warning(sprintf('Sync complete with errors. New invoices: %d, Errors: %d', $totalNew, $totalErrors));
+        } else {
+            $io->success(sprintf('Sync complete. New invoices: %d', $totalNew));
+        }
 
-        return $totalErrors > 0 ? Command::FAILURE : Command::SUCCESS;
+        // Always return SUCCESS — individual errors are already logged by the sync service.
+        // Returning FAILURE causes the scheduler to log a noisy ERROR with will_retry:false,
+        // which is misleading for transient ANAF issues (token expiry, rate limits, etc.).
+        return Command::SUCCESS;
     }
 }
