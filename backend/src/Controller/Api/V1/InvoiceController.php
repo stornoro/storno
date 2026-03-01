@@ -868,6 +868,22 @@ class InvoiceController extends AbstractController
         return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
     }
 
+    #[Route('/invoices/{uuid}/cancel-scheduled-email', methods: ['POST'])]
+    public function cancelScheduledEmail(string $uuid): JsonResponse
+    {
+        $invoice = $this->findInvoice($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('INVOICE_EDIT', $invoice);
+
+        $invoice->setScheduledEmailAt(null);
+        $this->entityManager->flush();
+
+        return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
+    }
+
     #[Route('/invoices/{uuid}/xml', methods: ['GET'])]
     public function downloadXml(string $uuid): Response
     {
