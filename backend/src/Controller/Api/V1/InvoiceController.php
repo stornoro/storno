@@ -1509,14 +1509,6 @@ class InvoiceController extends AbstractController
 
         $this->denyAccessUnlessGranted('INVOICE_SEND', $invoice);
 
-        $org = $invoice->getCompany()?->getOrganization();
-        if ($org && !$this->licenseManager->canUsePaymentLinks($org)) {
-            return $this->json([
-                'error' => 'Payment links are not available on your plan.',
-                'code' => 'PLAN_LIMIT',
-            ], Response::HTTP_PAYMENT_REQUIRED);
-        }
-
         /** @var \App\Entity\User|null $user */
         $user = $this->getUser();
 

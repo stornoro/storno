@@ -92,8 +92,8 @@
             </UButton>
           </UDropdownMenu>
 
-          <!-- Payment Link -->
-          <UTooltip v-if="stripeConnected && invoice.status !== 'draft' && invoice.status !== 'cancelled' && !invoice.paidAt" :text="$t('invoices.copyPaymentLink')">
+          <!-- Share Link -->
+          <UTooltip v-if="invoice.direction === 'outgoing' && !['draft', 'cancelled'].includes(invoice.status)" :text="$t('invoices.copyShareLink')">
             <UButton
               icon="i-lucide-link"
               :color="paymentLinkCopied ? 'success' : 'neutral'"
@@ -204,18 +204,21 @@
         {{ $t('invoices.validating') }}
       </div>
 
-      <!-- Validation Results -->
-      <UCard v-if="validationResult" :class="validationResult.valid ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'">
+      <!-- Validation Results — success (clean inline) -->
+      <div v-if="validationResult && validationResult.valid && !validationResult.errors.length && !validationResult.warnings.length" class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-3 py-2">
+        <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
+        <span class="font-medium">{{ $t('invoices.validationPassed') }}</span>
+        <UBadge v-if="!validationResult.schematronAvailable" color="warning" variant="subtle" size="sm">
+          {{ $t('invoices.schematronUnavailable') }}
+        </UBadge>
+      </div>
+
+      <!-- Validation Results — errors/warnings (card) -->
+      <UCard v-else-if="validationResult" class="border-red-200 dark:border-red-800">
         <template #header>
           <div class="flex items-center gap-2">
-            <UIcon
-              :name="validationResult.valid ? 'i-lucide-circle-check' : 'i-lucide-circle-x'"
-              :class="validationResult.valid ? 'text-green-500' : 'text-red-500'"
-              class="size-5"
-            />
-            <h3 class="font-semibold" :class="validationResult.valid ? 'text-green-600' : 'text-red-600'">
-              {{ validationResult.valid ? $t('invoices.validationPassed') : $t('invoices.validationFailed') }}
-            </h3>
+            <UIcon name="i-lucide-circle-x" class="text-red-500 size-5" />
+            <h3 class="font-semibold text-red-600">{{ $t('invoices.validationFailed') }}</h3>
             <UBadge v-if="!validationResult.schematronAvailable" color="warning" variant="subtle" size="sm">
               {{ $t('invoices.schematronUnavailable') }}
             </UBadge>
@@ -249,7 +252,7 @@
               </template>
               <dl class="space-y-2 text-sm">
                 <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.senderName || '-' }}</dd></div>
-                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ invoice.senderCif || '-' }}</dd></div>
+                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd></div>
               </dl>
             </UCard>
             <UCard>
@@ -258,7 +261,7 @@
               </template>
               <dl class="space-y-2 text-sm">
                 <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.receiverName || '-' }}</dd></div>
-                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ invoice.receiverCif || $t('clients.typeIndividual') }}</dd></div>
+                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || $t('clients.typeIndividual') }}</dd></div>
               </dl>
             </UCard>
           </div>
@@ -344,7 +347,7 @@
             </template>
             <dl class="grid grid-cols-2 gap-3 text-sm">
               <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.client.name }}</dd></div>
-              <div v-if="invoice.client.cui"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ invoice.client.cui }}</dd></div>
+              <div v-if="invoice.client.cui"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ formatCif(invoice.client.cui, invoice.client.isVatPayer) }}</dd></div>
             </dl>
           </UCard>
 
@@ -360,7 +363,7 @@
             </template>
             <dl class="grid grid-cols-2 gap-3 text-sm">
               <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.supplier.name }}</dd></div>
-              <div v-if="invoice.supplier.cif"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ invoice.supplier.cif }}</dd></div>
+              <div v-if="invoice.supplier.cif"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ formatCif(invoice.supplier.cif, invoice.supplier.isVatPayer) }}</dd></div>
             </dl>
           </UCard>
 
@@ -777,12 +780,12 @@
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-link" class="size-5 shrink-0 text-(--ui-primary)" />
-            <h3 class="font-semibold">{{ $t('invoices.paymentLinkReady') }}</h3>
+            <h3 class="font-semibold">{{ $t('invoices.shareLinkReady') }}</h3>
           </div>
         </template>
         <template #body>
           <div class="space-y-3">
-            <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.paymentLinkManualCopy') }}</p>
+            <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.shareLinkManualCopy') }}</p>
             <div class="flex items-center gap-2">
               <code class="flex-1 rounded bg-(--ui-bg-elevated) px-3 py-2 font-mono text-xs break-all select-all">{{ manualCopyUrl }}</code>
               <UButton icon="i-lucide-copy" variant="ghost" size="sm" @click="copyToClipboard(manualCopyUrl).catch(() => {})" />
@@ -1254,7 +1257,7 @@ async function copyPaymentLink() {
     }
   } catch (err) {
     console.error('copyPaymentLink failed:', err)
-    useToast().add({ title: $t('invoices.paymentLinkError'), color: 'error' })
+    useToast().add({ title: $t('invoices.shareLinkError'), color: 'error' })
   } finally {
     creatingPaymentLink.value = false
   }

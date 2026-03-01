@@ -537,9 +537,9 @@ const columns = [
 
 function getCounterparty(inv: any): string {
   if (inv.direction === 'incoming') {
-    return inv.senderName || inv.senderCif || '-'
+    return inv.senderName || formatCif(inv.senderCif, inv.supplier?.isVatPayer) || '-'
   }
-  return inv.receiverName || inv.receiverCif || '-'
+  return inv.receiverName || formatCif(inv.receiverCif, inv.client?.isVatPayer) || '-'
 }
 
 function formatMoney(amount?: string | number, currency = 'RON') {

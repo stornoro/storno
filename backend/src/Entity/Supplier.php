@@ -40,7 +40,7 @@ class Supplier
     private ?string $vatCode = null;
 
     #[ORM\Column]
-    #[Groups(['supplier:list', 'supplier:detail'])]
+    #[Groups(['supplier:list', 'supplier:detail', 'invoice:list', 'invoice:detail'])]
     private bool $isVatPayer = false;
 
     #[ORM\Column(length: 50, nullable: true)]

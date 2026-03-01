@@ -77,9 +77,9 @@ class InvoiceShareController extends AbstractController
             'currency' => $invoice->getCurrency(),
             'companyName' => $company?->getName(),
             'senderName' => $invoice->getSenderName(),
-            'senderCif' => $invoice->getSenderCif(),
+            'senderCif' => $this->formatCifWithPrefix($invoice->getSenderCif(), $company?->isVatPayer() ?? false),
             'receiverName' => $invoice->getReceiverName(),
-            'receiverCif' => $invoice->getReceiverCif(),
+            'receiverCif' => $this->formatCifWithPrefix($invoice->getReceiverCif(), $invoice->getClient()?->isVatPayer() ?? false),
             'hasPdf' => $invoice->getPdfPath() !== null || $invoice->getXmlPath() !== null,
             'hasXml' => $invoice->getXmlPath() !== null,
             'expiresAt' => $shareToken->getExpiresAt()?->format('c'),
@@ -198,5 +198,16 @@ class InvoiceShareController extends AbstractController
             'Content-Type' => 'application/xml',
             'Content-Disposition' => sprintf('attachment; filename="factura-%s.xml"', $invoice->getNumber()),
         ]);
+    }
+
+    private function formatCifWithPrefix(?string $cif, bool $isVatPayer): ?string
+    {
+        if (!$cif) {
+            return null;
+        }
+        if ($isVatPayer && preg_match('/^\d+$/', $cif)) {
+            return 'RO' . $cif;
+        }
+        return $cif;
     }
 }
