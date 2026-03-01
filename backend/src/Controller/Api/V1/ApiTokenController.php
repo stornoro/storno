@@ -43,6 +43,10 @@ class ApiTokenController extends AbstractController
     #[Route('/api-tokens', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
+        if ($this->organizationContext->isTokenAuth()) {
+            return $this->json(['error' => 'API keys cannot be managed via programmatic tokens. Use a browser session.'], Response::HTTP_FORBIDDEN);
+        }
+
         if (!$this->organizationContext->hasPermission(Permission::API_KEY_MANAGE)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
@@ -120,6 +124,10 @@ class ApiTokenController extends AbstractController
     #[Route('/api-tokens/{uuid}', methods: ['PATCH'])]
     public function update(string $uuid, Request $request): JsonResponse
     {
+        if ($this->organizationContext->isTokenAuth()) {
+            return $this->json(['error' => 'API keys cannot be managed via programmatic tokens. Use a browser session.'], Response::HTTP_FORBIDDEN);
+        }
+
         if (!$this->organizationContext->hasPermission(Permission::API_KEY_MANAGE)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
@@ -175,6 +183,10 @@ class ApiTokenController extends AbstractController
     #[Route('/api-tokens/{uuid}', methods: ['DELETE'])]
     public function revoke(string $uuid): JsonResponse
     {
+        if ($this->organizationContext->isTokenAuth()) {
+            return $this->json(['error' => 'API keys cannot be managed via programmatic tokens. Use a browser session.'], Response::HTTP_FORBIDDEN);
+        }
+
         if (!$this->organizationContext->hasPermission(Permission::API_KEY_MANAGE)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
@@ -195,6 +207,10 @@ class ApiTokenController extends AbstractController
     #[Route('/api-tokens/{uuid}/rotate', methods: ['POST'])]
     public function rotate(string $uuid): JsonResponse
     {
+        if ($this->organizationContext->isTokenAuth()) {
+            return $this->json(['error' => 'API keys cannot be managed via programmatic tokens. Use a browser session.'], Response::HTTP_FORBIDDEN);
+        }
+
         if (!$this->organizationContext->hasPermission(Permission::API_KEY_MANAGE)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }

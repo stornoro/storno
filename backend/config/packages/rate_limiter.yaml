@@ -48,6 +48,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        oauth2_token:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
         contact:
             policy: 'sliding_window'
             limit: 999999
@@ -107,6 +111,10 @@ when@prod:
             oauth_login:
                 policy: 'sliding_window'
                 limit: 10
+                interval: '1 minute'
+            oauth2_token:
+                policy: 'sliding_window'
+                limit: 20
                 interval: '1 minute'
             contact:
                 policy: 'sliding_window'

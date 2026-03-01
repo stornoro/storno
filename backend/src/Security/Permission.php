@@ -70,6 +70,10 @@ final class Permission
     public const API_KEY_VIEW = 'api_key.view';
     public const API_KEY_MANAGE = 'api_key.manage';
 
+    // OAuth2 Apps
+    public const OAUTH2_APP_VIEW = 'oauth2_app.view';
+    public const OAUTH2_APP_MANAGE = 'oauth2_app.manage';
+
     // Backup
     public const BACKUP_MANAGE = 'backup.manage';
 
@@ -101,6 +105,7 @@ final class Permission
             self::IMPORT_MANAGE, self::EXPORT_DATA,
             self::WEBHOOK_VIEW, self::WEBHOOK_MANAGE,
             self::API_KEY_VIEW, self::API_KEY_MANAGE,
+            self::OAUTH2_APP_VIEW, self::OAUTH2_APP_MANAGE,
             self::BACKUP_MANAGE,
             self::EMAIL_TEMPLATE_VIEW, self::EMAIL_TEMPLATE_MANAGE,
             self::REPORT_VIEW,

@@ -54,6 +54,14 @@ security:
             pattern: ^/api/v1/unsubscribe$
             security: false
 
+        oauth2_token:
+            pattern: ^/api/v1/oauth2/token$
+            security: false
+
+        oauth2_revoke:
+            pattern: ^/api/v1/oauth2/revoke$
+            security: false
+
         JWTToken:
             stateless: true
             pattern: ^/api/(v1|connect)/
@@ -61,6 +69,7 @@ security:
             entry_point: jwt
             jwt: ~
             custom_authenticators:
+                - App\Security\OAuth2Authenticator
                 - App\Security\ApiKeyAuthenticator
                 - App\Security\GoogleOAuth2Authenticator
                 - App\Security\StripeAppTokenAuthenticator
@@ -103,6 +112,8 @@ security:
         - { path: "^/api/v1/anaf/token-links/[a-f0-9]+$", methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/contact$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/unsubscribe$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/oauth2/token$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/oauth2/revoke$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1, roles: ROLE_API }
         - { path: ^/api, roles: PUBLIC_ACCESS }
         - { path: ^/api/*, roles: IS_AUTHENTICATED_FULLY }

@@ -1268,6 +1268,27 @@ export interface DashboardStats {
   payments?: PaymentSummary
 }
 
+// ── OAuth2 Client ──────────────────────────────────────────────
+export interface OAuth2Client {
+  id: string
+  name: string
+  description: string | null
+  clientId: string
+  clientSecretPrefix: string | null
+  clientType: 'confidential' | 'public'
+  redirectUris: string[]
+  scopes: string[]
+  websiteUrl: string | null
+  logoUrl: string | null
+  isActive: boolean
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface OAuth2ClientWithSecret extends OAuth2Client {
+  clientSecret: string
+}
+
 // ── API Key ────────────────────────────────────────────────────
 export interface ApiKey {
   id: string
