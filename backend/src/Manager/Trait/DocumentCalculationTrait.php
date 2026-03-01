@@ -22,7 +22,13 @@ trait DocumentCalculationTrait
         $line->setUnitOfMeasure($data['unitOfMeasure'] ?? 'buc');
         $line->setUnitPrice($data['unitPrice'] ?? '0.00');
         $line->setVatRate($data['vatRate'] ?? '21.00');
-        $line->setVatCategoryCode($data['vatCategoryCode'] ?? 'S');
+        $categoryCode = $data['vatCategoryCode'] ?? 'S';
+        $rate = (float) ($data['vatRate'] ?? '21.00');
+        // [BR-S-05] Standard rate must have rate > 0; auto-correct to Z (zero rate) if 0%
+        if ($categoryCode === 'S' && $rate === 0.0) {
+            $categoryCode = 'Z';
+        }
+        $line->setVatCategoryCode($categoryCode);
         $line->setDiscount($data['discount'] ?? '0.00');
         $line->setDiscountPercent($data['discountPercent'] ?? '0.00');
         $line->setVatIncluded(!empty($data['vatIncluded']));

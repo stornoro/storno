@@ -862,7 +862,7 @@ if (props.invoice) {
         unitOfMeasure: l.unitOfMeasure,
         unitPrice: l.unitPrice,
         vatRate: l.vatRate,
-        vatCategoryCode: l.vatCategoryCode,
+        vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
         productCode: l.productCode || '',
@@ -958,6 +958,13 @@ function normalizeVatRate(rate: string | number): string {
   return isNaN(num) ? '21.00' : num.toFixed(2)
 }
 
+// [BR-S-05] Standard rate (S) must have rate > 0; auto-correct to Z if 0%
+function normalizeVatCategoryCode(code: string, rate: string): string {
+  if (code === 'S' && parseFloat(rate) === 0) return 'Z'
+  if (code === 'Z' && parseFloat(rate) > 0) return 'S'
+  return code
+}
+
 function normalizeUnitOfMeasure(unit: string): string {
   const options = unitOfMeasureOptions.value as { value: string; code?: string }[]
   // If it's already a known short label, return as-is
@@ -974,7 +981,7 @@ function onProductSelected(product: Product) {
     line.description = product.description || product.name
     line.unitPrice = product.defaultPrice
     line.vatRate = normalizeVatRate(product.vatRate)
-    line.vatCategoryCode = product.vatCategoryCode
+    line.vatCategoryCode = normalizeVatCategoryCode(product.vatCategoryCode, line.vatRate)
     line.unitOfMeasure = normalizeUnitOfMeasure(product.unitOfMeasure)
     line.productCode = product.code || ''
   }

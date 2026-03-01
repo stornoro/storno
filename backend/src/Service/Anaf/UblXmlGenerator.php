@@ -518,10 +518,11 @@ class UblXmlGenerator
         // Group lines by VAT category code + rate for TaxSubtotal breakdown (BG-23)
         $vatGroups = [];
         foreach ($invoice->getLines() as $line) {
-            $key = $line->getVatCategoryCode() . '_' . $line->getVatRate();
+            $normalizedCode = $this->normalizeVatCategoryCode($line->getVatCategoryCode(), $line->getVatRate());
+            $key = $normalizedCode . '_' . $line->getVatRate();
             if (!isset($vatGroups[$key])) {
                 $vatGroups[$key] = [
-                    'categoryCode' => $line->getVatCategoryCode(),
+                    'categoryCode' => $normalizedCode,
                     'rate' => $line->getVatRate(),
                     'taxableAmount' => '0.00',
                     'taxAmount' => '0.00',
@@ -675,8 +676,9 @@ class UblXmlGenerator
         }
 
         // Classified tax category
+        $normalizedCode = $this->normalizeVatCategoryCode($line->getVatCategoryCode(), $line->getVatRate());
         $taxCategory = $dom->createElement('cac:ClassifiedTaxCategory');
-        $this->addElement($dom, $taxCategory, 'cbc:ID', $line->getVatCategoryCode());
+        $this->addElement($dom, $taxCategory, 'cbc:ID', $normalizedCode);
         $this->addElement($dom, $taxCategory, 'cbc:Percent', $line->getVatRate());
         $lineTaxScheme = $dom->createElement('cac:TaxScheme');
         $this->addElement($dom, $lineTaxScheme, 'cbc:ID', 'VAT');
@@ -753,6 +755,28 @@ class UblXmlGenerator
             'other' => 'ZZZ',
             default => '30', // Credit transfer
         };
+    }
+
+    /**
+     * [BR-S-05] Standard rated lines must have rate > 0.
+     * [BR-Z-05] Zero rated lines must have rate = 0.
+     * Auto-correct mismatched category code / rate combinations.
+     */
+    private function normalizeVatCategoryCode(string $categoryCode, string $vatRate): string
+    {
+        $rate = (float) $vatRate;
+
+        // S (Standard) with 0% → should be Z (Zero rate)
+        if ($categoryCode === 'S' && $rate === 0.0) {
+            return 'Z';
+        }
+
+        // Z (Zero rate) with rate > 0 → should be S (Standard)
+        if ($categoryCode === 'Z' && $rate > 0.0) {
+            return 'S';
+        }
+
+        return $categoryCode;
     }
 
     /**
