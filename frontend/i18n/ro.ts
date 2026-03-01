@@ -260,6 +260,18 @@ export default defineI18nLocale(async () => {
       mfaInvalidCode: 'Codul este invalid. Incearca din nou.',
       mfaExpired: 'Sesiunea a expirat. Te rugam sa te autentifici din nou.',
       mfaBackToLogin: 'Inapoi la autentificare',
+      mfaPasskeyTab: 'Cheie de acces',
+      mfaPasskeyVerify: 'Verifica cu cheie de acces',
+      mfaPasskeyPrompt: 'Foloseste cheia de acces pentru a continua verificarea.',
+      mfaPasskeyRetry: 'Verificarea cu cheie de acces a esuat. Incearca din nou.',
+    },
+
+    stepUpMfa: {
+      title: 'Verificare suplimentara',
+      description: 'Aceasta actiune necesita verificare suplimentara pentru securitate.',
+      verifying: 'Se verifica...',
+      expired: 'Provocarea a expirat. Incearca din nou.',
+      error: 'Verificarea a esuat.',
     },
 
     // ── Dashboard ────────────────────────────────────────────────

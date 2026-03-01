@@ -29,14 +29,14 @@ final class MfaLoginSubscriber implements EventSubscriberInterface
             return;
         }
 
-        if (!$user->isMfaEnabled()) {
+        if (!$user->requiresMfa()) {
             return;
         }
 
         // Create MFA challenge token
         $mfaToken = $this->mfaService->createMfaChallenge($user);
 
-        $methods = ['totp'];
+        $methods = $user->getAvailableMfaMethods();
         if ($this->mfaService->getMfaStatus($user)['backupCodesRemaining'] > 0) {
             $methods[] = 'backup_code';
         }

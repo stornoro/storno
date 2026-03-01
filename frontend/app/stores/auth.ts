@@ -290,6 +290,42 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function completeMfaWithPasskey(credential: any): Promise<boolean> {
+    if (!mfaToken.value) return false
+
+    const apiBase = useApiBase()
+    const fetchFn = useRequestFetch()
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await fetchFn<{ token: string }>(
+        '/auth/mfa/verify',
+        {
+          baseURL: apiBase,
+          method: 'POST',
+          credentials: 'include',
+          body: { mfaToken: mfaToken.value, type: 'passkey', credential },
+        },
+      )
+
+      token.value = response.token
+      mfaPending.value = false
+      mfaToken.value = null
+      mfaMethods.value = []
+
+      await fetchUser()
+      return true
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Verificarea cu cheie de acces a esuat.'
+      return false
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
   function clearMfa() {
     mfaPending.value = false
     mfaToken.value = null
@@ -390,6 +426,7 @@ export const useAuthStore = defineStore('auth', () => {
     fetchUser,
     deleteAccount,
     completeMfaLogin,
+    completeMfaWithPasskey,
     clearMfa,
     startImpersonation,
     stopImpersonation,

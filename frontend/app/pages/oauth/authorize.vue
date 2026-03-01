@@ -6,6 +6,7 @@ useHead({ title: $t('oauth2.authorize.title') })
 
 const route = useRoute()
 const { get, post } = useApi()
+const toast = useToast()
 
 const clientId = computed(() => route.query.client_id as string)
 const redirectUri = computed(() => route.query.redirect_uri as string)
@@ -20,6 +21,7 @@ const submitting = ref(false)
 const error = ref<string | null>(null)
 const clientInfo = ref<{ name: string, description: string | null, logoUrl: string | null, websiteUrl: string | null } | null>(null)
 const requestedScopes = ref<string[]>([])
+const showMfaModal = ref(false)
 
 // Group scopes by category for display
 const scopesByCategory = computed(() => {
@@ -80,9 +82,29 @@ async function fetchClientInfo() {
 }
 
 async function onAuthorize(approved: boolean) {
+  if (approved) {
+    // Check if step-up MFA is needed
+    try {
+      const challengeResult = await post<{ mfa_required: boolean }>('/v1/mfa/challenge', {})
+      if (challengeResult.mfa_required) {
+        showMfaModal.value = true
+        return
+      }
+    } catch {
+      // If challenge endpoint fails, proceed without MFA (user may not have MFA)
+    }
+  }
+  await doAuthorize(approved)
+}
+
+async function onMfaVerified(verificationToken: string) {
+  await doAuthorize(true, verificationToken)
+}
+
+async function doAuthorize(approved: boolean, verificationToken?: string) {
   submitting.value = true
   try {
-    const response = await post<{ redirect_uri: string }>('/v1/oauth2/authorize', {
+    const body: Record<string, any> = {
       client_id: clientId.value,
       redirect_uri: redirectUri.value,
       scope: scope.value,
@@ -90,11 +112,20 @@ async function onAuthorize(approved: boolean) {
       code_challenge: codeChallenge.value,
       code_challenge_method: codeChallengeMethod.value,
       approved,
-    })
+    }
+    if (verificationToken) {
+      body.verification_token = verificationToken
+    }
 
+    const response = await post<{ redirect_uri: string }>('/v1/oauth2/authorize', body)
     window.location.href = response.redirect_uri
   }
-  catch {
+  catch (err: any) {
+    if (err?.data?.error === 'mfa_required') {
+      showMfaModal.value = true
+      submitting.value = false
+      return
+    }
     error.value = $t('common.error')
     submitting.value = false
   }
@@ -193,5 +224,7 @@ onMounted(() => {
         </div>
       </UCard>
     </div>
+
+    <StepUpMfaModal v-model:open="showMfaModal" @verified="onMfaVerified" />
   </div>
 </template>

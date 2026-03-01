@@ -3,11 +3,13 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\ApiToken;
+use App\Entity\User;
 use App\Repository\ApiTokenRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Security\RolePermissionMap;
 use App\Service\ApiTokenService;
+use App\Service\MfaService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,6 +25,7 @@ class ApiTokenController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
         private readonly ApiTokenService $apiTokenService,
+        private readonly MfaService $mfaService,
     ) {}
 
     #[Route('/api-tokens', methods: ['GET'])]
@@ -51,6 +54,7 @@ class ApiTokenController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
+        /** @var User $user */
         $user = $this->getUser();
         $org = $this->organizationContext->getOrganization();
 
@@ -59,6 +63,14 @@ class ApiTokenController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+
+        // Step-up MFA gate
+        if ($user->requiresMfa()) {
+            $verificationToken = $data['verification_token'] ?? null;
+            if (!$verificationToken || !$this->mfaService->validateVerificationToken($verificationToken, $user)) {
+                return $this->json(['error' => 'mfa_required', 'error_description' => 'Step-up MFA verification required.'], Response::HTTP_FORBIDDEN);
+            }
+        }
 
         $name = trim($data['name'] ?? '');
         if (!$name) {
@@ -205,7 +217,7 @@ class ApiTokenController extends AbstractController
     }
 
     #[Route('/api-tokens/{uuid}/rotate', methods: ['POST'])]
-    public function rotate(string $uuid): JsonResponse
+    public function rotate(string $uuid, Request $request): JsonResponse
     {
         if ($this->organizationContext->isTokenAuth()) {
             return $this->json(['error' => 'API keys cannot be managed via programmatic tokens. Use a browser session.'], Response::HTTP_FORBIDDEN);
@@ -213,6 +225,17 @@ class ApiTokenController extends AbstractController
 
         if (!$this->organizationContext->hasPermission(Permission::API_KEY_MANAGE)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        // Step-up MFA gate
+        /** @var User $user */
+        $user = $this->getUser();
+        if ($user->requiresMfa()) {
+            $data = json_decode($request->getContent(), true) ?? [];
+            $verificationToken = $data['verification_token'] ?? null;
+            if (!$verificationToken || !$this->mfaService->validateVerificationToken($verificationToken, $user)) {
+                return $this->json(['error' => 'mfa_required', 'error_description' => 'Step-up MFA verification required.'], Response::HTTP_FORBIDDEN);
+            }
         }
 
         $oldToken = $this->apiTokenRepository->find($uuid);

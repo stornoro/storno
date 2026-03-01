@@ -19,6 +19,8 @@ const editingKey = ref<ApiKey | null>(null)
 const createdToken = ref<string | null>(null)
 
 const rotatingKey = ref<ApiKey | null>(null)
+const showMfaModal = ref(false)
+const pendingMfaAction = ref<'create' | 'rotate' | null>(null)
 
 const form = ref({
   name: '',
@@ -176,8 +178,9 @@ function isCategoryPartiallySelected(category: string): boolean {
 }
 
 async function onSave() {
-  saving.value = true
   if (editingKey.value) {
+    // Update doesn't require MFA
+    saving.value = true
     const ok = await store.updateApiKey(editingKey.value.id, {
       name: form.value.name,
       scopes: form.value.scopes,
@@ -189,22 +192,45 @@ async function onSave() {
     else if (store.error) {
       toast.add({ title: store.error, color: 'error' })
     }
+    saving.value = false
   }
   else {
-    const expiresAt = getExpiresAtFromOption(form.value.expiryOption, form.value.customExpiryDate)
-    const result = await store.createApiKey({
-      name: form.value.name,
-      scopes: form.value.scopes,
-      expiresAt,
-    })
-    if (result) {
-      createdToken.value = result.token ?? null
-      if (!createdToken.value) {
-        toast.add({ title: $t('apiKeys.createSuccess'), color: 'success' })
-        modalOpen.value = false
+    // Create requires step-up MFA — check first
+    try {
+      const { post: apiPost } = useApi()
+      const challengeResult = await apiPost<{ mfa_required: boolean }>('/v1/mfa/challenge', {})
+      if (challengeResult.mfa_required) {
+        pendingMfaAction.value = 'create'
+        showMfaModal.value = true
+        return
       }
+    } catch {
+      // No MFA configured, proceed
     }
-    else if (store.error) {
+    await doCreate()
+  }
+}
+
+async function doCreate(verificationToken?: string) {
+  saving.value = true
+  const expiresAt = getExpiresAtFromOption(form.value.expiryOption, form.value.customExpiryDate)
+  const result = await store.createApiKey({
+    name: form.value.name,
+    scopes: form.value.scopes,
+    expiresAt,
+  }, verificationToken)
+  if (result) {
+    createdToken.value = result.token ?? null
+    if (!createdToken.value) {
+      toast.add({ title: $t('apiKeys.createSuccess'), color: 'success' })
+      modalOpen.value = false
+    }
+  }
+  else if (store.error) {
+    if (store.error.includes('mfa_required')) {
+      pendingMfaAction.value = 'create'
+      showMfaModal.value = true
+    } else {
       toast.add({ title: store.error, color: 'error' })
     }
   }
@@ -245,9 +271,26 @@ function openRotate(key: ApiKey) {
 
 async function onRotate() {
   if (!rotateTargetKey.value) return
+  // Check if step-up MFA is needed
+  try {
+    const { post: apiPost } = useApi()
+    const challengeResult = await apiPost<{ mfa_required: boolean }>('/v1/mfa/challenge', {})
+    if (challengeResult.mfa_required) {
+      pendingMfaAction.value = 'rotate'
+      showMfaModal.value = true
+      return
+    }
+  } catch {
+    // No MFA configured, proceed
+  }
+  await doRotate()
+}
+
+async function doRotate(verificationToken?: string) {
+  if (!rotateTargetKey.value) return
   rotating.value = true
   rotatingKey.value = rotateTargetKey.value
-  const result = await store.rotateApiKey(rotateTargetKey.value.id)
+  const result = await store.rotateApiKey(rotateTargetKey.value.id, verificationToken)
   rotatingKey.value = null
   rotating.value = false
   if (result) {
@@ -259,8 +302,22 @@ async function onRotate() {
     toast.add({ title: $t('apiKeys.rotateSuccess'), color: 'success' })
   }
   else if (store.error) {
-    toast.add({ title: store.error, color: 'error' })
+    if (store.error.includes('mfa_required')) {
+      pendingMfaAction.value = 'rotate'
+      showMfaModal.value = true
+    } else {
+      toast.add({ title: store.error, color: 'error' })
+    }
   }
+}
+
+async function onMfaVerified(verificationToken: string) {
+  if (pendingMfaAction.value === 'create') {
+    await doCreate(verificationToken)
+  } else if (pendingMfaAction.value === 'rotate') {
+    await doRotate(verificationToken)
+  }
+  pendingMfaAction.value = null
 }
 
 function copyToken() {
@@ -398,6 +455,8 @@ onMounted(() => {
       :loading="rotating"
       @confirm="onRotate"
     />
+
+    <SharedStepUpMfaModal v-model:open="showMfaModal" @verified="onMfaVerified" />
 
     <!-- Create/Edit Slideover -->
     <USlideover v-model:open="modalOpen" :ui="{ content: 'sm:max-w-lg' }">
