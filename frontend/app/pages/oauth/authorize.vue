@@ -23,8 +23,8 @@ const clientInfo = ref<{ name: string, description: string | null, logoUrl: stri
 const requestedScopes = ref<string[]>([])
 const showMfaModal = ref(false)
 
-// Group scopes by category for display
-const scopesByCategory = computed(() => {
+// Group scopes by category for accordion display
+const permissionItems = computed(() => {
   const grouped: Record<string, string[]> = {}
   for (const s of requestedScopes.value) {
     const category = s.split('.')[0] ?? 'other'
@@ -33,14 +33,18 @@ const scopesByCategory = computed(() => {
     }
     grouped[category].push(s)
   }
-  return grouped
+  return Object.entries(grouped).map(([category, scopes]) => {
+    const key = `apiKeys.scopeCategories.${category}` as any
+    const translated = $t(key)
+    const label = translated !== key ? translated : category
+    return {
+      label: `${label} (${scopes.length})`,
+      icon: 'i-lucide-shield-check' as const,
+      value: category,
+      scopes,
+    }
+  })
 })
-
-function getCategoryLabel(category: string): string {
-  const key = `apiKeys.scopeCategories.${category}` as any
-  const translated = $t(key)
-  return translated !== key ? translated : category
-}
 
 async function fetchClientInfo() {
   loading.value = true
@@ -184,17 +188,16 @@ onMounted(() => {
           <!-- Requested permissions -->
           <div>
             <h3 class="text-sm font-medium text-(--ui-text-highlighted) mb-3">{{ $t('oauth2.authorize.permissions') }}</h3>
-            <div class="space-y-2">
-              <div v-for="(scopes, category) in scopesByCategory" :key="category" class="rounded-lg border border-default p-3">
-                <div class="text-sm font-medium text-(--ui-text-highlighted) mb-1">{{ getCategoryLabel(category as string) }}</div>
+            <UAccordion :items="permissionItems" type="multiple" collapsible>
+              <template #body="{ item }">
                 <div class="space-y-0.5">
-                  <div v-for="s in scopes" :key="s" class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
+                  <div v-for="s in (item as any).scopes" :key="s" class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
                     <UIcon name="i-lucide-check" class="size-3 text-success" />
                     {{ s }}
                   </div>
                 </div>
-              </div>
-            </div>
+              </template>
+            </UAccordion>
           </div>
 
           <!-- Security note -->
@@ -225,6 +228,6 @@ onMounted(() => {
       </UCard>
     </div>
 
-    <StepUpMfaModal v-model:open="showMfaModal" @verified="onMfaVerified" />
+    <SharedStepUpMfaModal v-model:open="showMfaModal" @verified="onMfaVerified" />
   </div>
 </template>

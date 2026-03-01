@@ -36,15 +36,7 @@ export function useStepUpMfa() {
 
   async function getPasskeyOptions(): Promise<any> {
     if (!challengeToken.value) throw new Error('No challenge token')
-    const apiBase = useApiBase()
-    const fetchFn = useRequestFetch()
-
-    const options = await fetchFn<any>('/v1/mfa/passkey/options', {
-      baseURL: apiBase,
-      method: 'POST',
-      body: { challengeToken: challengeToken.value },
-    })
-    return options
+    return await post<any>('/v1/mfa/passkey/options', { challengeToken: challengeToken.value })
   }
 
   async function verifyWithPasskey(): Promise<boolean> {
