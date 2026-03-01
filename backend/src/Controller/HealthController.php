@@ -21,6 +21,12 @@ class HealthController extends AbstractController
         private readonly string $centrifugoApiKey,
     ) {}
 
+    #[Route('/', methods: ['GET'])]
+    public function root(): JsonResponse
+    {
+        return $this->json(['name' => 'Storno API', 'status' => 'ok']);
+    }
+
     #[Route('/health', methods: ['GET'])]
     public function __invoke(): JsonResponse
     {

@@ -29,7 +29,7 @@ class BillingInvoiceService
         private readonly DocumentSeriesRepository $documentSeriesRepository,
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
-        private readonly string $billingCompanyId,
+        private readonly ?string $billingCompanyId,
     ) {}
 
     /**

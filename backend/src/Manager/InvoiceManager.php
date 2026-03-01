@@ -642,7 +642,16 @@ class InvoiceManager
     private function computeSpvSubmissionTime(int $delayHours): \DateTimeImmutable
     {
         $tz = new \DateTimeZone('Europe/Bucharest');
-        $earliest = (new \DateTimeImmutable('now', $tz))->modify(sprintf('+%d hours', $delayHours));
+        $now = new \DateTimeImmutable('now', $tz);
+
+        if ($delayHours >= 24) {
+            // Day-based delays (24, 48, 72, 96h): schedule at midnight N days from now
+            $days = intdiv($delayHours, 24);
+            return $now->modify(sprintf('+%d days', $days))->setTime(0, 0, 0);
+        }
+
+        // Hour-based delay (e.g. 2h): add hours, then find next 00:00-06:00 window
+        $earliest = $now->modify(sprintf('+%d hours', $delayHours));
         $hour = (int) $earliest->format('H');
 
         if ($hour < 6) {
