@@ -1166,23 +1166,42 @@ class EFacturaSyncService
         $this->pendingSuppliers = [];
     }
 
+    private function sanitizeErrorForUser(string $error): string
+    {
+        if (str_contains($error, 'cascade persist') || str_contains($error, 'EntityManager')) {
+            return 'Eroare internă la salvarea datelor. Reîncercați sincronizarea.';
+        }
+
+        if (str_contains($error, 'SQLSTATE') || str_contains($error, 'deadlock')) {
+            return 'Eroare temporară de bază de date. Reîncercați sincronizarea.';
+        }
+
+        if (preg_match('/^(Batch flush|Final flush|Default series) error: /', $error)) {
+            return 'Eroare internă la procesarea datelor. Reîncercați sincronizarea.';
+        }
+
+        return $error;
+    }
+
     private function notifySyncErrors(Company $company, array $errors): void
     {
         try {
+            $userErrors = array_values(array_unique(array_map([$this, 'sanitizeErrorForUser'], $errors)));
+
             $channel = self::CHANNEL_PREFIX . $company->getId()->toRfc4122();
             $this->centrifugo->publish($channel, [
                 'type' => 'sync.error',
-                'errors' => $errors,
+                'errors' => $userErrors,
                 'companyId' => $company->getId()->toRfc4122(),
             ]);
             $this->webhookDispatcher->dispatchForCompany($company, 'sync.error', [
-                'errors' => $errors,
+                'errors' => $userErrors,
                 'companyId' => $company->getId()->toRfc4122(),
             ]);
 
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
-            $errorCount = count($errors);
-            $firstError = $errors[0] ?? 'Eroare necunoscută';
+            $errorCount = count($userErrors);
+            $firstError = $userErrors[0] ?? 'Eroare necunoscută';
             $message = $errorCount === 1
                 ? sprintf('%s — %s', $company->getName(), $firstError)
                 : sprintf('%s — %d erori la sincronizare. Prima: %s', $company->getName(), $errorCount, $firstError);
@@ -1195,7 +1214,7 @@ class EFacturaSyncService
                     $message,
                     [
                         'companyId' => $company->getId()->toRfc4122(),
-                        'errors' => array_slice($errors, 0, 5),
+                        'errors' => array_slice($userErrors, 0, 5),
                     ],
                 );
             }

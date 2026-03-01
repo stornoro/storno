@@ -5,6 +5,66 @@ let centrifuge: Centrifuge | null = null
 let planGated = false
 const subscriptions = new Map<string, Subscription>()
 
+// Batch token fetching: collect channels and resolve all tokens in a single request
+let pendingTokenRequests = new Map<string, { resolve: (token: string) => void, reject: (err: any) => void }>()
+let batchTimer: ReturnType<typeof setTimeout> | null = null
+let apiFetchRef: ReturnType<typeof useApi>['apiFetch'] | null = null
+
+function scheduleBatchTokenFetch() {
+  if (batchTimer) return
+  batchTimer = setTimeout(async () => {
+    batchTimer = null
+    const pending = pendingTokenRequests
+    pendingTokenRequests = new Map()
+
+    if (pending.size === 0 || !apiFetchRef) return
+
+    // Single channel — use simple endpoint for backwards compat
+    if (pending.size === 1) {
+      const [channel, { resolve, reject }] = [...pending.entries()][0]
+      try {
+        const res = await apiFetchRef<{ token: string }>('/v1/centrifugo/subscription-token', {
+          method: 'POST',
+          body: { channel },
+          skipAuthRedirect: true,
+        })
+        resolve(res.token)
+      }
+      catch (e) {
+        console.warn(`[Centrifugo] Failed to get subscription token for ${channel}:`, e)
+        reject(e)
+      }
+      return
+    }
+
+    // Batch request
+    const channels = [...pending.keys()]
+    try {
+      const res = await apiFetchRef<{ tokens: Record<string, string> }>('/v1/centrifugo/subscription-token', {
+        method: 'POST',
+        body: { channels },
+        skipAuthRedirect: true,
+      })
+      for (const [channel, { resolve }] of pending) {
+        resolve(res.tokens[channel] || '')
+      }
+    }
+    catch (e) {
+      console.warn('[Centrifugo] Failed to batch-fetch subscription tokens:', e)
+      for (const [, { reject }] of pending) {
+        reject(e)
+      }
+    }
+  }, 10)
+}
+
+function getSubscriptionToken(channel: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    pendingTokenRequests.set(channel, { resolve, reject })
+    scheduleBatchTokenFetch()
+  })
+}
+
 /**
  * Composable for real-time communication via Centrifugo WebSocket.
  * Only connects on the client side.
@@ -12,6 +72,9 @@ const subscriptions = new Map<string, Subscription>()
 export function useCentrifugo() {
   const config = useRuntimeConfig()
   const { apiFetch } = useApi()
+
+  // Store ref for batch token fetcher
+  apiFetchRef = apiFetch
 
   function getClient(): Centrifuge | null {
     if (!import.meta.client) return null
@@ -78,16 +141,7 @@ export function useCentrifugo() {
     }
     else {
       sub = client.newSubscription(channel, {
-        getToken: async () => {
-          try {
-            const res = await apiFetch<{ token: string }>('/v1/centrifugo/subscription-token', { method: 'POST', body: { channel }, skipAuthRedirect: true })
-            return res.token
-          }
-          catch (e) {
-            console.warn(`[Centrifugo] Failed to get subscription token for ${channel}:`, e)
-            return ''
-          }
-        },
+        getToken: () => getSubscriptionToken(channel),
         ...(options?.recover ? { recover: true } : {}),
       })
     }
