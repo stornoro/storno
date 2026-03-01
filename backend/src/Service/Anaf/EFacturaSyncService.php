@@ -158,10 +158,16 @@ class EFacturaSyncService
 
         $batchCount = 0;
         $processedCount = 0;
+        $companyId = $company->getId();
         foreach ($messages as $message) {
             $messageId = (string) ($message['id'] ?? '');
             $processed = $this->processMessage($message, $messageId, $company, $cif, $token, $existingIds, $result);
             $processedCount++;
+
+            // Re-fetch company if EntityManager was reset during message processing
+            if (!$this->entityManager->contains($company)) {
+                $company = $this->entityManager->getReference(Company::class, $companyId);
+            }
 
             // Always publish progress so the UI stays responsive (even for skipped messages)
             if ($processedCount % 5 === 0 || $processedCount === $totalMessages) {
@@ -383,14 +389,29 @@ class EFacturaSyncService
             return false;
         } catch (\Throwable $e) {
             $result->addError("Error processing message $messageId: " . $e->getMessage());
-            if ($spvMessage) {
-                $spvMessage->setStatus('error');
-                $spvMessage->setErrorMessage($e->getMessage());
-            }
             $this->logger->error('Error processing ANAF message', [
                 'messageId' => $messageId,
                 'error' => $e->getMessage(),
             ]);
+
+            // Reset EntityManager if closed (e.g. deadlock), then re-fetch and mark message as error
+            if (!$this->entityManager->isOpen()) {
+                $this->resetEntityManager();
+            }
+
+            if ($spvMessage) {
+                try {
+                    $spvMessage = $this->entityManager->find(EFacturaMessage::class, $spvMessage->getId());
+                    if ($spvMessage) {
+                        $spvMessage->setStatus('error');
+                        $spvMessage->setErrorMessage(mb_substr($e->getMessage(), 0, 500));
+                        $this->entityManager->flush();
+                    }
+                } catch (\Throwable) {
+                    // Non-critical — message will be retried on next sync
+                }
+            }
+
             return false;
         }
     }

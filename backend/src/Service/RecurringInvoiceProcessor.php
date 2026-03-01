@@ -151,9 +151,6 @@ class RecurringInvoiceProcessor
                     $noteKey = $lineRefCurrency;
                     if (!isset($rateNotes[$noteKey])) {
                         $rateNote = sprintf('Curs BNR %s: 1 %s = %s RON', $issueDate->format('d.m.Y'), $lineRefCurrency, number_format($rate, 4, '.', ''));
-                        if ($markup > 0) {
-                            $rateNote .= sprintf(' + adaos %s%%', number_format($markup, 2, '.', ''));
-                        }
                         $rateNotes[$noteKey] = $rateNote;
                     }
                 } else {

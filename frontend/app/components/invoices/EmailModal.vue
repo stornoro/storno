@@ -21,6 +21,14 @@
           <span class="font-semibold shrink-0">{{ formatMoney(invoice.total, invoice.currency as any) }}</span>
         </div>
 
+        <!-- Scheduled email info -->
+        <div v-if="invoice.scheduledEmailAt" class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
+          <div class="flex items-center gap-2 text-sm">
+            <UIcon name="i-lucide-clock" class="size-4 shrink-0 text-blue-500" />
+            <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledEmailAt', { date: formatDateTime(invoice.scheduledEmailAt) }) }}</span>
+          </div>
+        </div>
+
         <!-- Template picker -->
         <UFormField :label="$t('invoices.emailTemplate')">
           <USelectMenu
@@ -124,6 +132,7 @@ const emit = defineEmits<{ sent: [] }>()
 
 const { t: $t } = useI18n()
 const { formatMoney } = useMoney()
+const { formatDateTime } = useDate()
 const invoiceStore = useInvoiceStore()
 const emailTemplateStore = useEmailTemplateStore()
 const toast = useToast()
