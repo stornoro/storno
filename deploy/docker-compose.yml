@@ -79,6 +79,20 @@ services:
       timeout: 5s
       retries: 3
 
+  # ── Docs (VitePress SSR) ─────────────────────────────────────────
+  docs:
+    image: ghcr.io/stornoro/docs:latest
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-8903}:3000"
+    networks:
+      - storno
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # ── MySQL (optional — only needed if not using external DATABASE_URL) ──
   db:
     image: mysql:8.0
