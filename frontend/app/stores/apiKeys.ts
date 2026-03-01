@@ -36,11 +36,13 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
     }
   }
 
-  async function createApiKey(data: { name: string, scopes: string[], expiresAt?: string | null }): Promise<ApiKey | null> {
+  async function createApiKey(data: { name: string, scopes: string[], expiresAt?: string | null }, verificationToken?: string): Promise<ApiKey | null> {
     const { post } = useApi()
     error.value = null
     try {
-      const result = await post<ApiKey>('/v1/api-tokens', data)
+      const body: any = { ...data }
+      if (verificationToken) body.verification_token = verificationToken
+      const result = await post<ApiKey>('/v1/api-tokens', body)
       await fetchApiKeys()
       return result
     }
@@ -78,11 +80,13 @@ export const useApiKeyStore = defineStore('apiKeys', () => {
     }
   }
 
-  async function rotateApiKey(id: string): Promise<ApiKey | null> {
+  async function rotateApiKey(id: string, verificationToken?: string): Promise<ApiKey | null> {
     const { post } = useApi()
     error.value = null
     try {
-      const result = await post<ApiKey>(`/v1/api-tokens/${id}/rotate`)
+      const body: any = {}
+      if (verificationToken) body.verification_token = verificationToken
+      const result = await post<ApiKey>(`/v1/api-tokens/${id}/rotate`, body)
       await fetchApiKeys()
       return result
     }

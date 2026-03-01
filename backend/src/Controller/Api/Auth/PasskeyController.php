@@ -5,6 +5,7 @@ namespace App\Controller\Api\Auth;
 use App\Entity\User;
 use App\Entity\UserPasskey;
 use App\Repository\UserPasskeyRepository;
+use App\Service\WebAuthnService;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
@@ -15,25 +16,18 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
-use Webauthn\AttestationStatement\AttestationStatementSupportManager;
-use Webauthn\AttestationStatement\NoneAttestationStatementSupport;
-use Webauthn\AuthenticatorAssertionResponse;
-use Webauthn\AuthenticatorAssertionResponseValidator;
 use Webauthn\AuthenticatorAttestationResponse;
 use Webauthn\AuthenticatorAttestationResponseValidator;
 use Webauthn\AuthenticatorSelectionCriteria;
 use Webauthn\CeremonyStep\CeremonyStepManagerFactory;
-use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\PublicKeyCredential;
 use Webauthn\PublicKeyCredentialCreationOptions;
 use Webauthn\PublicKeyCredentialDescriptor;
 use Webauthn\PublicKeyCredentialParameters;
 use Webauthn\PublicKeyCredentialRequestOptions;
 use Webauthn\PublicKeyCredentialRpEntity;
-use Webauthn\PublicKeyCredentialSource;
 use Webauthn\PublicKeyCredentialUserEntity;
 
 class PasskeyController extends AbstractController
@@ -47,7 +41,7 @@ class PasskeyController extends AbstractController
         private readonly RefreshTokenManagerInterface $refreshTokenManager,
         private readonly CacheInterface $cache,
         private readonly UserPasskeyRepository $passkeyRepository,
-        private readonly ParameterBagInterface $params,
+        private readonly WebAuthnService $webAuthnService,
     ) {}
 
     // ── Registration: Generate creation options (JWT required) ──────────────
@@ -58,7 +52,7 @@ class PasskeyController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
         $data = json_decode($request->getContent(), true) ?? [];
-        $rpId = $this->getRpId($request);
+        $rpId = $this->webAuthnService->getRpId($request);
 
         $userEntity = PublicKeyCredentialUserEntity::create(
             $user->getEmail(),
@@ -98,14 +92,15 @@ class PasskeyController extends AbstractController
 
         // Store challenge in cache
         $challengeKey = 'passkey_register_' . $user->getId()->toRfc4122();
+        $serializer = $this->webAuthnService->getSerializer();
         $this->cache->delete($challengeKey);
-        $this->cache->get($challengeKey, function (ItemInterface $item) use ($creationOptions) {
+        $this->cache->get($challengeKey, function (ItemInterface $item) use ($creationOptions, $serializer) {
             $item->expiresAfter(self::CHALLENGE_TTL);
-            return $this->getSerializer()->serialize($creationOptions, 'json');
+            return $serializer->serialize($creationOptions, 'json');
         });
 
         return new JsonResponse(
-            $this->getSerializer()->serialize($creationOptions, 'json'),
+            $serializer->serialize($creationOptions, 'json'),
             Response::HTTP_OK,
             [],
             true
@@ -120,7 +115,7 @@ class PasskeyController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
         $data = json_decode($request->getContent(), true);
-        $rpId = $this->getRpId($request);
+        $rpId = $this->webAuthnService->getRpId($request);
 
         // Retrieve stored creation options
         $challengeKey = 'passkey_register_' . $user->getId()->toRfc4122();
@@ -132,7 +127,7 @@ class PasskeyController extends AbstractController
             return $this->json(['error' => 'Challenge expired or not found.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $serializer = $this->getSerializer();
+        $serializer = $this->webAuthnService->getSerializer();
 
         /** @var PublicKeyCredentialCreationOptions $creationOptions */
         $creationOptions = $serializer->deserialize($storedJson, PublicKeyCredentialCreationOptions::class, 'json');
@@ -150,7 +145,7 @@ class PasskeyController extends AbstractController
 
         try {
             $factory = new CeremonyStepManagerFactory();
-            $factory->setAllowedOrigins($this->getAllowedOrigins($request));
+            $factory->setAllowedOrigins($this->webAuthnService->getAllowedOrigins($request));
             $validator = AuthenticatorAttestationResponseValidator::create($factory->creationCeremony());
 
             $publicKeyCredentialSource = $validator->check($response, $creationOptions, $rpId);
@@ -188,7 +183,7 @@ class PasskeyController extends AbstractController
             return $this->json(['error' => 'Too many requests.'], Response::HTTP_TOO_MANY_REQUESTS);
         }
 
-        $rpId = $this->getRpId($request);
+        $rpId = $this->webAuthnService->getRpId($request);
         $challenge = random_bytes(32);
 
         $requestOptions = PublicKeyCredentialRequestOptions::create(
@@ -199,15 +194,16 @@ class PasskeyController extends AbstractController
         );
 
         // Store challenge with a unique key
+        $serializer = $this->webAuthnService->getSerializer();
         $sessionId = bin2hex(random_bytes(16));
         $challengeKey = 'passkey_login_' . $sessionId;
         $this->cache->delete($challengeKey);
-        $this->cache->get($challengeKey, function (ItemInterface $item) use ($requestOptions) {
+        $this->cache->get($challengeKey, function (ItemInterface $item) use ($requestOptions, $serializer) {
             $item->expiresAfter(self::CHALLENGE_TTL);
-            return $this->getSerializer()->serialize($requestOptions, 'json');
+            return $serializer->serialize($requestOptions, 'json');
         });
 
-        $responseData = json_decode($this->getSerializer()->serialize($requestOptions, 'json'), true);
+        $responseData = json_decode($serializer->serialize($requestOptions, 'json'), true);
         $responseData['sessionId'] = $sessionId;
 
         return $this->json($responseData);
@@ -224,7 +220,6 @@ class PasskeyController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        $rpId = $this->getRpId($request);
         $sessionId = $data['sessionId'] ?? null;
 
         if (!$sessionId) {
@@ -241,56 +236,12 @@ class PasskeyController extends AbstractController
             return $this->json(['error' => 'Challenge expired or not found.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $serializer = $this->getSerializer();
-
-        /** @var PublicKeyCredentialRequestOptions $requestOptions */
-        $requestOptions = $serializer->deserialize($storedJson, PublicKeyCredentialRequestOptions::class, 'json');
-
-        // Parse the credential
         $credential = $data['credential'] ?? $data;
-
-        /** @var PublicKeyCredential $publicKeyCredential */
-        $publicKeyCredential = $serializer->denormalize($credential, PublicKeyCredential::class, 'json');
-
-        $response = $publicKeyCredential->response;
-        if (!$response instanceof AuthenticatorAssertionResponse) {
-            return $this->json(['error' => 'Invalid response type.'], Response::HTTP_BAD_REQUEST);
-        }
-
-        // Find the passkey by credential ID
-        $credentialIdB64 = base64_encode($publicKeyCredential->rawId);
-        $passkey = $this->passkeyRepository->findOneByCredentialId($credentialIdB64);
+        $passkey = $this->webAuthnService->verifyAssertion($storedJson, $credential, $request);
 
         if (!$passkey) {
-            return $this->json(['error' => 'Unknown credential.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Assertion verification failed.'], Response::HTTP_UNAUTHORIZED);
         }
-
-        /** @var PublicKeyCredentialSource $publicKeyCredentialSource */
-        $publicKeyCredentialSource = $serializer->deserialize(
-            $passkey->getPublicKeyCredentialSource(),
-            PublicKeyCredentialSource::class,
-            'json'
-        );
-
-        try {
-            $factory = new CeremonyStepManagerFactory();
-            $factory->setAllowedOrigins($this->getAllowedOrigins($request));
-            $validator = AuthenticatorAssertionResponseValidator::create($factory->requestCeremony());
-
-            $updatedSource = $validator->check(
-                $publicKeyCredentialSource,
-                $response,
-                $requestOptions,
-                $rpId,
-                $publicKeyCredentialSource->userHandle,
-            );
-        } catch (\Throwable $e) {
-            return $this->json(['error' => 'Assertion verification failed: ' . $e->getMessage()], Response::HTTP_UNAUTHORIZED);
-        }
-
-        // Update stored credential source (counter, etc.)
-        $passkey->setPublicKeyCredentialSource($serializer->serialize($updatedSource, 'json'));
-        $passkey->setLastUsedAt(new \DateTimeImmutable());
 
         $user = $passkey->getUser();
         $user->setLastConnectedAt(new \DateTimeImmutable());
@@ -355,63 +306,4 @@ class PasskeyController extends AbstractController
         return $this->json(null, Response::HTTP_NO_CONTENT);
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
-    private function getRpId(Request $request): string
-    {
-        // Use the registrable domain (e.g. "storno.ro") so passkeys work
-        // across subdomains (app.storno.ro, api.storno.ro).
-        $host = $request->getHost();
-        $parts = explode('.', $host);
-
-        // For domains like "api.storno.ro" → return "storno.ro"
-        // For "localhost" or single-part hosts → return as-is
-        if (count($parts) > 2) {
-            return implode('.', array_slice($parts, -2));
-        }
-
-        return $host;
-    }
-
-    private function getAllowedOrigins(Request $request): array
-    {
-        $origins = array_filter(
-            array_map('trim', explode(',', $this->params->get('app.passkey_allowed_origins') ?? '')),
-        );
-
-        // Android passkey origin (android:apk-key-hash:...)
-        $androidOrigin = $this->params->get('app.android_passkey_origin');
-        if ($androidOrigin) {
-            $origins[] = $androidOrigin;
-        }
-
-        // Use the Origin header from the browser when available —
-        // the dev proxy (changeOrigin) rewrites Host, so request host/port
-        // won't match the browser's actual origin in clientDataJSON.
-        $origin = $request->headers->get('Origin');
-        if ($origin) {
-            $origins[] = $origin;
-        } else {
-            $scheme = $request->getScheme();
-            $host = $request->getHost();
-            $port = $request->getPort();
-
-            $computed = $scheme . '://' . $host;
-            if (($scheme === 'https' && $port !== 443) || ($scheme === 'http' && $port !== 80)) {
-                $computed .= ':' . $port;
-            }
-            $origins[] = $computed;
-        }
-
-        return array_unique($origins);
-    }
-
-    private function getSerializer(): \Symfony\Component\Serializer\SerializerInterface
-    {
-        $attestationStatementSupportManager = new AttestationStatementSupportManager([
-            new NoneAttestationStatementSupport(),
-        ]);
-
-        return (new WebauthnSerializerFactory($attestationStatementSupportManager))->create();
-    }
 }

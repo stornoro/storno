@@ -52,6 +52,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        stepup_mfa_verify:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
         contact:
             policy: 'sliding_window'
             limit: 999999
@@ -115,6 +119,10 @@ when@prod:
             oauth2_token:
                 policy: 'sliding_window'
                 limit: 20
+                interval: '1 minute'
+            stepup_mfa_verify:
+                policy: 'sliding_window'
+                limit: 5
                 interval: '1 minute'
             contact:
                 policy: 'sliding_window'

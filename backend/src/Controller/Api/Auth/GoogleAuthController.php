@@ -134,10 +134,10 @@ class GoogleAuthController extends AbstractController
         $user->setLastConnectedAt(new \DateTimeImmutable());
         $this->em->flush();
 
-        // Check if MFA is enabled — return challenge instead of JWT
-        if ($user->isMfaEnabled()) {
+        // Check if MFA is required — return challenge instead of JWT
+        if ($user->requiresMfa()) {
             $mfaToken = $this->mfaService->createMfaChallenge($user);
-            $methods = ['totp'];
+            $methods = $user->getAvailableMfaMethods();
             $status = $this->mfaService->getMfaStatus($user);
             if ($status['backupCodesRemaining'] > 0) {
                 $methods[] = 'backup_code';

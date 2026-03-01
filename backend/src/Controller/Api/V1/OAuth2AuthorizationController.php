@@ -9,8 +9,10 @@ use App\Repository\OAuth2AccessTokenRepository;
 use App\Repository\OAuth2AuthorizationCodeRepository;
 use App\Repository\OAuth2ClientRepository;
 use App\Repository\OAuth2RefreshTokenRepository;
+use App\Entity\User;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
+use App\Service\MfaService;
 use App\Service\OAuth2TokenService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -34,6 +36,7 @@ class OAuth2AuthorizationController extends AbstractController
         private readonly OAuth2TokenService $tokenService,
         private readonly LoggerInterface $apiLogger,
         private readonly RateLimiterFactory $oauth2TokenLimiter,
+        private readonly MfaService $mfaService,
     ) {}
 
     /**
@@ -137,6 +140,16 @@ class OAuth2AuthorizationController extends AbstractController
 
         if ($codeChallenge && $codeChallengeMethod !== 'S256') {
             return $this->json(['error' => 'invalid_request', 'error_description' => 'Only S256 code_challenge_method is supported.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Step-up MFA gate
+        /** @var User $currentUser */
+        $currentUser = $this->getUser();
+        if ($currentUser->requiresMfa()) {
+            $verificationToken = $data['verification_token'] ?? null;
+            if (!$verificationToken || !$this->mfaService->validateVerificationToken($verificationToken, $currentUser)) {
+                return $this->json(['error' => 'mfa_required', 'error_description' => 'Step-up MFA verification required.'], Response::HTTP_FORBIDDEN);
+            }
         }
 
         $requestedScopes = $scope ? explode(' ', $scope) : $client->getScopes();

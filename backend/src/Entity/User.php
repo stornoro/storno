@@ -636,4 +636,21 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         return $this->totpSecret !== null && $this->totpSecret->isVerified();
     }
+
+    public function requiresMfa(): bool
+    {
+        return $this->isMfaEnabled() || $this->passkeys->count() > 0;
+    }
+
+    public function getAvailableMfaMethods(): array
+    {
+        $methods = [];
+        if ($this->isMfaEnabled()) {
+            $methods[] = 'totp';
+        }
+        if ($this->passkeys->count() > 0) {
+            $methods[] = 'passkey';
+        }
+        return $methods;
+    }
 }

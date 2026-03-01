@@ -18,6 +18,8 @@ use Symfony\Contracts\Cache\ItemInterface;
 class MfaService
 {
     private const CHALLENGE_TTL = 300; // 5 minutes
+    private const STEPUP_CHALLENGE_TTL = 300; // 5 minutes
+    private const VERIFICATION_TOKEN_TTL = 120; // 2 minutes
     private const MAX_ATTEMPTS = 5;
     private const BACKUP_CODE_COUNT = 10;
     private const APP_NAME = 'Storno';
@@ -243,6 +245,117 @@ class MfaService
             'backupCodesRemaining' => $this->backupCodeRepository->countUnusedByUser($user),
             'passkeysCount' => $user->getPasskeys()->count(),
         ];
+    }
+
+    // ── Step-up MFA challenge ──────────────────────────────────────────
+
+    public function createStepUpChallenge(User $user): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $cacheKey = 'stepup_challenge_' . $token;
+
+        $this->cache->delete($cacheKey);
+        $this->cache->get($cacheKey, function (ItemInterface $item) use ($user) {
+            $item->expiresAfter(self::STEPUP_CHALLENGE_TTL);
+            return json_encode([
+                'userId' => $user->getId()->toRfc4122(),
+                'attempts' => 0,
+            ]);
+        });
+
+        return $token;
+    }
+
+    public function validateStepUpChallenge(string $token): ?array
+    {
+        $cacheKey = 'stepup_challenge_' . $token;
+
+        $data = $this->cache->get($cacheKey, function () {
+            return null;
+        });
+
+        if ($data === null) {
+            return null;
+        }
+
+        $decoded = json_decode($data, true);
+        if (!$decoded || !isset($decoded['userId'])) {
+            return null;
+        }
+
+        if (($decoded['attempts'] ?? 0) >= self::MAX_ATTEMPTS) {
+            $this->cache->delete($cacheKey);
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    public function incrementStepUpAttempts(string $token): void
+    {
+        $cacheKey = 'stepup_challenge_' . $token;
+
+        $data = $this->cache->get($cacheKey, function () {
+            return null;
+        });
+
+        if ($data === null) {
+            return;
+        }
+
+        $decoded = json_decode($data, true);
+        $decoded['attempts'] = ($decoded['attempts'] ?? 0) + 1;
+
+        $this->cache->delete($cacheKey);
+        $this->cache->get($cacheKey, function (ItemInterface $item) use ($decoded) {
+            $item->expiresAfter(self::STEPUP_CHALLENGE_TTL);
+            return json_encode($decoded);
+        });
+    }
+
+    public function deleteStepUpChallenge(string $token): void
+    {
+        $this->cache->delete('stepup_challenge_' . $token);
+    }
+
+    // ── Verification tokens (single-use, short-lived) ───────────────
+
+    public function createVerificationToken(User $user): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $cacheKey = 'mfa_verified_' . $token;
+
+        $this->cache->delete($cacheKey);
+        $this->cache->get($cacheKey, function (ItemInterface $item) use ($user) {
+            $item->expiresAfter(self::VERIFICATION_TOKEN_TTL);
+            return json_encode([
+                'userId' => $user->getId()->toRfc4122(),
+            ]);
+        });
+
+        return $token;
+    }
+
+    public function validateVerificationToken(string $token, User $user): bool
+    {
+        $cacheKey = 'mfa_verified_' . $token;
+
+        $data = $this->cache->get($cacheKey, function () {
+            return null;
+        });
+
+        if ($data === null) {
+            return false;
+        }
+
+        $decoded = json_decode($data, true);
+        if (!$decoded || ($decoded['userId'] ?? null) !== $user->getId()->toRfc4122()) {
+            return false;
+        }
+
+        // Single-use: delete after validation
+        $this->cache->delete($cacheKey);
+        return true;
     }
 
     private function generateRandomCode(): string
