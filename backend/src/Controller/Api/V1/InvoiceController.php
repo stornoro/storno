@@ -607,6 +607,7 @@ class InvoiceController extends AbstractController
                 'valid' => $validation->isValid,
                 'errors' => array_map(fn ($e) => $e->toArray(), $validation->errors),
                 'warnings' => $validation->warnings,
+                'schematronAvailable' => $this->ublValidator->isSchematronAvailable(),
             ],
         ], Response::HTTP_CREATED, [], ['groups' => ['invoice:detail']]);
     }
@@ -651,6 +652,7 @@ class InvoiceController extends AbstractController
                 'valid' => $validation->isValid,
                 'errors' => array_map(fn ($e) => $e->toArray(), $validation->errors),
                 'warnings' => $validation->warnings,
+                'schematronAvailable' => $this->ublValidator->isSchematronAvailable(),
             ],
         ], context: ['groups' => ['invoice:detail']]);
     }
