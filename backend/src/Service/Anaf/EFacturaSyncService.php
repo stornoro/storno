@@ -404,6 +404,10 @@ class EFacturaSyncService
         }
 
         $spvMessage = new EFacturaMessage();
+        // Ensure company is managed in current EntityManager (may be detached after clear/reset)
+        if (!$this->entityManager->contains($company)) {
+            $company = $this->entityManager->getReference(Company::class, $company->getId());
+        }
         $spvMessage->setCompany($company);
         $spvMessage->setAnafMessageId($messageId);
         $spvMessage->setMessageType($type);
