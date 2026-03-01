@@ -4,6 +4,7 @@ namespace App\Security\Voter;
 
 use App\Entity\Invoice;
 use App\Entity\User;
+use App\Enum\OrganizationRole;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
@@ -48,6 +49,17 @@ class InvoiceVoter extends Voter
         $org = $this->organizationContext->getOrganization();
         if ($org === null || $invoice->getCompany()?->getOrganization() !== $org) {
             return false;
+        }
+
+        // Per-company access check for non-OWNER/ADMIN roles
+        $membership = $this->organizationContext->getMembership();
+        if ($membership) {
+            $role = $membership->getRole();
+            if ($role !== OrganizationRole::OWNER && $role !== OrganizationRole::ADMIN) {
+                if ($invoice->getCompany() && !$membership->hasAccessToCompany($invoice->getCompany())) {
+                    return false;
+                }
+            }
         }
 
         return match ($attribute) {
