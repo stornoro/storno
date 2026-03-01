@@ -197,6 +197,7 @@
         </div>
       </UCard>
 
+
       <!-- Validation loading -->
       <div v-if="validating && !validationResult" class="flex items-center gap-2 text-sm text-(--ui-text-muted) p-3">
         <UIcon name="i-lucide-loader-2" class="animate-spin size-4" />
@@ -496,6 +497,30 @@
         </template>
 
         <template #emails>
+          <!-- Scheduled email banner -->
+          <div v-if="invoice.scheduledEmailAt" class="mt-4 rounded-lg border p-3" :class="isEmailBlocked ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-mail" :class="isEmailBlocked ? 'text-amber-500' : 'text-blue-500'" class="shrink-0 size-5" />
+                <span :class="isEmailBlocked ? 'text-amber-800 dark:text-amber-200' : 'text-blue-800 dark:text-blue-200'">
+                  {{ isEmailBlocked
+                    ? $t('invoices.scheduledEmailBlocked', { date: formatDateTime(invoice.scheduledEmailAt) })
+                    : $t('invoices.scheduledEmailAt', { date: formatDateTime(invoice.scheduledEmailAt) })
+                  }}
+                </span>
+              </div>
+              <UButton
+                icon="i-lucide-x"
+                :color="isEmailBlocked ? 'warning' : 'primary'"
+                variant="subtle"
+                size="sm"
+                @click="cancelScheduledEmail"
+              >
+                {{ $t('invoices.cancelScheduledEmail') }}
+              </UButton>
+            </div>
+          </div>
+
           <UCard class="mt-4">
             <div v-if="emailLogs.length" class="space-y-4">
               <div v-for="log in emailLogs" :key="log.id" class="border border-(--ui-border) rounded-lg overflow-hidden">
@@ -885,6 +910,23 @@ const { copy: copyToClipboard } = useClipboard()
 const validating = ref(false)
 const validationResult = ref<any>(null)
 const autoValidated = ref(false)
+
+// Scheduled email is blocked when invoice was submitted to ANAF but not yet validated
+const isEmailBlocked = computed(() => {
+  if (!invoice.value?.scheduledEmailAt) return false
+  return !!invoice.value.anafUploadId && invoice.value.status !== 'validated'
+})
+
+async function cancelScheduledEmail() {
+  try {
+    const { post } = useApi()
+    await post(`/v1/invoices/${route.params.uuid}/cancel-scheduled-email`)
+    invoice.value.scheduledEmailAt = null
+    useToast().add({ title: $t('invoices.cancelScheduledEmailSuccess'), color: 'success' })
+  } catch {
+    useToast().add({ title: $t('invoices.updateError'), color: 'error' })
+  }
+}
 
 function localizeValidationMessage(message: string): string {
   const hashIndex = message.indexOf('#')
