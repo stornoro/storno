@@ -9,6 +9,7 @@ use App\Enum\DocumentType;
 use App\Manager\InvoiceManager;
 use App\Manager\ProformaInvoiceManager;
 use App\Repository\RecurringInvoiceRepository;
+use App\Service\Centrifugo\CentrifugoService;
 use App\Service\ExchangeRateService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -29,6 +30,7 @@ class RecurringInvoiceProcessor
         private readonly EntityManagerInterface $entityManager,
         private readonly ExchangeRateService $exchangeRateService,
         private readonly LoggerInterface $logger,
+        private readonly CentrifugoService $centrifugo,
     ) {}
 
     /**
@@ -246,6 +248,8 @@ class RecurringInvoiceProcessor
 
         $this->entityManager->flush();
 
+        $this->publishInvoiceChange($invoice->getCompany(), 'invoice.created');
+
         return [
             'invoiceId' => (string) $invoice->getId(),
             'invoiceNumber' => $invoice->getNumber(),
@@ -276,11 +280,20 @@ class RecurringInvoiceProcessor
 
         $this->entityManager->flush();
 
+        $this->publishInvoiceChange($company, 'invoice.created');
+
         return [
             'invoiceId' => (string) $proforma->getId(),
             'invoiceNumber' => $proforma->getNumber(),
             'documentType' => 'proforma',
         ];
+    }
+
+    private function publishInvoiceChange(\App\Entity\Company $company, string $type): void
+    {
+        $this->centrifugo->publish('invoices:company_' . $company->getId()->toRfc4122(), [
+            'type' => $type,
+        ]);
     }
 
     private function replaceTemplateVars(?string $text, int $month, int $year, string $rateText = ''): ?string

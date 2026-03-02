@@ -11,6 +11,7 @@ use App\Repository\OrganizationMembershipRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Anaf\EFacturaClient;
 use App\Service\EInvoice\EInvoiceStatusCheckerInterface;
+use App\Service\Centrifugo\CentrifugoService;
 use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -43,6 +44,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
         private readonly LoggerInterface $logger,
         private readonly NotificationService $notificationService,
         private readonly OrganizationMembershipRepository $membershipRepository,
+        private readonly CentrifugoService $centrifugo,
     ) {}
 
     public function check(EInvoiceSubmission $submission, CheckEInvoiceStatusMessage $message): void
@@ -116,6 +118,8 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
+            $this->publishInvoiceChange($invoice, 'invoice.validated');
+
             $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
                 'Factura %s a fost validată de ANAF',
                 $invoice->getNumber(),
@@ -144,6 +148,8 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
+            $this->publishInvoiceChange($invoice, 'invoice.rejected');
+
             $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(
                 'Factura %s a fost respinsă de ANAF: %s',
                 $invoice->getNumber(),
@@ -163,6 +169,18 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             ),
             [new DelayStamp($delay)]
         );
+    }
+
+    private function publishInvoiceChange(\App\Entity\Invoice $invoice, string $type): void
+    {
+        $company = $invoice->getCompany();
+        if (!$company) {
+            return;
+        }
+
+        $this->centrifugo->publish('invoices:company_' . $company->getId()->toRfc4122(), [
+            'type' => $type,
+        ]);
     }
 
     private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message): void

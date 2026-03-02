@@ -113,6 +113,7 @@ class InvoiceController extends AbstractController
 
         $deleted = 0;
         $errors = [];
+        $companyId = null;
 
         foreach ($ids as $id) {
             $invoice = $this->findInvoice($id);
@@ -121,12 +122,19 @@ class InvoiceController extends AbstractController
                 continue;
             }
             try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
                 $this->denyAccessUnlessGranted('INVOICE_DELETE', $invoice);
                 $this->invoiceManager->delete($invoice);
                 $deleted++;
             } catch (\Throwable $e) {
                 $errors[] = ['id' => $id, 'error' => $e->getMessage()];
             }
+        }
+
+        if ($deleted > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
         }
 
         return $this->json(['deleted' => $deleted, 'errors' => $errors]);
@@ -151,6 +159,7 @@ class InvoiceController extends AbstractController
 
         $cancelled = 0;
         $errors = [];
+        $companyId = null;
 
         foreach ($ids as $id) {
             $invoice = $this->findInvoice($id);
@@ -159,12 +168,19 @@ class InvoiceController extends AbstractController
                 continue;
             }
             try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
                 $this->denyAccessUnlessGranted('INVOICE_CANCEL', $invoice);
                 $this->invoiceManager->cancel($invoice, $reason, $user);
                 $cancelled++;
             } catch (\Throwable $e) {
                 $errors[] = ['id' => $id, 'error' => $e->getMessage()];
             }
+        }
+
+        if ($cancelled > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
         }
 
         return $this->json(['cancelled' => $cancelled, 'errors' => $errors]);
@@ -195,6 +211,7 @@ class InvoiceController extends AbstractController
 
         $created = 0;
         $errors = [];
+        $companyId = null;
 
         foreach ($ids as $id) {
             $invoice = $this->findInvoice($id);
@@ -204,6 +221,7 @@ class InvoiceController extends AbstractController
             }
 
             try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
                 $this->denyAccessUnlessGranted('INVOICE_REFUND', $invoice);
 
                 // Must be outgoing
@@ -347,6 +365,12 @@ class InvoiceController extends AbstractController
             }
         }
 
+        if ($created > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
+        }
+
         return $this->json(['created' => $created, 'errors' => $errors]);
     }
 
@@ -375,6 +399,7 @@ class InvoiceController extends AbstractController
 
         $marked = 0;
         $errors = [];
+        $companyId = null;
 
         foreach ($ids as $id) {
             $invoice = $this->findInvoice($id);
@@ -383,6 +408,7 @@ class InvoiceController extends AbstractController
                 continue;
             }
             try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
                 $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
 
                 $balance = $invoice->getBalance();
@@ -411,6 +437,12 @@ class InvoiceController extends AbstractController
             }
         }
 
+        if ($marked > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
+        }
+
         return $this->json(['marked' => $marked, 'errors' => $errors]);
     }
 
@@ -436,6 +468,7 @@ class InvoiceController extends AbstractController
 
         $unmarked = 0;
         $errors = [];
+        $companyId = null;
 
         foreach ($ids as $id) {
             $invoice = $this->findInvoice($id);
@@ -444,6 +477,7 @@ class InvoiceController extends AbstractController
                 continue;
             }
             try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
                 $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
 
                 if (!$invoice->getPaidAt() && bccomp($invoice->getAmountPaid(), '0', 2) === 0) {
@@ -456,6 +490,12 @@ class InvoiceController extends AbstractController
             } catch (\Throwable $e) {
                 $errors[] = ['id' => $id, 'error' => $e->getMessage()];
             }
+        }
+
+        if ($unmarked > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
         }
 
         return $this->json(['unmarked' => $unmarked, 'errors' => $errors]);
@@ -667,6 +707,10 @@ class InvoiceController extends AbstractController
 
         $this->denyAccessUnlessGranted('INVOICE_DELETE', $invoice);
 
+        // Capture company ID before deletion (entity will be gone after delete)
+        $company = $invoice->getCompany();
+        $companyId = $company?->getId()?->toRfc4122();
+
         try {
             $this->invoiceManager->delete($invoice);
         } catch (\DomainException $e) {
@@ -677,6 +721,12 @@ class InvoiceController extends AbstractController
                 'status' => $invoice->getStatus()->value,
             ]);
             return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.deleted',
+            ]);
         }
 
         return $this->json(null, Response::HTTP_NO_CONTENT);

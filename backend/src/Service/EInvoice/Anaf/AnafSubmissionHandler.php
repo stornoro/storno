@@ -12,6 +12,7 @@ use App\Service\Anaf\EFacturaClient;
 use App\Service\Anaf\EFacturaValidator;
 use App\Service\Anaf\UblXmlGenerator;
 use App\Service\EInvoice\EInvoiceSubmissionHandlerInterface;
+use App\Service\Centrifugo\CentrifugoService;
 use App\Service\Storage\OrganizationStorageResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -30,6 +31,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
+        private readonly CentrifugoService $centrifugo,
     ) {}
 
     public function handle(Invoice $invoice, EInvoiceSubmission $submission): void
@@ -59,6 +61,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
             $invoice->setAnafStatus('validation_failed');
             $invoice->setAnafErrorMessage($errorMessage);
             $this->entityManager->flush();
+            $this->publishInvoiceChange($invoice, 'invoice.submission_failed');
             return;
         }
 
@@ -88,6 +91,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
             $invoice->setAnafStatus('no_token');
             $invoice->setAnafErrorMessage('Nu exista un token ANAF valid pentru aceasta companie.');
             $this->entityManager->flush();
+            $this->publishInvoiceChange($invoice, 'invoice.submission_failed');
             return;
         }
 
@@ -103,6 +107,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
             $invoice->setAnafStatus('upload_failed');
             $invoice->setAnafErrorMessage($uploadResponse->errorMessage);
             $this->entityManager->flush();
+            $this->publishInvoiceChange($invoice, 'invoice.submission_failed');
             return;
         }
 
@@ -120,6 +125,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
         $invoice->setSyncedAt(new \DateTimeImmutable());
 
         $this->entityManager->flush();
+        $this->publishInvoiceChange($invoice, 'invoice.submitted');
 
         $this->logger->info('AnafSubmissionHandler: Invoice submitted successfully.', [
             'invoiceId' => (string) $invoice->getId(),
@@ -129,5 +135,17 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
         $this->messageBus->dispatch(
             new CheckEInvoiceStatusMessage((string) $submission->getId())
         );
+    }
+
+    private function publishInvoiceChange(Invoice $invoice, string $type): void
+    {
+        $company = $invoice->getCompany();
+        if (!$company) {
+            return;
+        }
+
+        $this->centrifugo->publish('invoices:company_' . $company->getId()->toRfc4122(), [
+            'type' => $type,
+        ]);
     }
 }
