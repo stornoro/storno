@@ -19,14 +19,18 @@ export function useApi() {
 
   async function refreshToken(): Promise<boolean> {
     try {
-      const response = await fetchFn<{ token: string }>('/auth/refresh', {
+      const response = await fetchFn<{ token: string; refresh_token?: string }>('/auth/refresh', {
         baseURL: apiBase,
         method: 'POST',
         credentials: 'include',
+        body: authStore.refreshToken ? { refresh_token: authStore.refreshToken } : undefined,
       })
 
       if (response.token) {
         authStore.token = response.token
+        if (response.refresh_token) {
+          authStore.refreshToken = response.refresh_token
+        }
         return true
       }
       return false

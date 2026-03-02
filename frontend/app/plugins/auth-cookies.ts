@@ -18,6 +18,12 @@ export default defineNuxtPlugin(() => {
     sameSite: 'lax',
     default: () => null,
   })
+  const refreshTokenCookie = useCookie<string | null>('auth_refresh_token', {
+    maxAge: 60 * 60 * 24 * 30,
+    path: '/',
+    sameSite: 'lax',
+    default: () => null,
+  })
   // ── Impersonation cookie (1h TTL matching JWT) ─────────────────
   const originalTokenCookie = useCookie<string | null>('impersonate_original_token', {
     maxAge: 60 * 60,
@@ -36,6 +42,9 @@ export default defineNuxtPlugin(() => {
   if (tokenCookie.value) {
     authStore.token = tokenCookie.value
   }
+  if (refreshTokenCookie.value) {
+    authStore.refreshToken = refreshTokenCookie.value
+  }
   if (originalTokenCookie.value) {
     authStore.originalToken = originalTokenCookie.value
   }
@@ -50,6 +59,9 @@ export default defineNuxtPlugin(() => {
   // ── Watch store → cookie sync ────────────────────────────────────
   watch(() => authStore.token, (val) => {
     tokenCookie.value = val
+  })
+  watch(() => authStore.refreshToken, (val) => {
+    refreshTokenCookie.value = val
   })
   watch(() => authStore.originalToken, (val) => {
     originalTokenCookie.value = val
