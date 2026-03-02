@@ -176,6 +176,9 @@ class RecurringInvoiceProcessor
         }
         $documentData['lines'] = $lines;
 
+        // Auto-apply VAT rules (reverse charge, OSS, export) based on client country
+        $documentData['autoApplyVatRules'] = true;
+
         // Build exchange rate text for [[curs]] template variable
         $rateText = !empty($rateNotes) ? implode("\n", $rateNotes) : '';
 
