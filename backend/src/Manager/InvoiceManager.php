@@ -513,7 +513,7 @@ class InvoiceManager
         $newStatus = $isRefund ? DocumentStatus::REFUND : DocumentStatus::ISSUED;
         $invoice->setStatus($newStatus);
 
-        // Mark parent invoice as refunded
+        // Mark parent invoice as refunded and auto-settle the storno
         if ($isRefund) {
             $parent = $invoice->getParentDocument();
             $parentPrevStatus = $parent->getStatus();
@@ -528,6 +528,11 @@ class InvoiceManager
                 'refundInvoiceId' => $invoice->getId()?->toRfc4122(),
             ]);
             $parent->addEvent($parentEvent);
+
+            // Auto-mark storno/credit note as settled — no payment to collect
+            $invoice->setAmountPaid($invoice->getTotal());
+            $invoice->setPaidAt(new \DateTimeImmutable());
+            $invoice->setPaymentMethod('bank_transfer');
         }
 
         // Schedule ANAF submission based on company delay (cron picks it up)
