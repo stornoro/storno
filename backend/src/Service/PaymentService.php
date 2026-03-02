@@ -151,7 +151,7 @@ class PaymentService
         }
     }
 
-    public function getPaymentSummary(Company $company, ?string $dateFrom = null, ?string $dateTo = null): array
+    public function getPaymentSummary(Company $company, ?string $dateFrom = null, ?string $dateTo = null, string $defaultCurrency = 'RON', float $defaultRate = 1.0): array
     {
         $conn = $this->entityManager->getConnection();
         $companyId = (string) $company->getId();
@@ -167,10 +167,13 @@ class PaymentService
             $dateParams['dateTo'] = $dateTo;
         }
 
-        $params = array_merge(['companyId' => $companyId], $dateParams);
+        $params = array_merge(['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate], $dateParams);
+
+        // Convert (total - amount_paid) to default currency using stored exchange_rate
+        $convertBalance = 'CASE WHEN currency = :defaultCurrency THEN (total - amount_paid) ELSE (total - amount_paid) * COALESCE(exchange_rate, 1) / :defaultRate END';
 
         $outstanding = $conn->fetchAssociative(
-            "SELECT COUNT(*) AS cnt, COALESCE(SUM(total - amount_paid), 0) AS amount
+            "SELECT COUNT(*) AS cnt, COALESCE(SUM($convertBalance), 0) AS amount
              FROM invoice
              WHERE company_id = :companyId
                AND deleted_at IS NULL
@@ -181,7 +184,7 @@ class PaymentService
         );
 
         $overdue = $conn->fetchAssociative(
-            "SELECT COUNT(*) AS cnt, COALESCE(SUM(total - amount_paid), 0) AS amount
+            "SELECT COUNT(*) AS cnt, COALESCE(SUM($convertBalance), 0) AS amount
              FROM invoice
              WHERE company_id = :companyId
                AND deleted_at IS NULL

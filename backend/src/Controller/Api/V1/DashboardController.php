@@ -10,6 +10,7 @@ use App\Repository\InvoiceRepository;
 use App\Repository\ProductRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
+use App\Service\ExchangeRateService;
 use App\Service\PaymentService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -30,6 +31,7 @@ class DashboardController extends AbstractController
         private readonly CompanyRepository $companyRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly PaymentService $paymentService,
+        private readonly ExchangeRateService $exchangeRateService,
     ) {}
 
     #[Route('/stats', methods: ['GET'])]
@@ -63,7 +65,10 @@ class DashboardController extends AbstractController
             $dateParams['dateTo'] = $dateTo;
         }
 
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
         $baseParams = array_merge(['companyId' => $companyId], $dateParams);
+        $amountParams = array_merge($baseParams, ['defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate]);
 
         // Counts by direction
         $directionCounts = $conn->fetchAllAssociative(
@@ -88,10 +93,14 @@ class DashboardController extends AbstractController
             $byStatus[$row['status']] = (int) $row['cnt'];
         }
 
-        // Total amounts
+        // SQL expression: convert amount to default currency using stored exchange_rate
+        $convertTotal = 'CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, 1) / :defaultRate END';
+        $convertVat = 'CASE WHEN currency = :defaultCurrency THEN vat_total ELSE vat_total * COALESCE(exchange_rate, 1) / :defaultRate END';
+
+        // Total amounts (converted to default currency)
         $totals = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(total), 0) as total_amount, COALESCE(SUM(vat_total), 0) as total_vat FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $dateFilter,
-            $baseParams
+            "SELECT COALESCE(SUM($convertTotal), 0) as total_amount, COALESCE(SUM($convertVat), 0) as total_vat FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $dateFilter,
+            $amountParams
         );
 
         // Client count (unfiltered — entity count, not transactional)
@@ -106,14 +115,14 @@ class DashboardController extends AbstractController
             ['companyId' => $companyId]
         );
 
-        // Monthly totals (last 12 months, grouped by direction)
+        // Monthly totals (last 12 months, grouped by direction, converted to default currency)
         $monthlyRows = $conn->fetchAllAssociative(
-            "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month, direction, COALESCE(SUM(total), 0) AS amount
+            "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month, direction, COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
              WHERE company_id = :companyId AND deleted_at IS NULL AND issue_date >= (CURRENT_DATE - INTERVAL 12 MONTH)" . $dateFilter . "
              GROUP BY month, direction
              ORDER BY month",
-            $baseParams
+            $amountParams
         );
 
         $monthlyMap = [];
@@ -130,10 +139,10 @@ class DashboardController extends AbstractController
         }
         $monthlyTotals = array_values($monthlyMap);
 
-        // Amounts by direction
+        // Amounts by direction (converted to default currency)
         $directionAmounts = $conn->fetchAllAssociative(
-            'SELECT direction, COALESCE(SUM(total), 0) AS amount FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $dateFilter . ' GROUP BY direction',
-            $baseParams
+            "SELECT direction, COALESCE(SUM($convertTotal), 0) AS amount FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $dateFilter . ' GROUP BY direction',
+            $amountParams
         );
         $amountsByDirection = ['incoming' => '0.00', 'outgoing' => '0.00'];
         foreach ($directionAmounts as $row) {
@@ -175,8 +184,8 @@ class DashboardController extends AbstractController
             ];
         }, $recentInvoices);
 
-        // Payment summary
-        $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo);
+        // Payment summary (converted to default currency)
+        $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo, $defaultCurrency, $defaultRate);
 
         $response = $this->json([
             'invoices' => [
@@ -197,6 +206,7 @@ class DashboardController extends AbstractController
             'monthlyTotals' => $monthlyTotals,
             'amountsByDirection' => $amountsByDirection,
             'payments' => $paymentSummary,
+            'currency' => $defaultCurrency,
         ]);
 
         // Skip cache when date params are present (filtered data)

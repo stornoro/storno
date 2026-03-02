@@ -7,6 +7,7 @@ const props = defineProps<{
   overdueCount: number
   overdueAmount: string | number
   recentActivity: RecentActivityItem[]
+  currency?: string
   loading?: boolean
 }>()
 
@@ -57,9 +58,9 @@ const totalUnpaidAmount = computed(() => Number(props.outstandingAmount || 0))
           <!-- Big amount -->
           <div class="flex items-baseline gap-1.5 mb-4">
             <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
-              {{ formatMoney(totalUnpaidAmount).replace(/\s*RON/, '') }}
+              {{ new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(totalUnpaidAmount) }}
             </span>
-            <span class="text-sm text-(--ui-text-muted)">RON</span>
+            <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
           </div>
 
           <!-- Mini table header -->

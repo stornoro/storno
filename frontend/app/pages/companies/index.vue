@@ -312,6 +312,11 @@
                     <div class="text-sm font-medium">{{ editCompany.representativeRole }}</div>
                   </div>
                 </div>
+                <!-- Default currency -->
+                <div class="pt-1">
+                  <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.defaultCurrency') }}</div>
+                  <div class="text-sm font-medium">{{ editCompany.defaultCurrency ?? 'RON' }}</div>
+                </div>
               </div>
 
               <!-- Editable form -->
@@ -411,6 +416,14 @@
                     <UInput v-model="editForm.representativeRole" />
                   </UFormField>
                 </div>
+                <UFormField :label="$t('companies.defaultCurrency')">
+                  <USelectMenu
+                    v-model="editForm.defaultCurrency"
+                    :items="currencyOptions"
+                    value-key="value"
+                    class="w-40"
+                  />
+                </UFormField>
                 <UButton
                   :loading="savingCompanyInfo"
                   :disabled="!companyInfoDirty"
@@ -676,7 +689,7 @@ const router = useRouter()
 const toast = useToast()
 const { copy } = useClipboard()
 const { get } = useApi()
-const { fetchDefaults, countryOptions, countyOptions } = useInvoiceDefaults()
+const { fetchDefaults, countryOptions, countyOptions, currencyOptions } = useInvoiceDefaults()
 
 const cityOptions = ref<{ label: string, value: string }[]>([])
 const citySearchTimeout = ref<ReturnType<typeof setTimeout>>()
@@ -800,6 +813,7 @@ const editForm = reactive({
   eoriCode: '',
   representative: '',
   representativeRole: '',
+  defaultCurrency: 'RON',
 })
 
 const canConfirmDelete = computed(() =>
@@ -829,6 +843,7 @@ const companyInfoDirty = computed(() => {
     || editForm.eoriCode !== (c.eoriCode ?? '')
     || editForm.representative !== (c.representative ?? '')
     || editForm.representativeRole !== (c.representativeRole ?? '')
+    || editForm.defaultCurrency !== (c.defaultCurrency ?? 'RON')
 })
 
 const anafConnected = ref(false)
@@ -899,6 +914,7 @@ async function openEdit(company: Company) {
   editForm.eoriCode = company.eoriCode ?? ''
   editForm.representative = company.representative ?? ''
   editForm.representativeRole = company.representativeRole ?? ''
+  editForm.defaultCurrency = company.defaultCurrency ?? 'RON'
   autoSubmitEnabled.value = company.efacturaDelayHours != null
   selectedDelay.value = company.efacturaDelayHours ?? 24
   editOpen.value = true
@@ -941,6 +957,7 @@ async function saveCompanyInfo() {
       eoriCode: editForm.eoriCode || null,
       representative: editForm.representative || null,
       representativeRole: editForm.representativeRole || null,
+      defaultCurrency: editForm.defaultCurrency,
     } as Partial<Company>)
     if (result) {
       toast.add({ title: $t('common.saved'), color: 'success' })
