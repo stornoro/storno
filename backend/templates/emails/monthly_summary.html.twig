@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storno - Raport Lunar</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f0f0f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0f0f5;">
+        <tr>
+            <td align="center" style="padding: 32px 16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 16px rgba(0,0,0,0.06);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1a1a2e 0%, #2d2b55 100%); padding: 20px 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td>
+                                        <h1 style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Storno.ro</h1>
+                                    </td>
+                                    <td align="right">
+                                        <span style="color: #a5b4fc; font-size: 13px; font-weight: 500;">Raport lunar</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Accent Line -->
+                    <tr>
+                        <td style="height: 3px; background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 33%, #a78bfa 66%, #c4b5fd 100%);"></td>
+                    </tr>
+
+                    <!-- Period Banner -->
+                    <tr>
+                        <td style="padding: 32px 36px 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border-radius: 10px; border: 1px solid #c7d2fe;">
+                                <tr>
+                                    <td style="padding: 20px 24px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                            <tr>
+                                                <td style="width: 44px; vertical-align: top;">
+                                                    <div style="width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); text-align: center; line-height: 44px; font-size: 20px; box-shadow: 0 2px 8px rgba(99,102,241,0.3);">
+                                                        &#128202;
+                                                    </div>
+                                                </td>
+                                                <td style="padding-left: 16px; vertical-align: middle;">
+                                                    <p style="margin: 0 0 2px 0; font-size: 13px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">{{ monthLabel }}</p>
+                                                    <p style="margin: 0; font-size: 18px; color: #1e1b4b; font-weight: 700; letter-spacing: -0.3px;">{{ dateRange }}</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Greeting -->
+                    <tr>
+                        <td style="padding: 24px 36px 0 36px;">
+                            <p style="margin: 0; font-size: 15px; color: #374151; line-height: 1.6;">
+                                Buna, <strong style="color: #111827;">{{ userName }}</strong>
+                            </p>
+                            <p style="margin: 8px 0 0 0; font-size: 15px; color: #6b7280; line-height: 1.6;">
+                                Iata cum a aratat luna trecuta pentru <strong style="color: #374151;">{{ companyName }}</strong>:
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Main Metrics -->
+                    <tr>
+                        <td style="padding: 24px 36px 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <!-- Total Facturat -->
+                                    <td width="48%" style="vertical-align: top;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fafafa; border-radius: 10px; border: 1px solid #f3f4f6;">
+                                            <tr>
+                                                <td style="padding: 20px;">
+                                                    <p style="margin: 0 0 4px 0; font-size: 12px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Facturat</p>
+                                                    <p style="margin: 0 0 6px 0; font-size: 28px; color: #111827; font-weight: 800; letter-spacing: -0.5px;">{{ totalInvoicedFormatted }}</p>
+                                                    <p style="margin: 0; font-size: 13px; color: #6b7280;">{{ currency }} &middot; {{ invoiceCount }} {{ invoiceCount == 1 ? 'factura' : 'facturi' }}</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <!-- Total Incasat -->
+                                    <td width="48%" style="vertical-align: top;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0;">
+                                            <tr>
+                                                <td style="padding: 20px;">
+                                                    <p style="margin: 0 0 4px 0; font-size: 12px; color: #16a34a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Incasat</p>
+                                                    <p style="margin: 0 0 6px 0; font-size: 28px; color: #16a34a; font-weight: 800; letter-spacing: -0.5px;">{{ totalCollectedFormatted }}</p>
+                                                    <p style="margin: 0; font-size: 13px; color: #6b7280;">{{ currency }} &middot; {{ paymentCount }} {{ paymentCount == 1 ? 'plata' : 'plati' }}</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Collection Rate Bar -->
+                    <tr>
+                        <td style="padding: 20px 36px 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">
+                                            Rata de incasare
+                                            <strong style="color: #16a34a; float: right;">{{ collectionRate }}%</strong>
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div style="background-color: #f3f4f6; border-radius: 6px; height: 8px; overflow: hidden;">
+                                            <div style="background: linear-gradient(90deg, #22c55e 0%, #4ade80 100%); height: 8px; border-radius: 6px; width: {{ collectionRate > 100 ? 100 : collectionRate }}%;"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Divider -->
+                    <tr>
+                        <td style="padding: 24px 36px 0 36px;">
+                            <div style="height: 1px; background-color: #f3f4f6;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Receivables Breakdown Title -->
+                    <tr>
+                        <td style="padding: 24px 36px 16px 36px;">
+                            <p style="margin: 0; font-size: 14px; color: #111827; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                &#128176; Situatie creante
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Receivables Grid -->
+                    <tr>
+                        <td style="padding: 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+                                <!-- Row 1 -->
+                                <tr>
+                                    <td width="50%" style="padding: 16px 20px; border-bottom: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6;">
+                                        <p style="margin: 0 0 4px 0; font-size: 12px; color: {{ receivables[0].color }}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">&#9679; {{ receivables[0].label }}</p>
+                                        <p style="margin: 0; font-size: 22px; color: {{ receivables[0].color }}; font-weight: 800; letter-spacing: -0.3px;">{{ receivables[0].totalFormatted }} <span style="font-size: 13px; font-weight: 500; color: #9ca3af;">{{ currency }}</span></p>
+                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">{{ receivables[0].count }} {{ receivables[0].count == 1 ? 'factura' : 'facturi' }}</p>
+                                    </td>
+                                    <td width="50%" style="padding: 16px 20px; border-bottom: 1px solid #f3f4f6;">
+                                        <p style="margin: 0 0 4px 0; font-size: 12px; color: {{ receivables[1].color }}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">&#9679; {{ receivables[1].label }}</p>
+                                        <p style="margin: 0; font-size: 22px; color: {{ receivables[1].color }}; font-weight: 800; letter-spacing: -0.3px;">{{ receivables[1].totalFormatted }} <span style="font-size: 13px; font-weight: 500; color: #9ca3af;">{{ currency }}</span></p>
+                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">{{ receivables[1].count }} {{ receivables[1].count == 1 ? 'factura' : 'facturi' }}</p>
+                                    </td>
+                                </tr>
+                                <!-- Row 2 -->
+                                <tr>
+                                    <td width="50%" style="padding: 16px 20px; border-right: 1px solid #f3f4f6;">
+                                        <p style="margin: 0 0 4px 0; font-size: 12px; color: {{ receivables[2].color }}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">&#9679; {{ receivables[2].label }}</p>
+                                        <p style="margin: 0; font-size: 22px; color: {{ receivables[2].color }}; font-weight: 800; letter-spacing: -0.3px;">{{ receivables[2].totalFormatted }} <span style="font-size: 13px; font-weight: 500; color: #9ca3af;">{{ currency }}</span></p>
+                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">{{ receivables[2].count }} {{ receivables[2].count == 1 ? 'factura' : 'facturi' }}</p>
+                                    </td>
+                                    <td width="50%" style="padding: 16px 20px;">
+                                        <p style="margin: 0 0 4px 0; font-size: 12px; color: {{ receivables[3].color }}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">&#9679; {{ receivables[3].label }}</p>
+                                        <p style="margin: 0; font-size: 22px; color: {{ receivables[3].color }}; font-weight: 800; letter-spacing: -0.3px;">{{ receivables[3].totalFormatted }} <span style="font-size: 13px; font-weight: 500; color: #9ca3af;">{{ currency }}</span></p>
+                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">{{ receivables[3].count }} {{ receivables[3].count == 1 ? 'factura' : 'facturi' }}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {% if topClients|length > 0 %}
+                    <!-- Divider -->
+                    <tr>
+                        <td style="padding: 24px 36px 0 36px;">
+                            <div style="height: 1px; background-color: #f3f4f6;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Top Clients Title -->
+                    <tr>
+                        <td style="padding: 24px 36px 16px 36px;">
+                            <p style="margin: 0; font-size: 14px; color: #111827; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                &#11088; Top clienti
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Top Clients Table -->
+                    <tr>
+                        <td style="padding: 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+                                <tr style="background-color: #f9fafb;">
+                                    <td style="padding: 10px 16px; font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Client</td>
+                                    <td style="padding: 10px 16px; font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-align: right;">Facturat</td>
+                                    <td style="padding: 10px 16px; font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-align: right;">Incasat</td>
+                                </tr>
+                                {% for client in topClients %}
+                                <tr>
+                                    <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #f3f4f6;">
+                                        <div style="display: inline-block; width: 24px; height: 24px; border-radius: 6px; background: {{ client.avatarGradient }}; text-align: center; line-height: 24px; font-size: 11px; color: #fff; font-weight: 700; vertical-align: middle; margin-right: 8px;">{{ client.initial }}</div>
+                                        {{ client.name }}
+                                    </td>
+                                    <td style="padding: 12px 16px; font-size: 14px; color: #374151; text-align: right; border-top: 1px solid #f3f4f6;">{{ client.invoiced }} {{ client.currency }}</td>
+                                    <td style="padding: 12px 16px; font-size: 14px; color: #16a34a; font-weight: 600; text-align: right; border-top: 1px solid #f3f4f6;">{{ client.collected }} {{ client.currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Month-over-Month -->
+                    <tr>
+                        <td style="padding: 24px 36px 0 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-radius: 10px; border: 1px solid #e9d5ff;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                                            <tr>
+                                                <td>
+                                                    <p style="margin: 0 0 2px 0; font-size: 12px; color: #7c3aed; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">vs. luna anterioara</p>
+                                                    <p style="margin: 0; font-size: 14px; color: #374151; line-height: 1.5;">
+                                                        Facturat <span style="color: {{ comparison.invoiced.direction == 'up' ? '#16a34a' : (comparison.invoiced.direction == 'down' ? '#ef4444' : '#6b7280') }}; font-weight: 700;">{{ comparison.invoiced.direction == 'up' ? '&#9650;' : (comparison.invoiced.direction == 'down' ? '&#9660;' : '&#9644;') }} {{ comparison.invoiced.label }}</span> &nbsp;&middot;&nbsp;
+                                                        Incasat <span style="color: {{ comparison.collected.direction == 'up' ? '#16a34a' : (comparison.collected.direction == 'down' ? '#ef4444' : '#6b7280') }}; font-weight: 700;">{{ comparison.collected.direction == 'up' ? '&#9650;' : (comparison.collected.direction == 'down' ? '&#9660;' : '&#9644;') }} {{ comparison.collected.label }}</span> &nbsp;&middot;&nbsp;
+                                                        Restante <span style="color: {{ comparison.overdue.direction == 'down' ? '#16a34a' : (comparison.overdue.direction == 'up' ? '#ef4444' : '#6b7280') }}; font-weight: 700;">{{ comparison.overdue.direction == 'up' ? '&#9650;' : (comparison.overdue.direction == 'down' ? '&#9660;' : '&#9644;') }} {{ comparison.overdue.label }}</span>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- CTA Button -->
+                    <tr>
+                        <td style="padding: 28px 36px 32px 36px;" align="center">
+                            <a href="{{ dashboardUrl }}" target="_blank"
+                               style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(79,70,229,0.3);">
+                                Deschide Dashboard
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 24px 36px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center;">
+                                Trimis prin <a href="https://storno.ro" style="color: #6366f1; text-decoration: none; font-weight: 500;">Storno.ro</a>
+                            </p>
+                            {% if unsubscribeUrl is defined and unsubscribeUrl %}
+                            <p style="margin: 6px 0 0 0; font-size: 11px; color: #d1d5db; text-align: center;">
+                                <a href="{{ unsubscribeUrl }}" style="color: #d1d5db; text-decoration: underline;">Dezaboneaza-te</a> de la rapoartele lunare
+                            </p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -26,6 +26,7 @@ class NotificationPreferenceController extends AbstractController
         'token.expiring_soon',
         'token.refresh_failed',
         'export_ready',
+        'report.monthly_summary',
     ];
 
     public function __construct(

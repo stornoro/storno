@@ -18,6 +18,7 @@ class NotificationService
         'token.expiring_soon',
         'export_ready',
         'payment.received',
+        'report.monthly_summary',
     ];
 
     public function __construct(
