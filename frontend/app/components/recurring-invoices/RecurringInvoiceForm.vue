@@ -277,19 +277,26 @@
 
           <!-- Description full width with template variables -->
           <UFormField :label="$t('invoices.lineDescription')" class="w-full">
-            <UInput v-model="line.description" :placeholder="$t('invoices.lineDescription')" class="w-full" />
-            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-
-              <UTooltip v-for="v in templateVariables" :key="v.token" :text="`${v.token} \u2192 ${v.example}`">
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-(--ui-bg-elevated) text-(--ui-text-muted) hover:text-(--ui-text) hover:bg-(--ui-bg-accented) transition-colors cursor-pointer border border-(--ui-border)"
-                  @click="line.description += v.token"
-                >
-                  <span class="font-mono">{{ v.token }}</span>
-                  <span class="text-(--ui-text-dimmed)">&rarr; {{ v.example }}</span>
-                </button>
-              </UTooltip>
+            <div class="flex gap-1.5">
+              <UInput v-model="line.description" :placeholder="$t('invoices.lineDescription')" class="flex-1" />
+              <UPopover :ui="{ content: 'p-0' }">
+                <UButton icon="i-lucide-braces" variant="outline" color="neutral" size="sm" />
+                <template #content>
+                  <div class="p-2 space-y-1.5 w-56">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-(--ui-text-dimmed) px-1">{{ $t('recurringInvoices.insertVariable') }}</p>
+                    <button
+                      v-for="v in templateVariables"
+                      :key="v.token"
+                      type="button"
+                      class="flex items-center justify-between w-full px-2 py-1.5 rounded text-xs hover:bg-(--ui-bg-elevated) transition-colors cursor-pointer"
+                      @click="line.description += v.token"
+                    >
+                      <span class="font-mono font-medium text-(--ui-text)">{{ v.token }}</span>
+                      <span class="text-(--ui-text-dimmed)">{{ v.example }}</span>
+                    </button>
+                  </div>
+                </template>
+              </UPopover>
             </div>
           </UFormField>
 
@@ -471,17 +478,31 @@
         </UFormField>
         <UFormField :label="$t('common.notes')">
           <UTextarea v-model="form.notes" :rows="6" class="w-full" />
-          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            <UTooltip v-for="v in templateVariables" :key="v.token" :text="`${v.token} \u2192 ${v.example}`">
+          <div class="flex mt-1.5">
+            <UPopover :ui="{ content: 'p-0' }">
               <button
                 type="button"
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-(--ui-bg-elevated) text-(--ui-text-muted) hover:text-(--ui-text) hover:bg-(--ui-bg-accented) transition-colors cursor-pointer border border-(--ui-border)"
-                @click="form.notes += v.token"
               >
-                <span class="font-mono">{{ v.token }}</span>
-                <span class="text-(--ui-text-dimmed)">&rarr; {{ v.example }}</span>
+                <UIcon name="i-lucide-braces" class="size-3" />
+                <span>{{ $t('recurringInvoices.insertVariable') }}</span>
               </button>
-            </UTooltip>
+              <template #content>
+                <div class="p-2 space-y-1.5 w-56">
+                  <p class="text-[10px] font-semibold uppercase tracking-wide text-(--ui-text-dimmed) px-1">{{ $t('recurringInvoices.insertVariable') }}</p>
+                  <button
+                    v-for="v in templateVariables"
+                    :key="v.token"
+                    type="button"
+                    class="flex items-center justify-between w-full px-2 py-1.5 rounded text-xs hover:bg-(--ui-bg-elevated) transition-colors cursor-pointer"
+                    @click="form.notes += v.token"
+                  >
+                    <span class="font-mono font-medium text-(--ui-text)">{{ v.token }}</span>
+                    <span class="text-(--ui-text-dimmed)">{{ v.example }}</span>
+                  </button>
+                </div>
+              </template>
+            </UPopover>
           </div>
         </UFormField>
       </div>
@@ -764,10 +785,24 @@ const currentMonth = new Date().getMonth()
 const currentYear = new Date().getFullYear()
 const romanianMonths = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie']
 
+function offsetMonth(offset: number): { month: number, year: number } {
+  const d = new Date(currentYear, currentMonth + offset, 1)
+  return { month: d.getMonth(), year: d.getFullYear() }
+}
+
+const prevMonth = offsetMonth(-1)
+const nextMonth = offsetMonth(1)
+
 const templateVariables = [
   { token: '[[luna]]', example: romanianMonths[currentMonth] },
+  { token: '[[luna-1]]', example: romanianMonths[prevMonth.month] },
+  { token: '[[luna+1]]', example: romanianMonths[nextMonth.month] },
   { token: '[[an]]', example: String(currentYear) },
+  { token: '[[an-1]]', example: String(currentYear - 1) },
+  { token: '[[an+1]]', example: String(currentYear + 1) },
   { token: '[[luna_nr]]', example: String(currentMonth + 1).padStart(2, '0') },
+  { token: '[[luna_nr-1]]', example: String(prevMonth.month + 1).padStart(2, '0') },
+  { token: '[[luna_nr+1]]', example: String(nextMonth.month + 1).padStart(2, '0') },
   { token: '[[curs]]', example: 'Curs BNR' },
 ]
 
