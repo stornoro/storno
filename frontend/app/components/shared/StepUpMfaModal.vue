@@ -35,10 +35,6 @@ watch(open, async (isOpen) => {
       return
     }
     activeTab.value = hasPasskey.value ? 'passkey' : 'totp'
-    // Auto-trigger passkey
-    if (hasPasskey.value) {
-      await onVerifyPasskey()
-    }
   }
 })
 

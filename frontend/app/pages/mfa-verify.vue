@@ -106,6 +106,8 @@ const authStore = useAuthStore()
 const toast = useToast()
 
 const { resolve: resolvePostLogin } = usePostLoginRoute()
+const apiBase = useApiBase()
+const fetchFn = useRequestFetch()
 const loading = ref(false)
 const totpCode = ref('')
 const backupCode = ref('')
@@ -133,18 +135,11 @@ onMounted(() => {
     navigateTo('/login')
     return
   }
-  // Auto-trigger passkey prompt
-  if (hasPasskey.value) {
-    onVerifyPasskey()
-  }
 })
 
 async function onVerifyPasskey() {
   loading.value = true
   try {
-    const apiBase = useApiBase()
-    const fetchFn = useRequestFetch()
-
     // 1. Get passkey assertion options from server
     const options = await fetchFn<any>('/auth/mfa/passkey/options', {
       baseURL: apiBase,
