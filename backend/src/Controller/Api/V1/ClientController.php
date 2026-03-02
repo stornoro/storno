@@ -27,6 +27,12 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/api/v1/clients')]
 class ClientController extends AbstractController
 {
+    private const EU_COUNTRY_CODES = [
+        'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+        'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+        'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ];
+
     public function __construct(
         private readonly ClientManager $clientManager,
         private readonly ClientRepository $clientRepository,
@@ -586,8 +592,10 @@ class ClientController extends AbstractController
 
     private function autoValidateVies(Client $client): void
     {
-        // Only validate foreign clients with a VAT code
-        if ($client->getCountry() === 'RO' || empty($client->getVatCode())) {
+        $country = $client->getCountry();
+
+        // Only validate foreign EU clients with a VAT code
+        if (!in_array($country, self::EU_COUNTRY_CODES, true) || $country === 'RO' || empty($client->getVatCode())) {
             $client->setViesValid(null);
             $client->setViesValidatedAt(null);
             $client->setViesName(null);

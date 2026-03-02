@@ -61,7 +61,7 @@ class ClientRepository extends ServiceEntityRepository
         $sql = "
             SELECT
                 c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
-                c.address, c.city, c.email,
+                c.address, c.city, c.email, c.country, c.vies_valid AS viesValid,
                 COALESCE(s.invoice_count, 0) AS invoiceCount,
                 COALESCE(s.invoice_total, 0) AS invoiceTotal
             FROM client c
@@ -90,6 +90,7 @@ class ClientRepository extends ServiceEntityRepository
         // Convert types
         foreach ($rows as &$row) {
             $row['isVatPayer'] = (bool) $row['isVatPayer'];
+            $row['viesValid'] = $row['viesValid'] === null ? null : (bool) $row['viesValid'];
             $row['invoiceCount'] = (int) $row['invoiceCount'];
             $row['invoiceTotal'] = round((float) $row['invoiceTotal'], 2);
         }
