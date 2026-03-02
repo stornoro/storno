@@ -47,7 +47,11 @@ final class AuthenticationSuccessSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $refreshToken = $event->getData()[$this->refreshTokenParameterName];
+        $refreshToken = $data[$this->refreshTokenParameterName] ?? null;
+        if (!$refreshToken) {
+            return;
+        }
+
         $response = $event->getResponse();
         $response->headers->setCookie(
             new Cookie(

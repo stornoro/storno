@@ -36,7 +36,13 @@ final class RefreshJwtTokenSubscriber implements EventSubscriberInterface
             Request::METHOD_POST === $request->getMethod() &&
             ($route === 'gesdinet_jwt_refresh_token' || $route === 'jwt_refresh')
         ) {
-            $request->attributes->set($this->refreshTokenParameterName, $request->cookies->get($this->cookieName));
+            // Only set the attribute when the cookie actually contains a value.
+            // Setting it to null would prevent the bundle from reading the
+            // refresh_token sent in the request body as a fallback.
+            $cookieValue = $request->cookies->get($this->cookieName);
+            if ($cookieValue) {
+                $request->attributes->set($this->refreshTokenParameterName, $cookieValue);
+            }
         }
     }
 }

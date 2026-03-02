@@ -7,11 +7,13 @@ use App\Service\MfaService;
 use Lexik\Bundle\JWTAuthenticationBundle\Event\AuthenticationSuccessEvent;
 use Lexik\Bundle\JWTAuthenticationBundle\Events;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 final class MfaLoginSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private readonly MfaService $mfaService,
+        private readonly RequestStack $requestStack,
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -23,6 +25,13 @@ final class MfaLoginSubscriber implements EventSubscriberInterface
 
     public function onAuthenticationSuccess(AuthenticationSuccessEvent $event): void
     {
+        // Skip MFA challenge during token refresh — user already completed MFA at login
+        $request = $this->requestStack->getCurrentRequest();
+        $route = $request?->attributes->get('_route');
+        if ($route === 'jwt_refresh' || $route === 'gesdinet_jwt_refresh_token') {
+            return;
+        }
+
         $user = $event->getUser();
 
         if (!$user instanceof User) {
