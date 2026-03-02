@@ -3,6 +3,8 @@ import { bufferToBase64url, base64urlToBuffer } from '~/utils/webauthn'
 export function usePasskey() {
   const authStore = useAuthStore()
   const { post, get, del } = useApi()
+  const apiBase = useApiBase()
+  const fetchFn = useRequestFetch()
   const isLoading = ref(false)
 
   const isSupported = computed(() => {
@@ -78,8 +80,6 @@ export function usePasskey() {
     isLoading.value = true
     try {
       // 1. Get request options from server (public endpoint)
-      const apiBase = useApiBase()
-      const fetchFn = useRequestFetch()
       const options = await fetchFn<any>('/auth/passkey/login/options', {
         baseURL: apiBase,
         method: 'POST',
