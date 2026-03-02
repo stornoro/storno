@@ -106,6 +106,7 @@ class InvoiceManager
         }
         $invoice->setNotes($data['notes'] ?? null);
         $invoice->setPaymentTerms($data['paymentTerms'] ?? null);
+        $invoice->setPaymentMethod($data['paymentMethod'] ?? null);
         $invoice->setDeliveryLocation($data['deliveryLocation'] ?? null);
         $invoice->setProjectReference($data['projectReference'] ?? null);
 
@@ -247,6 +248,9 @@ class InvoiceManager
         }
         if (array_key_exists('paymentTerms', $data)) {
             $invoice->setPaymentTerms($data['paymentTerms']);
+        }
+        if (array_key_exists('paymentMethod', $data)) {
+            $invoice->setPaymentMethod($data['paymentMethod']);
         }
         if (array_key_exists('deliveryLocation', $data)) {
             $invoice->setDeliveryLocation($data['deliveryLocation']);
