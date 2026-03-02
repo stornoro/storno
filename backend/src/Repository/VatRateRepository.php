@@ -41,4 +41,17 @@ class VatRateRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    public function findDefaultByCompany(Company $company): ?VatRate
+    {
+        return $this->createQueryBuilder('vr')
+            ->where('vr.company = :company')
+            ->andWhere('vr.isDefault = true')
+            ->andWhere('vr.isActive = true')
+            ->andWhere('vr.deletedAt IS NULL')
+            ->setParameter('company', $company)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

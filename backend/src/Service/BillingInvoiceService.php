@@ -7,6 +7,8 @@ use App\Entity\Organization;
 use App\Manager\InvoiceManager;
 use App\Repository\CompanyRepository;
 use App\Repository\DocumentSeriesRepository;
+use App\Repository\VatRateRepository;
+use App\Service\EuVatRateService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -20,6 +22,12 @@ use Symfony\Component\Uid\Uuid;
  */
 class BillingInvoiceService
 {
+    private const EU_COUNTRY_CODES = [
+        'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+        'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+        'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ];
+
     private ?Company $billingCompany = null;
     private bool $resolved = false;
 
@@ -27,6 +35,8 @@ class BillingInvoiceService
         private readonly InvoiceManager $invoiceManager,
         private readonly CompanyRepository $companyRepository,
         private readonly DocumentSeriesRepository $documentSeriesRepository,
+        private readonly VatRateRepository $vatRateRepository,
+        private readonly EuVatRateService $euVatRateService,
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
         private readonly ?string $billingCompanyId,
@@ -77,9 +87,8 @@ class BillingInvoiceService
         $planLabel = ucfirst($planName);
         $unitPrice = number_format($amount / 100, 2, '.', '');
 
-        // Determine VAT: Storno.ro (RO company) charges 19% TVA to RO customers
-        $vatRate = '19.00';
-        $vatCategoryCode = 'S';
+        // Determine VAT based on buyer's country and billing company settings
+        [$vatRate, $vatCategoryCode] = $this->resolveVatForBuyer($company, $org);
 
         // Build receiver info from the organization
         $receiverName = $org->getName();
@@ -143,6 +152,8 @@ class BillingInvoiceService
                 'stripeInvoiceId' => $stripeInvoiceId,
                 'amount' => $unitPrice,
                 'currency' => $currency,
+                'vatRate' => $vatRate,
+                'vatCategoryCode' => $vatCategoryCode,
             ]);
         } catch (\Throwable $e) {
             // Log but don't fail the webhook — subscription should still activate
@@ -152,6 +163,71 @@ class BillingInvoiceService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Determine VAT rate and category code for a billing invoice based on EU VAT rules.
+     *
+     * Decision tree:
+     * 1. Buyer is in same country as billing company → standard domestic VAT
+     * 2. Buyer is EU + VAT payer (B2B intra-community) → reverse charge (AE, 0%)
+     * 3. Buyer is EU + not VAT payer + billing company has OSS → OSS destination country rate
+     * 4. Buyer is EU + not VAT payer + no OSS → standard domestic VAT
+     * 5. Buyer is non-EU → export exempt (G, 0%)
+     *
+     * @return array{string, string} [vatRate, vatCategoryCode]
+     */
+    private function resolveVatForBuyer(Company $billingCompany, Organization $org): array
+    {
+        // Billing company's default VAT rate (fallback for domestic sales)
+        $defaultVat = $this->vatRateRepository->findDefaultByCompany($billingCompany);
+        $domesticRate = $defaultVat ? $defaultVat->getRate() : '19.00';
+        $domesticCode = $defaultVat ? $defaultVat->getCategoryCode() : 'S';
+
+        $billingCountry = $billingCompany->getCountry() ?? 'RO';
+
+        // Resolve buyer's country from their first company
+        $buyerCountry = null;
+        $buyerIsVatPayer = false;
+        $orgCompanies = $org->getCompanies();
+        if ($orgCompanies->count() > 0) {
+            $buyerCompany = $orgCompanies->first();
+            $buyerCountry = $buyerCompany->getCountry();
+            $buyerIsVatPayer = $buyerCompany->isVatPayer();
+        }
+
+        // No buyer country info → assume domestic
+        if (!$buyerCountry) {
+            return [$domesticRate, $domesticCode];
+        }
+
+        // 1. Same country as billing company → domestic VAT
+        if ($buyerCountry === $billingCountry) {
+            return [$domesticRate, $domesticCode];
+        }
+
+        $buyerIsEu = in_array($buyerCountry, self::EU_COUNTRY_CODES, true);
+
+        // 5. Non-EU buyer → export exempt
+        if (!$buyerIsEu) {
+            return ['0.00', 'G'];
+        }
+
+        // 2. EU + VAT payer (B2B) → reverse charge
+        if ($buyerIsVatPayer) {
+            return ['0.00', 'AE'];
+        }
+
+        // 3. EU + not VAT payer + billing company has OSS → destination country rate
+        if ($billingCompany->isOss()) {
+            $standardRate = $this->euVatRateService->getStandardRate($buyerCountry);
+            if ($standardRate !== null) {
+                return [number_format($standardRate, 2, '.', ''), 'S'];
+            }
+        }
+
+        // 4. EU + not VAT payer + no OSS → domestic VAT
+        return [$domesticRate, $domesticCode];
     }
 
     private function getBillingCompany(): ?Company
