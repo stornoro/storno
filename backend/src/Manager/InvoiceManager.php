@@ -407,6 +407,35 @@ class InvoiceManager
         return $invoice;
     }
 
+    /**
+     * Propagate client changes to all editable invoices for that client.
+     * Updates receiver identity and reapplies VAT rules (reverse charge / OSS).
+     *
+     * @return int Number of invoices updated
+     */
+    public function propagateClientChanges(\App\Entity\Client $client, Company $company): int
+    {
+        $invoices = $this->invoiceRepository->findEditableByClient($company, $client);
+        $count = 0;
+
+        foreach ($invoices as $invoice) {
+            $invoice->setReceiverName($client->getName());
+            $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+
+            // Reapply VAT rules based on updated client data
+            $this->applyVatRules($invoice, $client, $company);
+            $this->recalculateTotals($invoice);
+            $invoice->setXmlPath(null);
+            $count++;
+        }
+
+        if ($count > 0) {
+            $this->entityManager->flush();
+        }
+
+        return $count;
+    }
+
     public function delete(Invoice $invoice): void
     {
         if (!$invoice->isDeletable()) {

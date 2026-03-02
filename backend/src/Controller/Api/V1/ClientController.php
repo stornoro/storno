@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Entity\Client;
 use App\Enum\InvoiceDirection;
 use App\Manager\ClientManager;
+use App\Manager\InvoiceManager;
 use App\Repository\ClientRepository;
 use App\Repository\DeliveryNoteRepository;
 use App\Repository\InvoiceRepository;
@@ -44,6 +45,7 @@ class ClientController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly SagaXmlExportService $sagaXmlExportService,
         private readonly ViesService $viesService,
+        private readonly InvoiceManager $invoiceManager,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -502,8 +504,20 @@ class ClientController extends AbstractController
 
         $this->entityManager->flush();
 
+        // Propagate client changes to editable invoices (name, CIF, VAT rules)
+        $invoiceFields = ['name', 'cui', 'cnp', 'vatCode', 'isVatPayer', 'country'];
+        $invoiceFieldsChanged = array_intersect(array_keys($data), $invoiceFields);
+        $invoicesUpdated = 0;
+        if ($invoiceFieldsChanged) {
+            $company = $client->getCompany();
+            if ($company) {
+                $invoicesUpdated = $this->invoiceManager->propagateClientChanges($client, $company);
+            }
+        }
+
         return $this->json([
             'client' => $client,
+            'invoicesUpdated' => $invoicesUpdated,
         ], Response::HTTP_OK, [], ['groups' => ['client:detail']]);
     }
 

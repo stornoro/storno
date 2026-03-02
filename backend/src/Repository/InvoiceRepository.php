@@ -551,6 +551,33 @@ class InvoiceRepository extends ServiceEntityRepository
      *
      * @return Invoice[]
      */
+    /**
+     * Find all editable invoices linked to a specific client in the current month.
+     * Editable = not cancelled, not sent_to_provider, and either rejected or not yet uploaded to ANAF.
+     * Only returns invoices with issueDate in the current calendar month — past months are considered closed.
+     *
+     * @return Invoice[]
+     */
+    public function findEditableByClient(Company $company, \App\Entity\Client $client): array
+    {
+        $monthStart = new \DateTime('first day of this month 00:00:00');
+
+        return $this->createQueryBuilder('i')
+            ->where('i.company = :company')
+            ->andWhere('i.client = :client')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.status NOT IN (:blocked)')
+            ->andWhere('i.status = :rejected OR i.anafUploadId IS NULL')
+            ->andWhere('i.issueDate >= :monthStart')
+            ->setParameter('company', $company)
+            ->setParameter('client', $client)
+            ->setParameter('blocked', [DocumentStatus::CANCELLED, DocumentStatus::SENT_TO_PROVIDER])
+            ->setParameter('rejected', DocumentStatus::REJECTED)
+            ->setParameter('monthStart', $monthStart)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findApproachingAnafDeadline(int $days): array
     {
         $targetDate = new \DateTime(sprintf('-%d days', $days));
