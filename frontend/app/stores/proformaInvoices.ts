@@ -10,11 +10,18 @@ export interface ProformaFilters {
   dateTo: string | null
 }
 
+interface DocumentTotals {
+  subtotal: string
+  vatTotal: string
+  total: string
+}
+
 interface ProformaPaginatedResponse {
   data: ProformaInvoice[]
   total: number
   page: number
   limit: number
+  totals: DocumentTotals
 }
 
 export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
@@ -33,6 +40,7 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
+  const totals = ref<DocumentTotals>({ subtotal: '0.00', vatTotal: '0.00', total: '0.00' })
   const sort = ref<string | null>(null)
   const order = ref<'asc' | 'desc' | null>(null)
 
@@ -74,6 +82,7 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       items.value = response.data
       total.value = response.total
       page.value = response.page
+      totals.value = response.totals ?? { subtotal: '0.00', vatTotal: '0.00', total: '0.00' }
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca profacturile.'
@@ -237,6 +246,7 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
     page,
     limit,
     total,
+    totals,
     sort,
     order,
 

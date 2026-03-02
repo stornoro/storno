@@ -830,31 +830,40 @@ onUnmounted(() => {
 
       <UEmpty v-if="!loading && !invoices.length" icon="i-lucide-file-text" :title="$t('invoices.noInvoices')" :description="$t('invoices.noInvoicesDesc')" class="py-12" />
 
-      <!-- Totals summary -->
-      <div v-if="invoices.length" class="flex flex-col items-end gap-1 py-3 text-sm">
-        <div class="flex items-center gap-4">
-          <span class="text-muted">{{ $t('invoices.totalExcluding') }}</span>
-          <span class="font-medium tabular-nums w-28 text-right">{{ formatPlainMoney(invoicesStore.totals.subtotal) }}</span>
+      <!-- Totals summary bar -->
+      <div v-if="invoices.length" class="flex items-center bg-elevated/50 rounded-lg border border-default mt-2 py-2.5 px-4 gap-0">
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalExcluding') }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.subtotal) }}</div>
         </div>
-        <div class="flex items-center gap-4">
-          <span class="text-muted">{{ $t('invoices.vatLabel') }}</span>
-          <span class="font-medium tabular-nums w-28 text-right">{{ formatPlainMoney(invoicesStore.totals.vatTotal) }}</span>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.vatLabel') }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.vatTotal) }}</div>
         </div>
-        <div class="flex items-center gap-4">
-          <span class="text-muted font-semibold">{{ $t('invoices.totalIncluding') }}</span>
-          <span class="font-semibold tabular-nums w-28 text-right">{{ formatPlainMoney(invoicesStore.totals.total) }}</span>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalIncluding') }}</div>
+          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.total) }}</div>
         </div>
-        <div v-if="activeDirection !== 'incoming'" class="flex items-center gap-4">
-          <span class="text-muted">{{ $t('invoices.toBeCollected') }}</span>
-          <span class="font-medium tabular-nums w-28 text-right">{{ formatPlainMoney(invoicesStore.totals.receivable) }}</span>
+        <div v-if="activeDirection !== 'incoming'" class="w-px h-8 bg-default shrink-0" />
+        <div v-if="activeDirection !== 'incoming'" class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.toBeCollected') }}</div>
+          <div class="text-sm font-bold tabular-nums text-green-600 dark:text-green-400">{{ formatPlainMoney(invoicesStore.totals.receivable) }}</div>
         </div>
-        <div v-if="activeDirection !== 'outgoing'" class="flex items-center gap-4">
-          <span class="text-muted">{{ $t('invoices.toBePaid') }}</span>
-          <span class="font-medium tabular-nums w-28 text-right">{{ formatPlainMoney(invoicesStore.totals.payable) }}</span>
+        <div v-if="activeDirection !== 'outgoing'" class="w-px h-8 bg-default shrink-0" />
+        <div v-if="activeDirection !== 'outgoing'" class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.toBePaid') }}</div>
+          <div class="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{{ formatPlainMoney(invoicesStore.totals.payable) }}</div>
+        </div>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="ml-auto pl-4 flex items-center gap-2.5 shrink-0">
+          <span class="text-xs text-muted font-medium whitespace-nowrap">{{ $t('common.showing') }} {{ invoices.length }} {{ $t('common.of') }} {{ total }}</span>
+          <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
         </div>
       </div>
 
-      <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
+      <div v-else class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <span class="text-sm text-muted">
           {{ $t('common.showing') }} {{ invoices.length }} {{ $t('common.of') }} {{ total }}
         </span>

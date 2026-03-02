@@ -201,6 +201,10 @@ function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
 }
 
+function formatPlainMoney(amount?: string | number) {
+  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
+}
+
 type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
 function statusColor(status: string): BadgeColor {
@@ -341,11 +345,33 @@ onMounted(() => {
 
       <UEmpty v-if="!loading && !deliveryNotes.length" icon="i-lucide-package-check" :title="$t('deliveryNotes.noDeliveryNotes')" :description="$t('deliveryNotes.noDeliveryNotesDesc')" class="py-12" />
 
-      <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
-        <span class="text-sm text-muted">
-          {{ $t('common.showing') }} {{ deliveryNotes.length }} {{ $t('common.of') }} {{ total }}
-        </span>
-        <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
+      <div v-if="deliveryNotes.length" class="flex items-center bg-elevated/50 rounded-lg border border-default mt-2 py-2.5 px-4 gap-0">
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalExcluding') }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.subtotal) }}</div>
+        </div>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.vatLabel') }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.vatTotal) }}</div>
+        </div>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="flex-1 px-3">
+          <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalIncluding') }}</div>
+          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.total) }}</div>
+        </div>
+        <div class="w-px h-8 bg-default shrink-0" />
+        <div class="ml-auto pl-4 flex items-center gap-2.5 shrink-0">
+          <span class="text-xs text-muted font-medium whitespace-nowrap">{{ $t('common.showing') }} {{ deliveryNotes.length }} {{ $t('common.of') }} {{ total }}</span>
+          <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
+        </div>
+      </div>
+
+      <div v-else class="flex items-center bg-elevated/50 rounded-lg border border-default mt-2 py-2.5 px-4">
+        <span class="text-xs text-muted font-medium whitespace-nowrap">{{ $t('common.showing') }} {{ deliveryNotes.length }} {{ $t('common.of') }} {{ total }}</span>
+        <div class="ml-auto pl-4">
+          <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
+        </div>
       </div>
 
       <!-- Bulk Delete Confirm -->
