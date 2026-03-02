@@ -5,6 +5,7 @@ export const useAuthStore = defineStore('auth', () => {
   // ── State ──────────────────────────────────────────────────────────
   // Tokens are plain refs. Cookie sync is handled by plugins/auth-cookies.ts
   const token = ref<string | null>(null)
+  const refreshToken = ref<string | null>(null)
   const user = ref<User | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -65,7 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetchFn<{ token?: string; mfa_required?: boolean; mfa_token?: string; mfa_methods?: string[] }>(
+      const response = await fetchFn<{ token?: string; refresh_token?: string; mfa_required?: boolean; mfa_token?: string; mfa_methods?: string[] }>(
         '/auth',
         {
           baseURL: apiBase,
@@ -84,6 +85,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       token.value = response.token!
+      if (response.refresh_token) {
+        refreshToken.value = response.refresh_token
+      }
 
       // Fetch user profile after login
       await fetchUser()
@@ -144,7 +148,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetchFn<{ token?: string; mfa_required?: boolean; mfa_token?: string; mfa_methods?: string[] }>(
+      const response = await fetchFn<{ token?: string; refresh_token?: string; mfa_required?: boolean; mfa_token?: string; mfa_methods?: string[] }>(
         '/auth/google',
         {
           baseURL: apiBase,
@@ -163,6 +167,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       token.value = response.token!
+      if (response.refresh_token) {
+        refreshToken.value = response.refresh_token
+      }
 
       await fetchUser()
       return true
@@ -211,13 +218,17 @@ export const useAuthStore = defineStore('auth', () => {
       if (err?.response?.status === 401) {
         // Attempt token refresh before giving up
         try {
-          const refreshResponse = await fetchFn<{ token: string }>('/auth/refresh', {
+          const refreshResponse = await fetchFn<{ token: string; refresh_token?: string }>('/auth/refresh', {
             baseURL: apiBase,
             method: 'POST',
             credentials: 'include',
+            body: refreshToken.value ? { refresh_token: refreshToken.value } : undefined,
           })
           if (refreshResponse.token) {
             token.value = refreshResponse.token
+            if (refreshResponse.refresh_token) {
+              refreshToken.value = refreshResponse.refresh_token
+            }
             // Retry fetchUser with new token
             const retryResponse = await fetchFn<User>('/v1/me', {
               baseURL: apiBase,
@@ -263,7 +274,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetchFn<{ token: string }>(
+      const response = await fetchFn<{ token: string; refresh_token?: string }>(
         '/auth/mfa/verify',
         {
           baseURL: apiBase,
@@ -274,6 +285,9 @@ export const useAuthStore = defineStore('auth', () => {
       )
 
       token.value = response.token
+      if (response.refresh_token) {
+        refreshToken.value = response.refresh_token
+      }
       mfaPending.value = false
       mfaToken.value = null
       mfaMethods.value = []
@@ -299,7 +313,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetchFn<{ token: string }>(
+      const response = await fetchFn<{ token: string; refresh_token?: string }>(
         '/auth/mfa/verify',
         {
           baseURL: apiBase,
@@ -310,6 +324,9 @@ export const useAuthStore = defineStore('auth', () => {
       )
 
       token.value = response.token
+      if (response.refresh_token) {
+        refreshToken.value = response.refresh_token
+      }
       mfaPending.value = false
       mfaToken.value = null
       mfaMethods.value = []
@@ -378,6 +395,7 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     user.value = null
     token.value = null
+    refreshToken.value = null
     originalToken.value = null
     error.value = null
     clearMfa()
@@ -407,6 +425,7 @@ export const useAuthStore = defineStore('auth', () => {
     // State
     user,
     token,
+    refreshToken,
     loading,
     error,
     mfaPending,
