@@ -179,6 +179,12 @@ class InvoiceManager
             if ($series && $series->getCompany()?->getId()->equals($company->getId())) {
                 $invoice->setDocumentSeries($series);
             }
+        } else {
+            // Auto-assign the default series for this document type
+            $defaultSeries = $this->documentSeriesRepository->findDefaultByType($company, $docType->value);
+            if ($defaultSeries) {
+                $invoice->setDocumentSeries($defaultSeries);
+            }
         }
 
         // Draft invoices get a temporary number
@@ -537,9 +543,11 @@ class InvoiceManager
 
         // Schedule ANAF submission based on company delay (cron picks it up)
         // null = disabled, user must submit manually
+        // Only schedule for invoices with Romanian clients (ANAF e-Factura is only for RO recipients)
         $company = $invoice->getCompany();
         $delayHours = $company?->getEfacturaDelayHours();
-        if ($delayHours !== null) {
+        $clientCountry = $invoice->getClient()?->getCountry();
+        if ($delayHours !== null && ($clientCountry === null || $clientCountry === 'RO')) {
             $invoice->setScheduledSendAt($this->computeSpvSubmissionTime($delayHours));
         }
 
@@ -563,6 +571,12 @@ class InvoiceManager
     public function submitToAnaf(Invoice $invoice, User $user): void
     {
         $status = $invoice->getStatus();
+
+        // Only invoices for Romanian clients can be submitted to ANAF
+        $clientCountry = $invoice->getClient()?->getCountry();
+        if ($clientCountry !== null && $clientCountry !== 'RO') {
+            throw new \DomainException('Facturile pentru clienti din afara Romaniei nu se trimit la ANAF.');
+        }
 
         // Block draft, cancelled, refunded, and already-in-progress submissions
         $blockedStatuses = [DocumentStatus::DRAFT, DocumentStatus::CANCELLED, DocumentStatus::REFUNDED, DocumentStatus::SENT_TO_PROVIDER, DocumentStatus::SYNCED, DocumentStatus::VALIDATED];
@@ -746,6 +760,15 @@ class InvoiceManager
                         }
                     }
                 }
+            }
+            return;
+        }
+
+        // Non-EU clients: set VAT rate to 0% and category to Z (zero rate)
+        if ($client->getCountry() !== 'RO' && !in_array($client->getCountry(), self::EU_COUNTRY_CODES, true)) {
+            foreach ($invoice->getLines() as $line) {
+                $line->setVatRate('0.00');
+                $line->setVatCategoryCode('Z');
             }
         }
     }

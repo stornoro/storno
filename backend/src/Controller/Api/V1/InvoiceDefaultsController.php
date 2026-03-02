@@ -74,6 +74,7 @@ class InvoiceDefaultsController extends AbstractController
         // Check for reverse charge / OSS if clientId is provided
         $reverseCharge = false;
         $ossApplicable = false;
+        $exportApplicable = false;
         $ossVatRate = null;
         $ossVatRates = [];
         $clientId = $request->query->get('clientId');
@@ -94,6 +95,13 @@ class InvoiceDefaultsController extends AbstractController
                         'categoryCode' => 'AE',
                         'default' => true,
                     ]);
+                } elseif (
+                    $client
+                    && $client->getCountry() !== 'RO'
+                    && !in_array($client->getCountry(), self::EU_COUNTRY_CODES, true)
+                ) {
+                    // Non-EU client: flag set, default override applied after fallback block
+                    $exportApplicable = true;
                 } elseif (
                     $client
                     && $company->isOss()
@@ -152,6 +160,14 @@ class InvoiceDefaultsController extends AbstractController
                 ['rate' => '5', 'label' => 'Redus 5%', 'categoryCode' => 'S', 'default' => false],
                 ['rate' => '0', 'label' => 'Scutit', 'categoryCode' => 'Z', 'default' => false],
             ];
+        }
+
+        // Non-EU export: default to 0% rate (applied after fallback to guarantee $vatRates is populated)
+        if ($exportApplicable) {
+            $vatRates = array_map(function ($vr) {
+                $vr['default'] = $vr['rate'] === '0';
+                return $vr;
+            }, $vatRates);
         }
 
         $currencies = ['RON', 'EUR', 'USD', 'GBP', 'CHF', 'HUF', 'CZK', 'PLN', 'BGN', 'SEK', 'NOK', 'DKK'];
@@ -295,6 +311,7 @@ class InvoiceDefaultsController extends AbstractController
             'paymentMethods' => $paymentMethods,
             'isVatPayer' => $isVatPayer,
             'reverseCharge' => $reverseCharge,
+            'exportApplicable' => $exportApplicable,
             'ossApplicable' => $ossApplicable,
             'ossVatRate' => $ossVatRate,
             'ossVatRates' => $ossVatRates,
