@@ -2569,6 +2569,7 @@ export default defineI18nLocale(async () => {
         sync: 'Sincronizare',
         tokens: 'Token ANAF',
         exports: 'Export',
+        reports: 'Rapoarte',
       },
       events: {
         invoice: {
@@ -2594,6 +2595,9 @@ export default defineI18nLocale(async () => {
           refresh_failed: 'Eroare reinnoire token',
         },
         export_ready: 'Export finalizat',
+        report: {
+          monthly_summary: 'Raport lunar pe email',
+        },
       },
       saveSuccess: 'Preferinte salvate',
       saveError: 'Eroare la salvarea preferintelor',

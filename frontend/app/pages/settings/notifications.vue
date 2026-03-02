@@ -43,6 +43,11 @@ const categories = [
     label: $t('notificationPreferences.categories.exports'),
     events: ['export_ready'],
   },
+  {
+    key: 'reports',
+    label: $t('notificationPreferences.categories.reports'),
+    events: ['report.monthly_summary'],
+  },
 ]
 
 function getPreference(eventType: string, field: keyof Preference): boolean {
