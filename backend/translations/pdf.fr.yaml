@@ -53,6 +53,7 @@ sales_agent: 'Agent commercial'
 
 # Footer
 footer_text: 'Emise via'
+legal_disclaimer: 'Cette facture est valable sans signature ni cachet conformement a la legislation fiscale en vigueur.'
 
 # Invoice
 invoice_title: 'FACTURE'
