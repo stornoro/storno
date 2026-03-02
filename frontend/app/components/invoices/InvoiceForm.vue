@@ -167,6 +167,20 @@
       </div>
       <SharedClientRecentDocuments v-if="form.clientId" :client-id="form.clientId" />
 
+      <!-- Reverse charge indicator -->
+      <div v-if="reverseChargeActive" class="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+        <UIcon name="i-lucide-info" class="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+        <span class="text-xs text-amber-700 dark:text-amber-300">{{ $t('clients.reverseChargeInfo') }}</span>
+        <UBadge color="warning" variant="subtle" size="xs" class="ml-auto shrink-0">{{ $t('clients.reverseCharge') }}</UBadge>
+      </div>
+
+      <!-- OSS indicator -->
+      <div v-else-if="ossActive" class="flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+        <UIcon name="i-lucide-info" class="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
+        <span class="text-xs text-blue-700 dark:text-blue-300">{{ $t('clients.ossInfo') }}</span>
+        <UBadge color="info" variant="subtle" size="xs" class="ml-auto shrink-0">{{ $t('clients.ossActive') }}</UBadge>
+      </div>
+
       <!-- Unified client search (clients + registry) -->
       <InvoicesRegistrySearchSection
         v-else
@@ -650,6 +664,7 @@ const props = defineProps<{
   invoice?: Invoice | null
   refundOf?: string
   copyOf?: string
+  prefillClientId?: string
 }>()
 
 const emit = defineEmits<{
@@ -672,6 +687,7 @@ const pdfConfigStore = usePdfTemplateConfigStore()
 const {
   defaults,
   fetchDefaults,
+  fetchDefaultsForClient,
   vatRateOptions,
   currencyOptions,
   unitOfMeasureOptions,
@@ -696,6 +712,10 @@ const showNotes = ref(false)
 const showOptions = ref(false)
 const showClientBalance = ref(false)
 const showEfacturaInfo = ref(false)
+const reverseChargeActive = ref(false)
+const ossActive = ref(false)
+const ossVatRate = ref<{ rate: string; label: string; categoryCode: string } | null>(null)
+const ossVatRates = ref<{ rate: string; label: string; categoryCode: string; default: boolean }[]>([])
 const companyStore = useCompanyStore()
 const stripeConnected = computed(() => {
   const sc = companyStore.currentCompany?.stripeConnect
@@ -937,13 +957,21 @@ const taxPointDateCodeOptions = computed(() => [
 ])
 
 // VAT rate chip options
-const vatRateChipOptions = computed(() =>
-  vatRateOptions.value.map(vr => ({
+const vatRateChipOptions = computed(() => {
+  // When OSS is active, show destination country's VAT rates
+  if (ossActive.value && ossVatRates.value.length > 0) {
+    return ossVatRates.value.map(vr => ({
+      value: parseFloat(vr.rate).toFixed(2),
+      chipLabel: `${parseFloat(vr.rate)}%`,
+      categoryCode: vr.categoryCode,
+    }))
+  }
+  return vatRateOptions.value.map(vr => ({
     value: vr.value,
     chipLabel: `${parseFloat(vr.value)}%`,
     categoryCode: vr.categoryCode,
-  })),
-)
+  }))
+})
 
 function selectVatRate(index: number, vr: { value: string, categoryCode: string }) {
   const line = form.lines[index]
@@ -1062,9 +1090,21 @@ function clearClient() {
   form.clientId = null
   form.receiverName = ''
   form.receiverCif = ''
+  // Revert reverse charge if it was active
+  if (reverseChargeActive.value) {
+    reverseChargeActive.value = false
+    revertToStandardVat()
+  }
+  // Revert OSS if it was active
+  if (ossActive.value) {
+    ossActive.value = false
+    ossVatRate.value = null
+    ossVatRates.value = []
+    revertOssToStandardVat()
+  }
 }
 
-function onClientSelected(client: Client) {
+async function onClientSelected(client: Client) {
   form.clientId = client.id
   form.receiverCif = ''
   form.receiverName = ''
@@ -1074,6 +1114,75 @@ function onClientSelected(client: Client) {
   // Auto-check ANAF VAT status for new invoices
   if (!isEditing.value && client.type === 'company' && client.cui) {
     checkAnafVatStatus(client.cui)
+  }
+  // Auto-apply reverse charge / OSS for foreign clients
+  await checkClientVatRules(client)
+}
+
+async function checkClientVatRules(client: Client, applyToLines = true) {
+  // Reset both flags first
+  if (reverseChargeActive.value) {
+    reverseChargeActive.value = false
+    if (applyToLines) revertToStandardVat()
+  }
+  if (ossActive.value) {
+    ossActive.value = false
+    ossVatRate.value = null
+    ossVatRates.value = []
+    if (applyToLines) revertOssToStandardVat()
+  }
+
+  // Only check for foreign clients
+  if (client.country === 'RO') return
+
+  // Ask backend for reverse charge / OSS defaults
+  const clientDefaults = await fetchDefaultsForClient(client.id)
+
+  if (clientDefaults?.reverseCharge) {
+    reverseChargeActive.value = true
+    if (applyToLines) {
+      // Switch all standard-rated lines to reverse charge
+      for (const line of form.lines) {
+        if (line.vatCategoryCode === 'S') {
+          line.vatCategoryCode = 'AE'
+          line.vatRate = '0.00'
+        }
+      }
+      syncInvoiceTypeFromVat()
+    }
+  } else if (clientDefaults?.ossApplicable && clientDefaults.ossVatRate) {
+    ossActive.value = true
+    ossVatRate.value = clientDefaults.ossVatRate
+    ossVatRates.value = clientDefaults.ossVatRates || []
+    if (applyToLines) {
+      const ossRate = parseFloat(clientDefaults.ossVatRate.rate).toFixed(2)
+      // Switch all standard-rated lines to OSS default (standard) rate
+      for (const line of form.lines) {
+        if (line.vatCategoryCode === 'S') {
+          line.vatRate = ossRate
+        }
+      }
+    }
+  }
+}
+
+function revertToStandardVat() {
+  const defRate = defaultVatRate.value
+  for (const line of form.lines) {
+    if (line.vatCategoryCode === 'AE') {
+      line.vatCategoryCode = 'S'
+      line.vatRate = defRate
+    }
+  }
+  syncInvoiceTypeFromVat()
+}
+
+function revertOssToStandardVat() {
+  const defRate = defaultVatRate.value
+  for (const line of form.lines) {
+    if (line.vatCategoryCode === 'S') {
+      line.vatRate = defRate
+    }
   }
 }
 
@@ -1153,7 +1262,14 @@ watch(() => form, () => {
 }, { deep: true })
 
 function addLine() {
-  form.lines.push(emptyLine())
+  const line = emptyLine()
+  if (reverseChargeActive.value) {
+    line.vatCategoryCode = 'AE'
+    line.vatRate = '0.00'
+  } else if (ossActive.value && ossVatRate.value) {
+    line.vatRate = parseFloat(ossVatRate.value.rate).toFixed(2)
+  }
+  form.lines.push(line)
 }
 
 function removeLine(index: number) {
@@ -1313,6 +1429,13 @@ onMounted(async () => {
     checkAnafVatStatus(clientForVat.cui, !isEditing.value)
   }
 
+  // Load OSS/reverse-charge rate options for the current client
+  // For editing: only load the rate options (don't override line rates)
+  // For creating: also apply the default OSS rate to lines
+  if (clientForVat && clientForVat.country && clientForVat.country !== 'RO') {
+    await checkClientVatRules(clientForVat as Client, !isEditing.value)
+  }
+
   // Pre-fill from parent invoice for refund
   // Uses standard invoice (code 380) per Romanian e-Factura best practice
   if (props.refundOf && !props.invoice) {
@@ -1421,6 +1544,14 @@ onMounted(async () => {
       if (source.client && !clients.value.find(c => c.id === source.client!.id)) {
         clients.value = [source.client as Client, ...clients.value]
       }
+    }
+  }
+
+  // Pre-fill client from query param (e.g. creating invoice from client page)
+  if (props.prefillClientId && !props.invoice && !props.refundOf && !props.copyOf) {
+    const prefillClient = clients.value.find(c => c.id === props.prefillClientId)
+    if (prefillClient) {
+      await onClientSelected(prefillClient)
     }
   }
 

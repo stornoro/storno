@@ -25,10 +25,12 @@ const formSlideoverOpen = ref(false)
 const formSlideoverTitle = ref('')
 const formEditDeliveryNote = ref<DeliveryNote | null>(null)
 const formCopyOf = ref<string | undefined>(undefined)
+const formPrefillClientId = ref<string | undefined>(undefined)
 
-function openCreateSlideover() {
+function openCreateSlideover(clientId?: string) {
   formEditDeliveryNote.value = null
   formCopyOf.value = undefined
+  formPrefillClientId.value = clientId
   formSlideoverTitle.value = $t('deliveryNotes.newDeliveryNote')
   formSlideoverOpen.value = true
 }
@@ -78,7 +80,7 @@ function checkSlideoverQueryParams() {
     openEditSlideover(editParam)
   }
   else if (route.query.create) {
-    openCreateSlideover()
+    openCreateSlideover(route.query.clientId as string | undefined)
   }
 }
 
@@ -394,6 +396,7 @@ onMounted(() => {
             v-if="formSlideoverOpen"
             :delivery-note="formEditDeliveryNote"
             :copy-of="formCopyOf"
+            :prefill-client-id="formPrefillClientId"
             @saved="onFormSaved"
             @cancel="formSlideoverOpen = false"
           />

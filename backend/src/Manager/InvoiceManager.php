@@ -19,6 +19,8 @@ use App\Repository\DocumentSeriesRepository;
 use App\Repository\InvoiceRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Service\Anaf\AnafTokenResolver;
+use App\Service\EuVatRateService;
+use App\Service\ReverseChargeHelper;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -27,6 +29,13 @@ use Symfony\Component\Uid\Uuid;
 class InvoiceManager
 {
     use DocumentCalculationTrait;
+
+    private const EU_COUNTRY_CODES = [
+        'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+        'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+        'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ];
+
     public function __construct(
         private readonly InvoiceRepository $invoiceRepository,
         private readonly EntityManagerInterface $entityManager,
@@ -35,6 +44,7 @@ class InvoiceManager
         private readonly StripeConnectAccountRepository $connectAccountRepository,
         private readonly MessageBusInterface $messageBus,
         private readonly AnafTokenResolver $anafTokenResolver,
+        private readonly EuVatRateService $euVatRateService,
     ) {}
 
     public function find(string $uuid): ?Invoice
@@ -176,6 +186,14 @@ class InvoiceManager
 
         // Create lines
         $this->setLines($invoice, $data['lines'] ?? []);
+
+        // Opt-in: auto-apply reverse charge / OSS VAT rules
+        if (!empty($data['autoApplyVatRules'])) {
+            $invoiceClient = $invoice->getClient();
+            if ($invoiceClient) {
+                $this->applyVatRules($invoice, $invoiceClient, $company);
+            }
+        }
 
         // Recalculate totals
         $this->recalculateTotals($invoice);
@@ -624,6 +642,51 @@ class InvoiceManager
         $invoice->addEvent($event);
 
         $this->entityManager->flush();
+    }
+
+    /**
+     * Auto-apply reverse charge or OSS VAT rules to invoice lines.
+     * Only called when the caller opts in via autoApplyVatRules: true.
+     */
+    private function applyVatRules(Invoice $invoice, \App\Entity\Client $client, Company $company): void
+    {
+        // Rule 1: Reverse charge — foreign VIES-valid client + company has EU VAT
+        if (ReverseChargeHelper::shouldApplyReverseCharge($client, $company)) {
+            foreach ($invoice->getLines() as $line) {
+                if ($line->getVatCategoryCode() === 'S') {
+                    $line->setVatCategoryCode('AE');
+                    $line->setVatRate('0.00');
+                }
+            }
+            return;
+        }
+
+        // Rule 2: OSS — company is OSS + foreign EU client + not VIES valid
+        if (
+            $company->isOss()
+            && $client->getCountry() !== 'RO'
+            && in_array($client->getCountry(), self::EU_COUNTRY_CODES, true)
+            && $client->isViesValid() !== true
+        ) {
+            $allRates = $this->euVatRateService->getAllRates($client->getCountry());
+            if ($allRates !== null) {
+                // Build a set of valid destination country rates
+                $validRates = [];
+                foreach ($allRates as $rateVal) {
+                    $validRates[] = number_format((float) $rateVal, 2, '.', '');
+                }
+                $standardRate = isset($allRates['standard']) ? number_format((float) $allRates['standard'], 2, '.', '') : null;
+
+                foreach ($invoice->getLines() as $line) {
+                    if ($line->getVatCategoryCode() === 'S') {
+                        // If the line's rate is not a valid destination country rate, default to standard
+                        if (!in_array($line->getVatRate(), $validRates, true) && $standardRate !== null) {
+                            $line->setVatRate($standardRate);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private function setLines(Invoice $invoice, array $linesData): void

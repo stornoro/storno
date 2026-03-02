@@ -40,6 +40,10 @@
             <dt class="text-muted">{{ $t('common.name') }}</dt>
             <dd class="font-medium">{{ client.name }}</dd>
           </div>
+          <div>
+            <dt class="text-muted">{{ $t('common.type') }}</dt>
+            <dd>{{ client.type === 'company' ? $t('clients.typeCompany') : $t('clients.typeIndividual') }}</dd>
+          </div>
           <div v-if="client.type === 'company' || client.cui">
             <dt class="text-muted">CIF</dt>
             <dd class="font-medium font-mono flex items-center gap-1">
@@ -56,23 +60,51 @@
           </div>
           <div v-if="client.vatCode">
             <dt class="text-muted">{{ $t('clients.vatCode') }}</dt>
-            <dd>{{ client.vatCode }}</dd>
+            <dd class="flex items-center gap-2">
+              {{ client.vatCode }}
+              <UBadge v-if="client.viesValid === true" color="success" variant="subtle" size="xs">VIES</UBadge>
+              <UBadge v-else-if="client.viesValid === false" color="error" variant="subtle" size="xs">VIES</UBadge>
+            </dd>
+          </div>
+          <div v-if="client.viesName">
+            <dt class="text-muted">{{ $t('clients.viesName') }}</dt>
+            <dd>{{ client.viesName }}</dd>
+          </div>
+          <div v-if="client.viesValidatedAt">
+            <dt class="text-muted">{{ $t('clients.viesValidatedAt') }}</dt>
+            <dd>{{ formatDate(client.viesValidatedAt) }}</dd>
+          </div>
+          <div v-if="client.type === 'company'">
+            <dt class="text-muted">{{ $t('clients.isVatPayer') }}</dt>
+            <dd>
+              <UBadge :color="client.isVatPayer ? 'success' : 'neutral'" variant="subtle" size="sm">
+                {{ client.isVatPayer ? $t('common.yes') : $t('common.no') }}
+              </UBadge>
+            </dd>
           </div>
           <div v-if="client.type === 'company' && client.registrationNumber">
             <dt class="text-muted">{{ $t('clients.registrationNumber') }}</dt>
             <dd>{{ client.registrationNumber }}</dd>
           </div>
-          <div v-if="client.address">
-            <dt class="text-muted">{{ $t('clients.address') }}</dt>
-            <dd>{{ client.address }}</dd>
+          <div>
+            <dt class="text-muted">{{ $t('clients.country') }}</dt>
+            <dd>{{ countryLabel }}</dd>
+          </div>
+          <div v-if="client.county">
+            <dt class="text-muted">{{ $t('common.county') }}</dt>
+            <dd>{{ client.county }}</dd>
           </div>
           <div v-if="client.city">
             <dt class="text-muted">{{ $t('common.city') }}</dt>
             <dd>{{ client.city }}</dd>
           </div>
-          <div v-if="client.county">
-            <dt class="text-muted">{{ $t('common.county') }}</dt>
-            <dd>{{ client.county }}</dd>
+          <div v-if="client.address">
+            <dt class="text-muted">{{ $t('clients.address') }}</dt>
+            <dd>{{ client.address }}</dd>
+          </div>
+          <div v-if="client.postalCode">
+            <dt class="text-muted">{{ $t('clients.postalCode') }}</dt>
+            <dd>{{ client.postalCode }}</dd>
           </div>
           <div v-if="client.phone">
             <dt class="text-muted">{{ $t('clients.phone') }}</dt>
@@ -92,6 +124,14 @@
               {{ client.bankAccount }}
               <UButton icon="i-lucide-copy" variant="ghost" size="xs" @click="copy(client.bankAccount)" />
             </dd>
+          </div>
+          <div v-if="client.defaultPaymentTermDays">
+            <dt class="text-muted">{{ $t('clients.defaultPaymentTermDays') }}</dt>
+            <dd>{{ client.defaultPaymentTermDays }} {{ $t('common.days') }}</dd>
+          </div>
+          <div v-if="client.notes" class="md:col-span-2">
+            <dt class="text-muted">{{ $t('common.notes') }}</dt>
+            <dd class="whitespace-pre-wrap">{{ client.notes }}</dd>
           </div>
         </dl>
       </UCard>
@@ -247,6 +287,7 @@ const router = useRouter()
 const { copy } = useClipboard()
 const clientStore = useClientStore()
 const toast = useToast()
+const { fetchDefaults, countryOptions } = useInvoiceDefaults()
 
 const client = ref<any>(null)
 const invoiceHistory = ref<any[]>([])
@@ -261,6 +302,12 @@ const activeDocTab = ref('invoices')
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const deleting = ref(false)
+
+const countryLabel = computed(() => {
+  if (!client.value?.country) return ''
+  const match = countryOptions.value.find((c: any) => c.value === client.value.country)
+  return match ? match.label : client.value.country
+})
 
 const docTabs = computed(() => [
   { label: `${$t('clients.invoiceHistory')}${invoiceTotal.value ? ` (${invoiceTotal.value})` : ''}`, value: 'invoices' },
@@ -373,5 +420,8 @@ async function confirmDelete() {
   }
 }
 
-onMounted(fetchClientData)
+onMounted(() => {
+  fetchDefaults()
+  fetchClientData()
+})
 </script>

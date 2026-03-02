@@ -492,6 +492,7 @@ import { ETRANSPORT_OPERATION_TYPES, ETRANSPORT_PURPOSE_CODES_TTN, ETRANSPORT_CO
 const props = defineProps<{
   deliveryNote?: DeliveryNote | null
   copyOf?: string
+  prefillClientId?: string
 }>()
 
 const emit = defineEmits<{
@@ -978,6 +979,14 @@ onMounted(async () => {
       if (source.client && !clients.value.find((c: Client) => c.id === source.client!.id)) {
         clients.value = [source.client, ...clients.value]
       }
+    }
+  }
+
+  // Pre-fill client from query param (e.g. creating from client page)
+  if (props.prefillClientId && !props.deliveryNote && !props.copyOf) {
+    const prefillClient = clients.value.find(c => c.id === props.prefillClientId)
+    if (prefillClient) {
+      onClientSelected(prefillClient)
     }
   }
 })

@@ -3,9 +3,13 @@
 namespace App\Controller\Api\V1;
 
 use App\Manager\CompanyManager;
+use App\Repository\ClientRepository;
 use App\Repository\VatRateRepository;
 use App\Security\OrganizationContext;
+use App\Service\EuVatRateService;
 use App\Service\ExchangeRateService;
+use App\Service\ReverseChargeHelper;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -14,11 +18,19 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/v1/invoice-defaults')]
 class InvoiceDefaultsController extends AbstractController
 {
+    private const EU_COUNTRY_CODES = [
+        'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+        'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+        'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ];
+
     public function __construct(
         private readonly OrganizationContext $organizationContext,
         private readonly ExchangeRateService $exchangeRateService,
         private readonly VatRateRepository $vatRateRepository,
         private readonly CompanyManager $companyManager,
+        private readonly ClientRepository $clientRepository,
+        private readonly EuVatRateService $euVatRateService,
     ) {}
 
     /**
@@ -56,6 +68,79 @@ class InvoiceDefaultsController extends AbstractController
                     'categoryCode' => $vr->getCategoryCode(),
                     'default' => $isDefault,
                 ];
+            }
+        }
+
+        // Check for reverse charge / OSS if clientId is provided
+        $reverseCharge = false;
+        $ossApplicable = false;
+        $ossVatRate = null;
+        $ossVatRates = [];
+        $clientId = $request->query->get('clientId');
+        if ($clientId && $company) {
+            try {
+                $client = $this->clientRepository->find(Uuid::fromString($clientId));
+                if ($client && ReverseChargeHelper::shouldApplyReverseCharge($client, $company)) {
+                    $reverseCharge = true;
+                    // Override default VAT rate to reverse charge
+                    $vatRates = array_map(function ($vr) {
+                        $vr['default'] = false;
+                        return $vr;
+                    }, $vatRates);
+                    // Add reverse charge rate as default
+                    array_unshift($vatRates, [
+                        'rate' => '0',
+                        'label' => 'Taxare inversă / Reverse Charge',
+                        'categoryCode' => 'AE',
+                        'default' => true,
+                    ]);
+                } elseif (
+                    $client
+                    && $company->isOss()
+                    && $client->getCountry() !== 'RO'
+                    && in_array($client->getCountry(), self::EU_COUNTRY_CODES, true)
+                    && $client->isViesValid() !== true
+                ) {
+                    // OSS: destination country's VAT rates
+                    $allRates = $this->euVatRateService->getAllRates($client->getCountry());
+                    if ($allRates !== null && isset($allRates['standard'])) {
+                        $ossApplicable = true;
+                        $cc = $client->getCountry();
+                        // Build the default (standard) rate for backwards compat
+                        $stdStr = rtrim(rtrim(number_format($allRates['standard'], 2, '.', ''), '0'), '.');
+                        $ossVatRate = [
+                            'rate' => $stdStr,
+                            'label' => sprintf('TVA %s%% (%s — OSS)', $stdStr, $cc),
+                            'categoryCode' => 'S',
+                        ];
+                        // Build all available rates for the destination country
+                        $rateTypeLabels = [
+                            'standard' => 'Standard',
+                            'reduced' => 'Redus',
+                            'reduced1' => 'Redus',
+                            'reduced2' => 'Redus',
+                            'super_reduced' => 'Super-redus',
+                            'parking' => 'Parking',
+                        ];
+                        foreach ($allRates as $type => $rateVal) {
+                            $rStr = rtrim(rtrim(number_format((float) $rateVal, 2, '.', ''), '0'), '.');
+                            $typeLabel = $rateTypeLabels[$type] ?? ucfirst($type);
+                            $ossVatRates[] = [
+                                'rate' => $rStr,
+                                'label' => sprintf('TVA %s%% %s (%s — OSS)', $rStr, $typeLabel, $cc),
+                                'categoryCode' => 'S',
+                                'default' => $type === 'standard',
+                            ];
+                        }
+                        // Sort: standard first, then by rate descending
+                        usort($ossVatRates, function ($a, $b) {
+                            if ($a['default'] !== $b['default']) return $b['default'] <=> $a['default'];
+                            return (float) $b['rate'] <=> (float) $a['rate'];
+                        });
+                    }
+                }
+            } catch (\Throwable) {
+                // Invalid UUID or client not found — ignore
             }
         }
 
@@ -209,6 +294,10 @@ class InvoiceDefaultsController extends AbstractController
             'documentSeriesTypes' => $documentSeriesTypes,
             'paymentMethods' => $paymentMethods,
             'isVatPayer' => $isVatPayer,
+            'reverseCharge' => $reverseCharge,
+            'ossApplicable' => $ossApplicable,
+            'ossVatRate' => $ossVatRate,
+            'ossVatRates' => $ossVatRates,
             'countries' => $countries,
             'counties' => $counties,
         ]);
