@@ -30,6 +30,7 @@ const {
   outstandingAmount,
   overdueCount,
   overdueAmount,
+  currency,
 } = storeToRefs(dashboardStore)
 
 const { syncing } = storeToRefs(syncStore)
@@ -246,11 +247,13 @@ watch(() => companyStore.currentCompanyId, () => {
           :amount="outgoingAmount"
           :invoice-count="outgoingInvoices"
           :monthly-data="monthlyTotals"
+          :currency="currency"
           :loading="loading"
         />
 
         <DashboardClientBalanceCard
           :recent-activity="recentActivity"
+          :currency="currency"
           :loading="loading"
         />
 
@@ -260,6 +263,7 @@ watch(() => companyStore.currentCompanyId, () => {
           :overdue-count="overdueCount"
           :overdue-amount="overdueAmount"
           :recent-activity="recentActivity"
+          :currency="currency"
           :loading="loading"
         />
       </div>
@@ -271,6 +275,7 @@ watch(() => companyStore.currentCompanyId, () => {
           :incoming-invoices="incomingInvoices"
           :monthly-data="monthlyTotals"
           :invoices-by-status="invoicesByStatus"
+          :currency="currency"
           :loading="loading"
         />
 
@@ -293,6 +298,7 @@ watch(() => companyStore.currentCompanyId, () => {
           <DashboardDueTodayCard
             :overdue-amount="overdueAmount"
             :outstanding-amount="outstandingAmount"
+            :currency="currency"
             :loading="loading"
           />
         </div>

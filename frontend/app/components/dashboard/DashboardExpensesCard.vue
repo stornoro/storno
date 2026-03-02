@@ -6,6 +6,7 @@ const props = defineProps<{
   incomingInvoices: number
   monthlyData: MonthlyTotal[]
   invoicesByStatus: Record<string, number>
+  currency?: string
   loading?: boolean
 }>()
 
@@ -94,7 +95,7 @@ function getBarColor(status: string): string {
           <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
             {{ formatMoney(currentMonthAmount) }}
           </span>
-          <span class="text-sm text-(--ui-text-muted)">RON</span>
+          <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
           <UBadge v-if="monthChange !== null" :color="monthChange > 0 ? 'error' : 'success'" variant="subtle" size="xs">
             <UIcon :name="monthChange > 0 ? 'i-lucide-trending-up' : 'i-lucide-trending-down'" class="size-3 mr-0.5" />
             {{ Math.abs(monthChange) }}%
@@ -103,7 +104,7 @@ function getBarColor(status: string): string {
 
         <!-- Total label -->
         <div class="flex items-center gap-1.5 mb-3">
-          <span class="text-xs text-(--ui-text-muted)">{{ $t('common.total') }}: {{ formatMoney(incomingAmount) }} RON</span>
+          <span class="text-xs text-(--ui-text-muted)">{{ $t('common.total') }}: {{ formatMoney(incomingAmount) }} {{ currency ?? 'RON' }}</span>
         </div>
 
         <!-- Description -->

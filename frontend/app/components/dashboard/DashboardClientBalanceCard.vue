@@ -3,6 +3,7 @@ import type { RecentActivityItem } from '~/stores/dashboard'
 
 const props = defineProps<{
   recentActivity: RecentActivityItem[]
+  currency?: string
   loading?: boolean
 }>()
 
@@ -58,7 +59,7 @@ function formatMoney(amount: number) {
           <div v-for="client in topClients" :key="client.name" class="space-y-1">
             <div class="flex items-center justify-between text-sm">
               <span class="text-(--ui-text-muted) truncate mr-2">{{ client.name }}</span>
-              <span class="font-semibold text-(--ui-text) tabular-nums whitespace-nowrap">{{ formatMoney(client.amount) }} RON</span>
+              <span class="font-semibold text-(--ui-text) tabular-nums whitespace-nowrap">{{ formatMoney(client.amount) }} {{ currency ?? 'RON' }}</span>
             </div>
             <div class="h-1.5 bg-(--ui-bg-elevated) rounded-full overflow-hidden">
               <div

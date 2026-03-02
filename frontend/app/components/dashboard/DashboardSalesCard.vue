@@ -5,6 +5,7 @@ const props = defineProps<{
   amount: string | number
   invoiceCount: number
   monthlyData: MonthlyTotal[]
+  currency?: string
   loading?: boolean
 }>()
 
@@ -114,7 +115,7 @@ const sparklineLabels = computed(() => {
             <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
               {{ formatMoney(currentMonthAmount) }}
             </span>
-            <span class="text-sm text-(--ui-text-muted)">RON</span>
+            <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
           </div>
 
           <!-- Stats row -->
@@ -125,7 +126,7 @@ const sparklineLabels = computed(() => {
             </div>
             <div class="text-right">
               <span class="text-(--ui-text-muted)">{{ $t('dashboard.cards.avgDaily') }}</span>
-              <div class="font-semibold text-(--ui-text) tabular-nums">{{ formatMoney(avgDailyValue) }} RON</div>
+              <div class="font-semibold text-(--ui-text) tabular-nums">{{ formatMoney(avgDailyValue) }} {{ currency ?? 'RON' }}</div>
             </div>
           </div>
 

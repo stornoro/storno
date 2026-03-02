@@ -35,6 +35,7 @@ export interface DashboardStatsResponse {
     outgoing: string
   }
   payments?: PaymentStats
+  currency?: string
 }
 
 export interface RecentActivityItem {
@@ -92,6 +93,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const outstandingAmount = computed(() => stats.value?.payments?.outstandingAmount ?? '0.00')
   const overdueCount = computed(() => stats.value?.payments?.overdueCount ?? 0)
   const overdueAmount = computed(() => stats.value?.payments?.overdueAmount ?? '0.00')
+  const currency = computed(() => stats.value?.currency ?? 'RON')
 
   // ── Actions ────────────────────────────────────────────────────────
   async function fetchStats(params?: { dateFrom?: string; dateTo?: string }): Promise<void> {
@@ -149,6 +151,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     outstandingAmount,
     overdueCount,
     overdueAmount,
+    currency,
 
     // Actions
     fetchStats,

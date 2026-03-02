@@ -2,6 +2,7 @@
 const props = defineProps<{
   overdueAmount: string | number
   outstandingAmount: string | number
+  currency?: string
   loading?: boolean
 }>()
 
@@ -37,7 +38,7 @@ function formatMoney(amount: string | number) {
               <span class="text-2xl font-semibold text-(--ui-text) tabular-nums">
                 {{ formatMoney(overdueAmount) }}
               </span>
-              <span class="text-sm text-(--ui-text-muted)">RON</span>
+              <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
             </div>
           </div>
 
@@ -48,7 +49,7 @@ function formatMoney(amount: string | number) {
               <span class="text-2xl font-semibold text-(--ui-text) tabular-nums">
                 {{ formatMoney(outstandingAmount) }}
               </span>
-              <span class="text-sm text-(--ui-text-muted)">RON</span>
+              <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
             </div>
           </div>
         </div>
