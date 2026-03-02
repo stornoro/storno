@@ -5,6 +5,7 @@ mobile/
 status/
 storno-cli/
 stripe-app/
+webhook-relay/
 zapier-app/
 
 # OS / IDE
