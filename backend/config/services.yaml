@@ -345,5 +345,10 @@ services:
         arguments:
             $inner: '@.inner'
 
+    App\MessageHandler\DispatchWebhookHandler:
+        arguments:
+            $webhookRelayUrl: '%env(default::WEBHOOK_RELAY_URL)%'
+            $webhookRelaySecret: '%env(default::WEBHOOK_RELAY_SECRET)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

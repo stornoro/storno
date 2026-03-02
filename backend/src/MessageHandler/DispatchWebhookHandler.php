@@ -20,6 +20,9 @@ class DispatchWebhookHandler
     private const MAX_ATTEMPTS = 3;
     private const RETRY_DELAYS_MS = [60_000, 300_000, 900_000]; // 1min, 5min, 15min
 
+    private readonly ?string $webhookRelayUrl;
+    private readonly ?string $webhookRelaySecret;
+
     public function __construct(
         private readonly WebhookEndpointRepository $endpointRepository,
         private readonly WebhookDeliveryRepository $deliveryRepository,
@@ -27,7 +30,12 @@ class DispatchWebhookHandler
         private readonly HttpClientInterface $httpClient,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?string $webhookRelayUrl = null,
+        ?string $webhookRelaySecret = null,
+    ) {
+        $this->webhookRelayUrl = $webhookRelayUrl ?: null;
+        $this->webhookRelaySecret = $webhookRelaySecret ?: null;
+    }
 
     public function __invoke(DispatchWebhookMessage $message): void
     {
@@ -58,21 +66,46 @@ class DispatchWebhookHandler
 
         $startTime = hrtime(true);
 
-        try {
-            $response = $this->httpClient->request('POST', $endpoint->getUrl(), [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'X-Webhook-Signature' => $signature,
-                    'X-Webhook-Event' => $message->eventType,
-                    'X-Webhook-Id' => $delivery->getId()->toRfc4122(),
-                    'User-Agent' => 'Storno-Webhook/1.0',
-                ],
-                'body' => $jsonPayload,
-                'timeout' => 10,
-            ]);
+        $webhookHeaders = [
+            'Content-Type' => 'application/json',
+            'X-Webhook-Signature' => $signature,
+            'X-Webhook-Event' => $message->eventType,
+            'X-Webhook-Id' => $delivery->getId()->toRfc4122(),
+            'User-Agent' => 'Storno-Webhook/1.0',
+        ];
 
-            $statusCode = $response->getStatusCode();
-            $responseBody = $response->getContent(false);
+        try {
+            if ($this->webhookRelayUrl && $this->webhookRelaySecret) {
+                $relayBody = json_encode([
+                    'target_url' => $endpoint->getUrl(),
+                    'method' => 'POST',
+                    'headers' => $webhookHeaders,
+                    'body' => $jsonPayload,
+                ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+                $relayResponse = $this->httpClient->request('POST', $this->webhookRelayUrl, [
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'Authorization' => 'Bearer ' . $this->webhookRelaySecret,
+                    ],
+                    'body' => $relayBody,
+                    'timeout' => 15,
+                ]);
+
+                $relayData = json_decode($relayResponse->getContent(false), true);
+                $statusCode = $relayData['status'] ?? 0;
+                $responseBody = $relayData['body'] ?? ($relayData['error'] ?? '');
+            } else {
+                $response = $this->httpClient->request('POST', $endpoint->getUrl(), [
+                    'headers' => $webhookHeaders,
+                    'body' => $jsonPayload,
+                    'timeout' => 10,
+                ]);
+
+                $statusCode = $response->getStatusCode();
+                $responseBody = $response->getContent(false);
+            }
+
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
 
             $delivery->setResponseStatusCode($statusCode);
