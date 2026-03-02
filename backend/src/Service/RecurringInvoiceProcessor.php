@@ -302,9 +302,35 @@ class RecurringInvoiceProcessor
             return null;
         }
 
-        return str_replace(
-            ['[[luna]]', '[[an]]', '[[luna_nr]]', '[[curs]]'],
-            [self::ROMANIAN_MONTHS[$month], (string) $year, str_pad((string) $month, 2, '0', STR_PAD_LEFT), $rateText],
+        return preg_replace_callback(
+            '/\[\[(luna|luna_nr|an)([+-]\d+)?\]\]|\[\[curs\]\]/',
+            function (array $m) use ($month, $year, $rateText): string {
+                // [[curs]]
+                if ($m[0] === '[[curs]]') {
+                    return $rateText;
+                }
+
+                $type = $m[1];
+                $offset = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
+
+                if ($type === 'an') {
+                    return (string) ($year + $offset);
+                }
+
+                // For luna / luna_nr, use DateTime to handle year wraparound
+                $base = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
+                if ($offset !== 0) {
+                    $base->modify(sprintf('%+d months', $offset));
+                }
+                $adjMonth = (int) $base->format('n');
+
+                if ($type === 'luna') {
+                    return self::ROMANIAN_MONTHS[$adjMonth];
+                }
+
+                // luna_nr
+                return str_pad((string) $adjMonth, 2, '0', STR_PAD_LEFT);
+            },
             $text,
         );
     }
