@@ -387,6 +387,15 @@ class InvoiceManager
             $this->setLines($invoice, $data['lines']);
         }
 
+        // Opt-in: auto-apply reverse charge / OSS VAT rules
+        if (!empty($data['autoApplyVatRules'])) {
+            $invoiceClient = $invoice->getClient();
+            $company = $invoice->getCompany();
+            if ($invoiceClient && $company) {
+                $this->applyVatRules($invoice, $invoiceClient, $company);
+            }
+        }
+
         // Recalculate totals
         $this->recalculateTotals($invoice);
 
