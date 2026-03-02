@@ -125,6 +125,9 @@ class EFacturaXmlParser
         // Attachments from AdditionalDocumentReference
         $attachments = $this->parseAttachments($root);
 
+        // Parse UBL extensions
+        $ublExtensions = $this->parseUblExtensions($root, $lineTag);
+
         return new ParsedInvoice(
             number: $this->getElementValue($root, self::NS_CBC, 'ID'),
             issueDate: $this->getElementValue($root, self::NS_CBC, 'IssueDate'),
@@ -142,6 +145,7 @@ class EFacturaXmlParser
             deliveryLocation: $deliveryLocation,
             projectReference: $projectReference,
             attachments: $attachments,
+            ublExtensions: $ublExtensions['document'] ?? null,
         );
     }
 
@@ -290,6 +294,9 @@ class EFacturaXmlParser
             // Calculate VAT amount for line
             $vatAmount = bcmul($lineTotal, bcdiv($vatRate, '100', 6), 2);
 
+            // Parse line-level UBL extensions
+            $lineUblExtensions = $this->parseLineUblExtensions($lineEl);
+
             $lines[] = new ParsedInvoiceLine(
                 description: $description,
                 quantity: $quantity,
@@ -299,6 +306,7 @@ class EFacturaXmlParser
                 vatCategoryCode: $vatCategoryCode,
                 vatAmount: $vatAmount,
                 lineTotal: $lineTotal,
+                ublExtensions: $lineUblExtensions,
             );
         }
 
@@ -413,6 +421,231 @@ class EFacturaXmlParser
 
         // Full name → ISO code
         return $nameToCode[$code] ?? $value;
+    }
+
+    /**
+     * Parse UBL extensions from the XML for both document and line levels.
+     *
+     * @return array{document: ?array, lines: array<int, ?array>}
+     */
+    private function parseUblExtensions(\DOMElement $root, string $lineTag): array
+    {
+        $docExtensions = [];
+
+        // Document-level InvoicePeriod
+        $periodEl = $this->getFirstElement($root, self::NS_CAC, 'InvoicePeriod');
+        if ($periodEl) {
+            $period = [];
+            $startDate = $this->getElementValue($periodEl, self::NS_CBC, 'StartDate');
+            $endDate = $this->getElementValue($periodEl, self::NS_CBC, 'EndDate');
+            $descCode = $this->getElementValue($periodEl, self::NS_CBC, 'DescriptionCode');
+            if ($startDate) $period['startDate'] = $startDate;
+            if ($endDate) $period['endDate'] = $endDate;
+            if ($descCode) $period['descriptionCode'] = $descCode;
+            if ($period) {
+                $docExtensions['invoicePeriod'] = $period;
+            }
+        }
+
+        // Document-level Delivery (structured)
+        $deliveryEl = $this->getFirstElement($root, self::NS_CAC, 'Delivery');
+        if ($deliveryEl) {
+            $delivery = [];
+            $actualDate = $this->getElementValue($deliveryEl, self::NS_CBC, 'ActualDeliveryDate');
+            if ($actualDate) {
+                $delivery['actualDeliveryDate'] = $actualDate;
+            }
+            $deliveryLocEl = $this->getFirstElement($deliveryEl, self::NS_CAC, 'DeliveryLocation');
+            if ($deliveryLocEl) {
+                $addressEl = $this->getFirstElement($deliveryLocEl, self::NS_CAC, 'Address');
+                if ($addressEl) {
+                    $addr = [];
+                    $street = $this->getElementValue($addressEl, self::NS_CBC, 'StreetName');
+                    $city = $this->getElementValue($addressEl, self::NS_CBC, 'CityName');
+                    $subentity = $this->getElementValue($addressEl, self::NS_CBC, 'CountrySubentity');
+                    $postalZone = $this->getElementValue($addressEl, self::NS_CBC, 'PostalZone');
+                    $countryEl = $this->getFirstElement($addressEl, self::NS_CAC, 'Country');
+                    $countryCode = $countryEl ? $this->getElementValue($countryEl, self::NS_CBC, 'IdentificationCode') : null;
+
+                    if ($street) $addr['streetName'] = $street;
+                    if ($city) $addr['cityName'] = $city;
+                    if ($subentity) $addr['countrySubentity'] = $subentity;
+                    if ($postalZone) $addr['postalZone'] = $postalZone;
+                    if ($countryCode) $addr['countryCode'] = $countryCode;
+                    if ($addr) {
+                        $delivery['deliveryAddress'] = $addr;
+                    }
+                }
+            }
+            if ($delivery) {
+                $docExtensions['delivery'] = $delivery;
+            }
+        }
+
+        // Document-level AllowanceCharge
+        $acElements = $root->getElementsByTagNameNS(self::NS_CAC, 'AllowanceCharge');
+        $docAllowanceCharges = [];
+        foreach ($acElements as $acEl) {
+            if (!$acEl instanceof \DOMElement) continue;
+            // Only process direct children of root (document-level), not line-level
+            if ($acEl->parentNode !== $root) continue;
+
+            $chargeIndicator = $this->getElementValue($acEl, self::NS_CBC, 'ChargeIndicator');
+            $amount = $this->getElementValue($acEl, self::NS_CBC, 'Amount');
+            if ($amount === null) continue;
+
+            $ac = [
+                'chargeIndicator' => $chargeIndicator === 'true',
+                'amount' => $amount,
+            ];
+
+            $reasonCode = $this->getElementValue($acEl, self::NS_CBC, 'AllowanceChargeReasonCode');
+            $reason = $this->getElementValue($acEl, self::NS_CBC, 'AllowanceChargeReason');
+            $multiplier = $this->getElementValue($acEl, self::NS_CBC, 'MultiplierFactorNumeric');
+            $baseAmount = $this->getElementValue($acEl, self::NS_CBC, 'BaseAmount');
+
+            if ($reasonCode) $ac['reasonCode'] = $reasonCode;
+            if ($reason) $ac['reason'] = $reason;
+            if ($multiplier) $ac['multiplierFactorNumeric'] = $multiplier;
+            if ($baseAmount) $ac['baseAmount'] = $baseAmount;
+
+            // TaxCategory
+            $taxCatEl = $this->getFirstElement($acEl, self::NS_CAC, 'TaxCategory');
+            if ($taxCatEl) {
+                $catId = $this->getElementValue($taxCatEl, self::NS_CBC, 'ID');
+                $catPercent = $this->getElementValue($taxCatEl, self::NS_CBC, 'Percent');
+                if ($catId) $ac['taxCategoryCode'] = $catId;
+                if ($catPercent) $ac['taxRate'] = $catPercent;
+            }
+
+            $docAllowanceCharges[] = $ac;
+        }
+        if ($docAllowanceCharges) {
+            $docExtensions['allowanceCharges'] = $docAllowanceCharges;
+        }
+
+        // PrepaidAmount from LegalMonetaryTotal
+        $monetaryTotal = $this->getFirstElement($root, self::NS_CAC, 'LegalMonetaryTotal');
+        if ($monetaryTotal) {
+            $prepaid = $this->getElementValue($monetaryTotal, self::NS_CBC, 'PrepaidAmount');
+            if ($prepaid && bccomp($prepaid, '0.00', 2) !== 0) {
+                $docExtensions['prepaidAmount'] = $prepaid;
+            }
+        }
+
+        // AdditionalDocumentReferences (excluding DocumentTypeCode=130 which is invoicedObjectIdentifier, and excluding those with attachments)
+        $docRefs = $root->getElementsByTagNameNS(self::NS_CAC, 'AdditionalDocumentReference');
+        $additionalRefs = [];
+        foreach ($docRefs as $docRef) {
+            if (!$docRef instanceof \DOMElement) continue;
+
+            // Skip if it has an Attachment (those are parsed separately)
+            $attachmentEl = $this->getFirstElement($docRef, self::NS_CAC, 'Attachment');
+            if ($attachmentEl) continue;
+
+            $refId = $this->getElementValue($docRef, self::NS_CBC, 'ID');
+            if (!$refId) continue;
+
+            $typeCode = $this->getElementValue($docRef, self::NS_CBC, 'DocumentTypeCode');
+            // Skip DocumentTypeCode=130 (already mapped to invoicedObjectIdentifier)
+            if ($typeCode === '130') continue;
+
+            $ref = ['id' => $refId];
+            if ($typeCode) $ref['documentTypeCode'] = $typeCode;
+            $desc = $this->getElementValue($docRef, self::NS_CBC, 'DocumentDescription');
+            if ($desc) $ref['documentDescription'] = $desc;
+
+            $additionalRefs[] = $ref;
+        }
+        if ($additionalRefs) {
+            $docExtensions['additionalDocumentReferences'] = $additionalRefs;
+        }
+
+        // Line-level extensions are parsed inside parseLines via parsedLine->ublExtensions
+        return [
+            'document' => $docExtensions ?: null,
+            'lines' => [], // Line extensions handled in parseLines
+        ];
+    }
+
+    /**
+     * Parse line-level UBL extensions from an InvoiceLine/CreditNoteLine element.
+     */
+    private function parseLineUblExtensions(\DOMElement $lineEl): ?array
+    {
+        $ext = [];
+
+        // InvoicePeriod on line
+        $periodEl = $this->getFirstElement($lineEl, self::NS_CAC, 'InvoicePeriod');
+        if ($periodEl) {
+            $period = [];
+            $startDate = $this->getElementValue($periodEl, self::NS_CBC, 'StartDate');
+            $endDate = $this->getElementValue($periodEl, self::NS_CBC, 'EndDate');
+            if ($startDate) $period['startDate'] = $startDate;
+            if ($endDate) $period['endDate'] = $endDate;
+            if ($period) {
+                $ext['invoicePeriod'] = $period;
+            }
+        }
+
+        // AllowanceCharge on line
+        $acElements = $lineEl->getElementsByTagNameNS(self::NS_CAC, 'AllowanceCharge');
+        $lineAcs = [];
+        foreach ($acElements as $acEl) {
+            if (!$acEl instanceof \DOMElement) continue;
+            if ($acEl->parentNode !== $lineEl) continue;
+
+            $chargeIndicator = $this->getElementValue($acEl, self::NS_CBC, 'ChargeIndicator');
+            $amount = $this->getElementValue($acEl, self::NS_CBC, 'Amount');
+            if ($amount === null) continue;
+
+            $ac = [
+                'chargeIndicator' => $chargeIndicator === 'true',
+                'amount' => $amount,
+            ];
+            $reasonCode = $this->getElementValue($acEl, self::NS_CBC, 'AllowanceChargeReasonCode');
+            $reason = $this->getElementValue($acEl, self::NS_CBC, 'AllowanceChargeReason');
+            $multiplier = $this->getElementValue($acEl, self::NS_CBC, 'MultiplierFactorNumeric');
+            $baseAmount = $this->getElementValue($acEl, self::NS_CBC, 'BaseAmount');
+            if ($reasonCode) $ac['reasonCode'] = $reasonCode;
+            if ($reason) $ac['reason'] = $reason;
+            if ($multiplier) $ac['multiplierFactorNumeric'] = $multiplier;
+            if ($baseAmount) $ac['baseAmount'] = $baseAmount;
+
+            $lineAcs[] = $ac;
+        }
+        if ($lineAcs) {
+            $ext['allowanceCharges'] = $lineAcs;
+        }
+
+        // AdditionalItemProperty inside Item
+        $itemEl = $this->getFirstElement($lineEl, self::NS_CAC, 'Item');
+        if ($itemEl) {
+            $propElements = $itemEl->getElementsByTagNameNS(self::NS_CAC, 'AdditionalItemProperty');
+            $props = [];
+            foreach ($propElements as $propEl) {
+                if (!$propEl instanceof \DOMElement) continue;
+                $name = $this->getElementValue($propEl, self::NS_CBC, 'Name');
+                $value = $this->getElementValue($propEl, self::NS_CBC, 'Value');
+                if ($name && $value !== null) {
+                    $props[] = ['name' => $name, 'value' => $value];
+                }
+            }
+            if ($props) {
+                $ext['additionalItemProperties'] = $props;
+            }
+
+            // OriginCountry inside Item
+            $originEl = $this->getFirstElement($itemEl, self::NS_CAC, 'OriginCountry');
+            if ($originEl) {
+                $code = $this->getElementValue($originEl, self::NS_CBC, 'IdentificationCode');
+                if ($code) {
+                    $ext['originCountry'] = $code;
+                }
+            }
+        }
+
+        return $ext ?: null;
     }
 
     /**

@@ -21,6 +21,7 @@ use App\Repository\StripeConnectAccountRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\EuVatRateService;
 use App\Service\ReverseChargeHelper;
+use App\Validator\UblExtensionsValidator;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -45,6 +46,7 @@ class InvoiceManager
         private readonly MessageBusInterface $messageBus,
         private readonly AnafTokenResolver $anafTokenResolver,
         private readonly EuVatRateService $euVatRateService,
+        private readonly UblExtensionsValidator $ublExtensionsValidator,
     ) {}
 
     public function find(string $uuid): ?Invoice
@@ -164,6 +166,13 @@ class InvoiceManager
 
         if (isset($data['exchangeRate'])) {
             $invoice->setExchangeRate($data['exchangeRate']);
+        }
+
+        // UBL extensions
+        if (isset($data['ublExtensions'])) {
+            $invoice->setUblExtensions(
+                $this->ublExtensionsValidator->validateDocumentExtensions($data['ublExtensions'])
+            );
         }
 
         // Link to parent document (for refund)
@@ -365,6 +374,13 @@ class InvoiceManager
             $invoice->setPayeeLegalRegistrationIdentifier($data['payeeLegalRegistrationIdentifier']);
         }
 
+        // UBL extensions
+        if (array_key_exists('ublExtensions', $data)) {
+            $invoice->setUblExtensions(
+                $this->ublExtensionsValidator->validateDocumentExtensions($data['ublExtensions'])
+            );
+        }
+
         if (isset($data['language'])) {
             $invoice->setLanguage($data['language']);
         }
@@ -508,15 +524,27 @@ class InvoiceManager
 
         // Assign final number from DocumentSeries with pessimistic lock
         $series = $invoice->getDocumentSeries();
-        if ($series) {
-            $this->entityManager->wrapInTransaction(function () use ($series, $invoice) {
-                $this->entityManager->lock($series, LockMode::PESSIMISTIC_WRITE);
-                $this->entityManager->refresh($series);
-                $newNumber = $series->getCurrentNumber() + 1;
-                $series->setCurrentNumber($newNumber);
-                $invoice->setNumber($series->getPrefix() . str_pad((string) $newNumber, 4, '0', STR_PAD_LEFT));
-            });
+        if (!$series) {
+            // Auto-assign default series if none was set
+            $company = $invoice->getCompany();
+            $docType = $invoice->getDocumentType()?->value ?? 'invoice';
+            if ($company) {
+                $series = $this->documentSeriesRepository->findDefaultByType($company, $docType);
+                if ($series) {
+                    $invoice->setDocumentSeries($series);
+                }
+            }
         }
+        if (!$series) {
+            throw new \DomainException('Nu se poate emite factura fără o serie de document. Creați o serie în setări.');
+        }
+        $this->entityManager->wrapInTransaction(function () use ($series, $invoice) {
+            $this->entityManager->lock($series, LockMode::PESSIMISTIC_WRITE);
+            $this->entityManager->refresh($series);
+            $newNumber = $series->getCurrentNumber() + 1;
+            $series->setCurrentNumber($newNumber);
+            $invoice->setNumber($series->getPrefix() . str_pad((string) $newNumber, 4, '0', STR_PAD_LEFT));
+        });
 
         $isRefund = $invoice->getParentDocument() !== null;
         $previousStatus = $invoice->getStatus();

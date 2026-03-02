@@ -67,4 +67,7 @@ interface DocumentLineInterface
 
     public function getCpvCode(): ?string;
     public function setCpvCode(?string $cpvCode): static;
+
+    public function getUblExtensions(): ?array;
+    public function setUblExtensions(?array $ublExtensions): static;
 }

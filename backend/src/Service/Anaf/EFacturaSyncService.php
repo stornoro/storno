@@ -487,6 +487,9 @@ class EFacturaSyncService
         if ($parsed->projectReference) {
             $invoice->setProjectReference($parsed->projectReference);
         }
+        if ($parsed->ublExtensions) {
+            $invoice->setUblExtensions($parsed->ublExtensions);
+        }
 
         // Extract upload ID from message details
         $payload = $message['detalii'] ?? '';
@@ -553,6 +556,9 @@ class EFacturaSyncService
             $line->setVatCategoryCode($parsedLine->vatCategoryCode);
             $line->setVatAmount($parsedLine->vatAmount);
             $line->setLineTotal($parsedLine->lineTotal);
+            if ($parsedLine->ublExtensions) {
+                $line->setUblExtensions($parsedLine->ublExtensions);
+            }
 
             // Find-or-create product
             if ($parsedLine->description) {
