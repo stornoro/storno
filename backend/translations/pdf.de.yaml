@@ -53,6 +53,7 @@ sales_agent: 'Vertriebsmitarbeiter'
 
 # Footer
 footer_text: 'Erstellt mit'
+legal_disclaimer: 'Diese Rechnung ist ohne Unterschrift und Stempel gemaess der geltenden Steuergesetzgebung gultig.'
 
 # Invoice
 invoice_title: 'RECHNUNG'

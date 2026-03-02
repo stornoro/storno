@@ -53,6 +53,7 @@ sales_agent: 'Sales agent'
 
 # Footer
 footer_text: 'Issued via'
+legal_disclaimer: 'This invoice is valid without signature and stamp according to applicable fiscal legislation.'
 
 # Invoice
 invoice_title: 'INVOICE'
