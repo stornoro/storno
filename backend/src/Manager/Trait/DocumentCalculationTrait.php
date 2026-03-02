@@ -3,6 +3,7 @@
 namespace App\Manager\Trait;
 
 use App\Entity\DocumentLineInterface;
+use App\Validator\UblExtensionsValidator;
 
 /**
  * Shared line population and total calculation logic for document managers.
@@ -42,6 +43,12 @@ trait DocumentCalculationTrait
         $line->setBuyerItemIdentification($data['buyerItemIdentification'] ?? null);
         $line->setStandardItemIdentification($data['standardItemIdentification'] ?? null);
         $line->setCpvCode($data['cpvCode'] ?? null);
+
+        // UBL extensions (line-level)
+        if (isset($data['ublExtensions'])) {
+            $validator = isset($this->ublExtensionsValidator) ? $this->ublExtensionsValidator : new UblExtensionsValidator();
+            $line->setUblExtensions($validator->validateLineExtensions($data['ublExtensions']));
+        }
 
         $this->calculateLineTotals($line);
     }

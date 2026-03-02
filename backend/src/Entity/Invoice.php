@@ -379,6 +379,10 @@ class Invoice
     #[Groups(['invoice:detail'])]
     private ?string $payeeLegalRegistrationIdentifier = null;
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['invoice:detail'])]
+    private ?array $ublExtensions = null;
+
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['invoice:detail'])]
     private bool $penaltyEnabled = false;
@@ -1118,6 +1122,18 @@ class Invoice
     public function getBalance(): string
     {
         return bcsub($this->total, $this->amountPaid, 2);
+    }
+
+    public function getUblExtensions(): ?array
+    {
+        return $this->ublExtensions;
+    }
+
+    public function setUblExtensions(?array $ublExtensions): static
+    {
+        $this->ublExtensions = $ublExtensions;
+
+        return $this;
     }
 
     public function isPenaltyEnabled(): bool

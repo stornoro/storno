@@ -106,6 +106,14 @@ class UblXmlGenerator
             $this->addElement($dom, $root, 'cbc:Note', $invoice->getNotes());
         }
 
+        // UBL extensions
+        $extensions = $invoice->getUblExtensions() ?? [];
+
+        // InvoicePeriod from ublExtensions (after Note, before DocumentCurrencyCode per XSD)
+        if (!empty($extensions['invoicePeriod'])) {
+            $this->addInvoicePeriod($dom, $root, $extensions['invoicePeriod']);
+        }
+
         // [BR-RO-030] DocumentCurrencyCode and TaxCurrencyCode
         $this->addElement($dom, $root, 'cbc:DocumentCurrencyCode', $invoice->getCurrency());
         if ($invoice->getCurrency() !== 'RON') {
@@ -180,6 +188,21 @@ class UblXmlGenerator
             $root->appendChild($additionalRef);
         }
 
+        // AdditionalDocumentReferences from ublExtensions
+        if (!empty($extensions['additionalDocumentReferences'])) {
+            foreach ($extensions['additionalDocumentReferences'] as $ref) {
+                $extRef = $dom->createElement('cac:AdditionalDocumentReference');
+                $this->addElement($dom, $extRef, 'cbc:ID', $ref['id']);
+                if (!empty($ref['documentTypeCode'])) {
+                    $this->addElement($dom, $extRef, 'cbc:DocumentTypeCode', $ref['documentTypeCode']);
+                }
+                if (!empty($ref['documentDescription'])) {
+                    $this->addElement($dom, $extRef, 'cbc:DocumentDescription', $ref['documentDescription']);
+                }
+                $root->appendChild($extRef);
+            }
+        }
+
         // ProjectReference (BT-11)
         if ($invoice->getProjectReference()) {
             $projectRef = $dom->createElement('cac:ProjectReference');
@@ -195,6 +218,11 @@ class UblXmlGenerator
         // AccountingCustomerParty (Client)
         $this->addCustomerParty($dom, $root, $client);
 
+        // Delivery from ublExtensions (after AccountingCustomerParty, before PayeeParty per XSD)
+        if (!empty($extensions['delivery'])) {
+            $this->addDeliveryElement($dom, $root, $extensions['delivery']);
+        }
+
         // PayeeParty (BT-59, BT-60, BT-61)
         $this->addPayeeParty($dom, $root, $invoice);
 
@@ -206,18 +234,26 @@ class UblXmlGenerator
         // PaymentTerms [BR-CO-25]
         $this->addPaymentTerms($dom, $root, $invoice, $isCreditNote);
 
+        // Document-level AllowanceCharge from ublExtensions (after PaymentTerms, before TaxTotal per XSD)
+        $allowanceTotal = '0.00';
+        $chargeTotal = '0.00';
+        if (!empty($extensions['allowanceCharges'])) {
+            [$allowanceTotal, $chargeTotal] = $this->addDocumentAllowanceCharges($dom, $root, $extensions['allowanceCharges'], $invoice->getCurrency());
+        }
+
         // === Tax ===
 
         // TaxTotal with VAT breakdown [BR-CO-18] [BR-S-01]
-        $this->addTaxTotal($dom, $root, $invoice);
+        $this->addTaxTotal($dom, $root, $invoice, $extensions);
 
         // [BR-RO-030] Second TaxTotal in RON when invoice currency is not RON
         if ($invoice->getCurrency() !== 'RON') {
-            $this->addTaxTotalInRon($dom, $root, $invoice);
+            $this->addTaxTotalInRon($dom, $root, $invoice, $extensions);
         }
 
         // Legal monetary total
-        $this->addLegalMonetaryTotal($dom, $root, $invoice);
+        $prepaidAmount = $extensions['prepaidAmount'] ?? '0.00';
+        $this->addLegalMonetaryTotal($dom, $root, $invoice, $allowanceTotal, $chargeTotal, $prepaidAmount);
 
         // === Lines ===
 
@@ -508,13 +544,8 @@ class UblXmlGenerator
         }
     }
 
-    private function addTaxTotal(\DOMDocument $dom, \DOMElement $root, Invoice $invoice): void
+    private function addTaxTotal(\DOMDocument $dom, \DOMElement $root, Invoice $invoice, array $extensions = []): void
     {
-        $taxTotal = $dom->createElement('cac:TaxTotal');
-        $taxAmountEl = $dom->createElement('cbc:TaxAmount', $invoice->getVatTotal());
-        $taxAmountEl->setAttribute('currencyID', $invoice->getCurrency());
-        $taxTotal->appendChild($taxAmountEl);
-
         // Group lines by VAT category code + rate for TaxSubtotal breakdown (BG-23)
         $vatGroups = [];
         foreach ($invoice->getLines() as $line) {
@@ -531,6 +562,49 @@ class UblXmlGenerator
             $vatGroups[$key]['taxableAmount'] = bcadd($vatGroups[$key]['taxableAmount'], $line->getLineTotal(), 2);
             $vatGroups[$key]['taxAmount'] = bcadd($vatGroups[$key]['taxAmount'], $line->getVatAmount(), 2);
         }
+
+        // Adjust VAT groups with document-level allowance/charge contributions
+        if (!empty($extensions['allowanceCharges'])) {
+            foreach ($extensions['allowanceCharges'] as $ac) {
+                $catCode = $ac['taxCategoryCode'] ?? 'S';
+                $rate = $ac['taxRate'] ?? '0.00';
+                $normalizedCode = $this->normalizeVatCategoryCode($catCode, $rate);
+                $key = $normalizedCode . '_' . $rate;
+
+                if (!isset($vatGroups[$key])) {
+                    $vatGroups[$key] = [
+                        'categoryCode' => $normalizedCode,
+                        'rate' => $rate,
+                        'taxableAmount' => '0.00',
+                        'taxAmount' => '0.00',
+                    ];
+                }
+
+                $amount = $ac['amount'];
+                $vatOnAc = bcmul($amount, bcdiv($rate, '100', 6), 2);
+
+                if ($ac['chargeIndicator']) {
+                    // Charge increases taxable amount
+                    $vatGroups[$key]['taxableAmount'] = bcadd($vatGroups[$key]['taxableAmount'], $amount, 2);
+                    $vatGroups[$key]['taxAmount'] = bcadd($vatGroups[$key]['taxAmount'], $vatOnAc, 2);
+                } else {
+                    // Allowance decreases taxable amount
+                    $vatGroups[$key]['taxableAmount'] = bcsub($vatGroups[$key]['taxableAmount'], $amount, 2);
+                    $vatGroups[$key]['taxAmount'] = bcsub($vatGroups[$key]['taxAmount'], $vatOnAc, 2);
+                }
+            }
+        }
+
+        // Calculate total tax amount
+        $totalTaxAmount = '0.00';
+        foreach ($vatGroups as $group) {
+            $totalTaxAmount = bcadd($totalTaxAmount, $group['taxAmount'], 2);
+        }
+
+        $taxTotal = $dom->createElement('cac:TaxTotal');
+        $taxAmountEl = $dom->createElement('cbc:TaxAmount', $totalTaxAmount);
+        $taxAmountEl->setAttribute('currencyID', $invoice->getCurrency());
+        $taxTotal->appendChild($taxAmountEl);
 
         foreach ($vatGroups as $group) {
             $taxSubtotal = $dom->createElement('cac:TaxSubtotal');
@@ -571,7 +645,7 @@ class UblXmlGenerator
      * [BR-RO-030] Second TaxTotal in RON when invoice currency is not RON.
      * [BR-53] When TaxCurrencyCode is present, Invoice total VAT amount in accounting currency must be provided.
      */
-    private function addTaxTotalInRon(\DOMDocument $dom, \DOMElement $root, Invoice $invoice): void
+    private function addTaxTotalInRon(\DOMDocument $dom, \DOMElement $root, Invoice $invoice, array $extensions = []): void
     {
         $rate = $invoice->getExchangeRate()
             ? (float) $invoice->getExchangeRate()
@@ -583,7 +657,21 @@ class UblXmlGenerator
             );
         }
 
-        $vatInRon = bcmul($invoice->getVatTotal(), (string) $rate, 2);
+        // Compute adjusted VAT total (same logic as addTaxTotal)
+        $adjustedVat = $invoice->getVatTotal();
+        if (!empty($extensions['allowanceCharges'])) {
+            foreach ($extensions['allowanceCharges'] as $ac) {
+                $acRate = $ac['taxRate'] ?? '0.00';
+                $vatOnAc = bcmul($ac['amount'], bcdiv($acRate, '100', 6), 2);
+                if ($ac['chargeIndicator']) {
+                    $adjustedVat = bcadd($adjustedVat, $vatOnAc, 2);
+                } else {
+                    $adjustedVat = bcsub($adjustedVat, $vatOnAc, 2);
+                }
+            }
+        }
+
+        $vatInRon = bcmul($adjustedVat, (string) $rate, 2);
         $taxTotalRon = $dom->createElement('cac:TaxTotal');
         $taxAmountRon = $dom->createElement('cbc:TaxAmount', $vatInRon);
         $taxAmountRon->setAttribute('currencyID', 'RON');
@@ -591,25 +679,79 @@ class UblXmlGenerator
         $root->appendChild($taxTotalRon);
     }
 
-    private function addLegalMonetaryTotal(\DOMDocument $dom, \DOMElement $root, Invoice $invoice): void
-    {
+    private function addLegalMonetaryTotal(
+        \DOMDocument $dom,
+        \DOMElement $root,
+        Invoice $invoice,
+        string $allowanceTotal = '0.00',
+        string $chargeTotal = '0.00',
+        string $prepaidAmount = '0.00',
+    ): void {
+        $currency = $invoice->getCurrency();
+        $lineExtensionAmount = $invoice->getSubtotal();
+
+        // TaxExclusiveAmount = LineExtensionAmount - allowances + charges
+        $taxExclusiveAmount = bcsub(bcadd($lineExtensionAmount, $chargeTotal, 2), $allowanceTotal, 2);
+
+        // Compute adjusted VAT for TaxInclusiveAmount
+        $adjustedVat = $invoice->getVatTotal();
+        $extensions = $invoice->getUblExtensions() ?? [];
+        if (!empty($extensions['allowanceCharges'])) {
+            foreach ($extensions['allowanceCharges'] as $ac) {
+                $rate = $ac['taxRate'] ?? '0.00';
+                $vatOnAc = bcmul($ac['amount'], bcdiv($rate, '100', 6), 2);
+                if ($ac['chargeIndicator']) {
+                    $adjustedVat = bcadd($adjustedVat, $vatOnAc, 2);
+                } else {
+                    $adjustedVat = bcsub($adjustedVat, $vatOnAc, 2);
+                }
+            }
+        }
+
+        // TaxInclusiveAmount = TaxExclusiveAmount + adjustedVat
+        $taxInclusiveAmount = bcadd($taxExclusiveAmount, $adjustedVat, 2);
+
+        // PayableAmount = TaxInclusiveAmount - prepaidAmount
+        $payableAmount = bcsub($taxInclusiveAmount, $prepaidAmount, 2);
+
         $legalTotal = $dom->createElement('cac:LegalMonetaryTotal');
 
-        $lineExtension = $dom->createElement('cbc:LineExtensionAmount', $invoice->getSubtotal());
-        $lineExtension->setAttribute('currencyID', $invoice->getCurrency());
-        $legalTotal->appendChild($lineExtension);
+        $lineExtEl = $dom->createElement('cbc:LineExtensionAmount', $lineExtensionAmount);
+        $lineExtEl->setAttribute('currencyID', $currency);
+        $legalTotal->appendChild($lineExtEl);
 
-        $taxExclusive = $dom->createElement('cbc:TaxExclusiveAmount', $invoice->getSubtotal());
-        $taxExclusive->setAttribute('currencyID', $invoice->getCurrency());
-        $legalTotal->appendChild($taxExclusive);
+        $taxExclEl = $dom->createElement('cbc:TaxExclusiveAmount', $taxExclusiveAmount);
+        $taxExclEl->setAttribute('currencyID', $currency);
+        $legalTotal->appendChild($taxExclEl);
 
-        $taxInclusive = $dom->createElement('cbc:TaxInclusiveAmount', $invoice->getTotal());
-        $taxInclusive->setAttribute('currencyID', $invoice->getCurrency());
-        $legalTotal->appendChild($taxInclusive);
+        $taxInclEl = $dom->createElement('cbc:TaxInclusiveAmount', $taxInclusiveAmount);
+        $taxInclEl->setAttribute('currencyID', $currency);
+        $legalTotal->appendChild($taxInclEl);
 
-        $payable = $dom->createElement('cbc:PayableAmount', $invoice->getTotal());
-        $payable->setAttribute('currencyID', $invoice->getCurrency());
-        $legalTotal->appendChild($payable);
+        // AllowanceTotalAmount (when non-zero)
+        if (bccomp($allowanceTotal, '0.00', 2) !== 0) {
+            $allowanceEl = $dom->createElement('cbc:AllowanceTotalAmount', $allowanceTotal);
+            $allowanceEl->setAttribute('currencyID', $currency);
+            $legalTotal->appendChild($allowanceEl);
+        }
+
+        // ChargeTotalAmount (when non-zero)
+        if (bccomp($chargeTotal, '0.00', 2) !== 0) {
+            $chargeEl = $dom->createElement('cbc:ChargeTotalAmount', $chargeTotal);
+            $chargeEl->setAttribute('currencyID', $currency);
+            $legalTotal->appendChild($chargeEl);
+        }
+
+        // PrepaidAmount (when non-zero)
+        if (bccomp($prepaidAmount, '0.00', 2) !== 0) {
+            $prepaidEl = $dom->createElement('cbc:PrepaidAmount', $prepaidAmount);
+            $prepaidEl->setAttribute('currencyID', $currency);
+            $legalTotal->appendChild($prepaidEl);
+        }
+
+        $payableEl = $dom->createElement('cbc:PayableAmount', $payableAmount);
+        $payableEl->setAttribute('currencyID', $currency);
+        $legalTotal->appendChild($payableEl);
 
         $root->appendChild($legalTotal);
     }
@@ -646,6 +788,40 @@ class UblXmlGenerator
         // BT-127 Invoice line note
         if ($line->getLineNote()) {
             $this->addElement($dom, $invoiceLine, 'cbc:Note', $line->getLineNote());
+        }
+
+        // Line-level ublExtensions
+        $lineExt = $line->getUblExtensions() ?? [];
+
+        // InvoicePeriod on line (after AccountingCost/Note, before AllowanceCharge)
+        if (!empty($lineExt['invoicePeriod'])) {
+            $this->addInvoicePeriod($dom, $invoiceLine, $lineExt['invoicePeriod']);
+        }
+
+        // AllowanceCharge on line (after InvoicePeriod, before Item)
+        if (!empty($lineExt['allowanceCharges'])) {
+            foreach ($lineExt['allowanceCharges'] as $ac) {
+                $acEl = $dom->createElement('cac:AllowanceCharge');
+                $this->addElement($dom, $acEl, 'cbc:ChargeIndicator', $ac['chargeIndicator'] ? 'true' : 'false');
+                if (!empty($ac['reasonCode'])) {
+                    $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReasonCode', $ac['reasonCode']);
+                }
+                if (!empty($ac['reason'])) {
+                    $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReason', $ac['reason']);
+                }
+                if (!empty($ac['multiplierFactorNumeric'])) {
+                    $this->addElement($dom, $acEl, 'cbc:MultiplierFactorNumeric', $ac['multiplierFactorNumeric']);
+                }
+                $acAmountEl = $dom->createElement('cbc:Amount', $ac['amount']);
+                $acAmountEl->setAttribute('currencyID', $currency);
+                $acEl->appendChild($acAmountEl);
+                if (!empty($ac['baseAmount'])) {
+                    $baseEl = $dom->createElement('cbc:BaseAmount', $ac['baseAmount']);
+                    $baseEl->setAttribute('currencyID', $currency);
+                    $acEl->appendChild($baseEl);
+                }
+                $invoiceLine->appendChild($acEl);
+            }
         }
 
         // Item [BR-RO-L1024 name max 100 chars]
@@ -689,6 +865,23 @@ class UblXmlGenerator
         $taxCategory->appendChild($lineTaxScheme);
         $item->appendChild($taxCategory);
 
+        // AdditionalItemProperty from line ublExtensions (after ClassifiedTaxCategory)
+        if (!empty($lineExt['additionalItemProperties'])) {
+            foreach ($lineExt['additionalItemProperties'] as $prop) {
+                $propEl = $dom->createElement('cac:AdditionalItemProperty');
+                $this->addElement($dom, $propEl, 'cbc:Name', $prop['name']);
+                $this->addElement($dom, $propEl, 'cbc:Value', $prop['value']);
+                $item->appendChild($propEl);
+            }
+        }
+
+        // OriginCountry from line ublExtensions
+        if (!empty($lineExt['originCountry'])) {
+            $originCountryEl = $dom->createElement('cac:OriginCountry');
+            $this->addElement($dom, $originCountryEl, 'cbc:IdentificationCode', $lineExt['originCountry']);
+            $item->appendChild($originCountryEl);
+        }
+
         $invoiceLine->appendChild($item);
 
         // Price
@@ -699,6 +892,115 @@ class UblXmlGenerator
         $invoiceLine->appendChild($price);
 
         $root->appendChild($invoiceLine);
+    }
+
+    private function addInvoicePeriod(\DOMDocument $dom, \DOMElement $parent, array $period): void
+    {
+        $periodEl = $dom->createElement('cac:InvoicePeriod');
+        if (!empty($period['startDate'])) {
+            $this->addElement($dom, $periodEl, 'cbc:StartDate', $period['startDate']);
+        }
+        if (!empty($period['endDate'])) {
+            $this->addElement($dom, $periodEl, 'cbc:EndDate', $period['endDate']);
+        }
+        if (!empty($period['descriptionCode'])) {
+            $this->addElement($dom, $periodEl, 'cbc:DescriptionCode', $period['descriptionCode']);
+        }
+        $parent->appendChild($periodEl);
+    }
+
+    private function addDeliveryElement(\DOMDocument $dom, \DOMElement $root, array $delivery): void
+    {
+        $deliveryEl = $dom->createElement('cac:Delivery');
+
+        if (!empty($delivery['actualDeliveryDate'])) {
+            $this->addElement($dom, $deliveryEl, 'cbc:ActualDeliveryDate', $delivery['actualDeliveryDate']);
+        }
+
+        if (!empty($delivery['deliveryAddress'])) {
+            $addr = $delivery['deliveryAddress'];
+            $locationEl = $dom->createElement('cac:DeliveryLocation');
+            $addressEl = $dom->createElement('cac:Address');
+
+            if (!empty($addr['streetName'])) {
+                $this->addElement($dom, $addressEl, 'cbc:StreetName', $addr['streetName']);
+            }
+            if (!empty($addr['cityName'])) {
+                $this->addElement($dom, $addressEl, 'cbc:CityName', $addr['cityName']);
+            }
+            if (!empty($addr['postalZone'])) {
+                $this->addElement($dom, $addressEl, 'cbc:PostalZone', $addr['postalZone']);
+            }
+            if (!empty($addr['countrySubentity'])) {
+                $this->addElement($dom, $addressEl, 'cbc:CountrySubentity', $addr['countrySubentity']);
+            }
+            if (!empty($addr['countryCode'])) {
+                $countryEl = $dom->createElement('cac:Country');
+                $this->addElement($dom, $countryEl, 'cbc:IdentificationCode', $addr['countryCode']);
+                $addressEl->appendChild($countryEl);
+            }
+
+            $locationEl->appendChild($addressEl);
+            $deliveryEl->appendChild($locationEl);
+        }
+
+        $root->appendChild($deliveryEl);
+    }
+
+    /**
+     * @return array{0: string, 1: string} [allowanceTotal, chargeTotal]
+     */
+    private function addDocumentAllowanceCharges(\DOMDocument $dom, \DOMElement $root, array $allowanceCharges, string $currency): array
+    {
+        $allowanceTotal = '0.00';
+        $chargeTotal = '0.00';
+
+        foreach ($allowanceCharges as $ac) {
+            $acEl = $dom->createElement('cac:AllowanceCharge');
+            $this->addElement($dom, $acEl, 'cbc:ChargeIndicator', $ac['chargeIndicator'] ? 'true' : 'false');
+
+            if (!empty($ac['reasonCode'])) {
+                $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReasonCode', $ac['reasonCode']);
+            }
+            if (!empty($ac['reason'])) {
+                $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReason', $ac['reason']);
+            }
+            if (!empty($ac['multiplierFactorNumeric'])) {
+                $this->addElement($dom, $acEl, 'cbc:MultiplierFactorNumeric', $ac['multiplierFactorNumeric']);
+            }
+
+            $amountEl = $dom->createElement('cbc:Amount', $ac['amount']);
+            $amountEl->setAttribute('currencyID', $currency);
+            $acEl->appendChild($amountEl);
+
+            if (!empty($ac['baseAmount'])) {
+                $baseEl = $dom->createElement('cbc:BaseAmount', $ac['baseAmount']);
+                $baseEl->setAttribute('currencyID', $currency);
+                $acEl->appendChild($baseEl);
+            }
+
+            // TaxCategory for document-level allowance/charge
+            $taxCat = $dom->createElement('cac:TaxCategory');
+            $catCode = $ac['taxCategoryCode'] ?? 'S';
+            $this->addElement($dom, $taxCat, 'cbc:ID', $catCode);
+            if (!$this->shouldOmitPercent($catCode)) {
+                $this->addElement($dom, $taxCat, 'cbc:Percent', $ac['taxRate'] ?? '0.00');
+            }
+            $taxScheme = $dom->createElement('cac:TaxScheme');
+            $this->addElement($dom, $taxScheme, 'cbc:ID', 'VAT');
+            $taxCat->appendChild($taxScheme);
+            $acEl->appendChild($taxCat);
+
+            $root->appendChild($acEl);
+
+            if ($ac['chargeIndicator']) {
+                $chargeTotal = bcadd($chargeTotal, $ac['amount'], 2);
+            } else {
+                $allowanceTotal = bcadd($allowanceTotal, $ac['amount'], 2);
+            }
+        }
+
+        return [$allowanceTotal, $chargeTotal];
     }
 
     private function addElement(\DOMDocument $dom, \DOMElement $parent, string $name, string $value): void

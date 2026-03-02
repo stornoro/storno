@@ -13,5 +13,6 @@ class ParsedInvoiceLine
         public readonly string $vatCategoryCode = 'S',
         public readonly string $vatAmount = '0.00',
         public readonly string $lineTotal = '0.00',
+        public readonly ?array $ublExtensions = null,
     ) {}
 }

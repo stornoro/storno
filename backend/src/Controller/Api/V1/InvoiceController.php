@@ -290,6 +290,24 @@ class InvoiceController extends AbstractController
                 $storno->setPayeeIdentifier($invoice->getPayeeIdentifier());
                 $storno->setPayeeLegalRegistrationIdentifier($invoice->getPayeeLegalRegistrationIdentifier());
 
+                // Copy non-financial ublExtensions (invoicePeriod, delivery only; omit allowanceCharges, prepaidAmount)
+                $origExtensions = $invoice->getUblExtensions();
+                if ($origExtensions) {
+                    $stornoExtensions = [];
+                    if (!empty($origExtensions['invoicePeriod'])) {
+                        $stornoExtensions['invoicePeriod'] = $origExtensions['invoicePeriod'];
+                    }
+                    if (!empty($origExtensions['delivery'])) {
+                        $stornoExtensions['delivery'] = $origExtensions['delivery'];
+                    }
+                    if (!empty($origExtensions['additionalDocumentReferences'])) {
+                        $stornoExtensions['additionalDocumentReferences'] = $origExtensions['additionalDocumentReferences'];
+                    }
+                    if ($stornoExtensions) {
+                        $storno->setUblExtensions($stornoExtensions);
+                    }
+                }
+
                 // Assign a temporary draft number
                 $storno->setNumber('DRAFT-' . substr(Uuid::v7()->toRfc4122(), 0, 8));
 

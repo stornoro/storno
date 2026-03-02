@@ -51,7 +51,7 @@
             {{ $t('invoices.issue') }}
           </UButton>
           <UButton
-            v-else-if="invoice.status !== 'cancelled' && invoice.status !== 'sent_to_provider' && (!invoice.anafUploadId || invoice.status === 'rejected')"
+            v-else-if="isRoClient && invoice.status !== 'cancelled' && invoice.status !== 'sent_to_provider' && (!invoice.anafUploadId || invoice.status === 'rejected')"
             icon="i-lucide-send"
             color="primary"
             :loading="submitting"
@@ -190,7 +190,7 @@
       </UCard>
 
       <!-- Scheduled ANAF send info -->
-      <UCard v-if="invoice.scheduledSendAt && !invoice.anafUploadId" class="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+      <UCard v-if="isRoClient && invoice.scheduledSendAt && !invoice.anafUploadId" class="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
         <div class="flex items-center gap-2 text-sm">
           <UIcon name="i-lucide-clock" class="text-blue-500 shrink-0 size-5" />
           <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(invoice.scheduledSendAt) }) }}</span>
@@ -1062,8 +1062,14 @@ const isOverdue = computed(() => {
   return new Date(invoice.value.dueDate) < new Date()
 })
 
+const isRoClient = computed(() => {
+  const country = invoice.value?.client?.country
+  return !country || country === 'RO'
+})
+
 const issueModalDescription = computed(() => {
   const base = $t('invoices.issueConfirmDescription')
+  if (!isRoClient.value) return base
   const delayHours = companyStore.currentCompany?.efacturaDelayHours
   if (delayHours) {
     const label = delayHours < 24

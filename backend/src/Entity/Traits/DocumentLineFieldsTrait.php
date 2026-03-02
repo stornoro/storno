@@ -98,6 +98,10 @@ trait DocumentLineFieldsTrait
     #[Groups(['invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private ?string $cpvCode = null;
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
+    private ?array $ublExtensions = null;
+
     private function initId(): void
     {
         $this->id = Uuid::v7();
@@ -333,6 +337,18 @@ trait DocumentLineFieldsTrait
     public function setCpvCode(?string $cpvCode): static
     {
         $this->cpvCode = $cpvCode;
+
+        return $this;
+    }
+
+    public function getUblExtensions(): ?array
+    {
+        return $this->ublExtensions;
+    }
+
+    public function setUblExtensions(?array $ublExtensions): static
+    {
+        $this->ublExtensions = $ublExtensions;
 
         return $this;
     }

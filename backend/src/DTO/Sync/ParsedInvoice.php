@@ -27,5 +27,6 @@ class ParsedInvoice
         public readonly ?string $deliveryLocation = null,
         public readonly ?string $projectReference = null,
         public readonly array $attachments = [],
+        public readonly ?array $ublExtensions = null,
     ) {}
 }
