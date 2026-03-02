@@ -50,12 +50,21 @@
               />
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <UBadge
                 :color="company.syncEnabled ? 'success' : 'neutral'"
                 variant="subtle"
               >
                 {{ company.syncEnabled ? $t('companies.syncEnabled') : $t('companies.syncDisabled') }}
+              </UBadge>
+              <UBadge
+                variant="subtle"
+                color="neutral"
+                class="cursor-pointer font-mono"
+                @click.stop="copy(company.id)"
+              >
+                ID
+                <UIcon name="i-lucide-copy" class="size-3" />
               </UBadge>
             </div>
 
@@ -665,6 +674,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const router = useRouter()
 const toast = useToast()
+const { copy } = useClipboard()
 const { get } = useApi()
 const { fetchDefaults, countryOptions, countyOptions } = useInvoiceDefaults()
 
