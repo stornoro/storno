@@ -383,6 +383,24 @@ export const useAuthStore = defineStore('auth', () => {
     clearMfa()
     const { reset } = useThemePreferences()
     reset()
+
+    // Reset company store and all company-scoped stores
+    // so stale data from the previous user is never shown
+    const companyStore = useCompanyStore()
+    companyStore.companies = []
+    companyStore.deletedCompanies = []
+    companyStore.currentCompanyId = null
+    useDashboardStore().$reset()
+    useInvoiceStore().$reset()
+    useClientStore().$reset()
+    useProductStore().$reset()
+    useSyncStore().$reset()
+    useSupplierStore().$reset()
+    useBankAccountStore().$reset()
+    useDocumentSeriesStore().$reset()
+    useEFacturaMessageStore().$reset()
+    useRecurringInvoiceStore().$reset()
+    useProformaInvoiceStore().$reset()
   }
 
   return {
