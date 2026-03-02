@@ -46,6 +46,12 @@ const loading = computed(() => clientsStore.loading)
 const clients = computed(() => clientsStore.items)
 const total = computed(() => clientsStore.total)
 
+const EU_COUNTRY_CODES = [
+  'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+  'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+  'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+]
+
 const columns = [
   { id: 'select', header: '', accessorKey: 'id', size: 40 },
   {
@@ -160,7 +166,12 @@ onMounted(() => fetchClients())
           <div class="flex items-center gap-3">
             <UAvatar :text="getInitials(row.original.name)" size="sm" />
             <div>
-              <p class="font-medium text-highlighted">{{ row.original.name }}</p>
+              <div class="flex items-center gap-1.5">
+                <p class="font-medium text-highlighted">{{ row.original.name }}</p>
+                <UBadge v-if="row.original.country && row.original.country !== 'RO'" variant="subtle" size="xs" color="neutral">
+                  {{ row.original.country }}
+                </UBadge>
+              </div>
               <p v-if="row.original.city" class="text-xs text-muted">{{ row.original.city }}</p>
             </div>
           </div>
@@ -170,6 +181,14 @@ onMounted(() => fetchClients())
             <span class="font-mono text-sm">{{ row.original.cui || row.original.cnp || '-' }}</span>
             <UBadge v-if="row.original.type" :color="row.original.type === 'company' ? 'info' : 'warning'" variant="subtle" size="xs">
               {{ row.original.type === 'company' ? 'PJ' : 'PF' }}
+            </UBadge>
+            <UBadge
+              v-if="row.original.country && row.original.country !== 'RO' && EU_COUNTRY_CODES.includes(row.original.country) && row.original.viesValid !== null && row.original.viesValid !== undefined"
+              :color="row.original.viesValid ? 'success' : 'error'"
+              variant="subtle"
+              size="xs"
+            >
+              {{ row.original.viesValid ? 'VIES ✓' : 'VIES ✗' }}
             </UBadge>
           </div>
         </template>
