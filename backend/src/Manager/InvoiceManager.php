@@ -189,9 +189,18 @@ class InvoiceManager
 
         // Opt-in: auto-apply reverse charge / OSS VAT rules
         if (!empty($data['autoApplyVatRules'])) {
+            if (array_key_exists('vatIncluded', $data)) {
+                foreach ($invoice->getLines() as $line) {
+                    $line->setVatIncluded((bool) $data['vatIncluded']);
+                }
+            }
             $invoiceClient = $invoice->getClient();
             if ($invoiceClient) {
                 $this->applyVatRules($invoice, $invoiceClient, $company);
+            }
+            // Recalculate line totals after VAT rules may have changed rates
+            foreach ($invoice->getLines() as $line) {
+                $this->calculateLineTotals($line);
             }
         }
 
@@ -389,10 +398,19 @@ class InvoiceManager
 
         // Opt-in: auto-apply reverse charge / OSS VAT rules
         if (!empty($data['autoApplyVatRules'])) {
+            if (array_key_exists('vatIncluded', $data)) {
+                foreach ($invoice->getLines() as $line) {
+                    $line->setVatIncluded((bool) $data['vatIncluded']);
+                }
+            }
             $invoiceClient = $invoice->getClient();
             $company = $invoice->getCompany();
             if ($invoiceClient && $company) {
                 $this->applyVatRules($invoice, $invoiceClient, $company);
+            }
+            // Recalculate line totals after VAT rules may have changed rates
+            foreach ($invoice->getLines() as $line) {
+                $this->calculateLineTotals($line);
             }
         }
 
