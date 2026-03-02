@@ -6,11 +6,13 @@ use App\DTO\Anaf\ValidationError;
 use App\DTO\Anaf\ValidationResult;
 use App\Entity\Invoice;
 use App\Repository\VatRateRepository;
+use App\Service\EuVatRateService;
 
 class EFacturaValidator
 {
     public function __construct(
         private readonly VatRateRepository $vatRateRepository,
+        private readonly EuVatRateService $euVatRateService,
     ) {}
 
     /**
@@ -28,6 +30,26 @@ class EFacturaValidator
             $dbRates = $this->vatRateRepository->findActiveByCompany($company);
             if (!empty($dbRates)) {
                 $validVatRates = array_map(fn($vr) => $vr->getRate(), $dbRates);
+            }
+        }
+
+        // Include destination country VAT rates when OSS applies
+        $client = $invoice->getClient();
+        if (
+            $company
+            && $company->isOss()
+            && $client
+            && $client->getCountry() !== 'RO'
+            && $client->isViesValid() !== true
+        ) {
+            $ossRates = $this->euVatRateService->getAllRates($client->getCountry());
+            if ($ossRates) {
+                foreach ($ossRates as $rateVal) {
+                    $formatted = number_format((float) $rateVal, 2, '.', '');
+                    if (!in_array($formatted, $validVatRates, true)) {
+                        $validVatRates[] = $formatted;
+                    }
+                }
             }
         }
 
@@ -53,7 +75,6 @@ class EFacturaValidator
         }
 
         // Client/receiver validations
-        $client = $invoice->getClient();
         if ($client !== null) {
             if ($client->getType() === 'company' && empty($client->getCui())) {
                 $errors[] = new ValidationError('Clientul (persoana juridica) nu are CUI completat.', 'business');

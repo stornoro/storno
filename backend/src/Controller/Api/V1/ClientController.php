@@ -14,6 +14,7 @@ use App\Security\Permission;
 use App\Service\Export\SagaXmlExportService;
 use App\Constants\Pagination;
 use App\Services\AnafService;
+use App\Service\Vies\ViesService;
 use App\Util\AddressNormalizer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -36,6 +37,7 @@ class ClientController extends AbstractController
         private readonly AnafService $anafService,
         private readonly EntityManagerInterface $entityManager,
         private readonly SagaXmlExportService $sagaXmlExportService,
+        private readonly ViesService $viesService,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -141,6 +143,27 @@ class ClientController extends AbstractController
         ]);
     }
 
+    #[Route('/vies-lookup', methods: ['GET'])]
+    public function viesLookup(Request $request): JsonResponse
+    {
+        $vatCode = trim($request->query->get('vatCode', ''));
+        if ($vatCode === '') {
+            return $this->json(['error' => 'vatCode is required.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $parsed = $this->viesService->parseVatCode($vatCode);
+        if (!$parsed) {
+            return $this->json(['error' => 'Invalid VAT code format. Expected format: DE123456789'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $result = $this->viesService->validate($parsed['countryCode'], $parsed['vatNumber']);
+        if ($result === null) {
+            return $this->json(['error' => 'VIES service unavailable.'], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        return $this->json(['data' => $result]);
+    }
+
     /**
      * Create a client manually.
      */
@@ -170,7 +193,7 @@ class ClientController extends AbstractController
         $city = trim($data['city'] ?? '');
         $address = trim($data['address'] ?? '');
 
-        if ($county === '') {
+        if ($country === 'RO' && $county === '') {
             $errors[] = ['key' => 'county', 'message' => 'County is required.'];
         }
         if ($city === '') {
@@ -182,7 +205,7 @@ class ClientController extends AbstractController
 
         $type = $data['type'] ?? 'company';
         $registrationNumber = !empty($data['registrationNumber']) ? trim($data['registrationNumber']) : null;
-        if ($type === 'company' && !$registrationNumber) {
+        if ($type === 'company' && $country === 'RO' && !$registrationNumber) {
             $errors[] = ['key' => 'registrationNumber', 'message' => 'Registration number is required for companies.'];
         }
 
@@ -213,10 +236,15 @@ class ClientController extends AbstractController
         $client->setIsVatPayer($data['isVatPayer'] ?? false);
         $client->setRegistrationNumber($registrationNumber);
         $client->setAddress($address);
-        // Normalize Bucharest sectors to UBL-compliant format
-        $normalized = AddressNormalizer::normalizeBucharest($county, $city);
-        $client->setCity($normalized['city']);
-        $client->setCounty($normalized['county']);
+        if ($country === 'RO' && $county !== '' && $city !== '') {
+            // Normalize Bucharest sectors to UBL-compliant format
+            $normalized = AddressNormalizer::normalizeBucharest($county, $city);
+            $client->setCity($normalized['city']);
+            $client->setCounty($normalized['county']);
+        } else {
+            $client->setCity($city ?: null);
+            $client->setCounty($county ?: null);
+        }
         $client->setCountry($country);
         $client->setPostalCode(!empty($data['postalCode']) ? trim($data['postalCode']) : null);
         $client->setEmail(!empty($data['email']) ? trim($data['email']) : null);
@@ -227,6 +255,8 @@ class ClientController extends AbstractController
         $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
         $client->setSource('manual');
+
+        $this->autoValidateVies($client);
 
         $this->entityManager->persist($client);
         $this->entityManager->flush();
@@ -411,7 +441,8 @@ class ClientController extends AbstractController
         if (array_key_exists('registrationNumber', $data)) {
             $regNum = !empty($data['registrationNumber']) ? trim($data['registrationNumber']) : null;
             $effectiveType = $data['type'] ?? $client->getType();
-            if ($effectiveType === 'company' && !$regNum) {
+            $effectiveCountry = $data['country'] ?? $client->getCountry() ?? 'RO';
+            if ($effectiveType === 'company' && $effectiveCountry === 'RO' && !$regNum) {
                 return $this->json(['error' => 'Registration number is required for companies.'], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
             $client->setRegistrationNumber($regNum);
@@ -424,9 +455,10 @@ class ClientController extends AbstractController
             $client->setAddress($addr);
         }
         if (array_key_exists('city', $data) || array_key_exists('county', $data)) {
+            $effectiveCountry = $data['country'] ?? $client->getCountry() ?? 'RO';
             $county = array_key_exists('county', $data) ? trim($data['county'] ?? '') : $client->getCounty();
             $city = array_key_exists('city', $data) ? trim($data['city'] ?? '') : $client->getCity();
-            if (array_key_exists('county', $data) && ($county === '' || $county === null)) {
+            if ($effectiveCountry === 'RO' && array_key_exists('county', $data) && ($county === '' || $county === null)) {
                 return $this->json(['error' => 'County cannot be empty.'], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
             if (array_key_exists('city', $data) && ($city === '' || $city === null)) {
@@ -456,6 +488,11 @@ class ClientController extends AbstractController
         if (array_key_exists('defaultPaymentTermDays', $data)) $client->setDefaultPaymentTermDays($data['defaultPaymentTermDays'] ?? null);
         if (array_key_exists('contactPerson', $data)) $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         if (array_key_exists('notes', $data)) $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
+
+        // Re-validate VIES if vatCode or country changed
+        if (array_key_exists('vatCode', $data) || array_key_exists('country', $data)) {
+            $this->autoValidateVies($client);
+        }
 
         $this->entityManager->flush();
 
@@ -547,4 +584,32 @@ class ClientController extends AbstractController
         return $this->organizationContext->resolveCompany($request);
     }
 
+    private function autoValidateVies(Client $client): void
+    {
+        // Only validate foreign clients with a VAT code
+        if ($client->getCountry() === 'RO' || empty($client->getVatCode())) {
+            $client->setViesValid(null);
+            $client->setViesValidatedAt(null);
+            $client->setViesName(null);
+            return;
+        }
+
+        $parsed = $this->viesService->parseVatCode($client->getVatCode());
+        if (!$parsed) {
+            $client->setViesValid(null);
+            $client->setViesValidatedAt(null);
+            $client->setViesName(null);
+            return;
+        }
+
+        $result = $this->viesService->validate($parsed['countryCode'], $parsed['vatNumber']);
+        if ($result === null) {
+            // API failure — don't change existing VIES status
+            return;
+        }
+
+        $client->setViesValid($result['valid']);
+        $client->setViesValidatedAt(new \DateTimeImmutable());
+        $client->setViesName($result['name']);
+    }
 }

@@ -68,7 +68,7 @@ class Client
     private ?string $county = null;
 
     #[ORM\Column(length: 2)]
-    #[Groups(['client:detail', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:list', 'client:detail', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private string $country = 'RO';
 
     #[ORM\Column(length: 10, nullable: true)]
@@ -118,6 +118,18 @@ class Client
     #[ORM\Column(nullable: true)]
     #[Groups(['client:detail'])]
     private ?array $einvoiceIdentifiers = null;
+
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    #[Groups(['client:list', 'client:detail'])]
+    private ?bool $viesValid = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['client:detail'])]
+    private ?\DateTimeImmutable $viesValidatedAt = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['client:detail'])]
+    private ?string $viesName = null;
 
     public function __construct()
     {
@@ -420,5 +432,41 @@ class Client
     public function getEinvoiceIdentifier(string $provider): ?array
     {
         return $this->einvoiceIdentifiers[$provider] ?? null;
+    }
+
+    public function isViesValid(): ?bool
+    {
+        return $this->viesValid;
+    }
+
+    public function setViesValid(?bool $viesValid): static
+    {
+        $this->viesValid = $viesValid;
+
+        return $this;
+    }
+
+    public function getViesValidatedAt(): ?\DateTimeImmutable
+    {
+        return $this->viesValidatedAt;
+    }
+
+    public function setViesValidatedAt(?\DateTimeImmutable $viesValidatedAt): static
+    {
+        $this->viesValidatedAt = $viesValidatedAt;
+
+        return $this;
+    }
+
+    public function getViesName(): ?string
+    {
+        return $this->viesName;
+    }
+
+    public function setViesName(?string $viesName): static
+    {
+        $this->viesName = $viesName;
+
+        return $this;
     }
 }

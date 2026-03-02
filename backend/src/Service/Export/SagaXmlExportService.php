@@ -396,7 +396,7 @@ class SagaXmlExportService
     }
 
     /**
-     * SAGA invoice type: space = regular, A = aviz, T = reverse-tax.
+     * SAGA invoice type: space = regular, 1 = OSS, A = aviz, T = reverse-tax.
      */
     private function getSagaInvoiceType(Invoice $invoice): string
     {
@@ -404,7 +404,24 @@ class SagaXmlExportService
             return 'T';
         }
 
+        if ($this->isOss($invoice)) {
+            return '1';
+        }
+
         return ' ';
+    }
+
+    private function isOss(Invoice $invoice): bool
+    {
+        $company = $invoice->getCompany();
+        $client = $invoice->getClient();
+
+        return $company
+            && $company->isOss()
+            && $client
+            && $client->getCountry() !== 'RO'
+            && $client->getCountry() !== null
+            && $client->isViesValid() !== true;
     }
 
     private function mapPaymentMethodToAccount(string $method, array $accountMap = []): string

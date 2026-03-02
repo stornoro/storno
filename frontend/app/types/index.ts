@@ -290,6 +290,9 @@ export interface Client {
   notes: string | null
   source: string
   lastSyncedAt: string | null
+  viesValid: boolean | null
+  viesValidatedAt: string | null
+  viesName: string | null
   createdAt: string
   updatedAt: string | null
   invoiceCount?: number

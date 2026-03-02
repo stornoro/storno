@@ -38,7 +38,7 @@
                 icon="i-lucide-search"
                 :loading="registryLoading"
                 @input="!isEdit && onCuiInput()"
-                @blur="validateCif"
+                @blur="onCuiBlur"
               />
             </UFormField>
             <UFormField :label="$t('invoices.receiverName')" required>
@@ -47,7 +47,7 @@
           </div>
           <!-- Registry search dropdown -->
           <div
-            v-if="registryDropdownOpen && !isEdit && registryResults.length > 0"
+            v-if="registryDropdownOpen && !isEdit && form.country === 'RO' && registryResults.length > 0"
             class="absolute left-0 right-0 top-full z-[200] mt-1 max-h-48 overflow-y-auto rounded-md border border-(--ui-border) bg-(--ui-bg) shadow-lg"
           >
             <button
@@ -82,8 +82,8 @@
           </UFormField>
         </div>
 
-        <!-- ANAF lookup button (company type with CUI, hidden after successful registry auto-lookup) -->
-        <div v-if="form.type === 'company' && form.cui && form.cui.length >= 2 && !cifError" class="flex items-center gap-2">
+        <!-- ANAF lookup button (company type with CUI, only for RO companies) -->
+        <div v-if="form.type === 'company' && form.country === 'RO' && form.cui && form.cui.length >= 2 && !cifError" class="flex items-center gap-2">
           <UButton
             v-if="!anafSuccess"
             type="button"
@@ -99,8 +99,38 @@
           <span v-if="anafError" class="text-xs text-(--ui-error)">{{ $t('clients.anafLookupError') }}</span>
         </div>
 
-        <!-- Registrul Comertului (company only) -->
-        <UFormField v-if="form.type === 'company'" :label="$t('clients.registrationNumber')" required>
+        <!-- VIES status (foreign company with CUI — auto-validated) -->
+        <div v-if="form.country !== 'RO' && form.cui && form.type === 'company'" class="flex items-center gap-2">
+          <UButton
+            v-if="viesLookupLoading"
+            type="button"
+            variant="soft"
+            size="xs"
+            icon="i-lucide-globe"
+            :loading="true"
+            disabled
+          >
+            {{ $t('clients.viesLookup') }}
+          </UButton>
+          <template v-else-if="viesResult !== null">
+            <UBadge v-if="viesResult === true" color="success" variant="subtle" size="xs">{{ $t('clients.viesValid') }}</UBadge>
+            <UBadge v-else color="error" variant="subtle" size="xs">{{ $t('clients.viesInvalid') }}</UBadge>
+          </template>
+          <UButton
+            v-if="!viesLookupLoading && viesResult === null && !viesError"
+            type="button"
+            variant="soft"
+            size="xs"
+            icon="i-lucide-globe"
+            @click="lookupVies"
+          >
+            {{ $t('clients.viesLookup') }}
+          </UButton>
+          <span v-if="viesError" class="text-xs text-(--ui-error)">{{ $t('clients.viesLookupError') }}</span>
+        </div>
+
+        <!-- Registrul Comertului (company only, required only for RO) -->
+        <UFormField v-if="form.type === 'company'" :label="$t('clients.registrationNumber')" :required="form.country === 'RO'">
           <UInput v-model="form.registrationNumber" :class="{ 'anaf-highlight': anafPopulatedFields.has('registrationNumber') }" placeholder="ex: J40/14772/2007" icon="i-lucide-file-text" />
         </UFormField>
 
@@ -209,6 +239,9 @@ const saving = ref(false)
 const anafLookup = ref(false)
 const anafSuccess = ref(false)
 const anafError = ref(false)
+const viesLookupLoading = ref(false)
+const viesResult = ref<boolean | null>(null)
+const viesError = ref(false)
 const cifError = ref('')
 const cnpError = ref('')
 const registryDropdownOpen = ref(false)
@@ -312,6 +345,17 @@ function populateFromPrefill(p: Record<string, any>) {
   }
 }
 
+// Close registry dropdown, reset lookups, and re-validate when country changes
+watch(() => form.country, () => {
+  registryDropdownOpen.value = false
+  clearRegistry()
+  anafSuccess.value = false
+  anafError.value = false
+  viesResult.value = null
+  viesError.value = false
+  if (form.cui) validateCif()
+})
+
 // Fetch cities when county changes
 watch(() => form.county, (newCounty) => {
   if (skipCityReset.value) {
@@ -345,10 +389,10 @@ function onCitySearch(term: string) {
 const canSave = computed(() => {
   if (!form.name) return false
   if (!form.country) return false
-  if (!form.county) return false
+  if (form.country === 'RO' && !form.county) return false
   if (!form.city) return false
   if (!form.address) return false
-  if (form.type === 'company' && !form.registrationNumber) return false
+  if (form.type === 'company' && form.country === 'RO' && !form.registrationNumber) return false
   if (form.type === 'company' && form.cui && cifError.value) return false
   if (form.type === 'individual' && form.cnp && cnpError.value) return false
   return true
@@ -359,9 +403,14 @@ function validateCif() {
     cifError.value = ''
     return
   }
-  const cleaned = form.cui.replace(/^RO/i, '').trim()
-  if (!/^\d{1,10}$/.test(cleaned)) {
-    cifError.value = $t('clients.invalidCif')
+  // Only validate RO CUI format (digits only) when country is Romania
+  if (form.country === 'RO') {
+    const cleaned = form.cui.replace(/^RO/i, '').trim()
+    if (!/^\d{1,10}$/.test(cleaned)) {
+      cifError.value = $t('clients.invalidCif')
+    } else {
+      cifError.value = ''
+    }
   } else {
     cifError.value = ''
   }
@@ -379,7 +428,36 @@ function validateCnp() {
   }
 }
 
+function onCuiBlur() {
+  validateCif()
+  // For non-RO companies, auto-trigger VIES lookup using CUI as VAT code
+  if (form.country !== 'RO' && form.type === 'company' && form.cui && form.cui.trim().length >= 4) {
+    form.vatCode = form.cui.trim()
+    lookupVies()
+  }
+}
+
+// EU VAT prefix → ISO country code mapping
+const vatPrefixToCountry: Record<string, string> = {
+  AT: 'AT', BE: 'BE', BG: 'BG', CY: 'CY', CZ: 'CZ', DE: 'DE', DK: 'DK',
+  EE: 'EE', EL: 'GR', ES: 'ES', FI: 'FI', FR: 'FR', HR: 'HR', HU: 'HU',
+  IE: 'IE', IT: 'IT', LT: 'LT', LU: 'LU', LV: 'LV', MT: 'MT', NL: 'NL',
+  PL: 'PL', PT: 'PT', RO: 'RO', SE: 'SE', SI: 'SI', SK: 'SK',
+}
+
+function detectCountryFromCui() {
+  const val = form.cui.trim().toUpperCase()
+  if (val.length < 3) return
+  const prefix = val.substring(0, 2)
+  const country = vatPrefixToCountry[prefix]
+  if (country && country !== form.country) {
+    form.country = country
+  }
+}
+
 function onCuiInput() {
+  detectCountryFromCui()
+  if (form.country !== 'RO') return
   const q = form.cui.trim()
   if (q.length >= 2) {
     registryDropdownOpen.value = true
@@ -441,6 +519,29 @@ async function lookupAnaf() {
   }
 }
 
+async function lookupVies() {
+  const vatCode = form.vatCode || form.cui?.trim()
+  if (!vatCode) return
+  form.vatCode = vatCode
+  viesLookupLoading.value = true
+  viesResult.value = null
+  viesError.value = false
+  try {
+    const res = await get<{ data: { valid: boolean, name: string | null, address: string | null } }>('/v1/clients/vies-lookup', { vatCode })
+    const valid = res?.data?.valid ?? false
+    viesResult.value = valid
+    form.isVatPayer = valid
+    // Auto-fill name if empty and VIES returned one
+    if (valid && res?.data?.name && !form.name) {
+      form.name = res.data.name
+    }
+  } catch {
+    viesError.value = true
+  } finally {
+    viesLookupLoading.value = false
+  }
+}
+
 async function onSave() {
   if (!canSave.value) return
   saving.value = true
@@ -475,8 +576,8 @@ async function onSave() {
   }
 
   // Create mode — existing logic
-  // If company with CUI, try ANAF-validated creation
-  if (form.type === 'company' && form.cui) {
+  // If RO company with CUI, try ANAF-validated creation
+  if (form.type === 'company' && form.country === 'RO' && form.cui) {
     const client = await clientStore.createClientFromRegistry(form.cui, form.name)
     if (client) {
       saving.value = false
@@ -534,6 +635,8 @@ function resetForm() {
   cnpError.value = ''
   anafSuccess.value = false
   anafError.value = false
+  viesResult.value = null
+  viesError.value = false
   cityOptions.value = []
   registryDropdownOpen.value = false
   selectingCui.value = null

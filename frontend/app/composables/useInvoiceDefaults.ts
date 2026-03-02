@@ -43,8 +43,16 @@ interface InvoiceDefaultsResponse {
   exchangeRates: Record<string, number>
   exchangeRateDate: string | null
   isVatPayer: boolean
+  reverseCharge?: boolean
   countries: CountryOption[]
   counties: CountyOption[]
+}
+
+interface ClientDefaultsResponse extends InvoiceDefaultsResponse {
+  reverseCharge: boolean
+  ossApplicable: boolean
+  ossVatRate: { rate: string; label: string; categoryCode: string } | null
+  ossVatRates: { rate: string; label: string; categoryCode: string; default: boolean }[]
 }
 
 // Shared state across all instances — fetched once per app lifecycle
@@ -64,6 +72,14 @@ export function useInvoiceDefaults() {
       .catch(() => { /* Use fallbacks on error */ })
       .finally(() => { loading.value = false; fetchPromise = null })
     return fetchPromise
+  }
+
+  async function fetchDefaultsForClient(clientId: string): Promise<ClientDefaultsResponse | null> {
+    try {
+      return await get<ClientDefaultsResponse>('/v1/invoice-defaults', { clientId })
+    } catch {
+      return null
+    }
   }
 
   const vatRateOptions = computed(() => {
@@ -172,6 +188,7 @@ export function useInvoiceDefaults() {
     defaults,
     loading,
     fetchDefaults,
+    fetchDefaultsForClient,
     vatRateOptions,
     currencyOptions,
     unitOfMeasureOptions,

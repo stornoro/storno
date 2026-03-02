@@ -152,11 +152,13 @@ const formSlideoverTitle = ref('')
 const formEditInvoice = ref<Invoice | null>(null)
 const formRefundOf = ref<string | undefined>(undefined)
 const formCopyOf = ref<string | undefined>(undefined)
+const formPrefillClientId = ref<string | undefined>(undefined)
 
-function openCreateSlideover() {
+function openCreateSlideover(clientId?: string) {
   formEditInvoice.value = null
   formRefundOf.value = undefined
   formCopyOf.value = undefined
+  formPrefillClientId.value = clientId
   formSlideoverTitle.value = $t('invoices.newInvoice')
   formSlideoverOpen.value = true
 }
@@ -220,7 +222,7 @@ function checkSlideoverQueryParams() {
     openEditSlideover(editParam)
   }
   else if (route.query.create) {
-    openCreateSlideover()
+    openCreateSlideover(route.query.clientId as string | undefined)
   }
 }
 
@@ -956,6 +958,7 @@ onUnmounted(() => {
             :invoice="formEditInvoice"
             :refund-of="formRefundOf"
             :copy-of="formCopyOf"
+            :prefill-client-id="formPrefillClientId"
             @saved="onFormSaved"
             @cancel="formSlideoverOpen = false"
           />
