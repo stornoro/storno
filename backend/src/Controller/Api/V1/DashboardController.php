@@ -70,6 +70,30 @@ class DashboardController extends AbstractController
         $baseParams = array_merge(['companyId' => $companyId], $dateParams);
         $amountParams = array_merge($baseParams, ['defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate]);
 
+        // Build fallback BNR rate lookup for currencies with NULL exchange_rate
+        // exchange_rate on invoice = how many RON per 1 unit of invoice currency
+        $fallbackRateSql = '1'; // ultimate fallback
+        try {
+            $distinctCurrencies = $conn->fetchFirstColumn(
+                'SELECT DISTINCT currency FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency',
+                ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
+            );
+            if ($distinctCurrencies) {
+                $cases = [];
+                foreach ($distinctCurrencies as $cur) {
+                    $bnrRate = $this->exchangeRateService->getRate($cur);
+                    if ($bnrRate !== null) {
+                        $cases[] = sprintf("WHEN currency = '%s' THEN %s", addslashes($cur), $bnrRate);
+                    }
+                }
+                if ($cases) {
+                    $fallbackRateSql = 'CASE ' . implode(' ', $cases) . ' ELSE 1 END';
+                }
+            }
+        } catch (\Throwable) {
+            // BNR unavailable — fall back to 1 (no conversion)
+        }
+
         // Counts by direction
         $directionCounts = $conn->fetchAllAssociative(
             'SELECT direction, COUNT(*) as cnt FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $dateFilter . ' GROUP BY direction',
@@ -93,9 +117,10 @@ class DashboardController extends AbstractController
             $byStatus[$row['status']] = (int) $row['cnt'];
         }
 
-        // SQL expression: convert amount to default currency using stored exchange_rate
-        $convertTotal = 'CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, 1) / :defaultRate END';
-        $convertVat = 'CASE WHEN currency = :defaultCurrency THEN vat_total ELSE vat_total * COALESCE(exchange_rate, 1) / :defaultRate END';
+        // SQL expression: convert amount to default currency
+        // Uses stored exchange_rate when available, falls back to current BNR rate
+        $convertTotal = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertVat = "CASE WHEN currency = :defaultCurrency THEN vat_total ELSE vat_total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         // Total amounts (converted to default currency)
         $totals = $conn->fetchAssociative(
@@ -185,7 +210,7 @@ class DashboardController extends AbstractController
         }, $recentInvoices);
 
         // Payment summary (converted to default currency)
-        $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo, $defaultCurrency, $defaultRate);
+        $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo, $defaultCurrency, $defaultRate, $fallbackRateSql);
 
         $response = $this->json([
             'invoices' => [
