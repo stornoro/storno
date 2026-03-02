@@ -17,6 +17,7 @@ const open = ref(false)
 const links = computed(() => {
   const close = () => { open.value = false }
 
+  // Group 1: Documents — daily work
   const group1 = [
     {
       label: $t('nav.dashboard'),
@@ -52,6 +53,12 @@ const links = computed(() => {
       label: $t('nav.receipts'),
       icon: 'i-lucide-receipt',
       to: '/receipts',
+      onSelect: close,
+    },
+    can(P.EFACTURA_VIEW) && isModuleEnabled(MODULE_KEYS.EFACTURA) && {
+      label: $t('nav.efactura'),
+      icon: 'i-lucide-cloud-download',
+      to: '/efactura',
       onSelect: close,
     },
     can(P.CLIENT_VIEW) && {
@@ -117,11 +124,6 @@ const links = computed(() => {
       to: '/settings/pdf-templates',
       onSelect: close,
     },
-    can(P.ORG_MANAGE_BILLING) && !authStore.isSelfHosted && {
-      label: $t('settings.billingPage.title'),
-      to: '/settings/billing',
-      onSelect: close,
-    },
     can(P.COMPANY_EDIT) && {
       label: $t('settings.modules.title'),
       to: '/settings/modules',
@@ -176,6 +178,11 @@ const links = computed(() => {
       onSelect: close,
     },
     can(P.ORG_MANAGE_BILLING) && !authStore.isSelfHosted && {
+      label: $t('settings.billingPage.title'),
+      to: '/settings/billing',
+      onSelect: close,
+    },
+    can(P.ORG_MANAGE_BILLING) && !authStore.isSelfHosted && {
       label: $t('settings.billingPage.stripeConnect'),
       to: '/settings/payments',
       onSelect: close,
@@ -187,13 +194,8 @@ const links = computed(() => {
     },
   ].filter(truthy)
 
+  // Group 2: Management — reports, settings, data, integrations
   const group2 = [
-    can(P.EFACTURA_VIEW) && isModuleEnabled(MODULE_KEYS.EFACTURA) && {
-      label: $t('nav.efactura'),
-      icon: 'i-lucide-cloud-download',
-      to: '/efactura',
-      onSelect: close,
-    },
     can(P.COMPANY_VIEW) && {
       label: $t('nav.companies'),
       icon: 'i-lucide-building-2',
@@ -205,7 +207,6 @@ const links = computed(() => {
       icon: 'i-lucide-bar-chart-3',
       to: '/reports',
       type: 'trigger' as const,
-      defaultOpen: true,
       children: [
         { label: $t('reports.salesAnalysis.title'), to: '/reports/sales', onSelect: close },
         { label: $t('reports.vatReportTitle'), to: '/reports/vat', onSelect: close },
@@ -217,7 +218,6 @@ const links = computed(() => {
       icon: 'i-lucide-settings',
       to: '/settings',
       type: 'trigger' as const,
-      defaultOpen: true,
       children: settingsChildren,
     },
     dataChildren.length > 0 && {
@@ -225,7 +225,6 @@ const links = computed(() => {
       icon: 'i-lucide-database',
       to: '/settings/import-export',
       type: 'trigger' as const,
-      defaultOpen: true,
       children: dataChildren,
     },
     integrationsChildren.length > 1 && {
@@ -233,7 +232,6 @@ const links = computed(() => {
       icon: 'i-lucide-plug',
       to: '/settings/notifications',
       type: 'trigger' as const,
-      defaultOpen: true,
       children: integrationsChildren,
     },
   ].filter(truthy)

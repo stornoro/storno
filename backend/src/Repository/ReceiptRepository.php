@@ -106,11 +106,47 @@ class ReceiptRepository extends ServiceEntityRepository
 
         $paginator = new Paginator($qb);
 
+        // Aggregated totals across all filtered results (not just current page)
+        $totalsQb = $this->createQueryBuilder('r')
+            ->select(
+                'SUM(r.subtotal) as totalExcluding',
+                'SUM(r.vatTotal) as totalVat',
+                'SUM(r.total) as totalIncluding',
+            )
+            ->leftJoin('r.client', 'c')
+            ->where('r.company = :company')
+            ->andWhere('r.deletedAt IS NULL')
+            ->setParameter('company', $company);
+
+        if (isset($filters['status'])) {
+            $totalsQb->andWhere('r.status = :status')
+                ->setParameter('status', ReceiptStatus::from($filters['status']));
+        }
+        if (isset($filters['search'])) {
+            $totalsQb->andWhere('r.number LIKE :search OR c.name LIKE :search OR r.customerName LIKE :search OR r.fiscalNumber LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+        if (isset($filters['dateFrom'])) {
+            $totalsQb->andWhere('r.issueDate >= :dateFrom')
+                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
+        }
+        if (isset($filters['dateTo'])) {
+            $totalsQb->andWhere('r.issueDate <= :dateTo')
+                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
+        }
+
+        $totals = $totalsQb->getQuery()->getSingleResult();
+
         return [
             'data' => iterator_to_array($paginator),
             'total' => count($paginator),
             'page' => $page,
             'limit' => $limit,
+            'totals' => [
+                'subtotal' => $totals['totalExcluding'] ?? '0.00',
+                'vatTotal' => $totals['totalVat'] ?? '0.00',
+                'total' => $totals['totalIncluding'] ?? '0.00',
+            ],
         ];
     }
 }

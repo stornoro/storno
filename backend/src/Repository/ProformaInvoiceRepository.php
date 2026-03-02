@@ -111,11 +111,47 @@ class ProformaInvoiceRepository extends ServiceEntityRepository
 
         $paginator = new Paginator($qb);
 
+        // Aggregated totals across all filtered results (not just current page)
+        $totalsQb = $this->createQueryBuilder('p')
+            ->select(
+                'SUM(p.subtotal) as totalExcluding',
+                'SUM(p.vatTotal) as totalVat',
+                'SUM(p.total) as totalIncluding',
+            )
+            ->leftJoin('p.client', 'c')
+            ->where('p.company = :company')
+            ->andWhere('p.deletedAt IS NULL')
+            ->setParameter('company', $company);
+
+        if (isset($filters['status'])) {
+            $totalsQb->andWhere('p.status = :status')
+                ->setParameter('status', ProformaStatus::from($filters['status']));
+        }
+        if (isset($filters['search'])) {
+            $totalsQb->andWhere('p.number LIKE :search OR c.name LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+        if (isset($filters['dateFrom'])) {
+            $totalsQb->andWhere('p.issueDate >= :dateFrom')
+                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
+        }
+        if (isset($filters['dateTo'])) {
+            $totalsQb->andWhere('p.issueDate <= :dateTo')
+                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
+        }
+
+        $totals = $totalsQb->getQuery()->getSingleResult();
+
         return [
             'data' => iterator_to_array($paginator),
             'total' => count($paginator),
             'page' => $page,
             'limit' => $limit,
+            'totals' => [
+                'subtotal' => $totals['totalExcluding'] ?? '0.00',
+                'vatTotal' => $totals['totalVat'] ?? '0.00',
+                'total' => $totals['totalIncluding'] ?? '0.00',
+            ],
         ];
     }
 }

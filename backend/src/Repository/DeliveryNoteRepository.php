@@ -106,11 +106,47 @@ class DeliveryNoteRepository extends ServiceEntityRepository
 
         $paginator = new Paginator($qb);
 
+        // Aggregated totals across all filtered results (not just current page)
+        $totalsQb = $this->createQueryBuilder('d')
+            ->select(
+                'SUM(d.subtotal) as totalExcluding',
+                'SUM(d.vatTotal) as totalVat',
+                'SUM(d.total) as totalIncluding',
+            )
+            ->leftJoin('d.client', 'c')
+            ->where('d.company = :company')
+            ->andWhere('d.deletedAt IS NULL')
+            ->setParameter('company', $company);
+
+        if (isset($filters['status'])) {
+            $totalsQb->andWhere('d.status = :status')
+                ->setParameter('status', DeliveryNoteStatus::from($filters['status']));
+        }
+        if (isset($filters['search'])) {
+            $totalsQb->andWhere('d.number LIKE :search OR c.name LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+        if (isset($filters['dateFrom'])) {
+            $totalsQb->andWhere('d.issueDate >= :dateFrom')
+                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
+        }
+        if (isset($filters['dateTo'])) {
+            $totalsQb->andWhere('d.issueDate <= :dateTo')
+                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
+        }
+
+        $totals = $totalsQb->getQuery()->getSingleResult();
+
         return [
             'data' => iterator_to_array($paginator),
             'total' => count($paginator),
             'page' => $page,
             'limit' => $limit,
+            'totals' => [
+                'subtotal' => $totals['totalExcluding'] ?? '0.00',
+                'vatTotal' => $totals['totalVat'] ?? '0.00',
+                'total' => $totals['totalIncluding'] ?? '0.00',
+            ],
         ];
     }
 }
