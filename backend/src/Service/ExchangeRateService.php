@@ -123,16 +123,17 @@ class ExchangeRateService
 
     /**
      * Build a SQL CASE expression that resolves a BNR fallback rate for each distinct
-     * invoice currency in a company. Used as the COALESCE fallback when exchange_rate is NULL.
+     * currency in a company table. Used as the COALESCE fallback when exchange_rate is NULL.
      *
-     * @param string $currencyColumn Column/alias referencing the invoice currency (e.g. 'currency', 'i.currency')
+     * @param string $currencyColumn Column/alias referencing the currency (e.g. 'currency', 'i.currency')
+     * @param string $table          Source table to scan for distinct currencies
      */
-    public function buildFallbackRateSql(Connection $conn, string $companyId, string $defaultCurrency, string $currencyColumn = 'currency'): string
+    public function buildFallbackRateSql(Connection $conn, string $companyId, string $defaultCurrency, string $currencyColumn = 'currency', string $table = 'invoice'): string
     {
         $fallbackRateSql = '1';
         try {
             $distinctCurrencies = $conn->fetchFirstColumn(
-                'SELECT DISTINCT currency FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency',
+                "SELECT DISTINCT currency FROM $table WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency",
                 ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
             );
             if ($distinctCurrencies) {
