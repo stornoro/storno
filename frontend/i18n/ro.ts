@@ -1652,6 +1652,7 @@ export default defineI18nLocale(async () => {
         approve: 'Autorizeaza',
         deny: 'Refuza',
         securityNote: 'Autorizarea va permite acestei aplicatii sa acceseze contul tau conform permisiunilor selectate. Puteti revoca accesul oricand din Setari.',
+        redirectNotice: 'Vei fi redirectionat catre {domain}',
         invalidClient: 'Aplicatia nu a fost gasita sau este inactiva.',
         invalidRedirect: 'URI-ul de redirectare nu este inregistrat pentru aceasta aplicatie.',
       },
