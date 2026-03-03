@@ -175,6 +175,11 @@ class InvoiceManager
             );
         }
 
+        // Schedule email on issue
+        if (!empty($data['scheduledEmailAt'])) {
+            $invoice->setScheduledEmailAt(new \DateTimeImmutable($data['scheduledEmailAt']));
+        }
+
         // Link to parent document (for refund)
         if (!empty($data['parentDocumentId'])) {
             $parentInvoice = $this->invoiceRepository->find(Uuid::fromString($data['parentDocumentId']));
@@ -386,6 +391,13 @@ class InvoiceManager
         }
         if (isset($data['exchangeRate'])) {
             $invoice->setExchangeRate($data['exchangeRate']);
+        }
+
+        // Schedule email on issue
+        if (array_key_exists('scheduledEmailAt', $data)) {
+            $invoice->setScheduledEmailAt(
+                $data['scheduledEmailAt'] ? new \DateTimeImmutable($data['scheduledEmailAt']) : null
+            );
         }
 
         // Update client

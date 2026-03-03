@@ -479,6 +479,20 @@
             </div>
             <USwitch v-model="form.plataOnline" :disabled="!stripeConnected" />
           </div>
+          <div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm">{{ $t('invoices.sendEmailOnIssue') }}</span>
+                <UTooltip v-if="!selectedClient?.email" :text="$t('invoices.sendEmailOnIssueNoEmail')">
+                  <UIcon name="i-lucide-info" class="size-3.5 text-amber-500" />
+                </UTooltip>
+              </div>
+              <USwitch v-model="form.sendEmailOnIssue" :disabled="!selectedClient?.email" />
+            </div>
+            <p v-if="form.sendEmailOnIssue && selectedClient?.email" class="text-xs text-(--ui-text-muted) mt-1">
+              {{ $t('invoices.sendEmailOnIssueHint', { email: selectedClient.email }) }}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -826,6 +840,7 @@ const form = reactive({
   tvaLaIncasare: false,
   platitorTva: false,
   plataOnline: false,
+  sendEmailOnIssue: false,
   // Client balance
   showClientBalance: false,
   clientBalanceExisting: '0.00',
@@ -869,6 +884,7 @@ if (props.invoice) {
   form.tvaLaIncasare = props.invoice.tvaLaIncasare || false
   form.platitorTva = props.invoice.platitorTva || false
   form.plataOnline = props.invoice.plataOnline || false
+  form.sendEmailOnIssue = !!props.invoice.scheduledEmailAt
   // Client balance
   form.showClientBalance = props.invoice.showClientBalance || false
   form.clientBalanceExisting = props.invoice.clientBalanceExisting ?? '0.00'
@@ -1120,6 +1136,8 @@ function clearClient() {
     ossVatRates.value = []
     revertOssToStandardVat()
   }
+  // Disable email on issue since no client
+  form.sendEmailOnIssue = false
 }
 
 async function onClientSelected(client: Client) {
@@ -1323,6 +1341,7 @@ async function onSave() {
     tvaLaIncasare: form.tvaLaIncasare,
     platitorTva: form.platitorTva,
     plataOnline: form.plataOnline,
+    scheduledEmailAt: form.sendEmailOnIssue ? new Date().toISOString() : null,
     showClientBalance: form.showClientBalance,
     clientBalanceExisting: form.showClientBalance && form.clientBalanceExisting ? form.clientBalanceExisting : undefined,
     clientBalanceOverdue: form.showClientBalance && form.clientBalanceOverdue ? form.clientBalanceOverdue : undefined,

@@ -205,6 +205,7 @@ export interface CreateInvoicePayload {
   tvaLaIncasare?: boolean
   platitorTva?: boolean
   plataOnline?: boolean
+  scheduledEmailAt?: string | null
   // Client balance
   showClientBalance?: boolean
   clientBalanceExisting?: string
@@ -246,6 +247,7 @@ export interface UpdateInvoicePayload {
   tvaLaIncasare?: boolean
   platitorTva?: boolean
   plataOnline?: boolean
+  scheduledEmailAt?: string | null
   // Client balance
   showClientBalance?: boolean
   clientBalanceExisting?: string | null
@@ -521,6 +523,7 @@ export interface Invoice {
   cancellationReason: string | null
   invoiceTypeCode: string | null
   scheduledSendAt: string | null
+  scheduledEmailAt: string | null
   deliveryLocation: string | null
   projectReference: string | null
   // Options
