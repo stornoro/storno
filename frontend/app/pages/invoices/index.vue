@@ -46,6 +46,7 @@ const statusFilter = ref('all')
 const activeDirection = ref('all')
 const sorting = ref<SortingState>([])
 const paidFilter = ref('all')
+const currencyFilter = ref(companyStore.currentCompany?.defaultCurrency || 'RON')
 const activeDatePreset = ref('thisMonth')
 
 const thisMonth = getMonthRange(0)
@@ -132,6 +133,14 @@ const activeFilters = computed<ActiveFilter[]>(() => {
       clear: () => { applyDatePreset(datePresets.value.find(p => p.value === 'all')!) },
     })
   }
+  const defaultCurrency = companyStore.currentCompany?.defaultCurrency || 'RON'
+  if (currencyFilter.value && currencyFilter.value !== defaultCurrency) {
+    chips.push({
+      key: 'currency',
+      label: `${$t('common.currency')}: ${currencyFilter.value}`,
+      clear: () => { currencyFilter.value = defaultCurrency },
+    })
+  }
   return chips
 })
 
@@ -142,6 +151,7 @@ function resetAllFilters() {
   statusFilter.value = 'all'
   paidFilter.value = 'all'
   activeDirection.value = 'all'
+  currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
   applyDatePreset(datePresets.value.find(p => p.value === 'thisMonth')!)
   page.value = 1
 }
@@ -622,6 +632,7 @@ async function fetchInvoices() {
     isPaid: paidFilter.value === 'paid' ? true : paidFilter.value === 'unpaid' ? false : null,
     dateFrom: dateFrom.value || null,
     dateTo: dateTo.value || null,
+    currency: currencyFilter.value || null,
   })
   invoicesStore.page = page.value
   invoicesStore.limit = limit.value
@@ -629,9 +640,10 @@ async function fetchInvoices() {
   await invoicesStore.fetchInvoices()
 }
 
-watch([page, activeDirection, statusFilter, paidFilter, dateFrom, dateTo], () => fetchInvoices())
+watch([page, activeDirection, statusFilter, paidFilter, dateFrom, dateTo, currencyFilter], () => fetchInvoices())
 
 watch(() => companyStore.currentCompanyId, () => {
+  currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
   resetAllFilters()
   sorting.value = []
   fetchInvoices()
@@ -715,6 +727,25 @@ onUnmounted(() => {
             <!-- Status & Paid filters -->
             <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('invoices.filterByStatus')" class="w-full sm:w-40" />
             <USelectMenu v-model="paidFilter" :items="paidOptions" value-key="value" :placeholder="$t('invoices.filterPaid')" class="w-full sm:w-28" />
+
+            <!-- Currency filter -->
+            <template v-if="invoicesStore.distinctCurrencies.length > 1">
+              <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
+              <div class="flex items-center gap-1">
+                <button
+                  v-for="cur in invoicesStore.distinctCurrencies"
+                  :key="cur"
+                  type="button"
+                  class="px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap"
+                  :class="currencyFilter === cur
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'bg-(--ui-bg-elevated) border-(--ui-border) text-(--ui-text-muted) hover:border-(--ui-text-muted)'"
+                  @click="currencyFilter = cur"
+                >
+                  {{ cur }}
+                </button>
+              </div>
+            </template>
           </div>
 
           <!-- Row 3: Active filter chips -->
@@ -834,27 +865,27 @@ onUnmounted(() => {
       <div v-if="invoices.length" class="flex items-center bg-elevated/50 rounded-lg border border-default mt-2 py-2.5 px-4 gap-0">
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalExcluding') }}</div>
-          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.subtotal) }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.subtotal) }} <span class="text-xs text-muted font-normal">{{ invoicesStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.vatLabel') }}</div>
-          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.vatTotal) }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.vatTotal) }} <span class="text-xs text-muted font-normal">{{ invoicesStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalIncluding') }}</div>
-          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.total) }}</div>
+          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(invoicesStore.totals.total) }} <span class="text-xs text-muted font-normal">{{ invoicesStore.activeCurrency }}</span></div>
         </div>
         <div v-if="activeDirection !== 'incoming'" class="w-px h-8 bg-default shrink-0" />
         <div v-if="activeDirection !== 'incoming'" class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.toBeCollected') }}</div>
-          <div class="text-sm font-bold tabular-nums text-green-600 dark:text-green-400">{{ formatPlainMoney(invoicesStore.totals.receivable) }}</div>
+          <div class="text-sm font-bold tabular-nums text-green-600 dark:text-green-400">{{ formatPlainMoney(invoicesStore.totals.receivable) }} <span class="text-xs font-normal">{{ invoicesStore.activeCurrency }}</span></div>
         </div>
         <div v-if="activeDirection !== 'outgoing'" class="w-px h-8 bg-default shrink-0" />
         <div v-if="activeDirection !== 'outgoing'" class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.toBePaid') }}</div>
-          <div class="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{{ formatPlainMoney(invoicesStore.totals.payable) }}</div>
+          <div class="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{{ formatPlainMoney(invoicesStore.totals.payable) }} <span class="text-xs font-normal">{{ invoicesStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="ml-auto pl-4 flex items-center gap-2.5 shrink-0">

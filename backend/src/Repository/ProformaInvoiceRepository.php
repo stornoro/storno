@@ -14,8 +14,9 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ProformaInvoiceRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+    ) {
         parent::__construct($registry, ProformaInvoice::class);
     }
 
@@ -79,6 +80,8 @@ class ProformaInvoiceRepository extends ServiceEntityRepository
             $sortOrder = strtoupper($filters['order']);
         }
 
+        $currency = $filters['currency'] ?? $company->getDefaultCurrency() ?? 'RON';
+
         $qb = $this->createQueryBuilder('p')
             ->leftJoin('p.client', 'c')->addSelect('c')
             ->where('p.company = :company')
@@ -86,72 +89,80 @@ class ProformaInvoiceRepository extends ServiceEntityRepository
             ->setParameter('company', $company)
             ->orderBy('p.' . $sortField, $sortOrder);
 
-        if (isset($filters['status'])) {
-            $qb->andWhere('p.status = :status')
-                ->setParameter('status', ProformaStatus::from($filters['status']));
-        }
-
-        if (isset($filters['search'])) {
-            $qb->andWhere('p.number LIKE :search OR c.name LIKE :search')
-                ->setParameter('search', '%' . $filters['search'] . '%');
-        }
-
-        if (isset($filters['dateFrom'])) {
-            $qb->andWhere('p.issueDate >= :dateFrom')
-                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
-        }
-
-        if (isset($filters['dateTo'])) {
-            $qb->andWhere('p.issueDate <= :dateTo')
-                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
-        }
+        $this->applyFilters($qb, $filters);
 
         $qb->setFirstResult(($page - 1) * $limit)
             ->setMaxResults($limit);
 
         $paginator = new Paginator($qb);
 
-        // Aggregated totals across all filtered results (not just current page)
-        $totalsQb = $this->createQueryBuilder('p')
+        // Aggregated totals (same currency, no conversion)
+        $totalsQb = $this->createQueryBuilder('t')
             ->select(
-                'SUM(p.subtotal) as totalExcluding',
-                'SUM(p.vatTotal) as totalVat',
-                'SUM(p.total) as totalIncluding',
+                'COALESCE(SUM(t.subtotal), 0) AS totalExcluding',
+                'COALESCE(SUM(t.vatTotal), 0) AS totalVat',
+                'COALESCE(SUM(t.total), 0) AS totalIncluding',
             )
-            ->leftJoin('p.client', 'c')
-            ->where('p.company = :company')
-            ->andWhere('p.deletedAt IS NULL')
+            ->leftJoin('t.client', 'c')
+            ->where('t.company = :company')
+            ->andWhere('t.deletedAt IS NULL')
             ->setParameter('company', $company);
 
-        if (isset($filters['status'])) {
-            $totalsQb->andWhere('p.status = :status')
-                ->setParameter('status', ProformaStatus::from($filters['status']));
-        }
-        if (isset($filters['search'])) {
-            $totalsQb->andWhere('p.number LIKE :search OR c.name LIKE :search')
-                ->setParameter('search', '%' . $filters['search'] . '%');
-        }
-        if (isset($filters['dateFrom'])) {
-            $totalsQb->andWhere('p.issueDate >= :dateFrom')
-                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
-        }
-        if (isset($filters['dateTo'])) {
-            $totalsQb->andWhere('p.issueDate <= :dateTo')
-                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
-        }
+        $this->applyFilters($totalsQb, $filters);
 
         $totals = $totalsQb->getQuery()->getSingleResult();
+
+        // Distinct currencies for this company
+        $distinctCurrencies = $this->createQueryBuilder('dc')
+            ->select('DISTINCT dc.currency')
+            ->where('dc.company = :company')
+            ->andWhere('dc.deletedAt IS NULL')
+            ->setParameter('company', $company)
+            ->getQuery()
+            ->getSingleColumnResult();
 
         return [
             'data' => iterator_to_array($paginator),
             'total' => count($paginator),
             'page' => $page,
             'limit' => $limit,
+            'currency' => $currency,
+            'distinctCurrencies' => $distinctCurrencies,
             'totals' => [
                 'subtotal' => $totals['totalExcluding'] ?? '0.00',
                 'vatTotal' => $totals['totalVat'] ?? '0.00',
                 'total' => $totals['totalIncluding'] ?? '0.00',
             ],
         ];
+    }
+
+    private function applyFilters(\Doctrine\ORM\QueryBuilder $qb, array $filters): void
+    {
+        $a = $qb->getRootAliases()[0];
+
+        if (isset($filters['currency'])) {
+            $qb->andWhere("$a.currency = :currency")
+                ->setParameter('currency', $filters['currency']);
+        }
+
+        if (isset($filters['status'])) {
+            $qb->andWhere("$a.status = :status")
+                ->setParameter('status', ProformaStatus::from($filters['status']));
+        }
+
+        if (isset($filters['search'])) {
+            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search")
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+
+        if (isset($filters['dateFrom'])) {
+            $qb->andWhere("$a.issueDate >= :dateFrom")
+                ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
+        }
+
+        if (isset($filters['dateTo'])) {
+            $qb->andWhere("$a.issueDate <= :dateTo")
+                ->setParameter('dateTo', new \DateTime($filters['dateTo']));
+        }
     }
 }

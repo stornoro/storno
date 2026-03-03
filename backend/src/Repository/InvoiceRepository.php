@@ -18,8 +18,9 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class InvoiceRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+    ) {
         parent::__construct($registry, Invoice::class);
     }
 
@@ -89,6 +90,8 @@ class InvoiceRepository extends ServiceEntityRepository
             $sortOrder = strtoupper($filters['order']);
         }
 
+        $currency = $filters['currency'] ?? $company->getDefaultCurrency() ?? 'RON';
+
         $qb = $this->createQueryBuilder('i')
             ->leftJoin('i.client', 'c')->addSelect('c')
             ->where('i.company = :company')
@@ -102,30 +105,39 @@ class InvoiceRepository extends ServiceEntityRepository
 
         $paginator = new Paginator($qb);
 
-        // Aggregated totals across all filtered results (not just current page)
-        $totalsQb = $this->createQueryBuilder('i')
+        // Aggregated totals across all filtered results (same currency, no conversion)
+        $totalsQb = $this->createQueryBuilder('t')
             ->select(
-                'SUM(i.subtotal) as totalExcluding',
-                'SUM(i.vatTotal) as totalVat',
-                'SUM(i.total) as totalIncluding',
-                'SUM(CASE WHEN i.direction = :outgoing AND i.paidAt IS NULL THEN (i.total - i.amountPaid) ELSE 0 END) as totalReceivable',
-                'SUM(CASE WHEN i.direction = :incoming AND i.paidAt IS NULL THEN (i.total - i.amountPaid) ELSE 0 END) as totalPayable',
+                'COALESCE(SUM(t.subtotal), 0) AS totalExcluding',
+                'COALESCE(SUM(t.vatTotal), 0) AS totalVat',
+                'COALESCE(SUM(t.total), 0) AS totalIncluding',
+                "COALESCE(SUM(CASE WHEN t.direction = 'outgoing' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalReceivable",
+                "COALESCE(SUM(CASE WHEN t.direction = 'incoming' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalPayable",
             )
-            ->leftJoin('i.client', 'c')
-            ->where('i.company = :company')
-            ->setParameter('company', $company)
-            ->setParameter('outgoing', InvoiceDirection::OUTGOING->value)
-            ->setParameter('incoming', InvoiceDirection::INCOMING->value);
+            ->leftJoin('t.client', 'c')
+            ->where('t.company = :company')
+            ->setParameter('company', $company);
 
         $this->applyFilters($totalsQb, $filters);
 
         $totals = $totalsQb->getQuery()->getSingleResult();
+
+        // Distinct currencies for this company
+        $distinctCurrencies = $this->createQueryBuilder('dc')
+            ->select('DISTINCT dc.currency')
+            ->where('dc.company = :company')
+            ->andWhere('dc.deletedAt IS NULL')
+            ->setParameter('company', $company)
+            ->getQuery()
+            ->getSingleColumnResult();
 
         return [
             'data' => iterator_to_array($paginator),
             'total' => count($paginator),
             'page' => $page,
             'limit' => $limit,
+            'currency' => $currency,
+            'distinctCurrencies' => $distinctCurrencies,
             'totals' => [
                 'subtotal' => $totals['totalExcluding'] ?? '0.00',
                 'vatTotal' => $totals['totalVat'] ?? '0.00',
@@ -138,67 +150,74 @@ class InvoiceRepository extends ServiceEntityRepository
 
     private function applyFilters(\Doctrine\ORM\QueryBuilder $qb, array $filters): void
     {
+        $a = $qb->getRootAliases()[0];
+
+        if (isset($filters['currency'])) {
+            $qb->andWhere("$a.currency = :currency")
+                ->setParameter('currency', $filters['currency']);
+        }
+
         if (isset($filters['type'])) {
-            $qb->andWhere('i.documentType = :type')
+            $qb->andWhere("$a.documentType = :type")
                 ->setParameter('type', DocumentType::from($filters['type']));
         }
 
         if (isset($filters['status'])) {
-            $qb->andWhere('i.status = :status')
+            $qb->andWhere("$a.status = :status")
                 ->setParameter('status', DocumentStatus::from($filters['status']));
         }
 
         if (isset($filters['direction'])) {
-            $qb->andWhere('i.direction = :direction')
+            $qb->andWhere("$a.direction = :direction")
                 ->setParameter('direction', InvoiceDirection::from($filters['direction']));
         }
 
         if (isset($filters['clientId'])) {
-            $qb->andWhere('i.client = :clientId')
+            $qb->andWhere("$a.client = :clientId")
                 ->setParameter('clientId', $filters['clientId']);
         }
 
         if (isset($filters['search'])) {
-            $qb->andWhere('i.number LIKE :search OR c.name LIKE :search OR i.senderName LIKE :search OR i.receiverName LIKE :search')
+            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search OR $a.senderName LIKE :search OR $a.receiverName LIKE :search")
                 ->setParameter('search', '%' . $filters['search'] . '%');
         }
 
         if (isset($filters['dateFrom'])) {
-            $qb->andWhere('i.issueDate >= :dateFrom')
+            $qb->andWhere("$a.issueDate >= :dateFrom")
                 ->setParameter('dateFrom', new \DateTime($filters['dateFrom']));
         }
 
         if (isset($filters['dateTo'])) {
-            $qb->andWhere('i.issueDate <= :dateTo')
+            $qb->andWhere("$a.issueDate <= :dateTo")
                 ->setParameter('dateTo', new \DateTime($filters['dateTo']));
         }
 
         if (isset($filters['isDuplicate'])) {
-            $qb->andWhere('i.isDuplicate = :isDuplicate')
+            $qb->andWhere("$a.isDuplicate = :isDuplicate")
                 ->setParameter('isDuplicate', filter_var($filters['isDuplicate'], FILTER_VALIDATE_BOOLEAN));
         }
 
         if (isset($filters['isLateSubmission'])) {
-            $qb->andWhere('i.isLateSubmission = :isLateSubmission')
+            $qb->andWhere("$a.isLateSubmission = :isLateSubmission")
                 ->setParameter('isLateSubmission', filter_var($filters['isLateSubmission'], FILTER_VALIDATE_BOOLEAN));
         }
 
         if (isset($filters['isPaid'])) {
             if (filter_var($filters['isPaid'], FILTER_VALIDATE_BOOLEAN)) {
-                $qb->andWhere('i.paidAt IS NOT NULL');
+                $qb->andWhere("$a.paidAt IS NOT NULL");
             } else {
-                $qb->andWhere('i.paidAt IS NULL');
+                $qb->andWhere("$a.paidAt IS NULL");
             }
         }
 
         if (isset($filters['isOverdue']) && filter_var($filters['isOverdue'], FILTER_VALIDATE_BOOLEAN)) {
-            $qb->andWhere('i.dueDate < :now')
-                ->andWhere('i.paidAt IS NULL')
+            $qb->andWhere("$a.dueDate < :now")
+                ->andWhere("$a.paidAt IS NULL")
                 ->setParameter('now', new \DateTime());
         }
 
         if (isset($filters['supplierId'])) {
-            $qb->andWhere('i.supplier = :supplierId')
+            $qb->andWhere("$a.supplier = :supplierId")
                 ->setParameter('supplierId', $filters['supplierId']);
         }
     }

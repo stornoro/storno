@@ -14,6 +14,7 @@ export interface InvoiceFilters {
   isLateSubmission: boolean | null
   isPaid: boolean | null
   supplierId: string | null
+  currency: string | null
 }
 
 interface InvoiceTotals {
@@ -30,6 +31,8 @@ interface InvoicePaginatedResponse {
   page: number
   limit: number
   totals: InvoiceTotals
+  currency: string
+  distinctCurrencies: string[]
 }
 
 export const useInvoiceStore = defineStore('invoices', () => {
@@ -49,6 +52,7 @@ export const useInvoiceStore = defineStore('invoices', () => {
     isLateSubmission: null,
     isPaid: null,
     supplierId: null,
+    currency: null,
   })
 
   const page = ref(1)
@@ -57,6 +61,8 @@ export const useInvoiceStore = defineStore('invoices', () => {
   const sort = ref<string | null>('issueDate')
   const order = ref<'asc' | 'desc' | null>('desc')
   const totals = ref<InvoiceTotals>({ subtotal: '0.00', vatTotal: '0.00', total: '0.00', receivable: '0.00', payable: '0.00' })
+  const activeCurrency = ref<string>('RON')
+  const distinctCurrencies = ref<string[]>([])
 
   // ── Getters ────────────────────────────────────────────────────────
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
@@ -98,6 +104,7 @@ export const useInvoiceStore = defineStore('invoices', () => {
       if (filters.value.isLateSubmission !== null) params.isLateSubmission = filters.value.isLateSubmission
       if (filters.value.isPaid !== null) params.isPaid = filters.value.isPaid
       if (filters.value.supplierId) params.supplierId = filters.value.supplierId
+      if (filters.value.currency) params.currency = filters.value.currency
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -107,6 +114,8 @@ export const useInvoiceStore = defineStore('invoices', () => {
       total.value = response.total
       page.value = response.page
       totals.value = response.totals ?? { subtotal: '0.00', vatTotal: '0.00', total: '0.00', receivable: '0.00', payable: '0.00' }
+      activeCurrency.value = response.currency ?? 'RON'
+      distinctCurrencies.value = response.distinctCurrencies ?? []
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca facturile.'
@@ -158,6 +167,7 @@ export const useInvoiceStore = defineStore('invoices', () => {
       isLateSubmission: null,
       isPaid: null,
       supplierId: null,
+      currency: null,
     }
     page.value = 1
   }
@@ -462,6 +472,8 @@ export const useInvoiceStore = defineStore('invoices', () => {
     sort,
     order,
     totals,
+    activeCurrency,
+    distinctCurrencies,
 
     // Getters
     totalPages,
