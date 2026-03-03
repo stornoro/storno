@@ -1223,6 +1223,8 @@ export default defineI18nLocale(async () => {
       bankAccount: 'Cont bancar',
       postalCode: 'Cod postal',
       defaultPaymentTermDays: 'Termen de plata implicit (zile)',
+      idNumber: 'Nr. identificare',
+      currency: 'Moneda',
       typeCompany: 'Persoana juridica',
       typeIndividual: 'Persoana fizica',
       addClient: 'Adauga client',
