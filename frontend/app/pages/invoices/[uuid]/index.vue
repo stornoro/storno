@@ -193,7 +193,7 @@
       <UCard v-if="isRoClient && invoice.scheduledSendAt && !invoice.anafUploadId" class="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
         <div class="flex items-center gap-2 text-sm">
           <UIcon name="i-lucide-clock" class="text-blue-500 shrink-0 size-5" />
-          <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(invoice.scheduledSendAt) }) }}</span>
+          <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(invoice.scheduledSendAt) }) }} <span class="text-blue-600/70 dark:text-blue-300/70">({{ formatRelative(invoice.scheduledSendAt) }})</span></span>
         </div>
       </UCard>
 
@@ -879,7 +879,7 @@ const route = useRoute()
 const invoiceStore = useInvoiceStore()
 const { get: apiGet, post: apiPost } = useApi()
 const { formatMoney } = useMoney()
-const { formatDate, formatDateTime } = useDate()
+const { formatDate, formatDateTime, formatRelative } = useDate()
 const { formatAndHighlight } = useXmlFormatter()
 
 const invoice = ref<any>(null)
