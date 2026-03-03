@@ -151,9 +151,18 @@ class UserController extends AbstractController
         }
 
         // Password change
-        if (!empty($data['currentPassword']) && !empty($data['newPassword'])) {
-            if (!$this->passwordHasher->isPasswordValid($user, $data['currentPassword'])) {
-                return $this->json(['error' => 'Parola curenta este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        if (!empty($data['newPassword'])) {
+            if ($user->getPassword() !== null) {
+                // User has a password: require currentPassword
+                if (empty($data['currentPassword']) || !$this->passwordHasher->isPasswordValid($user, $data['currentPassword'])) {
+                    return $this->json(['error' => 'Parola curenta este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+            } else {
+                // Social-only user setting password for the first time: require MFA verification
+                $verificationToken = $data['verificationToken'] ?? null;
+                if (!$verificationToken || !$this->mfaService->validateVerificationToken($verificationToken, $user)) {
+                    return $this->json(['error' => 'Verificarea a esuat.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
             }
             $user->setPassword($this->passwordHasher->hashPassword($user, $data['newPassword']));
         }

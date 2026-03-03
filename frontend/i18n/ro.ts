@@ -1942,6 +1942,7 @@ export default defineI18nLocale(async () => {
         changePasswordDesc: 'Foloseste o parola puternica de minim 8 caractere',
         currentPassword: 'Parola curenta',
         newPassword: 'Parola noua',
+        setPasswordHint: 'Contul tau foloseste autentificarea cu Google. Vei fi verificat prin email inainte de setarea parolei.',
         updateSuccess: 'Profil actualizat cu succes',
         updateError: 'Eroare la actualizarea profilului',
       },
