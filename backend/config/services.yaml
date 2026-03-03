@@ -233,6 +233,7 @@ services:
     App\Controller\Api\V1\BillingController:
         arguments:
             $stripePublishableKey: '%stripe.publishable_key%'
+            $billingCompanyId: '%stripe.billing_company_id%'
 
     App\Service\StripeAppInvoiceService:
         arguments:

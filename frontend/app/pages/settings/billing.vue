@@ -27,10 +27,35 @@ onMounted(async () => {
   await Promise.all([
     billingStore.fetchPlans(),
     billingStore.fetchSubscription(),
+    billingStore.fetchInvoices(),
   ])
   // Refresh user data to sync plan status
   authStore.fetchUser()
 })
+
+const downloadingInvoiceId = ref<string | null>(null)
+
+async function downloadInvoicePdf(inv: { id: string, number: string }) {
+  const { apiFetch } = useApi()
+  downloadingInvoiceId.value = inv.id
+  try {
+    const blob = await apiFetch<Blob>(`/v1/billing/invoices/${inv.id}/pdf`, {
+      responseType: 'blob',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `factura-${inv.number || 'download'}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  catch {
+    toast.add({ title: $t('settings.billingPage.error'), color: 'error' })
+  }
+  finally {
+    downloadingInvoiceId.value = null
+  }
+}
 
 // Handle Stripe redirect status
 const route = useRoute()
@@ -486,6 +511,62 @@ const intervalItems = computed(() => [
           </p>
         </div>
       </UPageCard>
+
+      <!-- Billing history -->
+      <div class="mt-8">
+        <h3 class="font-semibold text-lg mb-1">{{ $t('settings.billingPage.billingHistory') }}</h3>
+        <p class="text-sm text-(--ui-text-muted) mb-4">{{ $t('settings.billingPage.billingHistoryDescription') }}</p>
+
+        <div v-if="billingStore.invoicesLoading" class="flex justify-center py-8">
+          <UIcon name="i-lucide-loader-2" class="animate-spin size-6 text-(--ui-primary)" />
+        </div>
+
+        <UPageCard v-else-if="billingStore.invoices.length === 0" variant="subtle">
+          <div class="flex flex-col items-center gap-3 py-6">
+            <UIcon name="i-lucide-receipt" class="size-10 text-(--ui-text-muted)" />
+            <p class="text-center text-(--ui-text-muted) text-sm">
+              {{ $t('settings.billingPage.noInvoices') }}
+            </p>
+          </div>
+        </UPageCard>
+
+        <UPageCard v-else variant="subtle" :ui="{ root: 'overflow-x-auto' }">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-(--ui-border)">
+                <th class="text-left py-2 px-3 font-medium text-(--ui-text-muted)">{{ $t('settings.billingPage.invoiceNumber') }}</th>
+                <th class="text-left py-2 px-3 font-medium text-(--ui-text-muted)">{{ $t('settings.billingPage.invoiceDate') }}</th>
+                <th class="text-right py-2 px-3 font-medium text-(--ui-text-muted)">{{ $t('settings.billingPage.invoiceTotal') }}</th>
+                <th class="text-left py-2 px-3 font-medium text-(--ui-text-muted)">{{ $t('settings.billingPage.invoiceStatus') }}</th>
+                <th class="text-right py-2 px-3 font-medium text-(--ui-text-muted)" />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="inv in billingStore.invoices" :key="inv.id" class="border-b border-(--ui-border) last:border-0">
+                <td class="py-2.5 px-3 font-mono">{{ inv.number }}</td>
+                <td class="py-2.5 px-3">{{ formatDate(inv.issueDate) }}</td>
+                <td class="py-2.5 px-3 text-right font-medium">{{ Number(inv.total).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) }} {{ inv.currency }}</td>
+                <td class="py-2.5 px-3">
+                  <UBadge :color="inv.paidAt ? 'success' : 'warning'" variant="subtle" size="sm">
+                    {{ inv.paidAt ? $t('settings.billingPage.invoicePaid') : inv.status }}
+                  </UBadge>
+                </td>
+                <td class="py-2.5 px-3 text-right">
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    icon="i-lucide-download"
+                    :loading="downloadingInvoiceId === inv.id"
+                    @click="downloadInvoicePdf(inv)"
+                  >
+                    PDF
+                  </UButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </UPageCard>
+      </div>
     </template>
 
     <!-- Plan change confirmation modal -->

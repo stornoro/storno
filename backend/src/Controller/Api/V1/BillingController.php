@@ -2,7 +2,10 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Repository\CompanyRepository;
+use App\Repository\InvoiceRepository;
 use App\Security\OrganizationContext;
+use App\Service\DocumentPdfService;
 use App\Service\LicenseManager;
 use App\Service\LicenseValidationService;
 use App\Service\StripeService;
@@ -14,6 +17,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Uid\Uuid;
 
 #[Route('/api/v1/billing')]
 class BillingController extends AbstractController
@@ -26,7 +30,11 @@ class BillingController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
         private readonly UsageTrackingService $usageTrackingService,
+        private readonly InvoiceRepository $invoiceRepository,
+        private readonly CompanyRepository $companyRepository,
+        private readonly DocumentPdfService $documentPdfService,
         private readonly string $stripePublishableKey,
+        private readonly ?string $billingCompanyId = null,
     ) {}
 
     /**
@@ -419,6 +427,117 @@ class BillingController extends AbstractController
             return $this->json(['status' => 'resumed']);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * List billing invoices for the current org (matched by receiverCif).
+     */
+    #[Route('/invoices', name: 'billing_invoices', methods: ['GET'])]
+    public function invoices(Request $request): JsonResponse
+    {
+        $org = $this->organizationContext->getOrganization();
+        if (!$org) {
+            return $this->json(['error' => 'Organization not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission('org.manage_billing')) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        $billingCompany = $this->resolveBillingCompany();
+        if (!$billingCompany) {
+            return $this->json(['data' => [], 'total' => 0]);
+        }
+
+        $company = $org->getCompanies()->first();
+        if (!$company) {
+            return $this->json(['data' => [], 'total' => 0]);
+        }
+
+        $cif = (string) $company->getCif();
+        $page = $request->query->getInt('page', 1);
+        $limit = $request->query->getInt('limit', 20);
+
+        $result = $this->invoiceRepository->findBillingInvoicesForOrg($billingCompany, $cif, $page, $limit);
+
+        $invoices = array_map(fn ($invoice) => [
+            'id' => $invoice->getId()->toRfc4122(),
+            'number' => $invoice->getNumber(),
+            'issueDate' => $invoice->getIssueDate()?->format('Y-m-d'),
+            'total' => $invoice->getTotal(),
+            'currency' => $invoice->getCurrency(),
+            'status' => $invoice->getStatus()?->value,
+            'paidAt' => $invoice->getPaidAt()?->format('Y-m-d'),
+        ], $result['data']);
+
+        return $this->json([
+            'data' => $invoices,
+            'total' => $result['total'],
+            'page' => $result['page'],
+            'limit' => $result['limit'],
+        ]);
+    }
+
+    /**
+     * Download PDF for a billing invoice (authorization via receiverCif match).
+     */
+    #[Route('/invoices/{uuid}/pdf', name: 'billing_invoice_pdf', methods: ['GET'])]
+    public function invoicePdf(string $uuid): Response
+    {
+        $org = $this->organizationContext->getOrganization();
+        if (!$org) {
+            return $this->json(['error' => 'Organization not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission('org.manage_billing')) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        $billingCompany = $this->resolveBillingCompany();
+        if (!$billingCompany) {
+            return $this->json(['error' => 'Billing not configured'], Response::HTTP_NOT_FOUND);
+        }
+
+        $invoice = $this->invoiceRepository->findWithDetails($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Authorization: invoice must belong to billing company AND receiverCif must match org's company
+        if ($invoice->getCompany()?->getId()?->toRfc4122() !== $billingCompany->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Invoice not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $company = $org->getCompanies()->first();
+        if (!$company || $invoice->getReceiverCif() !== (string) $company->getCif()) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        try {
+            $pdfContent = $this->documentPdfService->generateInvoicePdf($invoice);
+        } catch (\Throwable $e) {
+            $this->logger->error('Billing invoice PDF generation failed', ['error' => $e->getMessage()]);
+
+            return $this->json(['error' => 'PDF generation failed'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new Response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('inline; filename="invoice-%s.pdf"', $invoice->getNumber()),
+        ]);
+    }
+
+    private function resolveBillingCompany(): ?\App\Entity\Company
+    {
+        if (empty($this->billingCompanyId)) {
+            return null;
+        }
+
+        try {
+            return $this->companyRepository->find(Uuid::fromString($this->billingCompanyId));
+        } catch (\Exception) {
+            return null;
         }
     }
 }
