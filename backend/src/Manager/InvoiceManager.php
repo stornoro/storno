@@ -603,6 +603,7 @@ class InvoiceManager
         $event->setMetadata([
             'action' => $isRefund ? 'refund_issued' : 'issued',
             'efacturaDelayHours' => $delayHours,
+            'scheduledSendAt' => $invoice->getScheduledSendAt()?->format('c'),
         ]);
         $invoice->addEvent($event);
 

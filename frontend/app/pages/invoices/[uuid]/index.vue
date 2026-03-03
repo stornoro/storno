@@ -485,11 +485,11 @@
                   </div>
                   <!-- Auto submit scheduled -->
                   <div
-                    v-else-if="event.metadata?.action === 'issued' && event.metadata?.efacturaDelayHours"
+                    v-else-if="event.metadata?.action === 'issued' && event.metadata?.scheduledSendAt"
                     class="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2"
                   >
                     <UIcon name="i-lucide-timer" class="size-4 shrink-0 text-blue-500 mt-0.5" />
-                    <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.autoSubmitScheduled') }}</p>
+                    <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(event.metadata.scheduledSendAt) }) }}</p>
                   </div>
                 </div>
               </div>
@@ -1147,8 +1147,8 @@ function getEventDetail(event: any): string | null {
   if (meta.action === 'submitted' && meta.scheduledSendAt) {
     return $t('invoices.scheduledSendAt', { date: formatDateTime(meta.scheduledSendAt) })
   }
-  if (meta.action === 'issued' && meta.efacturaDelayHours) {
-    return $t('invoices.autoSubmitScheduled')
+  if (meta.action === 'issued' && meta.scheduledSendAt) {
+    return $t('invoices.scheduledSendAt', { date: formatDateTime(meta.scheduledSendAt) })
   }
   if (meta.action === 'created_from_recurring' && meta.recurringInvoiceReference) {
     return meta.recurringInvoiceReference
