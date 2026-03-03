@@ -6,7 +6,7 @@ useHead({ title: $t('oauth2.authorize.title') })
 
 const route = useRoute()
 const { get, post } = useApi()
-const toast = useToast()
+const authStore = useAuthStore()
 
 const clientId = computed(() => route.query.client_id as string)
 const redirectUri = computed(() => route.query.redirect_uri as string)
@@ -23,8 +23,22 @@ const clientInfo = ref<{ name: string, description: string | null, logoUrl: stri
 const requestedScopes = ref<string[]>([])
 const showMfaModal = ref(false)
 
-// Group scopes by category for accordion display
-const permissionItems = computed(() => {
+const scopeCategoryIcons: Record<string, string> = {
+  company: 'i-lucide-building-2',
+  client: 'i-lucide-users',
+  product: 'i-lucide-package',
+  invoice: 'i-lucide-file-text',
+  series: 'i-lucide-hash',
+  payment: 'i-lucide-credit-card',
+  efactura: 'i-lucide-send',
+  settings: 'i-lucide-settings',
+  org: 'i-lucide-landmark',
+  export: 'i-lucide-download',
+  oauth2_app: 'i-lucide-app-window',
+}
+
+// Group scopes by category for display
+const permissionGroups = computed(() => {
   const grouped: Record<string, string[]> = {}
   for (const s of requestedScopes.value) {
     const category = s.split('.')[0] ?? 'other'
@@ -38,12 +52,32 @@ const permissionItems = computed(() => {
     const translated = $t(key)
     const label = translated !== key ? translated : category
     return {
-      label: `${label} (${scopes.length})`,
-      icon: 'i-lucide-shield-check' as const,
+      label,
+      icon: scopeCategoryIcons[category] ?? 'i-lucide-shield-check',
       value: category,
       scopes,
     }
   })
+})
+
+const expandedCategories = ref<Set<string>>(new Set())
+
+function toggleCategory(category: string) {
+  if (expandedCategories.value.has(category)) {
+    expandedCategories.value.delete(category)
+  }
+  else {
+    expandedCategories.value.add(category)
+  }
+}
+
+const redirectDomain = computed(() => {
+  try {
+    return new URL(redirectUri.value).hostname
+  }
+  catch {
+    return redirectUri.value
+  }
 })
 
 async function fetchClientInfo() {
@@ -146,87 +180,147 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-svh flex items-center justify-center bg-muted p-4">
-    <div class="w-full max-w-md">
-      <!-- Loading -->
-      <UCard v-if="loading" class="text-center">
-        <div class="py-8 flex flex-col items-center gap-4">
-          <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-muted" />
-          <p class="text-sm text-(--ui-text-muted)">{{ $t('common.loading') }}...</p>
-        </div>
-      </UCard>
+  <div>
+    <!-- Loading -->
+    <div v-if="loading" class="py-8 flex flex-col items-center gap-4">
+      <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-(--ui-text-muted)" />
+      <p class="text-sm text-(--ui-text-muted)">{{ $t('common.loading') }}...</p>
+    </div>
 
-      <!-- Error -->
-      <UCard v-else-if="error" class="text-center">
-        <div class="py-8 flex flex-col items-center gap-4">
-          <UIcon name="i-lucide-alert-circle" class="size-12 text-error" />
-          <p class="text-sm text-(--ui-text-muted)">{{ error }}</p>
+    <!-- Error -->
+    <UCard v-else-if="error" variant="outline">
+      <div class="py-6 flex flex-col items-center gap-4">
+        <div class="size-12 rounded-full bg-error/10 flex items-center justify-center">
+          <UIcon name="i-lucide-alert-circle" class="size-6 text-error" />
         </div>
-      </UCard>
+        <p class="text-sm text-(--ui-text-muted) text-center">{{ error }}</p>
+      </div>
+    </UCard>
 
-      <!-- Consent screen -->
-      <UCard v-else-if="clientInfo">
-        <div class="space-y-6">
-          <!-- App info -->
-          <div class="text-center space-y-3">
-            <div v-if="clientInfo.logoUrl" class="flex justify-center">
-              <img :src="clientInfo.logoUrl" :alt="clientInfo.name" class="size-16 rounded-xl" />
-            </div>
-            <div v-else class="flex justify-center">
-              <div class="size-16 rounded-xl bg-primary/10 flex items-center justify-center">
-                <UIcon name="i-lucide-app-window" class="size-8 text-primary" />
-              </div>
-            </div>
-            <h2 class="text-lg font-semibold text-(--ui-text-highlighted)">
-              {{ $t('oauth2.authorize.requestsAccess', { app: clientInfo.name }) }}
-            </h2>
-            <p v-if="clientInfo.websiteUrl" class="text-sm text-(--ui-text-muted)">
-              {{ clientInfo.websiteUrl }}
-            </p>
+    <!-- Consent screen -->
+    <UCard v-else-if="clientInfo" variant="outline">
+      <div class="space-y-5">
+        <!-- App-to-app connection -->
+        <div class="flex items-center justify-center gap-4">
+          <!-- App logo -->
+          <div v-if="clientInfo.logoUrl" class="size-14 rounded-xl overflow-hidden ring-1 ring-(--ui-border) shrink-0">
+            <img :src="clientInfo.logoUrl" :alt="clientInfo.name" class="size-full object-cover" />
+          </div>
+          <div v-else class="size-14 rounded-xl bg-primary/10 flex items-center justify-center ring-1 ring-(--ui-border) shrink-0">
+            <UIcon name="i-lucide-app-window" class="size-7 text-primary" />
           </div>
 
-          <!-- Requested permissions -->
-          <div>
-            <h3 class="text-sm font-medium text-(--ui-text-highlighted) mb-3">{{ $t('oauth2.authorize.permissions') }}</h3>
-            <UAccordion :items="permissionItems" type="multiple" collapsible>
-              <template #body="{ item }">
-                <div class="space-y-0.5">
-                  <div v-for="s in (item as any).scopes" :key="s" class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
-                    <UIcon name="i-lucide-check" class="size-3 text-success" />
-                    {{ s }}
+          <!-- Connection indicator -->
+          <div class="flex items-center gap-1 text-(--ui-text-dimmed)">
+            <div class="w-4 h-px bg-(--ui-border)" />
+            <UIcon name="i-lucide-arrow-left-right" class="size-4" />
+            <div class="w-4 h-px bg-(--ui-border)" />
+          </div>
+
+          <!-- Storno logo -->
+          <div class="size-14 rounded-xl overflow-hidden ring-1 ring-(--ui-border) shrink-0 flex items-center justify-center bg-(--ui-bg)">
+            <img src="/logo.png" alt="Storno.ro" class="h-8 w-auto" />
+          </div>
+        </div>
+
+        <!-- Title -->
+        <div class="text-center space-y-1">
+          <h2 class="text-lg font-semibold text-(--ui-text-highlighted)">
+            {{ $t('oauth2.authorize.requestsAccess', { app: clientInfo.name }) }}
+          </h2>
+          <p v-if="clientInfo.websiteUrl" class="text-xs text-(--ui-text-muted)">
+            {{ clientInfo.websiteUrl }}
+          </p>
+        </div>
+
+        <!-- Logged-in user -->
+        <div class="flex items-center gap-2 rounded-lg bg-(--ui-bg-elevated) px-3 py-2">
+          <UAvatar :text="authStore.initials" size="xs" />
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-medium text-(--ui-text-highlighted) truncate">{{ authStore.displayName }}</p>
+            <p v-if="authStore.user?.email" class="text-xs text-(--ui-text-muted) truncate">{{ authStore.user.email }}</p>
+          </div>
+        </div>
+
+        <!-- Requested permissions -->
+        <div>
+          <h3 class="text-xs font-medium text-(--ui-text-muted) uppercase tracking-wide mb-2">
+            {{ $t('oauth2.authorize.permissions') }}
+          </h3>
+          <div class="rounded-lg border border-(--ui-border) divide-y divide-(--ui-border) overflow-hidden">
+            <div v-for="group in permissionGroups" :key="group.value">
+              <button
+                class="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-(--ui-bg-elevated)/50 transition-colors"
+                @click="toggleCategory(group.value)"
+              >
+                <UIcon :name="group.icon" class="size-4 text-primary shrink-0" />
+                <span class="text-sm font-medium text-(--ui-text-highlighted) flex-1">{{ group.label }}</span>
+                <UBadge variant="subtle" size="sm" color="neutral">{{ group.scopes.length }}</UBadge>
+                <UIcon
+                  name="i-lucide-chevron-down"
+                  class="size-4 text-(--ui-text-dimmed) shrink-0 transition-transform duration-200"
+                  :class="expandedCategories.has(group.value) ? 'rotate-180' : ''"
+                />
+              </button>
+              <Transition
+                enter-active-class="transition-all duration-200 ease-out"
+                leave-active-class="transition-all duration-150 ease-in"
+                enter-from-class="opacity-0 max-h-0"
+                enter-to-class="opacity-100 max-h-48"
+                leave-from-class="opacity-100 max-h-48"
+                leave-to-class="opacity-0 max-h-0"
+              >
+                <div v-show="expandedCategories.has(group.value)" class="overflow-hidden">
+                  <div class="px-3 pb-2.5 pt-0.5 ml-6.5 space-y-1">
+                    <div v-for="s in group.scopes" :key="s" class="text-xs text-(--ui-text-muted) flex items-center gap-1.5">
+                      <UIcon name="i-lucide-check" class="size-3 text-success shrink-0" />
+                      <span class="font-mono">{{ s }}</span>
+                    </div>
                   </div>
                 </div>
-              </template>
-            </UAccordion>
-          </div>
-
-          <!-- Security note -->
-          <div class="rounded-lg bg-muted p-3">
-            <p class="text-xs text-(--ui-text-muted)">{{ $t('oauth2.authorize.securityNote') }}</p>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex gap-3">
-            <UButton
-              class="flex-1"
-              variant="outline"
-              color="neutral"
-              :loading="submitting"
-              @click="onAuthorize(false)"
-            >
-              {{ $t('oauth2.authorize.deny') }}
-            </UButton>
-            <UButton
-              class="flex-1"
-              :loading="submitting"
-              @click="onAuthorize(true)"
-            >
-              {{ $t('oauth2.authorize.approve') }}
-            </UButton>
+              </Transition>
+            </div>
           </div>
         </div>
-      </UCard>
-    </div>
+
+        <!-- Security note -->
+        <div class="flex items-start gap-2 rounded-lg bg-(--ui-bg-elevated) p-3">
+          <UIcon name="i-lucide-info" class="size-3.5 text-(--ui-text-dimmed) shrink-0 mt-0.5" />
+          <p class="text-xs text-(--ui-text-muted) leading-relaxed">
+            {{ $t('oauth2.authorize.securityNote') }}
+          </p>
+        </div>
+
+        <!-- Redirect notice -->
+        <p class="text-center text-xs text-(--ui-text-dimmed)">
+          {{ $t('oauth2.authorize.redirectNotice', { domain: redirectDomain }) }}
+        </p>
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+          <UButton
+            class="flex-1"
+            variant="outline"
+            color="neutral"
+            size="lg"
+            :loading="submitting"
+            :ui="{ base: 'rounded-xl justify-center font-semibold' }"
+            @click="onAuthorize(false)"
+          >
+            {{ $t('oauth2.authorize.deny') }}
+          </UButton>
+          <UButton
+            class="flex-1"
+            size="lg"
+            :loading="submitting"
+            :ui="{ base: 'rounded-xl justify-center font-semibold' }"
+            @click="onAuthorize(true)"
+          >
+            {{ $t('oauth2.authorize.approve') }}
+          </UButton>
+        </div>
+      </div>
+    </UCard>
 
     <SharedStepUpMfaModal v-model:open="showMfaModal" @verified="onMfaVerified" />
   </div>
