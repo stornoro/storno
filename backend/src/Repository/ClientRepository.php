@@ -32,7 +32,7 @@ class ClientRepository extends ServiceEntityRepository
             ->orderBy('c.createdAt', 'DESC');
 
         if ($search) {
-            $qb->andWhere('c.name LIKE :search OR c.cui LIKE :search OR c.cnp LIKE :search OR c.email LIKE :search')
+            $qb->andWhere('c.name LIKE :search OR c.cui LIKE :search OR c.cnp LIKE :search OR c.email LIKE :search OR c.idNumber LIKE :search')
                 ->setParameter('search', '%' . $search . '%');
         }
 
@@ -53,8 +53,8 @@ class ClientRepository extends ServiceEntityRepository
         $searchClause = '';
         $searchParams = [];
         if ($search) {
-            $searchClause = 'AND (c.name LIKE ? OR c.cui LIKE ? OR c.cnp LIKE ? OR c.email LIKE ?)';
-            $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%"];
+            $searchClause = 'AND (c.name LIKE ? OR c.cui LIKE ? OR c.cnp LIKE ? OR c.email LIKE ? OR c.id_number LIKE ?)';
+            $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%"];
         }
 
         // Main query: group clients by identifier, join outgoing invoice stats only
