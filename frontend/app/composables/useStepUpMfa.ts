@@ -88,6 +88,16 @@ export function useStepUpMfa() {
     }
   }
 
+  async function sendEmailOtp(): Promise<boolean> {
+    if (!challengeToken.value) return false
+    try {
+      await post('/v1/mfa/email-otp/send', { challengeToken: challengeToken.value })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async function verify(type: string, code?: string, credential?: any): Promise<boolean> {
     loading.value = true
     error.value = null
@@ -125,6 +135,7 @@ export function useStepUpMfa() {
     error,
     requestChallenge,
     getPasskeyOptions,
+    sendEmailOtp,
     verify,
     verifyWithPasskey,
     reset,

@@ -10,15 +10,23 @@ const activeTab = ref('passkey')
 const totpCode = ref('')
 const backupCode = ref('')
 
+const emailOtpCode = ref('')
+const emailOtpSent = ref(false)
+const emailOtpSending = ref(false)
+const emailOtpCooldown = ref(0)
+let emailOtpTimer: ReturnType<typeof setInterval> | null = null
+
 const hasPasskey = computed(() => stepUp.methods.value.includes('passkey'))
 const hasTotp = computed(() => stepUp.methods.value.includes('totp'))
 const hasBackup = computed(() => stepUp.methods.value.includes('backup_code'))
+const hasEmailOtp = computed(() => stepUp.methods.value.includes('email_otp'))
 
 const tabs = computed(() => {
   const items: { label: string; value: string }[] = []
   if (hasPasskey.value) items.push({ label: $t('auth.mfaPasskeyTab'), value: 'passkey' })
   if (hasTotp.value) items.push({ label: $t('auth.mfaTotpTab'), value: 'totp' })
   if (hasBackup.value) items.push({ label: $t('auth.mfaBackupTab'), value: 'backup' })
+  if (hasEmailOtp.value) items.push({ label: $t('auth.mfaEmailOtpTab'), value: 'email_otp' })
   return items
 })
 
@@ -27,6 +35,10 @@ watch(open, async (isOpen) => {
     stepUp.reset()
     totpCode.value = ''
     backupCode.value = ''
+    emailOtpCode.value = ''
+    emailOtpSent.value = false
+    emailOtpCooldown.value = 0
+    clearCooldown()
     const needed = await stepUp.requestChallenge()
     if (!needed) {
       // No MFA required — shouldn't happen but handle gracefully
@@ -71,6 +83,56 @@ async function onVerifyBackup() {
     toast.add({ title: $t('auth.mfaInvalidCode'), color: 'error' })
   }
 }
+
+async function onSendEmailOtp() {
+  emailOtpSending.value = true
+  try {
+    await stepUp.sendEmailOtp()
+    emailOtpSent.value = true
+    startCooldown()
+  }
+  catch {
+    toast.add({ title: $t('auth.mfaInvalidCode'), color: 'error' })
+  }
+  finally {
+    emailOtpSending.value = false
+  }
+}
+
+async function onVerifyEmailOtp() {
+  if (emailOtpCode.value.length !== 6) return
+  const success = await stepUp.verify('email_otp', emailOtpCode.value)
+  if (success && stepUp.verificationToken.value) {
+    clearCooldown()
+    emit('verified', stepUp.verificationToken.value)
+    open.value = false
+  } else {
+    emailOtpCode.value = ''
+    toast.add({ title: $t('auth.mfaInvalidCode'), color: 'error' })
+  }
+}
+
+function startCooldown() {
+  emailOtpCooldown.value = 60
+  clearCooldown()
+  emailOtpTimer = setInterval(() => {
+    emailOtpCooldown.value--
+    if (emailOtpCooldown.value <= 0) {
+      clearCooldown()
+    }
+  }, 1000)
+}
+
+function clearCooldown() {
+  if (emailOtpTimer) {
+    clearInterval(emailOtpTimer)
+    emailOtpTimer = null
+  }
+}
+
+onUnmounted(() => {
+  clearCooldown()
+})
 </script>
 
 <template>
@@ -161,6 +223,73 @@ async function onVerifyBackup() {
           >
             {{ $t('auth.mfaVerify') }}
           </UButton>
+        </div>
+
+        <!-- Email OTP -->
+        <div v-if="activeTab === 'email_otp'" class="space-y-4">
+          <template v-if="!emailOtpSent">
+            <div class="text-center py-2">
+              <UIcon name="i-lucide-mail" class="w-10 h-10 mx-auto mb-2 text-(--ui-text-muted)" />
+              <p class="text-sm text-(--ui-text-muted)">{{ $t('auth.mfaEmailOtpPrompt') }}</p>
+            </div>
+            <UButton
+              :loading="emailOtpSending"
+              size="lg"
+              block
+              :ui="{ base: 'rounded-xl justify-center font-semibold' }"
+              @click="onSendEmailOtp"
+            >
+              {{ $t('auth.mfaEmailOtpSend') }}
+            </UButton>
+          </template>
+
+          <template v-else>
+            <div class="text-center py-2">
+              <UIcon name="i-lucide-mail-check" class="w-8 h-8 mx-auto mb-2 text-(--ui-primary)" />
+              <p class="text-sm text-(--ui-text-muted) mb-2">{{ $t('auth.mfaEmailOtpSent') }}</p>
+            </div>
+            <UInput
+              v-model="emailOtpCode"
+              :placeholder="$t('auth.mfaEmailOtpPlaceholder')"
+              maxlength="6"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autofocus
+              size="xl"
+              class="w-full font-mono text-center text-lg tracking-widest"
+              :ui="{ base: 'rounded-xl shadow-sm' }"
+              @keydown.enter="onVerifyEmailOtp"
+            />
+            <UButton
+              :loading="stepUp.loading.value"
+              :disabled="emailOtpCode.length !== 6"
+              size="lg"
+              block
+              :ui="{ base: 'rounded-xl justify-center font-semibold' }"
+              @click="onVerifyEmailOtp"
+            >
+              {{ $t('auth.mfaVerify') }}
+            </UButton>
+            <div class="text-center">
+              <UButton
+                v-if="emailOtpCooldown > 0"
+                variant="ghost"
+                size="sm"
+                disabled
+              >
+                {{ $t('auth.mfaEmailOtpCooldown', { seconds: emailOtpCooldown }) }}
+              </UButton>
+              <UButton
+                v-else
+                variant="ghost"
+                size="sm"
+                :loading="emailOtpSending"
+                @click="onSendEmailOtp"
+              >
+                {{ $t('auth.mfaEmailOtpResend') }}
+              </UButton>
+            </div>
+          </template>
         </div>
       </template>
 
