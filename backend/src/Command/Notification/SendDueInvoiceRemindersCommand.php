@@ -102,33 +102,17 @@ class SendDueInvoiceRemindersCommand extends Command
                     ->andWhere('n.type = :type')
                     ->andWhere('n.sentAt >= :todayStart')
                     ->andWhere('n.sentAt < :todayEnd')
+                    ->andWhere('n.data LIKE :invoiceId')
                     ->setParameter('user', $user)
                     ->setParameter('type', $type)
                     ->setParameter('todayStart', new \DateTimeImmutable($today->format('Y-m-d') . ' 00:00:00'))
                     ->setParameter('todayEnd', new \DateTimeImmutable($today->format('Y-m-d') . ' 23:59:59'))
+                    ->setParameter('invoiceId', '%"invoiceId":"' . $invoice->getId()->toRfc4122() . '"%')
                     ->getQuery()
                     ->getSingleScalarResult();
 
-                // Additional check: same invoiceId in data
-                if ($existing > 0) {
-                    $existingWithInvoice = $this->notificationRepository->createQueryBuilder('n')
-                        ->select('COUNT(n.id)')
-                        ->where('n.user = :user')
-                        ->andWhere('n.type = :type')
-                        ->andWhere('n.sentAt >= :todayStart')
-                        ->andWhere('n.sentAt < :todayEnd')
-                        ->andWhere('n.data LIKE :invoiceId')
-                        ->setParameter('user', $user)
-                        ->setParameter('type', $type)
-                        ->setParameter('todayStart', new \DateTimeImmutable($today->format('Y-m-d') . ' 00:00:00'))
-                        ->setParameter('todayEnd', new \DateTimeImmutable($today->format('Y-m-d') . ' 23:59:59'))
-                        ->setParameter('invoiceId', '%"invoiceId":"' . $invoice->getId()->toRfc4122() . '"%')
-                        ->getQuery()
-                        ->getSingleScalarResult();
-
-                    if ((int) $existingWithInvoice > 0) {
-                        continue;
-                    }
+                if ((int) $existing > 0) {
+                    continue;
                 }
 
                 $message = $messageBuilder($invoice);
