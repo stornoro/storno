@@ -214,7 +214,32 @@ class OAuth2Client
 
     public function hasRedirectUri(string $uri): bool
     {
-        return in_array($uri, $this->redirectUris, true);
+        if (in_array($uri, $this->redirectUris, true)) {
+            return true;
+        }
+
+        // RFC 8252 §7.3: For public clients, allow any port on localhost/127.0.0.1
+        // Native apps (MCP clients, CLI tools) use ephemeral ports for OAuth callbacks
+        if ($this->clientType === 'public') {
+            $parsed = parse_url($uri);
+            $host = $parsed['host'] ?? '';
+            if ($host === 'localhost' || $host === '127.0.0.1') {
+                // Build the URI without the port and check against registered URIs
+                $withoutPort = ($parsed['scheme'] ?? 'http') . '://' . $host . ($parsed['path'] ?? '');
+                foreach ($this->redirectUris as $registered) {
+                    $rParsed = parse_url($registered);
+                    $rHost = $rParsed['host'] ?? '';
+                    if ($rHost === 'localhost' || $rHost === '127.0.0.1') {
+                        $rWithoutPort = ($rParsed['scheme'] ?? 'http') . '://' . $rHost . ($rParsed['path'] ?? '');
+                        if ($withoutPort === $rWithoutPort) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     public function getScopes(): array
