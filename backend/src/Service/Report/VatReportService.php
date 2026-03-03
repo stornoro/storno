@@ -5,11 +5,13 @@ namespace App\Service\Report;
 use App\Entity\Company;
 use App\Enum\InvoiceDirection;
 use App\Repository\InvoiceRepository;
+use App\Service\ExchangeRateService;
 
 class VatReportService
 {
     public function __construct(
         private readonly InvoiceRepository $invoiceRepository,
+        private readonly ExchangeRateService $exchangeRateService,
     ) {}
 
     public function generate(Company $company, int $year, int $month): array
@@ -22,8 +24,12 @@ class VatReportService
             'dateTo' => $dateTo->format('Y-m-d'),
         ], 10000);
 
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+
         $summary = [
             'period' => sprintf('%04d-%02d', $year, $month),
+            'currency' => $defaultCurrency,
             'outgoing' => $this->initVatBuckets(),
             'incoming' => $this->initVatBuckets(),
             'totals' => [
@@ -34,9 +40,13 @@ class VatReportService
 
         foreach ($invoices as $invoice) {
             $direction = $invoice->getDirection() === InvoiceDirection::OUTGOING ? 'outgoing' : 'incoming';
-            $subtotal = $invoice->getSubtotal();
-            $vatTotal = $invoice->getVatTotal();
-            $total = $invoice->getTotal();
+
+            // Compute conversion rate to default currency
+            $conversionRate = $this->getConversionRate($invoice->getCurrency(), $invoice->getExchangeRate(), $defaultCurrency, $defaultRate);
+
+            $subtotal = bcmul($invoice->getSubtotal(), $conversionRate, 2);
+            $vatTotal = bcmul($invoice->getVatTotal(), $conversionRate, 2);
+            $total = bcmul($invoice->getTotal(), $conversionRate, 2);
 
             // Aggregate totals
             $summary['totals'][$direction]['taxableBase'] = bcadd($summary['totals'][$direction]['taxableBase'], $subtotal, 2);
@@ -51,12 +61,12 @@ class VatReportService
                 }
                 $summary[$direction][$rate]['taxableBase'] = bcadd(
                     $summary[$direction][$rate]['taxableBase'],
-                    $line->getLineTotal(),
+                    bcmul($line->getLineTotal(), $conversionRate, 2),
                     2
                 );
                 $summary[$direction][$rate]['vatAmount'] = bcadd(
                     $summary[$direction][$rate]['vatAmount'],
-                    $line->getVatAmount(),
+                    bcmul($line->getVatAmount(), $conversionRate, 2),
                     2
                 );
             }
@@ -74,6 +84,25 @@ class VatReportService
         ];
 
         return $summary;
+    }
+
+    private function getConversionRate(string $invoiceCurrency, ?string $storedExchangeRate, string $defaultCurrency, float $defaultRate): string
+    {
+        if ($invoiceCurrency === $defaultCurrency) {
+            return '1';
+        }
+
+        $exchangeRate = $storedExchangeRate !== null ? (float) $storedExchangeRate : null;
+
+        if ($exchangeRate === null) {
+            $exchangeRate = $this->exchangeRateService->getRate($invoiceCurrency);
+        }
+
+        if ($exchangeRate === null) {
+            return '1';
+        }
+
+        return bcdiv((string) $exchangeRate, (string) $defaultRate, 6);
     }
 
     private function initVatBuckets(): array
