@@ -162,9 +162,15 @@
 
     <!-- Lines -->
     <div class="space-y-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
-        <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
+          <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+        </div>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs text-(--ui-text-muted)">{{ $t('invoices.vatIncluded') }}</span>
+          <USwitch v-model="form.vatIncluded" size="xs" />
+        </label>
       </div>
 
       <div class="space-y-4">
@@ -206,7 +212,7 @@
                 :search-input="true"
               />
             </UFormField>
-            <UFormField :label="$t('invoices.unitPrice')">
+            <UFormField :label="form.vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice')">
               <UInput v-model="line.unitPrice" type="number" step="0.01" min="0" />
             </UFormField>
             <UFormField :label="$t('invoices.discount')">
@@ -609,6 +615,7 @@ interface LineForm {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded: boolean
   tariffCode: string
   purposeCode: ETransportPurposeCode | undefined
   unitOfMeasureCode: ETransportUomCode
@@ -627,6 +634,7 @@ function emptyLine(): LineForm {
     vatCategoryCode: 'S',
     discount: '0.00',
     discountPercent: '0.00',
+    vatIncluded: false,
     tariffCode: '',
     purposeCode: 101 as ETransportPurposeCode | undefined,
     unitOfMeasureCode: 'KGM' as ETransportUomCode,
@@ -673,6 +681,7 @@ const form = reactive({
   etransportEndNumber: '',
   etransportEndOtherInfo: '',
   etransportEndPostalCode: '',
+  vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
 
@@ -713,6 +722,7 @@ if (props.deliveryNote) {
   form.etransportEndNumber = props.deliveryNote.etransportEndNumber || ''
   form.etransportEndOtherInfo = props.deliveryNote.etransportEndOtherInfo || ''
   form.etransportEndPostalCode = props.deliveryNote.etransportEndPostalCode || ''
+  form.vatIncluded = props.deliveryNote.lines.some(l => l.vatIncluded)
   form.lines = props.deliveryNote.lines.length > 0
     ? props.deliveryNote.lines.map(l => ({
         description: l.description,
@@ -723,6 +733,7 @@ if (props.deliveryNote) {
         vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
+        vatIncluded: l.vatIncluded || false,
         tariffCode: l.tariffCode || '',
         purposeCode: (l.purposeCode ?? 101) as ETransportPurposeCode,
         unitOfMeasureCode: (l.unitOfMeasureCode || 'KGM') as ETransportUomCode,
@@ -777,12 +788,20 @@ function onProductSelected(product: Product) {
 }
 
 function addLine() {
-  form.lines.push(emptyLine())
+  const line = emptyLine()
+  line.vatIncluded = form.vatIncluded
+  form.lines.push(line)
 }
 
 function removeLine(index: number) {
   form.lines.splice(index, 1)
 }
+
+watch(() => form.vatIncluded, (val) => {
+  for (const line of form.lines) {
+    line.vatIncluded = val
+  }
+})
 
 async function onSave() {
   saving.value = true
@@ -796,6 +815,7 @@ async function onSave() {
     vatCategoryCode: l.vatCategoryCode,
     discount: l.discount,
     discountPercent: l.discountPercent,
+    vatIncluded: form.vatIncluded || undefined,
     tariffCode: l.tariffCode || null,
     purposeCode: l.purposeCode,
     unitOfMeasureCode: l.unitOfMeasureCode || null,
@@ -958,6 +978,7 @@ onMounted(async () => {
       if (source.etransportVehicleNumber || source.etransportStartCounty || source.etransportUit) {
         showETransport.value = true
       }
+      form.vatIncluded = source.lines.some((l: any) => l.vatIncluded)
       form.lines = source.lines.length > 0
         ? source.lines.map((l: any) => ({
             description: l.description,
@@ -968,6 +989,7 @@ onMounted(async () => {
             vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode || 'S', l.vatRate),
             discount: l.discount || '0.00',
             discountPercent: l.discountPercent || '0.00',
+            vatIncluded: l.vatIncluded || false,
             tariffCode: l.tariffCode || '',
             purposeCode: (l.purposeCode ?? 101) as ETransportPurposeCode,
             unitOfMeasureCode: (l.unitOfMeasureCode || 'KGM') as ETransportUomCode,

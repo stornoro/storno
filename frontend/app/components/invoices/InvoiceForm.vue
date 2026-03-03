@@ -200,9 +200,15 @@
 
     <!-- Lines -->
     <div class="space-y-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
-        <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
+          <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+        </div>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs text-(--ui-text-muted)">{{ $t('invoices.vatIncluded') }}</span>
+          <USwitch v-model="form.vatIncluded" size="xs" />
+        </label>
       </div>
 
       <div class="space-y-4">
@@ -247,7 +253,7 @@
                 :search-input="true"
               />
             </UFormField>
-            <UFormField :label="$t('invoices.unitPrice')">
+            <UFormField :label="form.vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice')">
               <div class="flex">
                 <UInput v-model="line.unitPrice" type="number" step="0.01" min="0" class="flex-1" :ui="form.currency === 'RON' && hasExchangeRates ? { root: '[&_input]:rounded-r-none' } : {}" />
                 <UPopover v-if="form.currency === 'RON' && hasExchangeRates" :ui="{ content: 'p-0 w-64' }">
@@ -769,6 +775,7 @@ interface LineForm {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded: boolean
   productCode: string
   lineNote: string
   buyerAccountingRef: string
@@ -788,6 +795,7 @@ function emptyLine(): LineForm {
     vatCategoryCode: 'S',
     discount: '0.00',
     discountPercent: '0.00',
+    vatIncluded: false,
     productCode: '',
     lineNote: '',
     buyerAccountingRef: '',
@@ -837,6 +845,7 @@ const form = reactive({
   payeeName: '',
   payeeIdentifier: '',
   payeeLegalRegistrationIdentifier: '',
+  vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
 
@@ -880,6 +889,7 @@ if (props.invoice) {
   form.payeeIdentifier = props.invoice.payeeIdentifier || ''
   form.payeeLegalRegistrationIdentifier = props.invoice.payeeLegalRegistrationIdentifier || ''
 
+  form.vatIncluded = props.invoice.lines.some(l => l.vatIncluded)
   form.lines = props.invoice.lines.length > 0
     ? props.invoice.lines.map(l => ({
         description: l.description,
@@ -890,6 +900,7 @@ if (props.invoice) {
         vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
+        vatIncluded: l.vatIncluded || false,
         productCode: l.productCode || '',
         lineNote: l.lineNote || '',
         buyerAccountingRef: l.buyerAccountingRef || '',
@@ -984,6 +995,13 @@ function selectVatRate(index: number, vr: { value: string, categoryCode: string 
 function syncInvoiceTypeFromVat() {
   form.invoiceTypeCode = resolveInvoiceTypeCode(form.lines, form.invoiceTypeCode)
 }
+
+// Sync vatIncluded toggle to all lines
+watch(() => form.vatIncluded, (val) => {
+  for (const line of form.lines) {
+    line.vatIncluded = val
+  }
+})
 
 // Reverse sync: when invoice regime changes, update VAT category codes on 0% lines
 watch(() => form.invoiceTypeCode, (newTypeCode) => {
@@ -1263,6 +1281,7 @@ watch(() => form, () => {
 
 function addLine() {
   const line = emptyLine()
+  line.vatIncluded = form.vatIncluded
   if (reverseChargeActive.value) {
     line.vatCategoryCode = 'AE'
     line.vatRate = '0.00'
@@ -1288,6 +1307,7 @@ async function onSave() {
     vatCategoryCode: l.vatCategoryCode,
     discount: l.discount,
     discountPercent: l.discountPercent,
+    vatIncluded: form.vatIncluded || undefined,
     productCode: l.productCode || null,
     lineNote: l.lineNote || null,
     buyerAccountingRef: l.buyerAccountingRef || null,
@@ -1451,6 +1471,7 @@ onMounted(async () => {
       form.projectReference = parent.projectReference || ''
       showNotes.value = true
       // Refund: negate quantities (minus on quantity, price stays positive)
+      form.vatIncluded = parent.lines.some(l => l.vatIncluded)
       form.lines = parent.lines.length > 0
         ? parent.lines.map(l => {
             const qty = parseFloat(l.quantity) || 0
@@ -1463,6 +1484,7 @@ onMounted(async () => {
               vatCategoryCode: l.vatCategoryCode,
               discount: l.discount,
               discountPercent: l.discountPercent,
+              vatIncluded: l.vatIncluded || false,
               productCode: l.productCode || '',
               lineNote: l.lineNote || '',
               buyerAccountingRef: l.buyerAccountingRef || '',
@@ -1521,6 +1543,7 @@ onMounted(async () => {
       if (source.paymentTerms || source.projectReference || source.orderNumber || source.contractNumber || source.buyerReference || source.businessProcessType || source.payeeName) {
         showEfacturaInfo.value = true
       }
+      form.vatIncluded = source.lines.some(l => l.vatIncluded)
       form.lines = source.lines.length > 0
         ? source.lines.map(l => ({
             description: l.description,
@@ -1531,6 +1554,7 @@ onMounted(async () => {
             vatCategoryCode: l.vatCategoryCode,
             discount: l.discount,
             discountPercent: l.discountPercent,
+            vatIncluded: l.vatIncluded || false,
             productCode: l.productCode || '',
             lineNote: l.lineNote || '',
             buyerAccountingRef: l.buyerAccountingRef || '',

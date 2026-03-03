@@ -176,6 +176,7 @@ export interface InvoiceLinePayload {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
   productCode?: string | null
   lineNote?: string | null
   buyerAccountingRef?: string | null
@@ -347,6 +348,7 @@ export interface InvoiceLine {
   lineTotal: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
   productCode?: string | null
   lineNote?: string | null
   buyerAccountingRef?: string | null
@@ -779,6 +781,7 @@ export interface ProformaInvoiceLine {
   lineTotal: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
 }
 
 // ── Proforma Invoice ──────────────────────────────────────────────
@@ -859,6 +862,7 @@ export interface DeliveryNoteLine {
   lineTotal: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
   tariffCode?: string | null
   purposeCode?: number | null
   unitOfMeasureCode?: string | null
@@ -1029,6 +1033,7 @@ export interface ReceiptLine {
   lineTotal: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
 }
 
 // ── Receipt ─────────────────────────────────────────────────────────
@@ -1129,6 +1134,7 @@ export interface RecurringInvoiceLine {
   lineTotal: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
   referenceCurrency: string | null
   markupPercent: string | null
   priceRule: string
@@ -1187,6 +1193,7 @@ export interface RecurringInvoiceLinePayload {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded?: boolean
   referenceCurrency?: string | null
   markupPercent?: string | null
   priceRule?: string

@@ -3,6 +3,7 @@ interface LineBase {
   unitPrice: string
   discount: string
   vatRate: string
+  vatIncluded?: boolean
 }
 
 /**
@@ -69,10 +70,22 @@ export function useLineCalc() {
     const qty = parseFloat(line.quantity) || 0
     const price = parseFloat(line.unitPrice) || 0
     const disc = parseFloat(line.discount) || 0
+    if (line.vatIncluded) {
+      const gross = (qty * price) - disc
+      const vatRate = parseFloat(line.vatRate) || 0
+      return gross / (1 + vatRate / 100)
+    }
     return (qty * price) - disc
   }
 
   function lineVat(line: LineBase): number {
+    if (line.vatIncluded) {
+      const qty = parseFloat(line.quantity) || 0
+      const price = parseFloat(line.unitPrice) || 0
+      const disc = parseFloat(line.discount) || 0
+      const gross = (qty * price) - disc
+      return gross - lineNet(line)
+    }
     return lineNet(line) * ((parseFloat(line.vatRate) || 0) / 100)
   }
 

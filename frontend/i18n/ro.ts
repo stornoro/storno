@@ -665,6 +665,8 @@ export default defineI18nLocale(async () => {
       foreignValue: 'Valoare (valuta)',
       additionalPercent: 'Aditional %',
       unitPriceRon: 'Pret unitar (RON)',
+      vatIncluded: 'Preturi cu TVA inclus',
+      unitPriceVatIncluded: 'Pret unitar (cu TVA)',
       backToList: 'Inapoi la lista',
       // Series source labels
       seriesFromEfactura: 'e-Factura',
