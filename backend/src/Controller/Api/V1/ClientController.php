@@ -95,7 +95,7 @@ class ClientController extends AbstractController
 
         $handle = fopen('php://temp', 'r+');
         fwrite($handle, "\xEF\xBB\xBF");
-        fputcsv($handle, ['Tip', 'Denumire', 'CUI', 'CNP', 'Cod TVA', 'Platitor TVA', 'Nr. Reg. Com.', 'Adresa', 'Oras', 'Judet', 'Tara', 'Cod Postal', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Persoana contact', 'Termen plata (zile)']);
+        fputcsv($handle, ['Tip', 'Denumire', 'CUI', 'CNP', 'Cod TVA', 'Platitor TVA', 'Nr. Reg. Com.', 'Adresa', 'Oras', 'Judet', 'Tara', 'Cod Postal', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Persoana contact', 'Termen plata (zile)', 'Nr. identificare', 'Moneda']);
 
         foreach ($clients as $client) {
             fputcsv($handle, [
@@ -117,6 +117,8 @@ class ClientController extends AbstractController
                 $client->getBankAccount(),
                 $client->getContactPerson(),
                 $client->getDefaultPaymentTermDays(),
+                $client->getIdNumber(),
+                $client->getCurrency(),
             ]);
         }
 
@@ -262,6 +264,8 @@ class ClientController extends AbstractController
         $client->setDefaultPaymentTermDays($data['defaultPaymentTermDays'] ?? null);
         $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
+        $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
+        $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
         $client->setSource('manual');
 
         $this->autoValidateVies($client);
@@ -496,6 +500,8 @@ class ClientController extends AbstractController
         if (array_key_exists('defaultPaymentTermDays', $data)) $client->setDefaultPaymentTermDays($data['defaultPaymentTermDays'] ?? null);
         if (array_key_exists('contactPerson', $data)) $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         if (array_key_exists('notes', $data)) $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
+        if (array_key_exists('idNumber', $data)) $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
+        if (array_key_exists('currency', $data)) $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
 
         // Re-validate VIES if vatCode or country changed
         if (array_key_exists('vatCode', $data) || array_key_exists('country', $data)) {

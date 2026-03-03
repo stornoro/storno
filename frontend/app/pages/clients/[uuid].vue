@@ -125,6 +125,14 @@
               <UButton icon="i-lucide-copy" variant="ghost" size="xs" @click="copy(client.bankAccount)" />
             </dd>
           </div>
+          <div v-if="client.idNumber">
+            <dt class="text-muted">{{ $t('clients.idNumber') }}</dt>
+            <dd>{{ client.idNumber }}</dd>
+          </div>
+          <div v-if="client.currency">
+            <dt class="text-muted">{{ $t('clients.currency') }}</dt>
+            <dd>{{ client.currency }}</dd>
+          </div>
           <div v-if="client.defaultPaymentTermDays">
             <dt class="text-muted">{{ $t('clients.defaultPaymentTermDays') }}</dt>
             <dd>{{ client.defaultPaymentTermDays }} {{ $t('common.days') }}</dd>

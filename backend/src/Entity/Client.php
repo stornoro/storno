@@ -107,6 +107,14 @@ class Client
     #[Groups(['client:detail'])]
     private ?string $notes = null;
 
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['client:list', 'client:detail'])]
+    private ?string $idNumber = null;
+
+    #[ORM\Column(length: 3, nullable: true)]
+    #[Groups(['client:list', 'client:detail'])]
+    private ?string $currency = null;
+
     #[ORM\Column(length: 20)]
     #[Groups(['client:detail'])]
     private string $source = 'anaf_sync';
@@ -365,6 +373,30 @@ class Client
     public function setNotes(?string $notes): static
     {
         $this->notes = $notes;
+
+        return $this;
+    }
+
+    public function getIdNumber(): ?string
+    {
+        return $this->idNumber;
+    }
+
+    public function setIdNumber(?string $idNumber): static
+    {
+        $this->idNumber = $idNumber;
+
+        return $this;
+    }
+
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(?string $currency): static
+    {
+        $this->currency = $currency;
 
         return $this;
     }

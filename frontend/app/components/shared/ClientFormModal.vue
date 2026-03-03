@@ -196,6 +196,22 @@
           <span class="text-sm font-medium text-(--ui-text)">{{ $t('clients.isVatPayer') }}</span>
           <USwitch v-model="form.isVatPayer" />
         </div>
+
+        <!-- ID Number / Currency -->
+        <div class="grid grid-cols-2 gap-4">
+          <UFormField :label="$t('clients.idNumber')">
+            <UInput v-model="form.idNumber" icon="i-lucide-fingerprint" />
+          </UFormField>
+          <UFormField :label="$t('clients.currency')">
+            <USelectMenu
+              v-model="form.currency"
+              :items="currencyOptions"
+              value-key="value"
+              :placeholder="$t('clients.currency')"
+              :search-input="true"
+            />
+          </UFormField>
+        </div>
       </div>
     </template>
     <template #footer>
@@ -227,7 +243,7 @@ const isEdit = computed(() => !!props.client)
 const { t: $t } = useI18n()
 const clientStore = useClientStore()
 const { get } = useApi()
-const { fetchDefaults, countryOptions, countyOptions } = useInvoiceDefaults()
+const { fetchDefaults, countryOptions, countyOptions, currencyOptions } = useInvoiceDefaults()
 const { results: registryResults, loading: registryLoading, onRegistrySearch, clear: clearRegistry } = useRegistrySearch()
 
 const cityOptions = ref<{ label: string, value: string }[]>([])
@@ -267,6 +283,8 @@ const form = reactive({
   vatCode: null as string | null,
   isVatPayer: false,
   registrationNumber: '',
+  idNumber: '',
+  currency: undefined as string | undefined,
 })
 
 // Fetch defaults to populate country/county options
@@ -311,6 +329,8 @@ function populateForm(c: Client) {
   form.vatCode = c.vatCode || null
   form.isVatPayer = c.isVatPayer ?? false
   form.registrationNumber = c.registrationNumber || ''
+  form.idNumber = c.idNumber || ''
+  form.currency = c.currency || undefined
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -336,6 +356,8 @@ function populateFromPrefill(p: Record<string, any>) {
   form.vatCode = p.vatCode || null
   form.isVatPayer = p.isVatPayer ?? false
   form.registrationNumber = p.registrationNumber || ''
+  form.idNumber = p.idNumber || ''
+  form.currency = p.currency || undefined
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -562,6 +584,8 @@ async function onSave() {
       vatCode: form.vatCode,
       isVatPayer: form.isVatPayer,
       registrationNumber: form.registrationNumber || null,
+      idNumber: form.idNumber || null,
+      currency: form.currency || null,
     }
     const client = await clientStore.updateClient(props.client.id, payload)
     saving.value = false
@@ -603,6 +627,8 @@ async function onSave() {
     vatCode: form.vatCode,
     isVatPayer: form.isVatPayer,
     registrationNumber: form.registrationNumber || undefined,
+    idNumber: form.idNumber || undefined,
+    currency: form.currency || undefined,
   })
 
   saving.value = false
@@ -631,6 +657,8 @@ function resetForm() {
   form.vatCode = null
   form.isVatPayer = false
   form.registrationNumber = ''
+  form.idNumber = ''
+  form.currency = undefined
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false

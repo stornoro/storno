@@ -288,6 +288,8 @@ export interface Client {
   bankAccount: string | null
   defaultPaymentTermDays: number | null
   notes: string | null
+  idNumber: string | null
+  currency: string | null
   source: string
   lastSyncedAt: string | null
   viesValid: boolean | null
