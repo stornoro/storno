@@ -597,6 +597,31 @@ class InvoiceRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Find billing invoices issued by the billing company to a specific org (matched by receiverCif).
+     */
+    public function findBillingInvoicesForOrg(Company $billingCompany, string $receiverCif, int $page = 1, int $limit = 20): array
+    {
+        $qb = $this->createQueryBuilder('i')
+            ->where('i.company = :company')
+            ->andWhere('i.receiverCif = :receiverCif')
+            ->andWhere('i.deletedAt IS NULL')
+            ->setParameter('company', $billingCompany)
+            ->setParameter('receiverCif', $receiverCif)
+            ->orderBy('i.issueDate', 'DESC')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit);
+
+        $paginator = new Paginator($qb);
+
+        return [
+            'data' => iterator_to_array($paginator),
+            'total' => count($paginator),
+            'page' => $page,
+            'limit' => $limit,
+        ];
+    }
+
     public function findApproachingAnafDeadline(int $days): array
     {
         $targetDate = new \DateTime(sprintf('-%d days', $days));

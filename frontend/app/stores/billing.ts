@@ -30,6 +30,16 @@ interface RawPlan {
   includesPlan: string | null
 }
 
+export interface BillingInvoice {
+  id: string
+  number: string
+  issueDate: string
+  total: string
+  currency: string
+  status: string
+  paidAt: string | null
+}
+
 interface Subscription {
   stripeSubscriptionId: string | null
   stripePriceId: string | null
@@ -55,6 +65,8 @@ export const useBillingStore = defineStore('billing', () => {
   const plansLoading = ref(false)
   const error = ref<string | null>(null)
   const billingInterval = ref<'month' | 'year'>('month')
+  const invoices = ref<BillingInvoice[]>([])
+  const invoicesLoading = ref(false)
 
   // ── Getters ────────────────────────────────────────────────────────
   const currentPlan = computed(() => billing.value?.plan ?? 'free')
@@ -217,6 +229,22 @@ export const useBillingStore = defineStore('billing', () => {
     }
   }
 
+  async function fetchInvoices(): Promise<void> {
+    const { get } = useApi()
+    invoicesLoading.value = true
+
+    try {
+      const data = await get<{ data: BillingInvoice[], total: number }>('/v1/billing/invoices')
+      invoices.value = data.data
+    }
+    catch {
+      // Silently fail — invoices section just won't show data
+    }
+    finally {
+      invoicesLoading.value = false
+    }
+  }
+
   return {
     // State
     plans,
@@ -226,6 +254,8 @@ export const useBillingStore = defineStore('billing', () => {
     plansLoading,
     error,
     billingInterval,
+    invoices,
+    invoicesLoading,
 
     // Getters
     currentPlan,
@@ -249,5 +279,6 @@ export const useBillingStore = defineStore('billing', () => {
     openPortal,
     cancel,
     resume,
+    fetchInvoices,
   }
 })
