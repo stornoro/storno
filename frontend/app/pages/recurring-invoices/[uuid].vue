@@ -99,7 +99,12 @@
           <!-- Client -->
           <UCard v-if="recurringInvoice.client">
             <template #header>
-              <h3 class="font-semibold">{{ $t('invoices.client') }}</h3>
+              <div class="flex items-center justify-between">
+                <h3 class="font-semibold">{{ $t('invoices.client') }}</h3>
+                <UButton variant="ghost" size="xs" :to="`/clients/${recurringInvoice.client.id}`">
+                  {{ $t('common.view') }}
+                </UButton>
+              </div>
             </template>
             <dl class="grid grid-cols-2 gap-3 text-sm">
               <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ recurringInvoice.client.name }}</dd></div>
