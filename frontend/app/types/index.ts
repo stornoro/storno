@@ -80,6 +80,7 @@ export interface User {
   active: boolean
   emailVerified: boolean
   mfaEnabled?: boolean
+  hasPassword?: boolean
   production: boolean
   createdAt: string
   updatedAt: string | null

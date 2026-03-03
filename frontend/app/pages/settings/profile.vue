@@ -14,6 +14,9 @@ const loading = ref(false)
 const deleteModalOpen = ref(false)
 const deletePassword = ref('')
 const deleting = ref(false)
+const deleteStepUpOpen = ref(false)
+
+const userHasPassword = computed(() => authStore.user?.hasPassword !== false)
 const registeringPasskey = ref(false)
 const passkeys = ref<any[]>([])
 const deletePasskeyModalOpen = ref(false)
@@ -138,10 +141,33 @@ async function onSubmit() {
 }
 
 async function onDeleteAccount() {
-  if (!deletePassword.value) return
+  if (userHasPassword.value) {
+    if (!deletePassword.value) return
+    deleting.value = true
+    try {
+      await authStore.deleteAccount({ password: deletePassword.value })
+      toast.add({ title: $t('settings.deleteAccount.success'), color: 'success' })
+    }
+    catch (error: any) {
+      toast.add({ title: error?.data?.error ? translateApiError(error.data.error) : $t('settings.deleteAccount.error'), color: 'error' })
+    }
+    finally {
+      deleting.value = false
+      deletePassword.value = ''
+      deleteModalOpen.value = false
+    }
+  } else {
+    // Social-only user: show step-up MFA
+    deleteModalOpen.value = false
+    deleteStepUpOpen.value = true
+  }
+}
+
+async function onDeleteAccountVerified(verificationToken: string) {
+  deleteStepUpOpen.value = false
   deleting.value = true
   try {
-    await authStore.deleteAccount(deletePassword.value)
+    await authStore.deleteAccount({ verificationToken })
     toast.add({ title: $t('settings.deleteAccount.success'), color: 'success' })
   }
   catch (error: any) {
@@ -149,8 +175,6 @@ async function onDeleteAccount() {
   }
   finally {
     deleting.value = false
-    deletePassword.value = ''
-    deleteModalOpen.value = false
   }
 }
 
@@ -457,14 +481,16 @@ onMounted(() => {
           <h3 class="text-lg font-semibold">{{ $t('settings.deleteAccount.title') }}</h3>
         </div>
         <p class="text-sm text-muted">{{ $t('settings.deleteAccount.description') }}</p>
-        <UFormField :label="$t('settings.deleteAccount.passwordLabel')">
-          <UInput
-            v-model="deletePassword"
-            type="password"
-            :placeholder="$t('settings.deleteAccount.passwordPlaceholder')"
-            autocomplete="current-password"
-          />
-        </UFormField>
+        <template v-if="userHasPassword">
+          <UFormField :label="$t('settings.deleteAccount.passwordLabel')">
+            <UInput
+              v-model="deletePassword"
+              type="password"
+              :placeholder="$t('settings.deleteAccount.passwordPlaceholder')"
+              autocomplete="current-password"
+            />
+          </UFormField>
+        </template>
         <div class="flex justify-end gap-2 pt-2">
           <UButton variant="ghost" @click="deleteModalOpen = false">
             {{ $t('common.cancel') }}
@@ -472,7 +498,7 @@ onMounted(() => {
           <UButton
             color="error"
             :loading="deleting"
-            :disabled="!deletePassword"
+            :disabled="userHasPassword && !deletePassword"
             @click="onDeleteAccount"
           >
             {{ $t('settings.deleteAccount.confirm') }}
@@ -481,6 +507,9 @@ onMounted(() => {
       </div>
     </template>
   </UModal>
+
+  <!-- Step-up MFA for social-only account deletion -->
+  <SharedStepUpMfaModal v-model:open="deleteStepUpOpen" @verified="onDeleteAccountVerified" />
 
   <!-- Delete Passkey Modal -->
   <SharedConfirmModal
