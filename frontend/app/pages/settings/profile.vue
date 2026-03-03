@@ -15,6 +15,8 @@ const deleteModalOpen = ref(false)
 const deletePassword = ref('')
 const deleting = ref(false)
 const deleteStepUpOpen = ref(false)
+const passwordStepUpOpen = ref(false)
+const passwordVerificationToken = ref<string | null>(null)
 
 const userHasPassword = computed(() => authStore.user?.hasPassword !== false)
 const registeringPasskey = ref(false)
@@ -107,6 +109,12 @@ async function confirmDeletePasskey() {
 }
 
 async function onSubmit() {
+  // Social-only user trying to set a password: require step-up MFA first
+  if (!userHasPassword.value && formState.newPassword && !passwordVerificationToken.value) {
+    passwordStepUpOpen.value = true
+    return
+  }
+
   const { patch } = useApi()
   loading.value = true
   try {
@@ -115,9 +123,12 @@ async function onSubmit() {
       lastName: formState.lastName,
     }
 
-    if (formState.currentPassword && formState.newPassword) {
+    if (userHasPassword.value && formState.currentPassword && formState.newPassword) {
       payload.currentPassword = formState.currentPassword
       payload.newPassword = formState.newPassword
+    } else if (!userHasPassword.value && formState.newPassword && passwordVerificationToken.value) {
+      payload.newPassword = formState.newPassword
+      payload.verificationToken = passwordVerificationToken.value
     }
 
     await patch('/v1/me', payload)
@@ -125,10 +136,14 @@ async function onSubmit() {
     if (authStore.user) {
       authStore.user.firstName = formState.firstName
       authStore.user.lastName = formState.lastName
+      if (payload.newPassword) {
+        authStore.user.hasPassword = true
+      }
     }
 
     formState.currentPassword = ''
     formState.newPassword = ''
+    passwordVerificationToken.value = null
 
     toast.add({ title: $t('settings.profile.updateSuccess'), color: 'success' })
   }
@@ -138,6 +153,13 @@ async function onSubmit() {
   finally {
     loading.value = false
   }
+}
+
+function onPasswordStepUpVerified(token: string) {
+  passwordStepUpOpen.value = false
+  passwordVerificationToken.value = token
+  // Now re-trigger submit with the verification token
+  onSubmit()
 }
 
 async function onDeleteAccount() {
@@ -309,6 +331,7 @@ onMounted(() => {
 
     <UPageCard variant="subtle">
       <UFormField
+        v-if="userHasPassword"
         :label="$t('settings.profile.currentPassword')"
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
@@ -318,7 +341,7 @@ onMounted(() => {
           autocomplete="current-password"
         />
       </UFormField>
-      <USeparator />
+      <USeparator v-if="userHasPassword" />
       <UFormField
         :label="$t('settings.profile.newPassword')"
         class="flex max-sm:flex-col justify-between items-start gap-4"
@@ -329,6 +352,9 @@ onMounted(() => {
           autocomplete="new-password"
         />
       </UFormField>
+      <p v-if="!userHasPassword" class="text-xs text-(--ui-text-muted) mt-2">
+        {{ $t('settings.profile.setPasswordHint') }}
+      </p>
     </UPageCard>
   </div>
 
@@ -510,6 +536,9 @@ onMounted(() => {
 
   <!-- Step-up MFA for social-only account deletion -->
   <SharedStepUpMfaModal v-model:open="deleteStepUpOpen" @verified="onDeleteAccountVerified" />
+
+  <!-- Step-up MFA for social-only password setting -->
+  <SharedStepUpMfaModal v-model:open="passwordStepUpOpen" @verified="onPasswordStepUpVerified" />
 
   <!-- Delete Passkey Modal -->
   <SharedConfirmModal
