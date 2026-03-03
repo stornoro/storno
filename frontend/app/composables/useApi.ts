@@ -102,11 +102,13 @@ export function useApi() {
 
         // Refresh failed — logout
         authStore.logout()
-        navigateTo('/login')
+        const currentPath = useRoute().fullPath
+        navigateTo({ path: '/login', query: { redirect: currentPath } })
       }
       else if (error?.response?.status === 401 && !skipAuthRedirect) {
         authStore.logout()
-        navigateTo('/login')
+        const currentPath = useRoute().fullPath
+        navigateTo({ path: '/login', query: { redirect: currentPath } })
       }
       throw error
     }
