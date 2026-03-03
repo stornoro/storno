@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\User;
+use App\Message\SendMfaEmailOtpMessage;
 use App\Service\MfaService;
 use App\Service\WebAuthnService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -10,6 +11,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -25,6 +27,7 @@ class StepUpMfaController extends AbstractController
         private readonly WebAuthnService $webAuthnService,
         private readonly EntityManagerInterface $em,
         private readonly CacheInterface $cache,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     #[Route('/challenge', methods: ['POST'])]
@@ -43,6 +46,7 @@ class StepUpMfaController extends AbstractController
         if ($this->mfaService->getMfaStatus($user)['backupCodesRemaining'] > 0) {
             $methods[] = 'backup_code';
         }
+        $methods[] = 'email_otp';
 
         return $this->json([
             'mfa_required' => true,
@@ -85,6 +89,35 @@ class StepUpMfaController extends AbstractController
         return new JsonResponse($result['optionsJson'], Response::HTTP_OK, [], true);
     }
 
+    #[Route('/email-otp/send', methods: ['POST'])]
+    public function sendEmailOtp(Request $request, RateLimiterFactory $mfaVerifyLimiter): JsonResponse
+    {
+        $limiter = $mfaVerifyLimiter->create($request->getClientIp());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many requests.'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        /** @var User $user */
+        $user = $this->getUser();
+
+        $data = json_decode($request->getContent(), true);
+        $challengeToken = $data['challengeToken'] ?? null;
+
+        if (!$challengeToken) {
+            return $this->json(['error' => 'Missing challengeToken.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $challengeData = $this->mfaService->validateStepUpChallenge($challengeToken);
+        if (!$challengeData || $challengeData['userId'] !== $user->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Invalid or expired challenge.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $code = $this->mfaService->createEmailOtp($user, $challengeToken);
+        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code));
+
+        return $this->json(['sent' => true]);
+    }
+
     #[Route('/verify', methods: ['POST'])]
     public function verify(Request $request, RateLimiterFactory $mfaVerifyLimiter): JsonResponse
     {
@@ -123,6 +156,11 @@ class StepUpMfaController extends AbstractController
                 return $this->json(['error' => 'Missing code.'], Response::HTTP_BAD_REQUEST);
             }
             $verified = $this->mfaService->verifyBackupCode($user, $code);
+        } elseif ($type === 'email_otp') {
+            if (!$code) {
+                return $this->json(['error' => 'Missing code.'], Response::HTTP_BAD_REQUEST);
+            }
+            $verified = $this->mfaService->verifyEmailOtp($challengeToken, $code);
         } elseif ($type === 'passkey') {
             if (!$credential) {
                 return $this->json(['error' => 'Missing credential.'], Response::HTTP_BAD_REQUEST);

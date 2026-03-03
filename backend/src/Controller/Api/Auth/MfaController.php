@@ -3,6 +3,7 @@
 namespace App\Controller\Api\Auth;
 
 use App\Entity\User;
+use App\Message\SendMfaEmailOtpMessage;
 use App\Service\MfaService;
 use App\Service\WebAuthnService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -13,6 +14,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
@@ -33,6 +35,7 @@ class MfaController extends AbstractController
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly WebAuthnService $webAuthnService,
         private readonly CacheInterface $cache,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     // ── Public: Get passkey assertion options for MFA (no JWT required) ──
@@ -75,6 +78,40 @@ class MfaController extends AbstractController
         return new JsonResponse($result['optionsJson'], Response::HTTP_OK, [], true);
     }
 
+    // ── Public: Send email OTP for MFA (no JWT required) ──────────────────
+
+    #[Route('/api/auth/mfa/email-otp/send', name: 'api_auth_mfa_email_otp_send', methods: ['POST'])]
+    public function sendEmailOtp(Request $request, RateLimiterFactory $mfaVerifyLimiter): JsonResponse
+    {
+        $limiter = $mfaVerifyLimiter->create($request->getClientIp());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many requests.'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $mfaToken = $data['mfaToken'] ?? null;
+
+        if (!$mfaToken) {
+            return $this->json(['error' => 'Missing mfaToken.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $challengeData = $this->mfaService->validateMfaChallenge($mfaToken);
+        if (!$challengeData) {
+            return $this->json(['error' => 'Invalid or expired MFA challenge.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $user = $this->em->getRepository(User::class)->find($challengeData['userId']);
+        if (!$user) {
+            // Always return success to avoid email enumeration
+            return $this->json(['sent' => true]);
+        }
+
+        $code = $this->mfaService->createEmailOtp($user, $mfaToken);
+        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code));
+
+        return $this->json(['sent' => true]);
+    }
+
     // ── Public: Verify MFA challenge (no JWT required) ───────────────────
 
     #[Route('/api/auth/mfa/verify', name: 'api_auth_mfa_verify', methods: ['POST'])]
@@ -88,14 +125,14 @@ class MfaController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $mfaToken = $data['mfaToken'] ?? null;
         $code = $data['code'] ?? null;
-        $type = $data['type'] ?? 'totp'; // 'totp', 'backup', or 'passkey'
+        $type = $data['type'] ?? 'totp'; // 'totp', 'backup', 'passkey', or 'email_otp'
         $credential = $data['credential'] ?? null;
 
         if (!$mfaToken) {
             return $this->json(['error' => 'Missing mfaToken.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if ($type !== 'passkey' && !$code) {
+        if (!in_array($type, ['passkey'], true) && !$code) {
             return $this->json(['error' => 'Missing code.'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -115,6 +152,8 @@ class MfaController extends AbstractController
             $verified = $this->mfaService->verifyTotpCode($user, $code);
         } elseif ($type === 'backup') {
             $verified = $this->mfaService->verifyBackupCode($user, $code);
+        } elseif ($type === 'email_otp') {
+            $verified = $this->mfaService->verifyEmailOtp($mfaToken, $code);
         } elseif ($type === 'passkey') {
             if (!$credential) {
                 return $this->json(['error' => 'Missing credential.'], Response::HTTP_BAD_REQUEST);

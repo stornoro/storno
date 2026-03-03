@@ -264,6 +264,13 @@ export default defineI18nLocale(async () => {
       mfaPasskeyVerify: 'Verifica cu cheie de acces',
       mfaPasskeyPrompt: 'Foloseste cheia de acces pentru a continua verificarea.',
       mfaPasskeyRetry: 'Verificarea cu cheie de acces a esuat. Incearca din nou.',
+      mfaEmailOtpTab: 'Cod email',
+      mfaEmailOtpPrompt: 'Trimite un cod de verificare pe adresa ta de email.',
+      mfaEmailOtpSend: 'Trimite codul',
+      mfaEmailOtpSent: 'Codul a fost trimis pe adresa ta de email.',
+      mfaEmailOtpPlaceholder: '000000',
+      mfaEmailOtpResend: 'Retrimite codul',
+      mfaEmailOtpCooldown: 'Retrimite in {seconds}s',
     },
 
     stepUpMfa: {

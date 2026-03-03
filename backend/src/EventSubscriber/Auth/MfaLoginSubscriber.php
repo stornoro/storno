@@ -49,6 +49,7 @@ final class MfaLoginSubscriber implements EventSubscriberInterface
         if ($this->mfaService->getMfaStatus($user)['backupCodesRemaining'] > 0) {
             $methods[] = 'backup_code';
         }
+        $methods[] = 'email_otp';
 
         // Replace the response data with MFA challenge
         $event->setData([

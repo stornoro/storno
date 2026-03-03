@@ -265,7 +265,7 @@ export const useAuthStore = defineStore('auth', () => {
     navigateTo('/login')
   }
 
-  async function completeMfaLogin(code: string, type: 'totp' | 'backup'): Promise<boolean> {
+  async function completeMfaLogin(code: string, type: 'totp' | 'backup' | 'email_otp'): Promise<boolean> {
     if (!mfaToken.value) return false
 
     const apiBase = useApiBase()

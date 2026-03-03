@@ -23,6 +23,8 @@ class MfaService
     private const MAX_ATTEMPTS = 5;
     private const BACKUP_CODE_COUNT = 10;
     private const APP_NAME = 'Storno';
+    private const EMAIL_OTP_TTL = 300; // 5 minutes
+    private const EMAIL_OTP_LENGTH = 6;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -354,6 +356,42 @@ class MfaService
         }
 
         // Single-use: delete after validation
+        $this->cache->delete($cacheKey);
+        return true;
+    }
+
+    // ── Email OTP ──────────────────────────────────────────────────────
+
+    public function createEmailOtp(User $user, string $mfaToken): string
+    {
+        $code = '';
+        for ($i = 0; $i < self::EMAIL_OTP_LENGTH; $i++) {
+            $code .= random_int(0, 9);
+        }
+
+        $cacheKey = 'mfa_email_otp_' . $mfaToken;
+        $this->cache->delete($cacheKey);
+        $this->cache->get($cacheKey, function (ItemInterface $item) use ($code) {
+            $item->expiresAfter(self::EMAIL_OTP_TTL);
+            return $code;
+        });
+
+        return $code;
+    }
+
+    public function verifyEmailOtp(string $mfaToken, string $code): bool
+    {
+        $cacheKey = 'mfa_email_otp_' . $mfaToken;
+
+        $storedCode = $this->cache->get($cacheKey, function () {
+            return null;
+        });
+
+        if ($storedCode === null || $storedCode !== $code) {
+            return false;
+        }
+
+        // Single-use: delete after successful verification
         $this->cache->delete($cacheKey);
         return true;
     }
