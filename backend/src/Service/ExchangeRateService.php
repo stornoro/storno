@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -118,6 +119,39 @@ class ExchangeRateService
             'from' => $from,
             'to' => $to,
         ];
+    }
+
+    /**
+     * Build a SQL CASE expression that resolves a BNR fallback rate for each distinct
+     * invoice currency in a company. Used as the COALESCE fallback when exchange_rate is NULL.
+     *
+     * @param string $currencyColumn Column/alias referencing the invoice currency (e.g. 'currency', 'i.currency')
+     */
+    public function buildFallbackRateSql(Connection $conn, string $companyId, string $defaultCurrency, string $currencyColumn = 'currency'): string
+    {
+        $fallbackRateSql = '1';
+        try {
+            $distinctCurrencies = $conn->fetchFirstColumn(
+                'SELECT DISTINCT currency FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency',
+                ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
+            );
+            if ($distinctCurrencies) {
+                $cases = [];
+                foreach ($distinctCurrencies as $cur) {
+                    $bnrRate = $this->getRate($cur);
+                    if ($bnrRate !== null) {
+                        $cases[] = sprintf("WHEN %s = '%s' THEN %s", $currencyColumn, addslashes($cur), $bnrRate);
+                    }
+                }
+                if ($cases) {
+                    $fallbackRateSql = 'CASE ' . implode(' ', $cases) . ' ELSE 1 END';
+                }
+            }
+        } catch (\Throwable) {
+            // BNR unavailable — fall back to 1 (no conversion)
+        }
+
+        return $fallbackRateSql;
     }
 
     private function fetchFromBnr(): array

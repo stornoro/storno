@@ -71,28 +71,7 @@ class DashboardController extends AbstractController
         $amountParams = array_merge($baseParams, ['defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate]);
 
         // Build fallback BNR rate lookup for currencies with NULL exchange_rate
-        // exchange_rate on invoice = how many RON per 1 unit of invoice currency
-        $fallbackRateSql = '1'; // ultimate fallback
-        try {
-            $distinctCurrencies = $conn->fetchFirstColumn(
-                'SELECT DISTINCT currency FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency',
-                ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
-            );
-            if ($distinctCurrencies) {
-                $cases = [];
-                foreach ($distinctCurrencies as $cur) {
-                    $bnrRate = $this->exchangeRateService->getRate($cur);
-                    if ($bnrRate !== null) {
-                        $cases[] = sprintf("WHEN currency = '%s' THEN %s", addslashes($cur), $bnrRate);
-                    }
-                }
-                if ($cases) {
-                    $fallbackRateSql = 'CASE ' . implode(' ', $cases) . ' ELSE 1 END';
-                }
-            }
-        } catch (\Throwable) {
-            // BNR unavailable — fall back to 1 (no conversion)
-        }
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
 
         // Counts by direction
         $directionCounts = $conn->fetchAllAssociative(

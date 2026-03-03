@@ -16,6 +16,7 @@ class MonthlySummaryService
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
+        private readonly ExchangeRateService $exchangeRateService,
     ) {}
 
     public function getCompanySummary(Company $company, \DateTimeImmutable $monthStart, \DateTimeImmutable $monthEnd): ?array
@@ -23,25 +24,34 @@ class MonthlySummaryService
         $conn = $this->entityManager->getConnection();
         $companyId = $company->getId()->toRfc4122();
         $currency = $company->getDefaultCurrency();
+        $defaultRate = $this->exchangeRateService->getRate($currency) ?? 1.0;
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $currency, 'i.currency');
+
+        // SQL conversion expressions (all queries use alias i.)
+        $convertTotal = "CASE WHEN i.currency = :defaultCurrency THEN i.total ELSE i.total * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertOutstanding = "CASE WHEN i.currency = :defaultCurrency THEN (i.total - i.amount_paid) ELSE (i.total - i.amount_paid) * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertPayment = "CASE WHEN i.currency = :defaultCurrency THEN p.amount ELSE p.amount * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        $amountBase = ['defaultCurrency' => $currency, 'defaultRate' => $defaultRate];
 
         // Total invoiced: SUM(total) + COUNT of outgoing invoices issued in the month
         $invoiced = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total), 0) AS total, COUNT(i.id) AS count
+            "SELECT COALESCE(SUM($convertTotal), 0) AS total, COUNT(i.id) AS count
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled)
                AND i.issue_date >= :monthStart
                AND i.issue_date <= :monthEnd
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'monthStart' => $monthStart->format('Y-m-d'),
                 'monthEnd' => $monthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         $totalInvoiced = (float) $invoiced['total'];
@@ -49,20 +59,20 @@ class MonthlySummaryService
 
         // Total collected: SUM of payments on outgoing invoices with payment_date in the month
         $collected = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(p.amount), 0) AS total, COUNT(p.id) AS count
+            "SELECT COALESCE(SUM($convertPayment), 0) AS total, COUNT(p.id) AS count
              FROM payment p
              JOIN invoice i ON p.invoice_id = i.id
              WHERE p.company_id = :companyId
                AND i.direction = :direction
                AND p.payment_date >= :monthStart
                AND p.payment_date <= :monthEnd
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'monthStart' => $monthStart->format('Y-m-d'),
                 'monthEnd' => $monthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         $totalCollected = (float) $collected['total'];
@@ -82,42 +92,42 @@ class MonthlySummaryService
 
         // Restante (overdue): due_date < monthEnd, not fully paid
         $overdue = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total - i.amount_paid), 0) AS total, COUNT(i.id) AS count
+            "SELECT COALESCE(SUM($convertOutstanding), 0) AS total, COUNT(i.id) AS count
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled, :paid)
                AND i.due_date < :monthEnd
                AND i.total > i.amount_paid
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'paid' => DocumentStatus::PAID->value,
                 'monthEnd' => $monthEndStr,
-            ],
+            ]),
         );
 
         // Scadente azi: due_date = monthEnd
         $dueToday = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total - i.amount_paid), 0) AS total, COUNT(i.id) AS count
+            "SELECT COALESCE(SUM($convertOutstanding), 0) AS total, COUNT(i.id) AS count
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled, :paid)
                AND i.due_date = :monthEnd
                AND i.total > i.amount_paid
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'paid' => DocumentStatus::PAID->value,
                 'monthEnd' => $monthEndStr,
-            ],
+            ]),
         );
 
         // Scadente 1-30 zile: due_date between monthEnd+1 and monthEnd+30
@@ -125,7 +135,7 @@ class MonthlySummaryService
         $monthEndPlus30 = $monthEnd->modify('+30 days')->format('Y-m-d');
 
         $dueSoon = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total - i.amount_paid), 0) AS total, COUNT(i.id) AS count
+            "SELECT COALESCE(SUM($convertOutstanding), 0) AS total, COUNT(i.id) AS count
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
@@ -133,8 +143,8 @@ class MonthlySummaryService
                AND i.due_date >= :start
                AND i.due_date <= :end
                AND i.total > i.amount_paid
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
@@ -142,38 +152,38 @@ class MonthlySummaryService
                 'paid' => DocumentStatus::PAID->value,
                 'start' => $monthEndPlus1,
                 'end' => $monthEndPlus30,
-            ],
+            ]),
         );
 
         // Scadente >30 zile: due_date > monthEnd+30
         $dueLater = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total - i.amount_paid), 0) AS total, COUNT(i.id) AS count
+            "SELECT COALESCE(SUM($convertOutstanding), 0) AS total, COUNT(i.id) AS count
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled, :paid)
                AND i.due_date > :end
                AND i.total > i.amount_paid
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'paid' => DocumentStatus::PAID->value,
                 'end' => $monthEndPlus30,
-            ],
+            ]),
         );
 
         // Top 5 clients by invoiced amount
         $topClients = $conn->fetchAllAssociative(
-            'SELECT i.receiver_name AS name,
-                    SUM(i.total) AS invoiced,
+            "SELECT i.receiver_name AS name,
+                    SUM($convertTotal) AS invoiced,
                     COALESCE((
-                        SELECT SUM(p2.amount) FROM payment p2
-                        WHERE p2.invoice_id = i.id
-                          AND p2.payment_date >= :monthStart
-                          AND p2.payment_date <= :monthEnd
+                        SELECT SUM($convertPayment) FROM payment p
+                        WHERE p.invoice_id = i.id
+                          AND p.payment_date >= :monthStart
+                          AND p.payment_date <= :monthEnd
                     ), 0) AS collected
              FROM invoice i
              WHERE i.company_id = :companyId
@@ -184,15 +194,15 @@ class MonthlySummaryService
                AND i.deleted_at IS NULL
              GROUP BY i.receiver_name
              ORDER BY invoiced DESC
-             LIMIT 5',
-            [
+             LIMIT 5",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'monthStart' => $monthStart->format('Y-m-d'),
                 'monthEnd' => $monthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         // Month-over-month comparison
@@ -200,58 +210,58 @@ class MonthlySummaryService
         $prevMonthEnd = $prevMonthStart->modify('last day of this month');
 
         $prevInvoiced = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total), 0) AS total
+            "SELECT COALESCE(SUM($convertTotal), 0) AS total
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled)
                AND i.issue_date >= :monthStart
                AND i.issue_date <= :monthEnd
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'monthStart' => $prevMonthStart->format('Y-m-d'),
                 'monthEnd' => $prevMonthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         $prevCollected = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(p.amount), 0) AS total
+            "SELECT COALESCE(SUM($convertPayment), 0) AS total
              FROM payment p
              JOIN invoice i ON p.invoice_id = i.id
              WHERE p.company_id = :companyId
                AND i.direction = :direction
                AND p.payment_date >= :monthStart
                AND p.payment_date <= :monthEnd
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'monthStart' => $prevMonthStart->format('Y-m-d'),
                 'monthEnd' => $prevMonthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         $prevOverdue = $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(i.total - i.amount_paid), 0) AS total
+            "SELECT COALESCE(SUM($convertOutstanding), 0) AS total
              FROM invoice i
              WHERE i.company_id = :companyId
                AND i.direction = :direction
                AND i.status NOT IN (:draft, :cancelled, :paid)
                AND i.due_date < :monthEnd
                AND i.total > i.amount_paid
-               AND i.deleted_at IS NULL',
-            [
+               AND i.deleted_at IS NULL",
+            array_merge($amountBase, [
                 'companyId' => $companyId,
                 'direction' => InvoiceDirection::OUTGOING->value,
                 'draft' => DocumentStatus::DRAFT->value,
                 'cancelled' => DocumentStatus::CANCELLED->value,
                 'paid' => DocumentStatus::PAID->value,
                 'monthEnd' => $prevMonthEnd->format('Y-m-d'),
-            ],
+            ]),
         );
 
         $prevInvoicedTotal = (float) $prevInvoiced['total'];

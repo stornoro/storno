@@ -3,93 +3,110 @@
 namespace App\Service\Report;
 
 use App\Entity\Company;
+use App\Service\ExchangeRateService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class SalesAnalysisService
 {
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
+        private readonly ExchangeRateService $exchangeRateService,
     ) {}
 
     public function generate(Company $company, string $dateFrom, string $dateTo): array
     {
         $conn = $this->entityManager->getConnection();
         $companyId = (string) $company->getId();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $fallbackRateSqlI = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency, 'i.currency');
+
+        // SQL conversion expressions
+        $convertTotal = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertSubtotal = "CASE WHEN currency = :defaultCurrency THEN subtotal ELSE subtotal * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertVat = "CASE WHEN currency = :defaultCurrency THEN vat_total ELSE vat_total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertOutstanding = "CASE WHEN currency = :defaultCurrency THEN (total - amount_paid) ELSE (total - amount_paid) * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        // Aliased versions (for queries with table alias i.)
+        $iConvertTotal = "CASE WHEN i.currency = :defaultCurrency THEN i.total ELSE i.total * COALESCE(i.exchange_rate, $fallbackRateSqlI) / :defaultRate END";
+        $ilConvertLineTotal = "CASE WHEN i.currency = :defaultCurrency THEN il.line_total ELSE il.line_total * COALESCE(i.exchange_rate, $fallbackRateSqlI) / :defaultRate END";
 
         $baseWhere = 'company_id = :companyId AND direction = \'outgoing\' AND status NOT IN (\'draft\', \'cancelled\') AND deleted_at IS NULL';
+        $amountBase = ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate];
 
         // Annual total (current year up to dateTo, plus previous year)
         $currentYear = (int) substr($dateTo, 0, 4);
         $prevYear = $currentYear - 1;
 
         $annualCurrent = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM(total), 0) AS amount
+            "SELECT COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
              WHERE {$baseWhere}
                AND YEAR(issue_date) = :year AND issue_date <= :dateTo",
-            ['companyId' => $companyId, 'year' => $currentYear, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['year' => $currentYear, 'dateTo' => $dateTo])
         );
 
         $annualPrev = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM(total), 0) AS amount
+            "SELECT COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
              WHERE {$baseWhere}
                AND YEAR(issue_date) = :year",
-            ['companyId' => $companyId, 'year' => $prevYear]
+            array_merge($amountBase, ['year' => $prevYear])
         );
 
         // Period invoiced
         $periodInvoiced = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM(subtotal), 0) AS subtotal,
-                    COALESCE(SUM(vat_total), 0) AS vat_total,
-                    COALESCE(SUM(total), 0) AS total,
+            "SELECT COALESCE(SUM($convertSubtotal), 0) AS subtotal,
+                    COALESCE(SUM($convertVat), 0) AS vat_total,
+                    COALESCE(SUM($convertTotal), 0) AS total,
                     COUNT(*) AS cnt
              FROM invoice
              WHERE {$baseWhere}
                AND issue_date >= :dateFrom AND issue_date <= :dateTo",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
         // Period collected
         $periodCollected = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM(subtotal), 0) AS subtotal,
-                    COALESCE(SUM(vat_total), 0) AS vat_total,
-                    COALESCE(SUM(total), 0) AS total,
+            "SELECT COALESCE(SUM($convertSubtotal), 0) AS subtotal,
+                    COALESCE(SUM($convertVat), 0) AS vat_total,
+                    COALESCE(SUM($convertTotal), 0) AS total,
                     COUNT(*) AS cnt
              FROM invoice
              WHERE {$baseWhere}
                AND issue_date >= :dateFrom AND issue_date <= :dateTo
                AND paid_at IS NOT NULL",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
         // Period outstanding
         $periodOutstanding = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM(subtotal), 0) AS subtotal,
-                    COALESCE(SUM(vat_total), 0) AS vat_total,
-                    COALESCE(SUM(total - amount_paid), 0) AS total,
+            "SELECT COALESCE(SUM($convertSubtotal), 0) AS subtotal,
+                    COALESCE(SUM($convertVat), 0) AS vat_total,
+                    COALESCE(SUM($convertOutstanding), 0) AS total,
                     COUNT(*) AS cnt
              FROM invoice
              WHERE {$baseWhere}
                AND issue_date >= :dateFrom AND issue_date <= :dateTo
                AND paid_at IS NULL",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
         // Monthly revenue
         $monthlyRows = $conn->fetchAllAssociative(
             "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month,
-                    COALESCE(SUM(total), 0) AS invoiced,
-                    COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN total ELSE 0 END), 0) AS collected
+                    COALESCE(SUM($convertTotal), 0) AS invoiced,
+                    COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN ($convertTotal) ELSE 0 END), 0) AS collected
              FROM invoice
              WHERE {$baseWhere}
                AND issue_date >= :dateFrom AND issue_date <= :dateTo
              GROUP BY month
              ORDER BY month",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
-        // Recent invoices (last 10)
+        // Recent invoices (last 10) — individual rows, no conversion needed
         $recentInvoices = $conn->fetchAllAssociative(
             "SELECT i.id, i.number, i.issue_date, i.total, i.currency, i.status, i.paid_at,
                     COALESCE(c.name, i.receiver_name) AS client_name
@@ -106,7 +123,7 @@ class SalesAnalysisService
         // Top clients
         $topClients = $conn->fetchAllAssociative(
             "SELECT i.client_id, COALESCE(c.name, i.receiver_name) AS client_name,
-                    COALESCE(SUM(i.total), 0) AS total, COUNT(*) AS cnt
+                    COALESCE(SUM($iConvertTotal), 0) AS total, COUNT(*) AS cnt
              FROM invoice i
              LEFT JOIN client c ON c.id = i.client_id
              WHERE i.company_id = :companyId AND i.direction = 'outgoing'
@@ -115,13 +132,13 @@ class SalesAnalysisService
              GROUP BY i.client_id, client_name
              ORDER BY total DESC
              LIMIT 50",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
         // Top products
         $topProducts = $conn->fetchAllAssociative(
             "SELECT il.description, il.product_code,
-                    COALESCE(SUM(il.line_total), 0) AS total,
+                    COALESCE(SUM($ilConvertLineTotal), 0) AS total,
                     COALESCE(SUM(il.quantity), 0) AS quantity
              FROM invoice_line il
              INNER JOIN invoice i ON i.id = il.invoice_id
@@ -131,10 +148,11 @@ class SalesAnalysisService
              GROUP BY il.description, il.product_code
              ORDER BY total DESC
              LIMIT 50",
-            ['companyId' => $companyId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo]
+            array_merge($amountBase, ['dateFrom' => $dateFrom, 'dateTo' => $dateTo])
         );
 
         return [
+            'currency' => $defaultCurrency,
             'period' => [
                 'dateFrom' => $dateFrom,
                 'dateTo' => $dateTo,
