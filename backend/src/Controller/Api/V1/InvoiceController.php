@@ -93,12 +93,7 @@ class InvoiceController extends AbstractController
 
         $result = $this->invoiceManager->listByCompany($company, $filters, $page, $limit);
 
-        $response = $this->json($result, context: ['groups' => ['invoice:list']]);
-        $response->setMaxAge(30);
-        $response->setPrivate();
-        $response->setVary(['X-Company', 'Authorization']);
-
-        return $response;
+        return $this->json($result, context: ['groups' => ['invoice:list']]);
     }
 
     #[Route('/invoices/bulk-delete', methods: ['POST'])]
