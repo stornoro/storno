@@ -948,14 +948,17 @@ function localizeValidationMessage(message: string): string {
   return locale.value === 'en' ? parts[1] : parts[0]
 }
 
-const downloadMenuItems = computed(() => [
-  [
+const downloadMenuItems = computed(() => {
+  const items: any[] = [
     { label: $t('invoices.viewPdf'), icon: 'i-lucide-eye', onSelect: () => viewPdf() },
     { label: $t('invoices.downloadPdf'), icon: 'i-lucide-download', onSelect: () => downloadPdf() },
     { label: $t('invoices.downloadXml'), icon: 'i-lucide-file-code', onSelect: () => downloadXml() },
-    { label: $t('invoices.downloadSignature'), icon: 'i-lucide-file-check', onSelect: () => downloadSignature() },
-  ],
-])
+  ]
+  if (invoice.value?.status === 'validated') {
+    items.push({ label: $t('invoices.downloadSignature'), icon: 'i-lucide-file-check', onSelect: () => downloadSignature() })
+  }
+  return [items]
+})
 
 const moreActionsItems = computed(() => {
   const editGroup: any[] = []
