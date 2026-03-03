@@ -9,6 +9,7 @@ use App\Repository\UserRepository;
 use App\Security\OrganizationContext;
 use App\Security\RolePermissionMap;
 use App\Service\LicenseManager;
+use App\Service\MfaService;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -40,6 +41,7 @@ class UserController extends AbstractController
         private readonly FilesystemOperator $platformStorage,
         private readonly JWTEncoderInterface $jwtEncoder,
         private readonly UserRepository $userRepository,
+        private readonly MfaService $mfaService,
     ) {}
 
     #[Route('/me', name: 'app_api_user', methods: ['GET'])]
@@ -61,6 +63,7 @@ class UserController extends AbstractController
             'active' => $user->isActive(),
             'emailVerified' => $user->isEmailVerified(),
             'mfaEnabled' => $user->isMfaEnabled(),
+            'hasPassword' => $user->getPassword() !== null,
             'createdAt' => $user->getCreatedAt()?->format('c'),
             'preferences' => $user->getPreferences(),
             'avatarUrl' => $user->getAvatarPath() ? '/v1/me/avatar' : null,
@@ -167,10 +170,20 @@ class UserController extends AbstractController
         $user = $this->getUser();
         $data = json_decode($request->getContent(), true);
         $password = $data['password'] ?? null;
+        $verificationToken = $data['verificationToken'] ?? null;
 
-        // Require password confirmation
-        if (!$password || !$this->passwordHasher->isPasswordValid($user, $password)) {
-            return $this->json(['error' => 'Parola este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        $hasPassword = $user->getPassword() !== null;
+
+        if ($hasPassword) {
+            // Users with a password must confirm with their password
+            if (!$password || !$this->passwordHasher->isPasswordValid($user, $password)) {
+                return $this->json(['error' => 'Parola este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        } else {
+            // Social-only users must confirm via step-up MFA verification token
+            if (!$verificationToken || !$this->mfaService->validateVerificationToken($verificationToken, $user)) {
+                return $this->json(['error' => 'Verificarea a esuat.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
         }
 
         $userId = (string) $user->getId();

@@ -258,9 +258,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function deleteAccount(password: string): Promise<void> {
+  async function deleteAccount(opts: { password?: string; verificationToken?: string }): Promise<void> {
     const { del } = useApi()
-    await del('/v1/me', { password })
+    await del('/v1/me', opts)
     logout()
     navigateTo('/login')
   }
