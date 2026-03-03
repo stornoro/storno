@@ -324,7 +324,15 @@ onMounted(() => {
         }"
       >
         <template #clientId-cell="{ row }">
-          <span class="font-mono text-xs">{{ row.original.clientId.substring(0, 20) }}...</span>
+          <div class="flex items-center gap-1">
+            <span class="font-mono text-xs">{{ row.original.clientId.substring(0, 20) }}...</span>
+            <UButton
+              icon="i-lucide-copy"
+              variant="ghost"
+              size="xs"
+              @click="copy(row.original.clientId); toast.add({ title: $t('oauth2.clientIdCopied'), color: 'success' })"
+            />
+          </div>
         </template>
         <template #clientType-cell="{ row }">
           <UBadge variant="subtle" size="sm" :color="row.original.clientType === 'confidential' ? 'primary' : 'neutral'">

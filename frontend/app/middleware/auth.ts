@@ -2,7 +2,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const authStore = useAuthStore()
 
   if (!authStore.isAuthenticated) {
-    return navigateTo('/login')
+    return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
   }
 
   // Fetch user profile if not loaded yet (e.g. page refresh with saved token)
@@ -11,7 +11,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     // If token was invalid (401), fetchUser already cleared the cookies
     if (!authStore.isAuthenticated) {
-      return navigateTo('/login')
+      return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
     }
 
     // If user is still null but token exists (network error, backend down),
