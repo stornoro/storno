@@ -8,6 +8,7 @@ export interface ProformaFilters {
   search: string
   dateFrom: string | null
   dateTo: string | null
+  currency: string | null
 }
 
 interface DocumentTotals {
@@ -22,6 +23,8 @@ interface ProformaPaginatedResponse {
   page: number
   limit: number
   totals: DocumentTotals
+  currency: string
+  distinctCurrencies: string[]
 }
 
 export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
@@ -35,12 +38,15 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
     search: '',
     dateFrom: null,
     dateTo: null,
+    currency: null,
   })
 
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
   const totals = ref<DocumentTotals>({ subtotal: '0.00', vatTotal: '0.00', total: '0.00' })
+  const activeCurrency = ref<string>('RON')
+  const distinctCurrencies = ref<string[]>([])
   const sort = ref<string | null>(null)
   const order = ref<'asc' | 'desc' | null>(null)
 
@@ -74,6 +80,7 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       if (filters.value.search) params.search = filters.value.search
       if (filters.value.dateFrom) params.dateFrom = filters.value.dateFrom
       if (filters.value.dateTo) params.dateTo = filters.value.dateTo
+      if (filters.value.currency) params.currency = filters.value.currency
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -83,6 +90,8 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       total.value = response.total
       page.value = response.page
       totals.value = response.totals ?? { subtotal: '0.00', vatTotal: '0.00', total: '0.00' }
+      activeCurrency.value = response.currency ?? 'RON'
+      distinctCurrencies.value = response.distinctCurrencies ?? []
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca profacturile.'
@@ -207,6 +216,7 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       search: '',
       dateFrom: null,
       dateTo: null,
+      currency: null,
     }
     page.value = 1
   }
@@ -247,6 +257,8 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
     limit,
     total,
     totals,
+    activeCurrency,
+    distinctCurrencies,
     sort,
     order,
 

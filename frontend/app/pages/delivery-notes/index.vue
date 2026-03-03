@@ -18,6 +18,7 @@ const page = ref(1)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
 const search = ref('')
 const statusFilter = ref('all')
+const currencyFilter = ref(companyStore.currentCompany?.defaultCurrency || 'RON')
 const sorting = ref<SortingState>([])
 
 // Create/Edit/Copy slideover state
@@ -243,6 +244,7 @@ async function fetchDeliveryNotes() {
   deliveryNoteStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as DeliveryNoteStatus : null,
     search: search.value,
+    currency: currencyFilter.value || null,
   })
   deliveryNoteStore.page = page.value
   deliveryNoteStore.limit = limit.value
@@ -250,12 +252,13 @@ async function fetchDeliveryNotes() {
   await deliveryNoteStore.fetchDeliveryNotes()
 }
 
-watch([page, statusFilter], () => fetchDeliveryNotes())
+watch([page, statusFilter, currencyFilter], () => fetchDeliveryNotes())
 
 watch(() => companyStore.currentCompanyId, () => {
   page.value = 1
   search.value = ''
   statusFilter.value = 'all'
+  currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
   sorting.value = []
   fetchDeliveryNotes()
 })
@@ -286,6 +289,23 @@ onMounted(() => {
         <div class="flex flex-wrap items-center gap-2 w-full">
           <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-full sm:w-56" @update:model-value="onSearchInput" />
           <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('deliveryNotes.status')" class="w-full sm:w-44" />
+          <template v-if="deliveryNoteStore.distinctCurrencies.length > 1">
+            <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
+            <div class="flex items-center gap-1">
+              <button
+                v-for="cur in deliveryNoteStore.distinctCurrencies"
+                :key="cur"
+                type="button"
+                class="px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap"
+                :class="currencyFilter === cur
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-(--ui-bg-elevated) border-(--ui-border) text-(--ui-text-muted) hover:border-(--ui-text-muted)'"
+                @click="currencyFilter = cur"
+              >
+                {{ cur }}
+              </button>
+            </div>
+          </template>
         </div>
       </UDashboardToolbar>
     </template>
@@ -348,17 +368,17 @@ onMounted(() => {
       <div v-if="deliveryNotes.length" class="flex items-center bg-elevated/50 rounded-lg border border-default mt-2 py-2.5 px-4 gap-0">
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalExcluding') }}</div>
-          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.subtotal) }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.subtotal) }} <span class="text-xs text-muted font-normal">{{ deliveryNoteStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.vatLabel') }}</div>
-          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.vatTotal) }}</div>
+          <div class="text-sm font-bold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.vatTotal) }} <span class="text-xs text-muted font-normal">{{ deliveryNoteStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="flex-1 px-3">
           <div class="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">{{ $t('invoices.totalIncluding') }}</div>
-          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.total) }}</div>
+          <div class="text-[15px] font-extrabold tabular-nums">{{ formatPlainMoney(deliveryNoteStore.totals.total) }} <span class="text-xs text-muted font-normal">{{ deliveryNoteStore.activeCurrency }}</span></div>
         </div>
         <div class="w-px h-8 bg-default shrink-0" />
         <div class="ml-auto pl-4 flex items-center gap-2.5 shrink-0">
