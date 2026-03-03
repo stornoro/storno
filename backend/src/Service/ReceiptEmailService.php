@@ -102,6 +102,11 @@ class ReceiptEmailService
                 ->text($body)
                 ->html($html);
 
+            $companyEmail = $receipt->getCompany()?->getEmail();
+            if ($companyEmail && filter_var($companyEmail, FILTER_VALIDATE_EMAIL)) {
+                $email->replyTo(new Address($companyEmail, $companyName));
+            }
+
             if ($cc) {
                 foreach ($cc as $ccAddress) {
                     if (filter_var($ccAddress, FILTER_VALIDATE_EMAIL)) {
