@@ -141,9 +141,15 @@
 
     <!-- Lines -->
     <div class="space-y-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
-        <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
+          <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+        </div>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs text-(--ui-text-muted)">{{ $t('invoices.vatIncluded') }}</span>
+          <USwitch v-model="form.vatIncluded" size="xs" />
+        </label>
       </div>
 
       <div class="space-y-4">
@@ -185,7 +191,7 @@
                 :search-input="true"
               />
             </UFormField>
-            <UFormField :label="$t('invoices.unitPrice')">
+            <UFormField :label="form.vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice')">
               <UInput v-model="line.unitPrice" type="number" step="0.01" min="0" />
             </UFormField>
             <UFormField :label="$t('invoices.discount')">
@@ -457,6 +463,7 @@ interface LineForm {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded: boolean
 }
 
 function emptyLine(): LineForm {
@@ -469,6 +476,7 @@ function emptyLine(): LineForm {
     vatCategoryCode: 'S',
     discount: '0.00',
     discountPercent: '0.00',
+    vatIncluded: false,
   }
 }
 
@@ -491,6 +499,7 @@ const form = reactive({
   fiscalNumber: '',
   customerName: '',
   customerCif: '',
+  vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
 
@@ -513,6 +522,7 @@ if (props.receipt) {
   form.fiscalNumber = props.receipt.fiscalNumber || ''
   form.customerName = props.receipt.customerName || ''
   form.customerCif = props.receipt.customerCif || ''
+  form.vatIncluded = props.receipt.lines.some(l => l.vatIncluded)
   form.lines = props.receipt.lines.length > 0
     ? props.receipt.lines.map(l => ({
         description: l.description,
@@ -523,6 +533,7 @@ if (props.receipt) {
         vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
+        vatIncluded: l.vatIncluded || false,
       }))
     : [emptyLine()]
 
@@ -561,6 +572,12 @@ watch(showClientCreateModal, (isOpen) => {
   if (!isOpen) clientPrefill.value = null
 })
 
+watch(() => form.vatIncluded, (val) => {
+  for (const line of form.lines) {
+    line.vatIncluded = val
+  }
+})
+
 const computedTotals = computed(() => computeSimpleTotals(form.lines))
 
 const vatRateChipOptions = computed(() =>
@@ -597,7 +614,9 @@ function onProductSelected(product: Product) {
 }
 
 function addLine() {
-  form.lines.push(emptyLine())
+  const line = emptyLine()
+  line.vatIncluded = form.vatIncluded
+  form.lines.push(line)
 }
 
 function removeLine(index: number) {
@@ -616,6 +635,7 @@ async function onSave() {
     vatCategoryCode: l.vatCategoryCode,
     discount: l.discount,
     discountPercent: l.discountPercent,
+    vatIncluded: form.vatIncluded || undefined,
   }))
 
   let result: Receipt | null = null
@@ -724,6 +744,7 @@ onMounted(async () => {
       if (source.customerName || source.customerCif) {
         showCustomer.value = true
       }
+      form.vatIncluded = source.lines.some((l: any) => l.vatIncluded)
       form.lines = source.lines.length > 0
         ? source.lines.map((l: any) => ({
             description: l.description,
@@ -734,6 +755,7 @@ onMounted(async () => {
             vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode || 'S', l.vatRate),
             discount: l.discount || '0.00',
             discountPercent: l.discountPercent || '0.00',
+            vatIncluded: l.vatIncluded || false,
           }))
         : [emptyLine()]
       if (source.client && !clients.value.find(c => c.id === source.client.id)) {

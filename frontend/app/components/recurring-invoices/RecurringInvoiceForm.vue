@@ -246,9 +246,15 @@
 
     <!-- Lines -->
     <div class="space-y-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
-        <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-list" class="size-4 text-(--ui-text-muted)" />
+          <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('invoices.invoiceLines') }}</span>
+        </div>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <span class="text-xs text-(--ui-text-muted)">{{ $t('invoices.vatIncluded') }}</span>
+          <USwitch v-model="form.vatIncluded" size="xs" />
+        </label>
       </div>
 
       <div class="space-y-4 overflow-visible">
@@ -313,7 +319,7 @@
                 :search-input="true"
               />
             </UFormField>
-            <UFormField :label="line.referenceCurrency ? `${$t('invoices.unitPrice')} (${line.referenceCurrency})` : $t('invoices.unitPrice')">
+            <UFormField :label="line.referenceCurrency ? `${form.vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice')} (${line.referenceCurrency})` : (form.vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice'))">
               <UInput v-model="line.unitPrice" type="number" step="0.01" min="0" />
             </UFormField>
             <UFormField :label="line.referenceCurrency ? `${$t('invoices.discount')} (${line.referenceCurrency})` : $t('invoices.discount')">
@@ -619,6 +625,7 @@ interface LineForm {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded: boolean
   referenceCurrency: string | null
   markupPercent: string
   priceRule: string
@@ -635,6 +642,7 @@ function emptyLine(): LineForm {
     vatCategoryCode: 'S',
     discount: '0.00',
     discountPercent: '0.00',
+    vatIncluded: false,
     referenceCurrency: null,
     markupPercent: '',
     priceRule: 'fixed',
@@ -667,6 +675,7 @@ const form = reactive({
   penaltyEnabled: false,
   penaltyPercentPerDay: '',
   penaltyGraceDays: 0 as number,
+  vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
 
@@ -699,6 +708,7 @@ if (props.recurringInvoice) {
   form.penaltyEnabled = ri.penaltyEnabled ?? false
   form.penaltyPercentPerDay = ri.penaltyPercentPerDay || ''
   form.penaltyGraceDays = ri.penaltyGraceDays ?? 0
+  form.vatIncluded = ri.lines.some(l => l.vatIncluded)
   form.lines = ri.lines.length > 0
     ? ri.lines.map(l => ({
         description: l.description,
@@ -709,6 +719,7 @@ if (props.recurringInvoice) {
         vatCategoryCode: normalizeVatCategoryCode(l.vatCategoryCode, l.vatRate),
         discount: l.discount,
         discountPercent: l.discountPercent,
+        vatIncluded: l.vatIncluded || false,
         referenceCurrency: l.referenceCurrency || null,
         markupPercent: l.markupPercent || '',
         priceRule: l.priceRule || 'fixed',
@@ -957,6 +968,12 @@ watch(() => form.currency, (val) => {
   }
 })
 
+watch(() => form.vatIncluded, (val) => {
+  for (const line of form.lines) {
+    line.vatIncluded = val
+  }
+})
+
 // Converted line calculations (unique to recurring — handles per-line currency conversion)
 function lineConvertedNet(line: LineForm): number {
   const net = lineNet(line)
@@ -1013,7 +1030,9 @@ const computedTotals = computed(() => {
 })
 
 function addLine() {
-  form.lines.push(emptyLine())
+  const line = emptyLine()
+  line.vatIncluded = form.vatIncluded
+  form.lines.push(line)
 }
 
 function removeLine(index: number) {
@@ -1036,6 +1055,7 @@ async function onSave() {
     vatCategoryCode: l.vatCategoryCode,
     discount: l.discount,
     discountPercent: l.discountPercent,
+    vatIncluded: form.vatIncluded || undefined,
     referenceCurrency: l.referenceCurrency || null,
     markupPercent: l.markupPercent || null,
     priceRule: l.priceRule || 'fixed',

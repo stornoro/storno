@@ -52,6 +52,7 @@ interface WizardLine {
   vatCategoryCode: string
   discount: string
   discountPercent: string
+  vatIncluded: boolean
 }
 
 const lines = ref<WizardLine[]>([
@@ -64,8 +65,11 @@ const lines = ref<WizardLine[]>([
     vatCategoryCode: 'S',
     discount: '0',
     discountPercent: '0',
+    vatIncluded: false,
   },
 ])
+
+const vatIncluded = ref(false)
 
 const totals = computed(() => computeSimpleTotals(lines.value))
 
@@ -79,6 +83,7 @@ function addLine() {
     vatCategoryCode: 'S',
     discount: '0',
     discountPercent: '0',
+    vatIncluded: vatIncluded.value,
   })
 }
 
@@ -108,14 +113,14 @@ async function applySampleData() {
   const sample = generateSampleInvoice()
 
   // Apply sample lines
-  lines.value = sample.lines.map(l => ({ ...l }))
+  lines.value = sample.lines.map(l => ({ ...l, vatIncluded: false }))
 
   // Try to find an existing client matching sample, otherwise use the name for display
   if (!selectedClientId.value) {
     // Pre-fill a lightweight version — just set lines
     const sampleLine = sample.lines[0]
     if (sampleLine) {
-      lines.value = [{ ...sampleLine }]
+      lines.value = [{ ...sampleLine, vatIncluded: false }]
     }
     // Show the new client form pre-filled
     showNewClientForm.value = true
@@ -194,6 +199,7 @@ async function submitInvoice() {
         vatCategoryCode: l.vatCategoryCode,
         discount: l.discount,
         discountPercent: l.discountPercent,
+        vatIncluded: l.vatIncluded || undefined,
       })),
     })
 
@@ -240,6 +246,7 @@ watch(open, async (isOpen) => {
     sendToAnaf.value = false
     sendByEmail.value = false
     clientEmail.value = ''
+    vatIncluded.value = false
     lines.value = [{
       description: '',
       quantity: '1',
@@ -249,9 +256,14 @@ watch(open, async (isOpen) => {
       vatCategoryCode: 'S',
       discount: '0',
       discountPercent: '0',
+      vatIncluded: false,
     }]
     await Promise.all([loadClients(), fetchDefaults()])
   }
+})
+
+watch(vatIncluded, (val) => {
+  lines.value = lines.value.map(l => ({ ...l, vatIncluded: val }))
 })
 
 function goToInvoice() {
@@ -394,6 +406,13 @@ const formatMoney = (val: number) =>
 
         <!-- Step 2: Line items -->
         <div v-else-if="currentStep === 1" class="space-y-4">
+          <div class="flex items-center justify-end">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <span class="text-xs text-(--ui-text-muted)">{{ $t('invoices.vatIncluded') }}</span>
+              <USwitch v-model="vatIncluded" size="xs" />
+            </label>
+          </div>
+
           <div
             v-for="(line, idx) in lines"
             :key="idx"
@@ -419,7 +438,7 @@ const formatMoney = (val: number) =>
               <UFormField :label="$t('onboarding.wizard.quantity')">
                 <UInput v-model="line.quantity" type="number" min="0.01" step="0.01" />
               </UFormField>
-              <UFormField :label="$t('onboarding.wizard.unitPrice')" required>
+              <UFormField :label="vatIncluded ? $t('invoices.unitPriceVatIncluded') : $t('invoices.unitPrice')" required>
                 <UInput v-model="line.unitPrice" type="number" min="0" step="0.01" placeholder="0.00" />
               </UFormField>
             </div>
