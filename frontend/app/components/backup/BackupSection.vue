@@ -97,7 +97,7 @@ onUnmounted(() => {
 
     <!-- Active job progress -->
     <div v-if="isActiveJob && backupStore.currentJob" class="mb-6 p-4 rounded-lg border border-cyan-200 dark:border-cyan-800 bg-cyan-50/50 dark:bg-cyan-900/10">
-      <BackupBackupProgressBar
+      <BackupProgressBar
         :progress="backupStore.currentJob.progress"
         :step="backupStore.currentJob.currentStep"
         :status="backupStore.currentJob.status"
