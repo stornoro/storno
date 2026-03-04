@@ -639,7 +639,7 @@ class InvoiceController extends AbstractController
             try {
                 $this->paymentService->recordPayment($invoice, [
                     'amount' => $data['collect']['value'] ?? $invoice->getTotal(),
-                    'paymentMethod' => $data['collect']['type'] ?? 'bank_transfer',
+                    'paymentMethod' => $data['collect']['type'] ?? $invoice->getPaymentMethod() ?? 'bank_transfer',
                     'paymentDate' => $data['collect']['issueDate'] ?? null,
                     'reference' => $data['collect']['documentNumber'] ?? null,
                     'notes' => $data['collect']['mentions'] ?? null,
