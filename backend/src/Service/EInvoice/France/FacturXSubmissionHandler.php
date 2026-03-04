@@ -35,7 +35,7 @@ final class FacturXSubmissionHandler implements EInvoiceSubmissionHandlerInterfa
         if (!$validationResult->isValid) {
             $submission->setStatus(EInvoiceSubmissionStatus::REJECTED);
             $submission->setErrorMessage(
-                implode('; ', array_map(fn ($e) => $e->message, $validationResult->errors))
+                implode("\n", array_map(fn ($e) => $e->message, $validationResult->errors))
             );
             $this->entityManager->flush();
             return;

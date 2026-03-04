@@ -240,22 +240,22 @@
 
           <!-- e-Transport line fields -->
           <div v-if="showETransport" class="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-(--ui-border)">
-            <UFormField :label="$t('deliveryNotes.tariffCode')">
+            <UFormField :label="$t('deliveryNotes.tariffCode')" :required="etransportLineFieldsRequired">
               <UInput v-model="line.tariffCode" placeholder="08031010" maxlength="8" />
             </UFormField>
             <UFormField :label="$t('deliveryNotes.purposeCode')">
               <USelectMenu v-model="line.purposeCode" :items="purposeCodeOptions" value-key="value" />
             </UFormField>
-            <UFormField :label="$t('deliveryNotes.unitOfMeasure')">
+            <UFormField :label="$t('deliveryNotes.unitOfMeasure')" :required="etransportLineFieldsRequired">
               <USelectMenu v-model="line.unitOfMeasureCode" :items="uomCodeOptions" value-key="value" :search-input="true" />
             </UFormField>
-            <UFormField :label="$t('deliveryNotes.netWeight')">
+            <UFormField :label="$t('deliveryNotes.netWeight')" :required="etransportLineFieldsRequired">
               <UInput v-model="line.netWeight" type="number" step="0.01" min="0" />
             </UFormField>
-            <UFormField :label="$t('deliveryNotes.grossWeight')">
+            <UFormField :label="$t('deliveryNotes.grossWeight')" :required="etransportGrossWeightRequired">
               <UInput v-model="line.grossWeight" type="number" step="0.01" min="0" />
             </UFormField>
-            <UFormField :label="$t('deliveryNotes.valueWithoutVat')">
+            <UFormField :label="$t('deliveryNotes.valueWithoutVat')" :required="etransportLineFieldsRequired">
               <UInput v-model="line.valueWithoutVat" type="number" step="0.01" min="0" />
             </UFormField>
           </div>
@@ -355,10 +355,10 @@
                   value-key="value"
                 />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.transportDate')">
+              <UFormField :label="$t('deliveryNotes.transportDate')" :required="etransportHeaderRequired">
                 <UInput v-model="form.etransportTransportDate" type="date" />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.vehicleNumber')">
+              <UFormField :label="$t('deliveryNotes.vehicleNumber')" :required="etransportHeaderRequired">
                 <UInput v-model="form.etransportVehicleNumber" placeholder="B01ABC" />
               </UFormField>
               <UFormField :label="$t('deliveryNotes.trailer1')">
@@ -367,13 +367,13 @@
               <UFormField :label="$t('deliveryNotes.trailer2')">
                 <UInput v-model="form.etransportTrailer2" />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.transporterCountry')">
+              <UFormField :label="$t('deliveryNotes.transporterCountry')" :required="etransportHeaderRequired">
                 <UInput v-model="form.etransportTransporterCountry" maxlength="2" placeholder="RO" />
               </UFormField>
               <UFormField :label="$t('deliveryNotes.transporterCode')">
                 <UInput v-model="form.etransportTransporterCode" placeholder="CUI transportator" />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.transporterName')">
+              <UFormField :label="$t('deliveryNotes.transporterName')" :required="etransportHeaderRequired">
                 <UInput v-model="form.etransportTransporterName" />
               </UFormField>
             </div>
@@ -473,10 +473,43 @@
       </div>
     </div>
 
+    <!-- Validation Errors -->
+    <div v-if="lastValidation && !lastValidation.valid && lastValidation.errors.length" class="p-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 space-y-3">
+      <div class="flex items-center gap-2">
+        <UIcon name="i-lucide-circle-x" class="text-red-500 size-5" />
+        <span class="font-semibold text-red-600 dark:text-red-400">{{ $t('deliveryNotes.validationFailed') }}</span>
+        <UBadge color="error" variant="subtle" size="sm">
+          {{ lastValidation.errors.length }} {{ lastValidation.errors.length === 1 ? $t('deliveryNotes.validationErrorCount') : $t('deliveryNotes.validationErrorsCount') }}
+        </UBadge>
+      </div>
+      <p class="text-sm text-red-600 dark:text-red-400">
+        {{ $t('deliveryNotes.validationSavedWithErrors') }}
+      </p>
+      <div class="space-y-1.5">
+        <div v-for="(err, i) in lastValidation.errors" :key="i" class="flex items-start gap-2 text-sm">
+          <UIcon name="i-lucide-x" class="text-red-500 mt-0.5 shrink-0 size-4" />
+          <div class="min-w-0">
+            <span class="font-medium text-red-700 dark:text-red-300">{{ localizeValidationMessage(err.message) }}</span>
+            <span v-if="err.ruleId" class="text-red-400 dark:text-red-500 ml-1 text-xs">[{{ err.ruleId }}]</span>
+            <UBadge v-if="err.source" variant="subtle" size="xs" class="ml-1">{{ err.source }}</UBadge>
+          </div>
+        </div>
+      </div>
+      <div v-if="lastValidation.warnings.length" class="pt-3 border-t border-red-200 dark:border-red-800 space-y-1">
+        <div v-for="(warn, i) in lastValidation.warnings" :key="i" class="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
+          <UIcon name="i-lucide-alert-triangle" class="mt-0.5 shrink-0 size-4" />
+          <span>{{ localizeValidationMessage(warn) }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer buttons -->
     <div class="space-y-2">
       <UButton class="w-full justify-center" icon="i-lucide-check" :loading="saving" @click="onSave">
-        {{ $t('common.save') }}
+        {{ lastValidation && !lastValidation.valid ? $t('deliveryNotes.saveAndRevalidate') : $t('common.save') }}
+      </UButton>
+      <UButton v-if="lastValidation && !lastValidation.valid" class="w-full justify-center" variant="outline" icon="i-lucide-arrow-right" @click="closeWithErrors">
+        {{ $t('deliveryNotes.closeWithErrors') }}
       </UButton>
       <UButton class="w-full justify-center" variant="ghost" @click="emit('cancel')">
         {{ $t('common.cancel') }}
@@ -492,7 +525,7 @@
 </template>
 
 <script setup lang="ts">
-import type { DeliveryNote, CreateDeliveryNotePayload, UpdateDeliveryNotePayload, DeliveryNoteLinePayload, Client, Product } from '~/types'
+import type { DeliveryNote, CreateDeliveryNotePayload, UpdateDeliveryNotePayload, DeliveryNoteLinePayload, Client, Product, ValidationResponse } from '~/types'
 import { ETRANSPORT_OPERATION_TYPES, ETRANSPORT_PURPOSE_CODES_TTN, ETRANSPORT_COUNTIES, ETRANSPORT_COMMON_UOM_CODES } from '~/types/etransport'
 
 const props = defineProps<{
@@ -506,7 +539,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const { t: $t } = useI18n()
+const { t: $t, locale } = useI18n()
 const deliveryNoteStore = useDeliveryNoteStore()
 const clientStore = useClientStore()
 const {
@@ -531,6 +564,8 @@ const saving = ref(false)
 const showNotes = ref(false)
 const showDelegate = ref(false)
 const showETransport = ref(false)
+const lastValidation = ref<ValidationResponse | null>(null)
+const lastSavedDeliveryNote = ref<DeliveryNote | null>(null)
 const productPickerOpen = ref(false)
 const productPickerLineIndex = ref(0)
 
@@ -605,6 +640,20 @@ type ETransportUomCode = typeof ETRANSPORT_COMMON_UOM_CODES[number]['value']
 type ETransportOperationType = typeof ETRANSPORT_OPERATION_TYPES[number]['value']
 type ETransportPurposeCode = typeof ETRANSPORT_PURPOSE_CODES_TTN[number]['value']
 type ETransportCounty = typeof ETRANSPORT_COUNTIES[number]['value']
+
+const etransportHeaderRequired = computed(() => showETransport.value && form.etransportOperationType !== undefined)
+const etransportLineFieldsRequired = computed(() => {
+  const op = form.etransportOperationType
+  return op !== undefined && op !== 60 && op !== 70
+})
+const etransportGrossWeightRequired = computed(() => form.etransportOperationType !== undefined)
+
+function localizeValidationMessage(message: string): string {
+  const hashIndex = message.indexOf('#')
+  if (hashIndex === -1) return message
+  const parts = [message.substring(0, hashIndex).trim(), message.substring(hashIndex + 1).trim()]
+  return locale.value === 'en' ? parts[1] : parts[0]
+}
 
 interface LineForm {
   description: string
@@ -911,10 +960,35 @@ async function onSave() {
   saving.value = false
 
   if (result) {
+    lastValidation.value = result.validation ?? null
+    lastSavedDeliveryNote.value = result.deliveryNote
+    if (result.validation && !result.validation.valid && result.validation.errors.length > 0) {
+      toast.add({
+        title: props.deliveryNote ? $t('deliveryNotes.updateSuccess') : $t('deliveryNotes.createSuccess'),
+        description: $t('deliveryNotes.validationFixHint'),
+        color: 'warning',
+        icon: 'i-lucide-alert-triangle',
+      })
+      return
+    }
     emit('saved', result.deliveryNote)
   }
   else if (deliveryNoteStore.error) {
     toast.add({ title: deliveryNoteStore.error, color: 'error' })
+  }
+}
+
+// Clear validation errors when user modifies the form
+watch(() => form, () => {
+  if (lastValidation.value) {
+    lastValidation.value = null
+    lastSavedDeliveryNote.value = null
+  }
+}, { deep: true })
+
+function closeWithErrors() {
+  if (lastSavedDeliveryNote.value) {
+    emit('saved', lastSavedDeliveryNote.value)
   }
 }
 
