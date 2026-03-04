@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Company;
 use App\Entity\Supplier;
+use App\Service\ExchangeRateService;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -14,8 +15,10 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class SupplierRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly ExchangeRateService $exchangeRateService,
+    ) {
         parent::__construct($registry, Supplier::class);
     }
 
@@ -73,12 +76,17 @@ class SupplierRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return array{data: array<array<string, mixed>>, total: int}
+     * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool}
      */
     public function findByCompanyGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null): array
     {
         $conn = $this->getEntityManager()->getConnection();
         $companyId = $company->getId()->toRfc4122();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+
+        $convertTotalSql = "CASE WHEN currency = '$defaultCurrency' THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / $defaultRate END";
 
         $searchClause = '';
         $searchParams = [];
@@ -86,6 +94,11 @@ class SupplierRepository extends ServiceEntityRepository
             $searchClause = 'AND (s.name LIKE ? OR s.cif LIKE ?)';
             $searchParams = ["%$search%", "%$search%"];
         }
+
+        $hasForeignCurrencies = (bool) $conn->fetchOne(
+            "SELECT 1 FROM invoice WHERE company_id = ? AND deleted_at IS NULL AND direction = 'incoming' AND currency != ? LIMIT 1",
+            [$companyId, $defaultCurrency],
+        );
 
         $sql = "
             SELECT
@@ -95,7 +108,7 @@ class SupplierRepository extends ServiceEntityRepository
                 COALESCE(inv.invoice_total, 0) AS invoiceTotal
             FROM supplier s
             LEFT JOIN (
-                SELECT sender_cif AS cif, COUNT(*) AS invoice_count, SUM(total) AS invoice_total
+                SELECT sender_cif AS cif, COUNT(*) AS invoice_count, SUM($convertTotalSql) AS invoice_total
                 FROM invoice
                 WHERE company_id = ? AND deleted_at IS NULL AND direction = 'incoming'
                 GROUP BY sender_cif
@@ -131,6 +144,6 @@ class SupplierRepository extends ServiceEntityRepository
         $countParams = array_merge([$companyId], $searchParams);
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
-        return ['data' => $rows, 'total' => $total];
+        return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
     }
 }

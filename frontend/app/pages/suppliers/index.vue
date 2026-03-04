@@ -68,10 +68,10 @@ function getInitials(name: string): string {
     .toUpperCase()
 }
 
-function formatMoney(amount: number) {
+function formatMoney(amount: number, cur?: string) {
   return new Intl.NumberFormat('ro-RO', {
     style: 'currency',
-    currency: 'RON',
+    currency: cur || store.currency || 'RON',
     minimumFractionDigits: 2,
   }).format(amount)
 }
@@ -163,6 +163,14 @@ onMounted(() => fetchSuppliers())
         </template>
         <template #invoiceCount-cell="{ row }">
           <span class="text-sm tabular-nums">{{ (row.original as any).invoiceCount ?? 0 }}</span>
+        </template>
+        <template #invoiceTotal-header>
+          <div class="flex items-center gap-1">
+            <span>{{ $t('clients.invoiceTotal') }}</span>
+            <UTooltip v-if="store.hasForeignCurrencies" :text="$t('clients.invoiceTotalConverted', { currency: store.currency })">
+              <UIcon name="i-lucide-info" class="w-3.5 h-3.5 text-amber-500" />
+            </UTooltip>
+          </div>
         </template>
         <template #invoiceTotal-cell="{ row }">
           <span class="text-sm font-medium tabular-nums">

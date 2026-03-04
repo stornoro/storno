@@ -7,6 +7,8 @@ interface ClientPaginatedResponse {
   total: number
   page: number
   limit: number
+  currency: string
+  hasForeignCurrencies: boolean
 }
 
 interface ClientDetailResponse {
@@ -30,6 +32,8 @@ export const useClientStore = defineStore('clients', () => {
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
+  const currency = ref('RON')
+  const hasForeignCurrencies = ref(false)
 
   // ── Getters ────────────────────────────────────────────────────────
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
@@ -58,6 +62,8 @@ export const useClientStore = defineStore('clients', () => {
       items.value = response.data
       total.value = response.total
       page.value = response.page
+      currency.value = response.currency ?? 'RON'
+      hasForeignCurrencies.value = response.hasForeignCurrencies ?? false
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca clientii.'
@@ -180,6 +186,8 @@ export const useClientStore = defineStore('clients', () => {
     page,
     limit,
     total,
+    currency,
+    hasForeignCurrencies,
 
     // Getters
     totalPages,

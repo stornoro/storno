@@ -7,6 +7,8 @@ interface SupplierPaginatedResponse {
   total: number
   page: number
   limit: number
+  currency: string
+  hasForeignCurrencies: boolean
 }
 
 export interface SupplierDetailResponse {
@@ -24,6 +26,8 @@ export const useSupplierStore = defineStore('suppliers', () => {
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
+  const currency = ref('RON')
+  const hasForeignCurrencies = ref(false)
 
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
   const hasNextPage = computed(() => page.value < totalPages.value)
@@ -46,6 +50,8 @@ export const useSupplierStore = defineStore('suppliers', () => {
       items.value = response.data
       total.value = response.total
       page.value = response.page
+      currency.value = response.currency || 'RON'
+      hasForeignCurrencies.value = response.hasForeignCurrencies ?? false
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca furnizorii.'
@@ -135,7 +141,7 @@ export const useSupplierStore = defineStore('suppliers', () => {
   }
 
   return {
-    items, loading, error, search, page, limit, total,
+    items, loading, error, search, page, limit, total, currency, hasForeignCurrencies,
     totalPages, hasNextPage, hasPreviousPage, isEmpty,
     fetchSuppliers, fetchSupplier, createSupplier, updateSupplier, deleteSupplier, bulkDelete, setSearch, setPage, $reset,
   }
