@@ -9,6 +9,13 @@ const companyStore = useCompanyStore()
 
 const toast = useToast()
 
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:suppliers:columns', [
+  { key: 'email', label: $t('common.email'), default: false },
+  { key: 'phone', label: $t('common.phone'), default: false },
+  { key: 'vatCode', label: $t('suppliers.vatCode'), default: false },
+  { key: 'county', label: $t('common.county'), default: false },
+])
+
 const createModalOpen = ref(false)
 
 const page = ref(1)
@@ -46,18 +53,20 @@ const loading = computed(() => store.loading)
 const suppliers = computed(() => store.items)
 const total = computed(() => store.total)
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40 },
-  {
-    id: 'supplier',
-    header: $t('suppliers.name'),
-    accessorFn: (row: any) => row.name,
-  },
-  { accessorKey: 'cif', header: $t('suppliers.cif') },
-  { accessorKey: 'invoiceCount', header: $t('clients.invoiceCount') },
-  { accessorKey: 'invoiceTotal', header: $t('clients.invoiceTotal') },
-  { accessorKey: 'city', header: $t('common.city') },
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, _always: true },
+  { id: 'supplier', header: $t('suppliers.name'), accessorFn: (row: any) => row.name, _always: true },
+  { accessorKey: 'cif', header: $t('suppliers.cif'), _always: true },
+  { accessorKey: 'vatCode', header: $t('suppliers.vatCode'), _toggle: 'vatCode' },
+  { accessorKey: 'email', header: $t('common.email'), _toggle: 'email' },
+  { accessorKey: 'phone', header: $t('common.phone'), _toggle: 'phone' },
+  { accessorKey: 'invoiceCount', header: $t('clients.invoiceCount'), _always: true },
+  { accessorKey: 'invoiceTotal', header: $t('clients.invoiceTotal'), _always: true },
+  { accessorKey: 'city', header: $t('common.city'), _always: true },
+  { accessorKey: 'county', header: $t('common.county'), _toggle: 'county' },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function getInitials(name: string): string {
   return name
@@ -114,13 +123,36 @@ onMounted(() => fetchSuppliers())
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
+        <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label
+                  v-for="col in toggleableColumns"
+                  :key="col.key"
+                  class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="columnVisibility[col.key]"
+                    class="accent-primary"
+                    @change="toggleColumn(col.key)"
+                  >
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
+          <UButton icon="i-lucide-plus" :label="$t('suppliers.addSupplier')" @click="createModalOpen = true" />
+        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-1.5">
         <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
-        <UButton icon="i-lucide-plus" :label="$t('suppliers.addSupplier')" @click="createModalOpen = true" />
       </div>
 
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">
@@ -176,6 +208,18 @@ onMounted(() => fetchSuppliers())
           <span class="text-sm font-medium tabular-nums">
             {{ formatMoney((row.original as any).invoiceTotal ?? 0) }}
           </span>
+        </template>
+        <template #vatCode-cell="{ row }">
+          <span class="font-mono text-sm">{{ row.original.vatCode || '-' }}</span>
+        </template>
+        <template #email-cell="{ row }">
+          <span class="text-sm">{{ row.original.email || '-' }}</span>
+        </template>
+        <template #phone-cell="{ row }">
+          <span class="text-sm">{{ row.original.phone || '-' }}</span>
+        </template>
+        <template #county-cell="{ row }">
+          <span class="text-sm">{{ row.original.county || '-' }}</span>
         </template>
       </UTable>
 

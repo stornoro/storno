@@ -12,6 +12,12 @@ const toast = useToast()
 const { get } = useApi()
 const { fetchDefaults, vatRateOptions, currencyOptions, unitOfMeasureOptions, defaultCurrency, defaultUnitOfMeasure, defaultVatRate } = useInvoiceDefaults()
 
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:products:columns', [
+  { key: 'unitOfMeasure', label: $t('products.unitOfMeasure'), default: false },
+  { key: 'currency', label: $t('common.currency'), default: false },
+  { key: 'description', label: $t('common.description'), default: false },
+])
+
 // ── List state ───────────────────────────────────────────────────────
 const page = ref(1)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
@@ -182,16 +188,21 @@ async function handleBulkDelete() {
 }
 
 // ── Table columns ────────────────────────────────────────────────────
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40 },
-  { accessorKey: 'name', header: $t('products.name'), enableSorting: true },
-  { accessorKey: 'code', header: $t('products.code') },
-  { accessorKey: 'defaultPrice', header: $t('products.unitPrice'), enableSorting: true },
-  { accessorKey: 'vatRate', header: $t('products.vatRate') },
-  { accessorKey: 'usage', header: $t('products.usage') },
-  { accessorKey: 'isService', header: $t('products.isService') },
-  { id: 'actions', header: $t('common.actions') },
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, _always: true },
+  { accessorKey: 'name', header: $t('products.name'), enableSorting: true, _always: true },
+  { accessorKey: 'description', header: $t('common.description'), _toggle: 'description' },
+  { accessorKey: 'code', header: $t('products.code'), _always: true },
+  { accessorKey: 'defaultPrice', header: $t('products.unitPrice'), enableSorting: true, _always: true },
+  { accessorKey: 'currency', header: $t('common.currency'), _toggle: 'currency' },
+  { accessorKey: 'vatRate', header: $t('products.vatRate'), _always: true },
+  { accessorKey: 'unitOfMeasure', header: $t('products.unitOfMeasure'), _toggle: 'unitOfMeasure' },
+  { accessorKey: 'usage', header: $t('products.usage'), _always: true },
+  { accessorKey: 'isService', header: $t('products.isService'), _always: true },
+  { id: 'actions', header: $t('common.actions'), _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatPrice(amount: number | string, currency?: string) {
   return new Intl.NumberFormat('ro-RO', {
@@ -370,6 +381,27 @@ onMounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label
+                  v-for="col in toggleableColumns"
+                  :key="col.key"
+                  class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="columnVisibility[col.key]"
+                    class="accent-primary"
+                    @change="toggleColumn(col.key)"
+                  >
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UButton
             v-if="can(P.PRODUCT_CREATE)"
             :label="$t('products.addProduct')"
@@ -446,16 +478,25 @@ onMounted(() => {
             <p v-if="row.original.description" class="text-xs text-muted truncate max-w-xs">{{ row.original.description }}</p>
           </div>
         </template>
+        <template #description-cell="{ row }">
+          <span class="text-sm truncate max-w-48">{{ row.original.description || '-' }}</span>
+        </template>
         <template #code-cell="{ row }">
           <span class="font-mono text-xs text-muted">{{ row.original.code || '-' }}</span>
         </template>
         <template #defaultPrice-cell="{ row }">
           <span class="font-medium tabular-nums">{{ formatPrice(row.original.defaultPrice, row.original.currency) }}</span>
         </template>
+        <template #currency-cell="{ row }">
+          <span class="text-sm">{{ row.original.currency || '-' }}</span>
+        </template>
         <template #vatRate-cell="{ row }">
           <UBadge color="neutral" variant="subtle" size="sm">
             {{ row.original.vatRate }}%
           </UBadge>
+        </template>
+        <template #unitOfMeasure-cell="{ row }">
+          <span class="text-sm">{{ row.original.unitOfMeasure || '-' }}</span>
         </template>
         <template #usage-cell="{ row }">
           <span class="text-sm text-muted">{{ $t(`products.usageOptions.${row.original.usage}`) }}</span>

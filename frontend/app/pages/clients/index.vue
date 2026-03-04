@@ -10,6 +10,13 @@ const companyStore = useCompanyStore()
 const { can } = usePermissions()
 const toast = useToast()
 
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:clients:columns', [
+  { key: 'email', label: $t('common.email'), default: false },
+  { key: 'phone', label: $t('common.phone'), default: false },
+  { key: 'vatCode', label: $t('clients.vatCode'), default: false },
+  { key: 'county', label: $t('common.county'), default: false },
+])
+
 const createModalOpen = ref(false)
 const page = ref(1)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
@@ -52,18 +59,20 @@ const EU_COUNTRY_CODES = [
   'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
 ]
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40 },
-  {
-    id: 'client',
-    header: $t('clients.name'),
-    accessorFn: (row: any) => row.name,
-  },
-  { accessorKey: 'cui', header: 'CIF / CNP' },
-  { accessorKey: 'invoiceCount', header: $t('clients.invoiceCount') },
-  { accessorKey: 'invoiceTotal', header: $t('clients.invoiceTotal') },
-  { accessorKey: 'city', header: $t('common.city') },
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, _always: true },
+  { id: 'client', header: $t('clients.name'), accessorFn: (row: any) => row.name, _always: true },
+  { accessorKey: 'cui', header: 'CIF / CNP', _always: true },
+  { accessorKey: 'vatCode', header: $t('clients.vatCode'), _toggle: 'vatCode' },
+  { accessorKey: 'email', header: $t('common.email'), _toggle: 'email' },
+  { accessorKey: 'phone', header: $t('common.phone'), _toggle: 'phone' },
+  { accessorKey: 'invoiceCount', header: $t('clients.invoiceCount'), _always: true },
+  { accessorKey: 'invoiceTotal', header: $t('clients.invoiceTotal'), _always: true },
+  { accessorKey: 'city', header: $t('common.city'), _always: true },
+  { accessorKey: 'county', header: $t('common.county'), _toggle: 'county' },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function getInitials(name: string): string {
   return name
@@ -121,6 +130,27 @@ onMounted(() => fetchClients())
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label
+                  v-for="col in toggleableColumns"
+                  :key="col.key"
+                  class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="columnVisibility[col.key]"
+                    class="accent-primary"
+                    @change="toggleColumn(col.key)"
+                  >
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UButton
             v-if="can(P.CLIENT_CREATE)"
             :label="$t('clients.addClient')"
@@ -207,6 +237,18 @@ onMounted(() => fetchClients())
           <span class="text-sm font-medium tabular-nums">
             {{ formatMoney(row.original.invoiceTotal ?? 0) }}
           </span>
+        </template>
+        <template #vatCode-cell="{ row }">
+          <span class="font-mono text-sm">{{ row.original.vatCode || '-' }}</span>
+        </template>
+        <template #email-cell="{ row }">
+          <span class="text-sm">{{ row.original.email || '-' }}</span>
+        </template>
+        <template #phone-cell="{ row }">
+          <span class="text-sm">{{ row.original.phone || '-' }}</span>
+        </template>
+        <template #county-cell="{ row }">
+          <span class="text-sm">{{ row.original.county || '-' }}</span>
         </template>
       </UTable>
 

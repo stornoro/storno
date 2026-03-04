@@ -131,15 +131,26 @@ const frequencyOptions = computed(() => [
   { label: $t('recurringInvoices.frequencies.yearly'), value: 'yearly' },
 ])
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40 },
-  { accessorKey: 'reference', header: $t('recurringInvoices.reference') },
-  { accessorKey: 'clientName', header: $t('invoices.client') },
-  { accessorKey: 'frequency', header: $t('recurringInvoices.frequency') },
-  { accessorKey: 'nextIssuanceDate', header: $t('recurringInvoices.nextIssuanceDate') },
-  { accessorKey: 'total', header: $t('invoices.total') },
-  { accessorKey: 'isActive', header: $t('common.status') },
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:recurring:columns', [
+  { key: 'currency', label: $t('common.currency'), default: false },
+  { key: 'lastIssuedAt', label: $t('recurringInvoices.lastIssuedAt'), default: false },
+  { key: 'lastInvoiceNumber', label: $t('recurringInvoices.lastInvoiceNumber'), default: false },
+])
+
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, _always: true },
+  { accessorKey: 'reference', header: $t('recurringInvoices.reference'), _always: true },
+  { accessorKey: 'clientName', header: $t('invoices.client'), _always: true },
+  { accessorKey: 'frequency', header: $t('recurringInvoices.frequency'), _always: true },
+  { accessorKey: 'nextIssuanceDate', header: $t('recurringInvoices.nextIssuanceDate'), _always: true },
+  { accessorKey: 'total', header: $t('invoices.total'), _always: true },
+  { accessorKey: 'currency', header: $t('common.currency'), _toggle: 'currency' },
+  { accessorKey: 'lastIssuedAt', header: $t('recurringInvoices.lastIssuedAt'), _toggle: 'lastIssuedAt' },
+  { accessorKey: 'lastInvoiceNumber', header: $t('recurringInvoices.lastInvoiceNumber'), _toggle: 'lastInvoiceNumber' },
+  { accessorKey: 'isActive', header: $t('common.status'), _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
@@ -192,6 +203,18 @@ onMounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label v-for="col in toggleableColumns" :key="col.key" class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer">
+                  <input type="checkbox" :checked="columnVisibility[col.key]" class="accent-primary" @change="toggleColumn(col.key)">
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UTooltip :kbds="['C', 'R']">
             <UButton v-if="can(P.RECURRING_INVOICE_MANAGE)" icon="i-lucide-plus" @click="openCreateSlideover">
               {{ $t('recurringInvoices.newRecurringInvoice') }}
@@ -257,6 +280,15 @@ onMounted(() => {
               </div>
             </template>
           </UPopover>
+        </template>
+        <template #currency-cell="{ row }">
+          <span class="text-sm">{{ row.original.currency || '-' }}</span>
+        </template>
+        <template #lastIssuedAt-cell="{ row }">
+          <span class="text-sm">{{ row.original.lastIssuedAt ? new Date(row.original.lastIssuedAt).toLocaleDateString('ro-RO') : '-' }}</span>
+        </template>
+        <template #lastInvoiceNumber-cell="{ row }">
+          <span class="text-sm">{{ row.original.lastInvoiceNumber || '-' }}</span>
         </template>
         <template #isActive-cell="{ row }">
           <UBadge :color="row.original.isActive ? 'success' : 'neutral'" variant="subtle" size="sm">

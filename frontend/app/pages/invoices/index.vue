@@ -570,16 +570,30 @@ const exportItems = computed(() => [[
   },
 ]])
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false },
-  { accessorKey: 'number', header: $t('invoices.number'), enableSorting: true },
-  { accessorKey: 'issueDate', header: $t('invoices.issueDate'), enableSorting: true },
-  { id: 'counterparty', header: $t('invoices.counterparty'), accessorFn: (row: any) => row.senderName || row.receiverName || '-', enableSorting: true },
-  { accessorKey: 'direction', header: $t('invoices.direction'), enableSorting: true },
-  { accessorKey: 'total', header: $t('invoices.total'), enableSorting: true },
-  { accessorKey: 'status', header: $t('invoices.status'), enableSorting: true },
-  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false },
+// ── Column visibility ────────────────────────────────────────────
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:invoices:columns', [
+  { key: 'subtotal', label: $t('invoices.subtotal'), default: false },
+  { key: 'vatTotal', label: $t('invoices.vatLabel'), default: false },
+  { key: 'dueDate', label: $t('invoices.dueDate'), default: false },
+  { key: 'paid', label: $t('invoices.filterPaid'), default: false },
+])
+
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false, _always: true },
+  { accessorKey: 'number', header: $t('invoices.number'), enableSorting: true, _always: true },
+  { accessorKey: 'issueDate', header: $t('invoices.issueDate'), enableSorting: true, _always: true },
+  { id: 'counterparty', header: $t('invoices.counterparty'), accessorFn: (row: any) => row.senderName || row.receiverName || '-', enableSorting: true, _always: true },
+  { accessorKey: 'direction', header: $t('invoices.direction'), enableSorting: true, _always: true },
+  { accessorKey: 'subtotal', header: $t('invoices.subtotal'), enableSorting: true, _toggle: 'subtotal' },
+  { accessorKey: 'vatTotal', header: $t('invoices.vatLabel'), enableSorting: true, _toggle: 'vatTotal' },
+  { accessorKey: 'total', header: $t('invoices.total'), enableSorting: true, _always: true },
+  { accessorKey: 'dueDate', header: $t('invoices.dueDate'), enableSorting: true, _toggle: 'dueDate' },
+  { id: 'paid', header: $t('invoices.filterPaid'), accessorKey: 'paidAt', enableSorting: false, _toggle: 'paid' },
+  { accessorKey: 'status', header: $t('invoices.status'), enableSorting: true, _always: true },
+  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false, _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function getCounterparty(inv: any): string {
   if (inv.direction === 'incoming') {
@@ -713,6 +727,27 @@ onUnmounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label
+                  v-for="col in toggleableColumns"
+                  :key="col.key"
+                  class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="columnVisibility[col.key]"
+                    class="accent-primary"
+                    @change="toggleColumn(col.key)"
+                  >
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UDropdownMenu :items="exportItems">
             <UButton icon="i-lucide-download" color="neutral" variant="outline" />
           </UDropdownMenu>
@@ -860,10 +895,34 @@ onUnmounted(() => {
             {{ row.original.direction === 'incoming' ? $t('common.incoming') : $t('common.outgoing') }}
           </UBadge>
         </template>
+        <template #subtotal-cell="{ row }">
+          <span class="tabular-nums text-sm">
+            {{ formatMoney(row.original.subtotal, row.original.currency) }}
+          </span>
+        </template>
+        <template #vatTotal-cell="{ row }">
+          <span class="tabular-nums text-sm">
+            {{ formatMoney(row.original.vatTotal, row.original.currency) }}
+          </span>
+        </template>
         <template #total-cell="{ row }">
           <span class="font-medium tabular-nums">
             {{ formatMoney(row.original.total, row.original.currency) }}
           </span>
+        </template>
+        <template #dueDate-cell="{ row }">
+          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString('ro-RO') : '-' }}</span>
+        </template>
+        <template #paid-cell="{ row }">
+          <UBadge v-if="row.original.paidAt" color="success" variant="subtle" size="sm">
+            {{ $t('documentStatus.paid') }}
+          </UBadge>
+          <UBadge v-else-if="Number(row.original.amountPaid) > 0" color="warning" variant="subtle" size="sm">
+            {{ $t('documentStatus.partially_paid') }}
+          </UBadge>
+          <UBadge v-else color="neutral" variant="subtle" size="sm">
+            {{ $t('documentStatus.unpaid') }}
+          </UBadge>
         </template>
         <template #status-cell="{ row }">
           <div class="flex items-center gap-1">

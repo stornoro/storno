@@ -128,15 +128,26 @@ const statusOptions = computed(() => [
   { label: $t('receiptStatus.cancelled'), value: 'cancelled' },
 ])
 
-const columns = [
-  { accessorKey: 'number', header: $t('receipts.number'), enableSorting: true },
-  { accessorKey: 'clientName', header: $t('receipts.client'), enableSorting: false },
-  { accessorKey: 'issueDate', header: $t('receipts.issueDate'), enableSorting: true },
-  { accessorKey: 'total', header: $t('receipts.total'), enableSorting: true },
-  { accessorKey: 'paymentMethod', header: $t('receipts.paymentMethod'), enableSorting: false },
-  { accessorKey: 'status', header: $t('receipts.status'), enableSorting: true },
-  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false },
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:receipts:columns', [
+  { key: 'subtotal', label: $t('invoices.subtotal'), default: false },
+  { key: 'vatTotal', label: $t('invoices.vatLabel'), default: false },
+  { key: 'customerCif', label: $t('receipts.customerCif'), default: false },
+])
+
+const allColumnDefs = [
+  { accessorKey: 'number', header: $t('receipts.number'), enableSorting: true, _always: true },
+  { accessorKey: 'clientName', header: $t('receipts.client'), enableSorting: false, _always: true },
+  { accessorKey: 'customerCif', header: $t('receipts.customerCif'), enableSorting: false, _toggle: 'customerCif' },
+  { accessorKey: 'issueDate', header: $t('receipts.issueDate'), enableSorting: true, _always: true },
+  { accessorKey: 'subtotal', header: $t('invoices.subtotal'), enableSorting: true, _toggle: 'subtotal' },
+  { accessorKey: 'vatTotal', header: $t('invoices.vatLabel'), enableSorting: true, _toggle: 'vatTotal' },
+  { accessorKey: 'total', header: $t('receipts.total'), enableSorting: true, _always: true },
+  { accessorKey: 'paymentMethod', header: $t('receipts.paymentMethod'), enableSorting: false, _always: true },
+  { accessorKey: 'status', header: $t('receipts.status'), enableSorting: true, _always: true },
+  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false, _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
@@ -223,6 +234,18 @@ onMounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label v-for="col in toggleableColumns" :key="col.key" class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer">
+                  <input type="checkbox" :checked="columnVisibility[col.key]" class="accent-primary" @change="toggleColumn(col.key)">
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UTooltip :kbds="['C', 'B']">
             <UButton v-if="can(P.INVOICE_CREATE)" icon="i-lucide-plus" @click="openCreateSlideover">
               {{ $t('receipts.newReceipt') }}
@@ -278,6 +301,15 @@ onMounted(() => {
         </template>
         <template #clientName-cell="{ row }">
           {{ row.original.clientName || row.original.customerName || '-' }}
+        </template>
+        <template #subtotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.subtotal, row.original.currency) }}</span>
+        </template>
+        <template #vatTotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.vatTotal, row.original.currency) }}</span>
+        </template>
+        <template #customerCif-cell="{ row }">
+          <span class="font-mono text-sm">{{ row.original.customerCif || '-' }}</span>
         </template>
         <template #total-cell="{ row }">
           <span class="font-medium tabular-nums">
