@@ -279,7 +279,7 @@ onMounted(() => {
 <template>
   <div class="space-y-8">
     <!-- Section 0: Backup & Restore -->
-    <BackupBackupSection />
+    <BackupSection />
 
     <!-- Restore button card -->
     <UPageCard variant="subtle">
@@ -303,7 +303,7 @@ onMounted(() => {
     </UPageCard>
 
     <!-- Backup History -->
-    <BackupBackupHistoryTable />
+    <BackupHistoryTable />
 
     <!-- Section 1: Migration Checklist -->
     <UPageCard variant="subtle">

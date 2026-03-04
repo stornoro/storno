@@ -2,25 +2,11 @@
 const { t: $t } = useI18n()
 const backupStore = useBackupStore()
 
-const columns = [
-  { accessorKey: 'createdAt', header: $t('backup.date') },
-  { accessorKey: 'type', header: $t('backup.type') },
-  { accessorKey: 'status', header: 'Status' },
-  { accessorKey: 'filename', header: $t('backup.file') },
-  { accessorKey: 'fileSize', header: $t('backup.size') },
-  { accessorKey: 'actions', header: '' },
-]
-
-const typeLabels: Record<string, string> = {
-  backup: 'Backup',
-  restore: 'Restaurare',
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'neutral',
-  processing: 'warning',
-  completed: 'success',
-  failed: 'error',
+const statusConfig: Record<string, { color: string; icon: string }> = {
+  pending: { color: 'neutral', icon: 'i-lucide-clock' },
+  processing: { color: 'warning', icon: 'i-lucide-loader' },
+  completed: { color: 'success', icon: 'i-lucide-check-circle' },
+  failed: { color: 'error', icon: 'i-lucide-x-circle' },
 }
 
 function formatDate(dateStr: string): string {
@@ -34,6 +20,19 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function timeAgo(dateStr: string): string {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'acum'
+  if (mins < 60) return `acum ${mins} min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `acum ${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `acum ${days}z`
+  return formatDate(dateStr)
+}
+
 function formatBytes(bytes: number | null): string {
   if (!bytes) return '-'
   const k = 1024
@@ -42,81 +41,105 @@ function formatBytes(bytes: number | null): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-async function handleDownload(jobId: string, filename?: string) {
-  await backupStore.downloadBackup(jobId, filename ?? undefined)
-}
+const downloading = ref<string | null>(null)
 
-onMounted(() => {
-  backupStore.fetchHistory()
-})
+async function handleDownload(jobId: string, filename?: string) {
+  downloading.value = jobId
+  try {
+    await backupStore.downloadBackup(jobId, filename ?? undefined)
+  }
+  finally {
+    downloading.value = null
+  }
+}
 </script>
 
 <template>
   <UPageCard
     :title="$t('backup.historyTitle')"
     variant="subtle"
-    :ui="{ container: 'p-0 sm:p-0 gap-y-0', wrapper: 'items-stretch' }"
   >
-    <UTable
-      :data="backupStore.history"
-      :columns="columns"
-      :loading="backupStore.loading"
-      :ui="{
-        base: 'table-fixed',
-        thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-        tbody: '[&>tr]:last:[&>td]:border-b-0',
-        th: 'px-4',
-        td: 'px-4 border-b border-default',
-      }"
-    >
-      <template #createdAt-cell="{ row }">
-        <span class="text-sm">{{ formatDate(row.original.createdAt) }}</span>
-      </template>
+    <!-- History list -->
+    <div v-if="backupStore.loading" class="py-12 flex justify-center">
+      <UIcon name="i-lucide-loader" class="w-5 h-5 animate-spin text-(--ui-text-muted)" />
+    </div>
 
-      <template #type-cell="{ row }">
-        <div class="flex items-center gap-2">
+    <div v-else-if="backupStore.history.length === 0">
+      <UEmpty
+        icon="i-lucide-archive"
+        :title="$t('backup.noHistory')"
+        class="py-12"
+      />
+    </div>
+
+    <div v-else class="divide-y divide-default">
+      <div
+        v-for="job in backupStore.history"
+        :key="job.id"
+        class="flex items-center gap-4 py-3.5 px-1 group"
+      >
+        <!-- Type icon -->
+        <div
+          class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+          :class="job.type === 'backup'
+            ? 'bg-cyan-100 dark:bg-cyan-900/30'
+            : 'bg-amber-100 dark:bg-amber-900/30'"
+        >
           <UIcon
-            :name="row.original.type === 'backup' ? 'i-lucide-archive' : 'i-lucide-archive-restore'"
-            class="w-4 h-4 text-(--ui-text-muted)"
+            :name="job.type === 'backup' ? 'i-lucide-archive' : 'i-lucide-archive-restore'"
+            class="w-4.5 h-4.5"
+            :class="job.type === 'backup'
+              ? 'text-cyan-600 dark:text-cyan-400'
+              : 'text-amber-600 dark:text-amber-400'"
           />
-          <span class="text-sm">{{ typeLabels[row.original.type] || row.original.type }}</span>
         </div>
-      </template>
 
-      <template #status-cell="{ row }">
-        <UBadge
-          :label="$t(`backup.status${row.original.status.charAt(0).toUpperCase() + row.original.status.slice(1)}`)"
-          :color="(statusColors[row.original.status] as any) || 'neutral'"
-          variant="subtle"
-          size="sm"
-        />
-      </template>
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium">
+              {{ job.type === 'backup' ? 'Backup' : 'Restaurare' }}
+            </span>
+            <UBadge
+              :label="$t(`backup.status${job.status.charAt(0).toUpperCase() + job.status.slice(1)}`)"
+              :color="(statusConfig[job.status]?.color as any) || 'neutral'"
+              :icon="statusConfig[job.status]?.icon"
+              variant="subtle"
+              size="xs"
+            />
+          </div>
+          <div class="flex items-center gap-3 mt-0.5">
+            <span class="text-xs text-(--ui-text-muted)" :title="formatDate(job.createdAt)">
+              {{ timeAgo(job.createdAt) }}
+            </span>
+            <template v-if="job.filename && job.status === 'completed'">
+              <span class="text-xs text-(--ui-text-dimmed)">·</span>
+              <span class="text-xs text-(--ui-text-muted) font-mono truncate max-w-48">{{ job.filename }}</span>
+            </template>
+            <template v-if="job.fileSize && job.status === 'completed'">
+              <span class="text-xs text-(--ui-text-dimmed)">·</span>
+              <span class="text-xs text-(--ui-text-muted)">{{ formatBytes(job.fileSize) }}</span>
+            </template>
+            <template v-if="job.errorMessage && job.status === 'failed'">
+              <span class="text-xs text-(--ui-text-dimmed)">·</span>
+              <span class="text-xs text-red-500 truncate max-w-64">{{ job.errorMessage }}</span>
+            </template>
+          </div>
+        </div>
 
-      <template #filename-cell="{ row }">
-        <span class="text-sm font-mono truncate max-w-48 block">{{ row.original.filename || '-' }}</span>
-      </template>
-
-      <template #fileSize-cell="{ row }">
-        <span class="text-sm">{{ formatBytes(row.original.fileSize) }}</span>
-      </template>
-
-      <template #actions-cell="{ row }">
+        <!-- Download action -->
         <UButton
-          v-if="row.original.status === 'completed' && row.original.type === 'backup'"
+          v-if="job.status === 'completed' && job.type === 'backup'"
+          :label="$t('backup.downloadButton')"
           icon="i-lucide-download"
           size="xs"
-          variant="ghost"
+          variant="soft"
+          :loading="downloading === job.id"
+          class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           type="button"
-          @click="handleDownload(row.original.id, row.original.filename)"
+          @click="handleDownload(job.id, job.filename ?? undefined)"
         />
-      </template>
-    </UTable>
-
-    <UEmpty
-      v-if="!backupStore.loading && backupStore.history.length === 0"
-      icon="i-lucide-archive"
-      :title="$t('backup.noHistory')"
-      class="py-12"
-    />
+      </div>
+    </div>
   </UPageCard>
 </template>

@@ -21,7 +21,7 @@ onMounted(() => {
 <template>
   <div class="space-y-8">
     <!-- Section 1: Create Backup -->
-    <BackupBackupSection />
+    <BackupSection />
 
     <!-- Section 2: Restore -->
     <UPageCard variant="subtle">
@@ -50,7 +50,7 @@ onMounted(() => {
         v-if="backupStore.currentJob?.type === 'restore' && (backupStore.currentJob?.status === 'pending' || backupStore.currentJob?.status === 'processing')"
         class="mt-4 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10"
       >
-        <BackupBackupProgressBar
+        <BackupProgressBar
           :progress="backupStore.currentJob.progress"
           :step="backupStore.currentJob.currentStep"
           :status="backupStore.currentJob.status"
@@ -59,7 +59,7 @@ onMounted(() => {
     </UPageCard>
 
     <!-- Section 3: History -->
-    <BackupBackupHistoryTable />
+    <BackupHistoryTable />
 
     <!-- Modals -->
     <BackupRestoreModal v-model:open="restoreModalOpen" />
