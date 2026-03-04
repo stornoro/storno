@@ -17,7 +17,6 @@ class HealthController extends AbstractController
         private readonly CacheInterface $cache,
         private readonly HttpClientInterface $httpClient,
         private readonly string $centrifugoApiUrl,
-        private readonly string $centrifugoWsUrl,
         private readonly string $centrifugoApiKey,
     ) {}
 
@@ -72,7 +71,6 @@ class HealthController extends AbstractController
         return $this->json([
             'status' => $healthy ? 'healthy' : 'degraded',
             'checks' => $checks,
-            'websocket' => $this->centrifugoWsUrl,
             'timestamp' => (new \DateTimeImmutable())->format('c'),
         ], $healthy ? Response::HTTP_OK : Response::HTTP_SERVICE_UNAVAILABLE);
     }

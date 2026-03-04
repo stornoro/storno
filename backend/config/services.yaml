@@ -71,7 +71,6 @@ services:
     App\Controller\HealthController:
         arguments:
             $centrifugoApiUrl: '%env(CENTRIFUGO_API_URL)%'
-            $centrifugoWsUrl: '%env(CENTRIFUGO_WS_URL)%'
             $centrifugoApiKey: '%env(CENTRIFUGO_API_KEY)%'
 
     # ---------------------------------------------------------------------------
