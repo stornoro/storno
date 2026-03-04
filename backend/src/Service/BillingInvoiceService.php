@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\Company;
+use App\Entity\DocumentEvent;
 use App\Entity\Organization;
 use App\Manager\InvoiceManager;
 use App\Repository\CompanyRepository;
@@ -140,9 +141,24 @@ class BillingInvoiceService
             $this->invoiceManager->issue($invoice, $user);
 
             // Mark as paid immediately
+            $previousStatus = $invoice->getStatus();
             $invoice->setPaidAt(new \DateTimeImmutable());
             $invoice->setPaymentMethod('stripe');
             $invoice->setAmountPaid($invoice->getTotal());
+
+            $payEvent = new DocumentEvent();
+            $payEvent->setPreviousStatus($previousStatus);
+            $payEvent->setNewStatus($invoice->getStatus());
+            $payEvent->setMetadata([
+                'action' => 'payment_recorded',
+                'amount' => $invoice->getTotal(),
+                'paymentMethod' => 'stripe',
+                'amountPaid' => $invoice->getAmountPaid(),
+                'balance' => $invoice->getBalance(),
+                'auto' => true,
+            ]);
+            $invoice->addEvent($payEvent);
+
             $this->em->flush();
 
             $this->logger->info('Billing invoice created for subscription payment', [
