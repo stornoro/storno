@@ -1165,6 +1165,8 @@ export interface RecurringInvoice {
   stopDate: string | null
   lastIssuedAt: string | null
   lastInvoiceNumber: string | null
+  lastInvoiceId: string | null
+  lastDocumentType: string | null
   notes: string | null
   paymentTerms: string | null
   autoEmailEnabled: boolean

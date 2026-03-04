@@ -277,6 +277,8 @@ class RecurringInvoiceProcessor
         // Update recurring invoice metadata
         $ri->setLastIssuedAt(new \DateTimeImmutable());
         $ri->setLastInvoiceNumber($invoice->getNumber());
+        $ri->setLastInvoiceId($invoice->getId());
+        $ri->setLastDocumentType('invoice');
 
         $this->advanceNextIssuanceDate($ri);
 
@@ -309,6 +311,8 @@ class RecurringInvoiceProcessor
         // Update recurring invoice metadata
         $ri->setLastIssuedAt(new \DateTimeImmutable());
         $ri->setLastInvoiceNumber($proforma->getNumber());
+        $ri->setLastInvoiceId($proforma->getId());
+        $ri->setLastDocumentType('proforma');
 
         $this->advanceNextIssuanceDate($ri);
 

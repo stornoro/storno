@@ -124,6 +124,14 @@ class RecurringInvoice
     #[Groups(['recurring_invoice:list', 'recurring_invoice:detail'])]
     private ?string $lastInvoiceNumber = null;
 
+    #[ORM\Column(type: 'uuid', nullable: true)]
+    #[Groups(['recurring_invoice:list', 'recurring_invoice:detail'])]
+    private ?Uuid $lastInvoiceId = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['recurring_invoice:list', 'recurring_invoice:detail'])]
+    private ?string $lastDocumentType = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['recurring_invoice:detail'])]
     private ?string $notes = null;
@@ -433,6 +441,30 @@ class RecurringInvoice
     public function setLastInvoiceNumber(?string $lastInvoiceNumber): static
     {
         $this->lastInvoiceNumber = $lastInvoiceNumber;
+
+        return $this;
+    }
+
+    public function getLastInvoiceId(): ?Uuid
+    {
+        return $this->lastInvoiceId;
+    }
+
+    public function setLastInvoiceId(?Uuid $lastInvoiceId): static
+    {
+        $this->lastInvoiceId = $lastInvoiceId;
+
+        return $this;
+    }
+
+    public function getLastDocumentType(): ?string
+    {
+        return $this->lastDocumentType;
+    }
+
+    public function setLastDocumentType(?string $lastDocumentType): static
+    {
+        $this->lastDocumentType = $lastDocumentType;
 
         return $this;
     }
