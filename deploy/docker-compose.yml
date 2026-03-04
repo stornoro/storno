@@ -66,7 +66,6 @@ services:
     environment:
       NUXT_API_BASE: http://backend
       NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
-      NUXT_PUBLIC_CENTRIFUGO_WS: ${PUBLIC_CENTRIFUGO_WS:-wss://app.storno.ro/connection/websocket}
       NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       NUXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
     depends_on:

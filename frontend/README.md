@@ -55,7 +55,6 @@ Multi-stage build: Node 20 Alpine, produces a minimal image serving on port 3000
 |----------|---------|-------------|
 | `NUXT_PUBLIC_API_BASE` | `https://api.storno.ro` | Backend API URL (browser-facing) |
 | `API_BACKEND_URL` | `http://api.storno.test:8000` | Backend URL for SSR proxy (internal) |
-| `NUXT_PUBLIC_CENTRIFUGO_WS` | — | WebSocket URL for real-time updates |
 | `NUXT_PUBLIC_GOOGLE_CLIENT_ID` | — | Google OAuth client ID (set via `GOOGLE_CLIENT_ID` in deploy/.env) |
 | `NUXT_PUBLIC_TURNSTILE_SITE_KEY` | — | Cloudflare Turnstile CAPTCHA key (optional) |
 | `NUXT_PUBLIC_CHATWOOT_BASE_URL` | — | Chatwoot instance URL (optional) |
@@ -69,7 +68,6 @@ In Docker Compose, the frontend connects to the backend via internal network:
 environment:
   API_BACKEND_URL: http://backend          # Internal Docker network
   NUXT_PUBLIC_API_BASE: https://api.yourdomain.com  # Public URL for browser
-  NUXT_PUBLIC_CENTRIFUGO_WS: wss://app.yourdomain.com/connection/websocket
 ```
 
 ## Project Structure
@@ -232,7 +230,8 @@ Automatically attaches `Authorization`, `X-Company`, and `X-Organization` header
 ### WebSocket connection fails
 
 - Verify Centrifugo is running
-- Check `NUXT_PUBLIC_CENTRIFUGO_WS` points to the correct URL
+- WebSocket URL is derived from the current host (`wss://{host}/connection/websocket`)
+- Ensure your reverse proxy forwards `/connection/websocket` to Centrifugo
 - Ensure firewall allows WebSocket traffic
 
 ### Turnstile CAPTCHA error

@@ -144,8 +144,6 @@ frontend:
     NUXT_API_BASE: ""
     # Public API base (browser-facing).
     NUXT_PUBLIC_API_BASE: "https://api.storno.ro"
-    # WebSocket endpoint for Centrifugo.
-    NUXT_PUBLIC_CENTRIFUGO_WS: "wss://app.storno.ro/connection/websocket"
     # Google OAuth client ID (same value as backend.env.OAUTH_GOOGLE_CLIENT_ID).
     NUXT_PUBLIC_GOOGLE_CLIENT_ID: ""
     # Cloudflare Turnstile site key (public).

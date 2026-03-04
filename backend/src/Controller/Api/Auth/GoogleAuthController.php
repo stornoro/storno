@@ -142,6 +142,7 @@ class GoogleAuthController extends AbstractController
             if ($status['backupCodesRemaining'] > 0) {
                 $methods[] = 'backup_code';
             }
+            $methods[] = 'email_otp';
 
             return $this->json([
                 'mfa_required' => true,
