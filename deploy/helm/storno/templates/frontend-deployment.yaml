@@ -39,8 +39,6 @@ spec:
               value: {{ include "storno.nuxtApiBase" . | quote }}
             - name: NUXT_PUBLIC_API_BASE
               value: {{ .Values.frontend.env.NUXT_PUBLIC_API_BASE | quote }}
-            - name: NUXT_PUBLIC_CENTRIFUGO_WS
-              value: {{ .Values.frontend.env.NUXT_PUBLIC_CENTRIFUGO_WS | quote }}
             - name: NUXT_PUBLIC_GOOGLE_CLIENT_ID
               value: {{ .Values.frontend.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID | quote }}
             - name: NUXT_PUBLIC_TURNSTILE_SITE_KEY

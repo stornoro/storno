@@ -25,7 +25,6 @@ export default defineNuxtConfig({
     chatwootIdentityToken: '',
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'https://api.storno.ro',
-      centrifugoWs: process.env.NUXT_PUBLIC_CENTRIFUGO_WS || 'wss://app.storno.test:8444/connection/websocket',
       googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID || '',
       chatwootBaseUrl: process.env.NUXT_PUBLIC_CHATWOOT_BASE_URL || '',
       chatwootWebsiteToken: process.env.NUXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN || '',

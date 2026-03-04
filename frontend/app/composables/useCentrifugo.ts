@@ -70,7 +70,6 @@ function getSubscriptionToken(channel: string): Promise<string> {
  * Only connects on the client side.
  */
 export function useCentrifugo() {
-  const config = useRuntimeConfig()
   const { apiFetch } = useApi()
 
   // Store ref for batch token fetcher
@@ -84,7 +83,7 @@ export function useCentrifugo() {
 
     if (centrifuge) return centrifuge
 
-    const wsUrl = config.public.centrifugoWs || 'ws://localhost:8444/connection/websocket'
+    const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/connection/websocket`
 
     let tokenFailed = false
 
