@@ -1218,6 +1218,7 @@ export default defineI18nLocale(async () => {
       details: 'Detalii client',
       invoiceCount: 'Nr. facturi',
       invoiceTotal: 'Total facturat',
+      invoiceTotalConverted: 'Sumele in valuta au fost convertite in {currency} la cursul BNR',
       invoicesTotal: 'facturi',
       invoiceHistory: 'Facturi',
       noInvoices: 'Nicio factura gasita pentru acest CIF',

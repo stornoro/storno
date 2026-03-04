@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Client;
 use App\Entity\Company;
+use App\Service\ExchangeRateService;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -14,8 +15,10 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ClientRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly ExchangeRateService $exchangeRateService,
+    ) {
         parent::__construct($registry, Client::class);
     }
 
@@ -43,12 +46,17 @@ class ClientRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return array{data: array<array<string, mixed>>, total: int}
+     * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool}
      */
     public function findByCompanyGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null): array
     {
         $conn = $this->getEntityManager()->getConnection();
         $companyId = $company->getId()->toRfc4122();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+
+        $convertTotalSql = "CASE WHEN currency = '$defaultCurrency' THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / $defaultRate END";
 
         $searchClause = '';
         $searchParams = [];
@@ -57,7 +65,13 @@ class ClientRepository extends ServiceEntityRepository
             $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%"];
         }
 
-        // Main query: group clients by identifier, join outgoing invoice stats only
+        // Check if any foreign-currency invoices exist for this company
+        $hasForeignCurrencies = (bool) $conn->fetchOne(
+            "SELECT 1 FROM invoice WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing' AND currency != ? LIMIT 1",
+            [$companyId, $defaultCurrency],
+        );
+
+        // Main query: group clients by identifier, join outgoing invoice stats with currency conversion
         $sql = "
             SELECT
                 c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
@@ -66,7 +80,7 @@ class ClientRepository extends ServiceEntityRepository
                 COALESCE(s.invoice_total, 0) AS invoiceTotal
             FROM client c
             LEFT JOIN (
-                SELECT receiver_cif AS cif, COUNT(*) AS invoice_count, SUM(total) AS invoice_total
+                SELECT receiver_cif AS cif, COUNT(*) AS invoice_count, SUM($convertTotalSql) AS invoice_total
                 FROM invoice
                 WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing'
                 GROUP BY receiver_cif
@@ -109,7 +123,7 @@ class ClientRepository extends ServiceEntityRepository
         $countParams = array_merge([$companyId], $searchParams);
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
-        return ['data' => $rows, 'total' => $total];
+        return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
     }
 
     /**

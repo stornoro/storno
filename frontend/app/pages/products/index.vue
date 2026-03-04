@@ -196,7 +196,7 @@ const columns = [
 function formatPrice(amount: number | string, currency?: string) {
   return new Intl.NumberFormat('ro-RO', {
     style: 'currency',
-    currency: currency || 'RON',
+    currency: currency || companyStore.currentCompany?.defaultCurrency || 'RON',
     minimumFractionDigits: 2,
   }).format(Number(amount || 0))
 }

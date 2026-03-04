@@ -71,6 +71,8 @@ class ClientController extends AbstractController
             'total' => $result['total'],
             'page' => $page,
             'limit' => $limit,
+            'currency' => $company->getDefaultCurrency() ?? 'RON',
+            'hasForeignCurrencies' => $result['hasForeignCurrencies'] ?? false,
         ]);
         $response->setMaxAge(30);
         $response->setPrivate();
@@ -268,6 +270,7 @@ class ClientController extends AbstractController
         $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
         $client->setSource('manual');
 
+        $this->autoPopulateVatCodeFromCui($client);
         $this->autoValidateVies($client);
 
         $this->entityManager->persist($client);
@@ -503,8 +506,13 @@ class ClientController extends AbstractController
         if (array_key_exists('idNumber', $data)) $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
         if (array_key_exists('currency', $data)) $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
 
-        // Re-validate VIES if vatCode or country changed
-        if (array_key_exists('vatCode', $data) || array_key_exists('country', $data)) {
+        // Auto-populate vatCode from CUI if it has an EU prefix
+        if (array_key_exists('cui', $data)) {
+            $this->autoPopulateVatCodeFromCui($client);
+        }
+
+        // Re-validate VIES if vatCode, cui, or country changed
+        if (array_key_exists('vatCode', $data) || array_key_exists('cui', $data) || array_key_exists('country', $data)) {
             $this->autoValidateVies($client);
         }
 
@@ -608,6 +616,28 @@ class ClientController extends AbstractController
     private function resolveCompany(Request $request): ?\App\Entity\Company
     {
         return $this->organizationContext->resolveCompany($request);
+    }
+
+    /**
+     * If cui starts with an EU country prefix (e.g. IT01480420536), auto-populate vatCode from it.
+     */
+    private function autoPopulateVatCodeFromCui(Client $client): void
+    {
+        $cui = $client->getCui();
+        if (!$cui || $client->getVatCode()) {
+            return;
+        }
+
+        // Check if CUI starts with a 2-letter EU country code (non-RO)
+        if (preg_match('/^([A-Z]{2})(\d+)$/i', $cui, $matches)) {
+            $prefix = strtoupper($matches[1]);
+            if ($prefix !== 'RO' && in_array($prefix, self::EU_COUNTRY_CODES, true)) {
+                $client->setVatCode(strtoupper($cui));
+                $client->setCountry($prefix);
+                // Strip the prefix from CUI — CUI should be numeric only
+                $client->setCui($matches[2]);
+            }
+        }
     }
 
     private function autoValidateVies(Client $client): void

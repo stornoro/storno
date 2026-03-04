@@ -52,6 +52,8 @@ class SupplierController extends AbstractController
             'total' => $result['total'],
             'page' => $page,
             'limit' => $limit,
+            'currency' => $company->getDefaultCurrency() ?? 'RON',
+            'hasForeignCurrencies' => $result['hasForeignCurrencies'] ?? false,
         ]);
     }
 

@@ -38,20 +38,53 @@ function getYearRange(): { from: string, to: string } {
   return { from: `${y}-01-01`, to: `${y}-12-31` }
 }
 
-// ── Filter state ──────────────────────────────────────────────────
-const page = ref(1)
-const limit = ref(PAGINATION.DEFAULT_LIMIT)
-const search = ref('')
-const statusFilter = ref('all')
-const activeDirection = ref('all')
-const sorting = ref<SortingState>([])
-const paidFilter = ref('all')
-const currencyFilter = ref(companyStore.currentCompany?.defaultCurrency || 'RON')
-const activeDatePreset = ref('thisMonth')
-
+// ── Filter state (initialised from URL query when available) ─────
+const defaultCurrency = companyStore.currentCompany?.defaultCurrency || 'RON'
 const thisMonth = getMonthRange(0)
-const dateFrom = ref(thisMonth.from)
-const dateTo = ref(thisMonth.to)
+
+const page = ref(Number(route.query.page) || 1)
+const limit = ref(PAGINATION.DEFAULT_LIMIT)
+const search = ref((route.query.search as string) || '')
+const statusFilter = ref((route.query.status as string) || 'all')
+const activeDirection = ref((route.query.direction as string) || 'all')
+const paidFilter = ref((route.query.paid as string) || 'all')
+const currencyFilter = ref((route.query.currency as string) || defaultCurrency)
+const dateFrom = ref((route.query.dateFrom as string) || thisMonth.from)
+const dateTo = ref((route.query.dateTo as string) || thisMonth.to)
+const activeDatePreset = ref((route.query.datePreset as string) || 'thisMonth')
+
+const sorting = ref<SortingState>(
+  route.query.sort
+    ? [{ id: route.query.sort as string, desc: route.query.order === 'desc' }]
+    : [],
+)
+
+/** Sync current filter state to the URL (replace, not push). */
+function syncFiltersToUrl() {
+  const q: Record<string, string> = {}
+  if (search.value) q.search = search.value
+  if (statusFilter.value !== 'all') q.status = statusFilter.value
+  if (activeDirection.value !== 'all') q.direction = activeDirection.value
+  if (paidFilter.value !== 'all') q.paid = paidFilter.value
+  if (currencyFilter.value && currencyFilter.value !== (companyStore.currentCompany?.defaultCurrency || 'RON')) q.currency = currencyFilter.value
+  if (dateFrom.value) q.dateFrom = dateFrom.value
+  if (dateTo.value) q.dateTo = dateTo.value
+  if (activeDatePreset.value && activeDatePreset.value !== 'thisMonth') q.datePreset = activeDatePreset.value
+  if (page.value > 1) q.page = String(page.value)
+  const firstSort = sorting.value[0]
+  if (firstSort) {
+    q.sort = firstSort.id
+    q.order = firstSort.desc ? 'desc' : 'asc'
+  }
+
+  // Preserve non-filter query params (create, edit, refundOf, etc.)
+  for (const key of ['create', 'edit', 'refundOf', 'copyOf', 'clientId'] as const) {
+    const v = route.query[key]
+    if (v) q[key] = String(v)
+  }
+
+  router.replace({ query: q })
+}
 
 // ── Quick date presets ────────────────────────────────────────────
 type DatePreset = { label: string, value: string, range: () => { from: string, to: string } }
@@ -154,6 +187,7 @@ function resetAllFilters() {
   currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
   applyDatePreset(datePresets.value.find(p => p.value === 'thisMonth')!)
   page.value = 1
+  syncFiltersToUrl()
 }
 
 // ── Create/Edit slideover state ───────────────────────────────────
@@ -571,12 +605,14 @@ function statusColor(status: string): BadgeColor {
 
 const onSearchInput = useDebounceFn(() => {
   page.value = 1
+  syncFiltersToUrl()
   fetchInvoices()
 }, 300)
 
 function onSortChange(newSorting: SortingState | undefined) {
   sorting.value = newSorting ?? []
   applySortToStore()
+  syncFiltersToUrl()
   fetchInvoices()
 }
 
@@ -640,7 +676,10 @@ async function fetchInvoices() {
   await invoicesStore.fetchInvoices()
 }
 
-watch([page, activeDirection, statusFilter, paidFilter, dateFrom, dateTo, currencyFilter], () => fetchInvoices())
+watch([page, activeDirection, statusFilter, paidFilter, dateFrom, dateTo, currencyFilter], () => {
+  syncFiltersToUrl()
+  fetchInvoices()
+})
 
 watch(() => companyStore.currentCompanyId, () => {
   currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
