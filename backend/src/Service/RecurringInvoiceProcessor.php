@@ -13,6 +13,7 @@ use App\Service\Centrifugo\CentrifugoService;
 use App\Service\ExchangeRateService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Lock\LockFactory;
 
 class RecurringInvoiceProcessor
 {
@@ -31,6 +32,7 @@ class RecurringInvoiceProcessor
         private readonly ExchangeRateService $exchangeRateService,
         private readonly LoggerInterface $logger,
         private readonly CentrifugoService $centrifugo,
+        private readonly LockFactory $lockFactory,
     ) {}
 
     /**
@@ -39,6 +41,25 @@ class RecurringInvoiceProcessor
      * @return array{processed: int, errors: int, invoices: string[]}
      */
     public function processRecurringInvoices(\DateTimeInterface $date, int $limit = 100, bool $dryRun = false): array
+    {
+        // Global lock prevents concurrent cron runs from double-processing
+        $lock = $this->lockFactory->createLock('recurring-invoices-processing', 600);
+        if (!$lock->acquire()) {
+            $this->logger->warning('Recurring invoice processing already in progress, skipping.');
+            return ['processed' => 0, 'errors' => 0, 'invoices' => []];
+        }
+
+        try {
+            return $this->doProcess($date, $limit, $dryRun);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @return array{processed: int, errors: int, invoices: string[]}
+     */
+    private function doProcess(\DateTimeInterface $date, int $limit, bool $dryRun): array
     {
         $dueItems = $this->recurringInvoiceRepository->findDueForProcessing($date, $limit);
 
@@ -76,12 +97,22 @@ class RecurringInvoiceProcessor
      */
     public function issueNow(RecurringInvoice $ri, ?\App\Entity\User $user = null): array
     {
-        $result = $this->processOne($ri, new \DateTimeImmutable(), false, $user);
-        if (!$result) {
-            throw new \RuntimeException('Failed to generate document from recurring template.');
+        // Per-item lock prevents double-click or concurrent API calls
+        $lock = $this->lockFactory->createLock('recurring-invoice-issue-' . $ri->getId(), 60);
+        if (!$lock->acquire()) {
+            throw new \RuntimeException('This recurring invoice is already being processed.');
         }
 
-        return $result;
+        try {
+            $result = $this->processOne($ri, new \DateTimeImmutable(), false, $user);
+            if (!$result) {
+                throw new \RuntimeException('Failed to generate document from recurring template.');
+            }
+
+            return $result;
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
