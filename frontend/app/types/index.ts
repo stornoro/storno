@@ -419,6 +419,7 @@ export interface EmailTemplate {
   subject: string
   body: string
   isDefault: boolean
+  category: 'invoice' | 'delivery_note' | 'receipt'
 }
 
 // ── Email Log ───────────────────────────────────────────────────────

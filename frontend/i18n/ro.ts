@@ -952,6 +952,13 @@ export default defineI18nLocale(async () => {
       valueWithoutVat: 'Valoare fara TVA (RON)',
       operationType: 'Tip operatiune',
       transportData: 'Date transport',
+      validationFailed: 'Validare e-Transport esuata',
+      validationErrorCount: 'eroare',
+      validationErrorsCount: 'erori',
+      validationSavedWithErrors: 'Avizul a fost salvat, dar validarea e-Transport a returnat erori. Corectati erorile si salvati din nou.',
+      validationFixHint: 'Exista erori de validare e-Transport. Verificati detaliile.',
+      saveAndRevalidate: 'Salveaza si revalideaza',
+      closeWithErrors: 'Inchide cu erori',
     },
 
     deliveryNoteStatus: {
@@ -1531,6 +1538,10 @@ export default defineI18nLocale(async () => {
       variablesClickHint: 'apasa pentru a insera in subiect sau corp',
       preview: 'Previzualizare',
       edit: 'Editare',
+      category: 'Categorie',
+      categoryInvoice: 'Facturi',
+      categoryDeliveryNote: 'Avize',
+      categoryReceipt: 'Bonuri',
     },
 
     // ── Bank Accounts ───────────────────────────────────────────
@@ -1935,7 +1946,7 @@ export default defineI18nLocale(async () => {
       bankAccountsDescription: 'Gestioneaza conturile bancare ale companiei',
       apiKeysDescription: 'Chei de acces API pentru integrarile externe',
       oauthAppsDescription: 'Aplicatii externe conectate prin OAuth2',
-      emailTemplatesDescription: 'Sabloane email pentru trimiterea facturilor',
+      emailTemplatesDescription: 'Sabloane email pentru trimiterea facturilor, avizelor si bonurilor',
       documentSeriesDescription: 'Gestioneaza seriile de documente',
       profile: {
         title: 'Profil utilizator',

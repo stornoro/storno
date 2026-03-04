@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\EmailEvent;
 use App\Entity\EmailLog;
+use App\Entity\EmailTemplate;
 use App\Entity\Receipt;
 use App\Entity\User;
 use App\Enum\EmailEventType;
@@ -38,9 +39,15 @@ class ReceiptEmailService
         ?array $cc = null,
         ?array $bcc = null,
         ?User $sentBy = null,
+        ?EmailTemplate $template = null,
     ): EmailLog {
         $receiptNumber = $receipt->getNumber() ?? 'N/A';
         $companyName = $receipt->getCompany()?->getName() ?? '';
+
+        if ($template) {
+            $subject = $subject ?? $template->getSubject();
+            $body = $body ?? $template->getBody();
+        }
 
         $subject = $subject ?? sprintf('Bon fiscal %s - %s', $receiptNumber, $companyName);
         $body = $body ?? sprintf(

@@ -23,6 +23,14 @@ const subjectInputRef = ref<InstanceType<typeof HTMLInputElement> | null>(null)
 const bodyEditorRef = ref<InstanceType<typeof HTMLElement> | null>(null)
 const activeField = ref<'subject' | 'body'>('body')
 
+// Category tabs
+const categoryTabs = [
+  { label: $t('emailTemplates.categoryInvoice'), value: 'invoice' },
+  { label: $t('emailTemplates.categoryDeliveryNote'), value: 'delivery_note' },
+  { label: $t('emailTemplates.categoryReceipt'), value: 'receipt' },
+]
+const activeCategory = ref('invoice')
+
 const columns = [
   { accessorKey: 'name', header: $t('emailTemplates.name') },
   { accessorKey: 'subject', header: $t('emailTemplates.subject') },
@@ -62,7 +70,7 @@ async function onSave() {
     }
   }
   else {
-    const result = await store.createTemplate(form.value)
+    const result = await store.createTemplate({ ...form.value, category: activeCategory.value })
     if (result) {
       toast.add({ title: $t('emailTemplates.createSuccess'), color: 'success' })
       modalOpen.value = false
@@ -127,10 +135,14 @@ function insertVariable(variable: string) {
   }
 }
 
-watch(() => companyStore.currentCompanyId, () => store.fetchTemplates())
+watch(activeCategory, (category) => {
+  store.fetchTemplates(category)
+})
+
+watch(() => companyStore.currentCompanyId, () => store.fetchTemplates(activeCategory.value))
 
 onMounted(() => {
-  store.fetchTemplates()
+  store.fetchTemplates(activeCategory.value)
 })
 </script>
 
@@ -152,6 +164,19 @@ onMounted(() => {
         @click="openCreate"
       />
     </UPageCard>
+
+    <!-- Category tabs -->
+    <div class="mb-4 flex gap-1">
+      <UButton
+        v-for="tab in categoryTabs"
+        :key="tab.value"
+        :label="tab.label"
+        :variant="activeCategory === tab.value ? 'solid' : 'ghost'"
+        :color="activeCategory === tab.value ? 'primary' : 'neutral'"
+        size="sm"
+        @click="activeCategory = tab.value"
+      />
+    </div>
 
     <UPageCard
       variant="subtle"

@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\DeliveryNote;
 use App\Entity\EmailEvent;
 use App\Entity\EmailLog;
+use App\Entity\EmailTemplate;
 use App\Entity\User;
 use App\Enum\EmailEventType;
 use App\Enum\EmailStatus;
@@ -38,9 +39,15 @@ class DeliveryNoteEmailService
         ?array $cc = null,
         ?array $bcc = null,
         ?User $sentBy = null,
+        ?EmailTemplate $template = null,
     ): EmailLog {
         $noteNumber = $deliveryNote->getNumber() ?? 'N/A';
         $companyName = $deliveryNote->getCompany()?->getName() ?? '';
+
+        if ($template) {
+            $subject = $subject ?? $template->getSubject();
+            $body = $body ?? $template->getBody();
+        }
 
         $subject = $subject ?? sprintf('Aviz de insotire %s - %s', $noteNumber, $companyName);
         $body = $body ?? sprintf(

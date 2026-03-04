@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Constants\Pagination;
 use App\Manager\ReceiptManager;
 use App\Repository\EmailLogRepository;
+use App\Repository\EmailTemplateRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\ReceiptEmailService;
@@ -26,6 +27,7 @@ class ReceiptController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly ReceiptEmailService $receiptEmailService,
         private readonly EmailLogRepository $emailLogRepository,
+        private readonly EmailTemplateRepository $emailTemplateRepository,
     ) {}
 
     #[Route('/receipts', methods: ['GET'])]
@@ -306,6 +308,12 @@ class ReceiptController extends AbstractController
             return $this->json(['error' => 'A valid recipient email address is required.'], Response::HTTP_BAD_REQUEST);
         }
 
+        $template = null;
+        $templateId = $data['templateId'] ?? null;
+        if ($templateId) {
+            $template = $this->emailTemplateRepository->find($templateId);
+        }
+
         try {
             $emailLog = $this->receiptEmailService->send(
                 receipt: $receipt,
@@ -315,6 +323,7 @@ class ReceiptController extends AbstractController
                 cc: $data['cc'] ?? null,
                 bcc: $data['bcc'] ?? null,
                 sentBy: $user,
+                template: $template,
             );
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -335,10 +344,26 @@ class ReceiptController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        $company = $receipt->getCompany();
+        $defaultTemplate = $company ? $this->emailTemplateRepository->findDefaultForCompanyAndCategory($company, 'receipt') : null;
+
+        $to = $this->receiptEmailService->getDefaultRecipient($receipt);
+        $templateId = null;
+
+        if ($defaultTemplate) {
+            $subject = $this->receiptEmailService->substituteVariables($defaultTemplate->getSubject(), $receipt);
+            $body = $this->receiptEmailService->substituteVariables($defaultTemplate->getBody(), $receipt);
+            $templateId = (string) $defaultTemplate->getId();
+        } else {
+            $subject = $this->receiptEmailService->getDefaultSubject($receipt);
+            $body = $this->receiptEmailService->getDefaultBody($receipt);
+        }
+
         return $this->json([
-            'to' => $this->receiptEmailService->getDefaultRecipient($receipt),
-            'subject' => $this->receiptEmailService->getDefaultSubject($receipt),
-            'body' => $this->receiptEmailService->getDefaultBody($receipt),
+            'to' => $to,
+            'subject' => $subject,
+            'body' => $body,
+            'templateId' => $templateId,
         ]);
     }
 

@@ -21,6 +21,17 @@
           <span class="font-semibold shrink-0">{{ formatMoney(receipt.total, receipt.currency) }}</span>
         </div>
 
+        <!-- Template picker -->
+        <UFormField :label="$t('invoices.emailTemplate')">
+          <USelectMenu
+            v-model="selectedTemplateId"
+            :items="templateItems"
+            value-key="value"
+            :placeholder="$t('invoices.selectTemplate')"
+            icon="i-lucide-layout-template"
+          />
+        </UFormField>
+
         <!-- Recipients -->
         <div class="space-y-3">
           <UFormField :label="$t('invoices.emailTo')" required>
@@ -70,7 +81,7 @@
         </UFormField>
 
         <!-- Variables chips -->
-        <div class="space-y-2">
+        <div v-if="emailTemplateStore.availableVariables.length > 0" class="space-y-2">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-braces" class="size-4 text-(--ui-text-muted)" />
             <span class="text-xs font-medium text-(--ui-text-muted) uppercase tracking-wide">{{ $t('emailTemplates.variables') }}</span>
@@ -78,7 +89,7 @@
           </div>
           <div class="flex flex-wrap gap-1.5">
             <button
-              v-for="v in availableVariables"
+              v-for="v in emailTemplateStore.availableVariables"
               :key="v"
               type="button"
               class="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono rounded-md bg-(--ui-bg-elevated) border border-(--ui-border) text-(--ui-text-muted) hover:text-(--ui-text) hover:border-(--ui-border-hover) hover:bg-(--ui-bg-elevated)/80 transition-colors cursor-pointer"
@@ -113,10 +124,12 @@ const emit = defineEmits<{ sent: [] }>()
 
 const { t: $t } = useI18n()
 const receiptStore = useReceiptStore()
+const emailTemplateStore = useEmailTemplateStore()
 const toast = useToast()
 
 const sending = ref(false)
 const showCcBcc = ref(false)
+const selectedTemplateId = ref<string | null>(null)
 const form = ref({
   to: '',
   cc: '',
@@ -129,14 +142,12 @@ const subjectInputRef = ref<InstanceType<typeof HTMLInputElement> | null>(null)
 const bodyEditorRef = ref<InstanceType<typeof HTMLElement> | null>(null)
 const activeField = ref<'subject' | 'body'>('body')
 
-const availableVariables = [
-  '[[client_name]]',
-  '[[receipt_number]]',
-  '[[total]]',
-  '[[issue_date]]',
-  '[[company_name]]',
-  '[[currency]]',
-]
+const templateItems = computed(() =>
+  emailTemplateStore.items.map(t => ({
+    label: t.name + (t.isDefault ? ` (${$t('emailTemplates.isDefault')})` : ''),
+    value: t.id,
+  })),
+)
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
@@ -174,13 +185,26 @@ function insertVariable(variable: string) {
 watch(isOpen, async (open) => {
   if (open) {
     showCcBcc.value = false
+    await emailTemplateStore.fetchTemplates('receipt')
     const defaults = await receiptStore.fetchEmailDefaults(props.receipt.id)
     form.value.to = defaults.to ?? ''
     form.value.subject = defaults.subject ?? ''
     form.value.body = defaults.body ?? ''
+    const defaultTemplate = emailTemplateStore.items.find(t => t.isDefault)
+    selectedTemplateId.value = defaults.templateId ?? defaultTemplate?.id ?? null
     if (form.value.cc || form.value.bcc) {
       showCcBcc.value = true
     }
+  }
+})
+
+// When template selection changes, reload template content
+watch(selectedTemplateId, (templateId) => {
+  if (!templateId) return
+  const template = emailTemplateStore.items.find(t => t.id === templateId)
+  if (template) {
+    form.value.subject = template.subject
+    form.value.body = template.body
   }
 })
 
@@ -200,11 +224,13 @@ async function onSend() {
     body: form.value.body || undefined,
     cc: form.value.cc ? parseCsv(form.value.cc) : undefined,
     bcc: form.value.bcc ? parseCsv(form.value.bcc) : undefined,
+    templateId: selectedTemplateId.value || undefined,
   })
   sending.value = false
   if (result) {
     isOpen.value = false
     form.value = { to: '', cc: '', bcc: '', subject: '', body: '' }
+    selectedTemplateId.value = null
     toast.add({
       title: $t('receipts.emailSent'),
       icon: 'i-lucide-mail-check',
