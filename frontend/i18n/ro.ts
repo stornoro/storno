@@ -544,6 +544,8 @@ export default defineI18nLocale(async () => {
       },
       paymentUpdated: 'Status plata actualizat',
       paymentError: 'Eroare la actualizarea platii',
+      noPrevious: 'Nu exista factura anterioara',
+      noNext: 'Nu exista factura urmatoare',
       payments: 'Plati',
       recordPayment: 'Inregistreaza plata',
       paymentAmount: 'Suma plata',
