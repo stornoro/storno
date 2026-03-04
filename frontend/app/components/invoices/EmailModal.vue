@@ -191,7 +191,7 @@ function insertVariable(variable: string) {
 watch(isOpen, async (open) => {
   if (open) {
     showCcBcc.value = false
-    await emailTemplateStore.fetchTemplates()
+    await emailTemplateStore.fetchTemplates('invoice')
     const defaults = await invoiceStore.fetchEmailDefaults(props.invoice.id)
     form.value.to = defaults.to ?? ''
     form.value.subject = defaults.subject ?? ''

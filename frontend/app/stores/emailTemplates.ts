@@ -7,13 +7,14 @@ export const useEmailTemplateStore = defineStore('emailTemplates', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchTemplates(): Promise<void> {
+  async function fetchTemplates(category?: string): Promise<void> {
     const { get } = useApi()
     loading.value = true
     error.value = null
 
     try {
-      const response = await get<{ data: EmailTemplate[], availableVariables: string[] }>('/v1/email-templates')
+      const query = category ? `?category=${category}` : ''
+      const response = await get<{ data: EmailTemplate[], availableVariables: string[] }>(`/v1/email-templates${query}`)
       items.value = response.data
       availableVariables.value = response.availableVariables ?? []
     }
@@ -26,12 +27,12 @@ export const useEmailTemplateStore = defineStore('emailTemplates', () => {
     }
   }
 
-  async function createTemplate(data: { name: string, subject: string, body: string, isDefault?: boolean }): Promise<EmailTemplate | null> {
+  async function createTemplate(data: { name: string, subject: string, body: string, isDefault?: boolean, category?: string }): Promise<EmailTemplate | null> {
     const { post } = useApi()
     error.value = null
     try {
       const result = await post<EmailTemplate>('/v1/email-templates', data)
-      await fetchTemplates()
+      await fetchTemplates(data.category)
       return result
     }
     catch (err: any) {
@@ -45,7 +46,9 @@ export const useEmailTemplateStore = defineStore('emailTemplates', () => {
     error.value = null
     try {
       await patch(`/v1/email-templates/${id}`, data)
-      await fetchTemplates()
+      // Re-fetch with the category of the updated template
+      const category = data.category || items.value.find(t => t.id === id)?.category
+      await fetchTemplates(category)
       return true
     }
     catch (err: any) {
@@ -58,8 +61,9 @@ export const useEmailTemplateStore = defineStore('emailTemplates', () => {
     const { del } = useApi()
     error.value = null
     try {
+      const category = items.value.find(t => t.id === id)?.category
       await del(`/v1/email-templates/${id}`)
-      await fetchTemplates()
+      await fetchTemplates(category)
       return true
     }
     catch (err: any) {

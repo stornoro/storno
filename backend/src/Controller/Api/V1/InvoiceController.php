@@ -1439,7 +1439,7 @@ class InvoiceController extends AbstractController
         $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
 
         $company = $invoice->getCompany();
-        $defaultTemplate = $company ? $this->emailTemplateRepository->findDefaultForCompany($company) : null;
+        $defaultTemplate = $company ? $this->emailTemplateRepository->findDefaultForCompanyAndCategory($company, 'invoice') : null;
 
         $to = $this->invoiceEmailService->getDefaultRecipient($invoice);
         $templateId = null;

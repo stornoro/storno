@@ -12,6 +12,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: EmailTemplateRepository::class)]
 #[ORM\Index(name: 'idx_emailtemplate_company', columns: ['company_id'])]
+#[ORM\Index(name: 'idx_emailtemplate_company_category', columns: ['company_id', 'category'])]
 class EmailTemplate
 {
     use AuditableTrait;
@@ -40,6 +41,10 @@ class EmailTemplate
     #[ORM\Column]
     #[Groups(['email_template:list', 'email_template:detail'])]
     private bool $isDefault = false;
+
+    #[ORM\Column(length: 32, options: ['default' => 'invoice'])]
+    #[Groups(['email_template:list', 'email_template:detail'])]
+    private string $category = 'invoice';
 
     public function __construct()
     {
@@ -107,6 +112,18 @@ class EmailTemplate
     public function setIsDefault(bool $isDefault): static
     {
         $this->isDefault = $isDefault;
+
+        return $this;
+    }
+
+    public function getCategory(): string
+    {
+        return $this->category;
+    }
+
+    public function setCategory(string $category): static
+    {
+        $this->category = $category;
 
         return $this;
     }

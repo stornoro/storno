@@ -38,4 +38,30 @@ class EmailTemplateRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    public function findByCompanyAndCategory(Company $company, string $category): array
+    {
+        return $this->createQueryBuilder('et')
+            ->where('et.company = :company')
+            ->andWhere('et.category = :category')
+            ->setParameter('company', $company)
+            ->setParameter('category', $category)
+            ->orderBy('et.isDefault', 'DESC')
+            ->addOrderBy('et.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function findDefaultForCompanyAndCategory(Company $company, string $category): ?EmailTemplate
+    {
+        return $this->createQueryBuilder('et')
+            ->where('et.company = :company')
+            ->andWhere('et.category = :category')
+            ->andWhere('et.isDefault = true')
+            ->setParameter('company', $company)
+            ->setParameter('category', $category)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

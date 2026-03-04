@@ -194,7 +194,7 @@ export const useReceiptStore = defineStore('receipts', () => {
     }
   }
 
-  async function sendEmail(uuid: string, payload: { to: string, subject?: string, body?: string, cc?: string[], bcc?: string[] }): Promise<any> {
+  async function sendEmail(uuid: string, payload: { to: string, subject?: string, body?: string, cc?: string[], bcc?: string[], templateId?: string }): Promise<any> {
     const { post } = useApi()
     try {
       return await post(`/v1/receipts/${uuid}/email`, payload)
@@ -205,7 +205,7 @@ export const useReceiptStore = defineStore('receipts', () => {
     }
   }
 
-  async function fetchEmailDefaults(uuid: string): Promise<{ to?: string, subject?: string, body?: string }> {
+  async function fetchEmailDefaults(uuid: string): Promise<{ to?: string, subject?: string, body?: string, templateId?: string }> {
     const { get } = useApi()
     try {
       return await get(`/v1/receipts/${uuid}/email-defaults`)

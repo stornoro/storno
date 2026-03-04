@@ -17,17 +17,36 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/v1')]
 class EmailTemplateController extends AbstractController
 {
-    /** Variables available for substitution in email templates. */
-    private const AVAILABLE_VARIABLES = [
-        '[[client_name]]',
-        '[[invoice_number]]',
-        '[[total]]',
-        '[[due_date]]',
-        '[[issue_date]]',
-        '[[company_name]]',
-        '[[balance]]',
-        '[[currency]]',
+    private const VARIABLES_BY_CATEGORY = [
+        'invoice' => [
+            '[[client_name]]',
+            '[[invoice_number]]',
+            '[[total]]',
+            '[[due_date]]',
+            '[[issue_date]]',
+            '[[company_name]]',
+            '[[balance]]',
+            '[[currency]]',
+        ],
+        'delivery_note' => [
+            '[[client_name]]',
+            '[[delivery_note_number]]',
+            '[[total]]',
+            '[[issue_date]]',
+            '[[company_name]]',
+            '[[currency]]',
+        ],
+        'receipt' => [
+            '[[client_name]]',
+            '[[receipt_number]]',
+            '[[total]]',
+            '[[issue_date]]',
+            '[[company_name]]',
+            '[[currency]]',
+        ],
     ];
+
+    private const VALID_CATEGORIES = ['invoice', 'delivery_note', 'receipt'];
 
     public function __construct(
         private readonly EmailTemplateRepository $emailTemplateRepository,
@@ -48,11 +67,16 @@ class EmailTemplateController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
-        $templates = $this->emailTemplateRepository->findByCompany($company);
+        $category = $request->query->get('category', 'invoice');
+        if (!in_array($category, self::VALID_CATEGORIES, true)) {
+            $category = 'invoice';
+        }
 
-        // Auto-seed a default template if company has none
+        $templates = $this->emailTemplateRepository->findByCompanyAndCategory($company, $category);
+
+        // Auto-seed a default template if company has none for this category
         if (empty($templates)) {
-            $template = $this->createDefaultTemplate($company);
+            $template = $this->createDefaultTemplateForCategory($company, $category);
             $this->entityManager->persist($template);
             $this->entityManager->flush();
             $templates = [$template];
@@ -60,7 +84,7 @@ class EmailTemplateController extends AbstractController
 
         return $this->json([
             'data' => $templates,
-            'availableVariables' => self::AVAILABLE_VARIABLES,
+            'availableVariables' => self::VARIABLES_BY_CATEGORY[$category] ?? self::VARIABLES_BY_CATEGORY['invoice'],
         ], context: ['groups' => ['email_template:list']]);
     }
 
@@ -88,6 +112,11 @@ class EmailTemplateController extends AbstractController
         $name = $data['name'] ?? null;
         $subject = $data['subject'] ?? null;
         $body = $data['body'] ?? null;
+        $category = $data['category'] ?? 'invoice';
+
+        if (!in_array($category, self::VALID_CATEGORIES, true)) {
+            $category = 'invoice';
+        }
 
         if (!$name) {
             return $this->json(['error' => 'Field "name" is required.'], Response::HTTP_BAD_REQUEST);
@@ -104,10 +133,11 @@ class EmailTemplateController extends AbstractController
         $template->setName($name);
         $template->setSubject($subject);
         $template->setBody($body);
+        $template->setCategory($category);
         $template->setIsDefault($data['isDefault'] ?? false);
 
         if ($template->isDefault()) {
-            $this->unsetOtherDefaults($company);
+            $this->unsetOtherDefaults($company, null, $category);
         }
 
         $this->entityManager->persist($template);
@@ -142,7 +172,7 @@ class EmailTemplateController extends AbstractController
         if (isset($data['isDefault'])) {
             $template->setIsDefault((bool) $data['isDefault']);
             if ($template->isDefault()) {
-                $this->unsetOtherDefaults($template->getCompany(), $template);
+                $this->unsetOtherDefaults($template->getCompany(), $template, $template->getCategory());
             }
         }
 
@@ -169,9 +199,9 @@ class EmailTemplateController extends AbstractController
         return $this->json(['message' => 'Email template deleted.']);
     }
 
-    private function unsetOtherDefaults(\App\Entity\Company $company, ?EmailTemplate $except = null): void
+    private function unsetOtherDefaults(\App\Entity\Company $company, ?EmailTemplate $except = null, string $category = 'invoice'): void
     {
-        $templates = $this->emailTemplateRepository->findByCompany($company);
+        $templates = $this->emailTemplateRepository->findByCompanyAndCategory($company, $category);
         foreach ($templates as $template) {
             if ($except && $template->getId()?->equals($except->getId())) {
                 continue;
@@ -182,7 +212,16 @@ class EmailTemplateController extends AbstractController
         }
     }
 
-    private function createDefaultTemplate(\App\Entity\Company $company): EmailTemplate
+    private function createDefaultTemplateForCategory(\App\Entity\Company $company, string $category): EmailTemplate
+    {
+        return match ($category) {
+            'delivery_note' => $this->createDefaultDeliveryNoteTemplate($company),
+            'receipt' => $this->createDefaultReceiptTemplate($company),
+            default => $this->createDefaultInvoiceTemplate($company),
+        };
+    }
+
+    private function createDefaultInvoiceTemplate(\App\Entity\Company $company): EmailTemplate
     {
         $body = <<<'MD'
 Stimate/Stimata **[[client_name]]**,
@@ -214,6 +253,75 @@ MD;
         $template->setName('Sablon standard');
         $template->setSubject('Factura [[invoice_number]] - [[company_name]]');
         $template->setBody($body);
+        $template->setCategory('invoice');
+        $template->setIsDefault(true);
+
+        return $template;
+    }
+
+    private function createDefaultDeliveryNoteTemplate(\App\Entity\Company $company): EmailTemplate
+    {
+        $body = <<<'MD'
+Stimate/Stimata **[[client_name]]**,
+
+Va transmitem alaturat avizul de insotire **nr. [[delivery_note_number]]** emis in data de **[[issue_date]]**, in valoare totala de **[[total]] [[currency]]**.
+
+---
+
+### Detalii aviz
+
+- **Numar aviz:** [[delivery_note_number]]
+- **Data emitere:** [[issue_date]]
+- **Total:** [[total]] [[currency]]
+
+---
+
+Pentru orice intrebare legata de acest aviz, nu ezitati sa ne contactati.
+
+Cu stima,
+**[[company_name]]**
+MD;
+
+        $template = new EmailTemplate();
+        $template->setCompany($company);
+        $template->setName('Sablon standard aviz');
+        $template->setSubject('Aviz de insotire [[delivery_note_number]] - [[company_name]]');
+        $template->setBody($body);
+        $template->setCategory('delivery_note');
+        $template->setIsDefault(true);
+
+        return $template;
+    }
+
+    private function createDefaultReceiptTemplate(\App\Entity\Company $company): EmailTemplate
+    {
+        $body = <<<'MD'
+Stimate/Stimata **[[client_name]]**,
+
+Va transmitem alaturat bonul fiscal **nr. [[receipt_number]]** emis in data de **[[issue_date]]**, in valoare totala de **[[total]] [[currency]]**.
+
+---
+
+### Detalii bon fiscal
+
+- **Numar bon:** [[receipt_number]]
+- **Data emitere:** [[issue_date]]
+- **Total:** [[total]] [[currency]]
+
+---
+
+Pentru orice intrebare legata de acest bon fiscal, nu ezitati sa ne contactati.
+
+Cu stima,
+**[[company_name]]**
+MD;
+
+        $template = new EmailTemplate();
+        $template->setCompany($company);
+        $template->setName('Sablon standard bon');
+        $template->setSubject('Bon fiscal [[receipt_number]] - [[company_name]]');
+        $template->setBody($body);
+        $template->setCategory('receipt');
         $template->setIsDefault(true);
 
         return $template;

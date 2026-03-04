@@ -6,6 +6,7 @@ use App\Constants\Pagination;
 use App\Entity\DeliveryNote;
 use App\Manager\DeliveryNoteManager;
 use App\Repository\EmailLogRepository;
+use App\Repository\EmailTemplateRepository;
 use App\Repository\ProformaInvoiceRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
@@ -31,6 +32,7 @@ class DeliveryNoteController extends AbstractController
         private readonly ProformaInvoiceRepository $proformaInvoiceRepository,
         private readonly DeliveryNoteEmailService $deliveryNoteEmailService,
         private readonly EmailLogRepository $emailLogRepository,
+        private readonly EmailTemplateRepository $emailTemplateRepository,
         private readonly ETransportValidator $eTransportValidator,
         private readonly ETransportXmlGenerator $eTransportXmlGenerator,
     ) {}
@@ -512,6 +514,12 @@ class DeliveryNoteController extends AbstractController
             return $this->json(['error' => 'A valid recipient email address is required.'], Response::HTTP_BAD_REQUEST);
         }
 
+        $template = null;
+        $templateId = $data['templateId'] ?? null;
+        if ($templateId) {
+            $template = $this->emailTemplateRepository->find($templateId);
+        }
+
         try {
             $emailLog = $this->deliveryNoteEmailService->send(
                 deliveryNote: $deliveryNote,
@@ -521,6 +529,7 @@ class DeliveryNoteController extends AbstractController
                 cc: $data['cc'] ?? null,
                 bcc: $data['bcc'] ?? null,
                 sentBy: $user,
+                template: $template,
             );
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -541,10 +550,26 @@ class DeliveryNoteController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        $company = $deliveryNote->getCompany();
+        $defaultTemplate = $company ? $this->emailTemplateRepository->findDefaultForCompanyAndCategory($company, 'delivery_note') : null;
+
+        $to = $this->deliveryNoteEmailService->getDefaultRecipient($deliveryNote);
+        $templateId = null;
+
+        if ($defaultTemplate) {
+            $subject = $this->deliveryNoteEmailService->substituteVariables($defaultTemplate->getSubject(), $deliveryNote);
+            $body = $this->deliveryNoteEmailService->substituteVariables($defaultTemplate->getBody(), $deliveryNote);
+            $templateId = (string) $defaultTemplate->getId();
+        } else {
+            $subject = $this->deliveryNoteEmailService->getDefaultSubject($deliveryNote);
+            $body = $this->deliveryNoteEmailService->getDefaultBody($deliveryNote);
+        }
+
         return $this->json([
-            'to' => $this->deliveryNoteEmailService->getDefaultRecipient($deliveryNote),
-            'subject' => $this->deliveryNoteEmailService->getDefaultSubject($deliveryNote),
-            'body' => $this->deliveryNoteEmailService->getDefaultBody($deliveryNote),
+            'to' => $to,
+            'subject' => $subject,
+            'body' => $body,
+            'templateId' => $templateId,
         ]);
     }
 
