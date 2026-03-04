@@ -580,9 +580,24 @@ class InvoiceManager
             $parent->addEvent($parentEvent);
 
             // Auto-mark storno/credit note as settled — no payment to collect
+            $parentPaymentMethod = $parent->getPaymentMethod();
             $invoice->setAmountPaid($invoice->getTotal());
             $invoice->setPaidAt(new \DateTimeImmutable());
-            $invoice->setPaymentMethod('bank_transfer');
+            $invoice->setPaymentMethod($parentPaymentMethod);
+
+            $settlementEvent = new DocumentEvent();
+            $settlementEvent->setPreviousStatus($newStatus);
+            $settlementEvent->setNewStatus($newStatus);
+            $settlementEvent->setCreatedBy($user);
+            $settlementEvent->setMetadata([
+                'action' => 'payment_recorded',
+                'amount' => $invoice->getTotal(),
+                'paymentMethod' => $parentPaymentMethod,
+                'amountPaid' => $invoice->getAmountPaid(),
+                'balance' => $invoice->getBalance(),
+                'auto' => true,
+            ]);
+            $invoice->addEvent($settlementEvent);
         }
 
         // Schedule ANAF submission based on company delay (cron picks it up)

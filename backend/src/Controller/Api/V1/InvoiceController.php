@@ -432,9 +432,24 @@ class InvoiceController extends AbstractController
 
                 if (bccomp($balance, '0', 2) < 0) {
                     // Negative invoice (storno/credit note) — mark as settled directly
+                    $previousStatus = $invoice->getStatus();
                     $invoice->setAmountPaid($invoice->getTotal());
                     $invoice->setPaidAt(new \DateTimeImmutable($paidAt ?? 'now'));
                     $invoice->setPaymentMethod($paymentMethod);
+
+                    $event = new DocumentEvent();
+                    $event->setPreviousStatus($previousStatus);
+                    $event->setNewStatus($invoice->getStatus());
+                    $event->setCreatedBy($user);
+                    $event->setMetadata([
+                        'action' => 'payment_recorded',
+                        'amount' => $invoice->getTotal(),
+                        'paymentMethod' => $paymentMethod,
+                        'amountPaid' => $invoice->getAmountPaid(),
+                        'balance' => $invoice->getBalance(),
+                    ]);
+                    $invoice->addEvent($event);
+
                     $this->entityManager->flush();
                 } else {
                     $this->paymentService->recordPayment($invoice, [
