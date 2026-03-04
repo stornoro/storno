@@ -84,15 +84,26 @@
 
           <!-- Last issued info -->
           <UCard v-if="recurringInvoice.lastIssuedAt">
-            <div class="flex items-center gap-4 text-sm">
-              <div>
-                <span class="text-(--ui-text-muted)">{{ $t('recurringInvoices.lastIssuedAt') }}:</span>
-                <span class="font-medium ml-1">{{ formatDate(recurringInvoice.lastIssuedAt) }}</span>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4 text-sm">
+                <div>
+                  <span class="text-(--ui-text-muted)">{{ $t('recurringInvoices.lastIssuedAt') }}:</span>
+                  <span class="font-medium ml-1">{{ formatDate(recurringInvoice.lastIssuedAt) }}</span>
+                </div>
+                <div v-if="recurringInvoice.lastInvoiceNumber">
+                  <span class="text-(--ui-text-muted)">{{ $t('recurringInvoices.lastInvoiceNumber') }}:</span>
+                  <span class="font-medium ml-1">{{ recurringInvoice.lastInvoiceNumber }}</span>
+                </div>
               </div>
-              <div v-if="recurringInvoice.lastInvoiceNumber">
-                <span class="text-(--ui-text-muted)">{{ $t('recurringInvoices.lastInvoiceNumber') }}:</span>
-                <span class="font-medium ml-1">{{ recurringInvoice.lastInvoiceNumber }}</span>
-              </div>
+              <UButton
+                v-if="recurringInvoice.lastInvoiceId"
+                variant="outline"
+                size="xs"
+                icon="i-lucide-external-link"
+                :to="recurringInvoice.lastDocumentType === 'proforma' ? `/proforma-invoices/${recurringInvoice.lastInvoiceId}` : `/invoices/${recurringInvoice.lastInvoiceId}`"
+              >
+                {{ $t('common.view') }}
+              </UButton>
             </div>
           </UCard>
 
