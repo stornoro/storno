@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Lock\LockFactory;
 
 #[AsCommand(
     name: 'app:invoice:send-scheduled-emails',
@@ -26,6 +27,7 @@ class SendScheduledEmailsCommand extends Command
         private readonly EmailTemplateRepository $emailTemplateRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly LockFactory $lockFactory,
     ) {
         parent::__construct();
     }
@@ -43,6 +45,21 @@ class SendScheduledEmailsCommand extends Command
         $limit = (int) $input->getOption('limit');
         $dryRun = $input->getOption('dry-run');
 
+        $lock = $this->lockFactory->createLock('send-scheduled-emails', 300);
+        if (!$lock->acquire()) {
+            $io->warning('Another instance is already running. Skipping.');
+            return Command::SUCCESS;
+        }
+
+        try {
+            return $this->doExecute($io, $limit, $dryRun);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function doExecute(SymfonyStyle $io, int $limit, bool $dryRun): int
+    {
         $now = new \DateTimeImmutable();
         $invoices = $this->invoiceRepository->findScheduledForEmail($now, $limit);
 
