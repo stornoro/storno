@@ -158,16 +158,27 @@ const statusOptions = computed(() => [
   { label: $t('proformaStatus.expired'), value: 'expired' },
 ])
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false },
-  { accessorKey: 'number', header: $t('proformaInvoices.number'), enableSorting: true },
-  { accessorKey: 'clientName', header: $t('proformaInvoices.client'), enableSorting: false },
-  { accessorKey: 'issueDate', header: $t('proformaInvoices.issueDate'), enableSorting: true },
-  { accessorKey: 'validUntil', header: $t('proformaInvoices.validUntil'), enableSorting: true },
-  { accessorKey: 'total', header: $t('proformaInvoices.total'), enableSorting: true },
-  { accessorKey: 'status', header: $t('proformaInvoices.status'), enableSorting: true },
-  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false },
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:proformas:columns', [
+  { key: 'subtotal', label: $t('invoices.subtotal'), default: false },
+  { key: 'vatTotal', label: $t('invoices.vatLabel'), default: false },
+  { key: 'dueDate', label: $t('invoices.dueDate'), default: false },
+])
+
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false, _always: true },
+  { accessorKey: 'number', header: $t('proformaInvoices.number'), enableSorting: true, _always: true },
+  { accessorKey: 'clientName', header: $t('proformaInvoices.client'), enableSorting: false, _always: true },
+  { accessorKey: 'issueDate', header: $t('proformaInvoices.issueDate'), enableSorting: true, _always: true },
+  { accessorKey: 'validUntil', header: $t('proformaInvoices.validUntil'), enableSorting: true, _always: true },
+  { accessorKey: 'subtotal', header: $t('invoices.subtotal'), enableSorting: true, _toggle: 'subtotal' },
+  { accessorKey: 'vatTotal', header: $t('invoices.vatLabel'), enableSorting: true, _toggle: 'vatTotal' },
+  { accessorKey: 'total', header: $t('proformaInvoices.total'), enableSorting: true, _always: true },
+  { accessorKey: 'dueDate', header: $t('invoices.dueDate'), enableSorting: true, _toggle: 'dueDate' },
+  { accessorKey: 'status', header: $t('proformaInvoices.status'), enableSorting: true, _always: true },
+  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false, _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
@@ -248,6 +259,18 @@ onMounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label v-for="col in toggleableColumns" :key="col.key" class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer">
+                  <input type="checkbox" :checked="columnVisibility[col.key]" class="accent-primary" @change="toggleColumn(col.key)">
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UTooltip :kbds="['C', 'P']">
             <UButton v-if="can(P.INVOICE_CREATE)" icon="i-lucide-plus" @click="openCreateSlideover">
               {{ $t('proformaInvoices.newProforma') }}
@@ -315,6 +338,15 @@ onMounted(() => {
         </template>
         <template #validUntil-cell="{ row }">
           {{ row.original.validUntil ? new Date(row.original.validUntil).toLocaleDateString('ro-RO') : '-' }}
+        </template>
+        <template #subtotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.subtotal, row.original.currency) }}</span>
+        </template>
+        <template #vatTotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.vatTotal, row.original.currency) }}</span>
+        </template>
+        <template #dueDate-cell="{ row }">
+          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString('ro-RO') : '-' }}</span>
         </template>
         <template #clientName-cell="{ row }">
           {{ row.original.clientName || '-' }}

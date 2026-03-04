@@ -188,15 +188,26 @@ const statusOptions = computed(() => [
   { label: $t('deliveryNoteStatus.cancelled'), value: 'cancelled' },
 ])
 
-const columns = [
-  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false },
-  { accessorKey: 'number', header: $t('deliveryNotes.number'), enableSorting: true },
-  { accessorKey: 'clientName', header: $t('deliveryNotes.client'), enableSorting: false },
-  { accessorKey: 'issueDate', header: $t('deliveryNotes.issueDate'), enableSorting: true },
-  { accessorKey: 'total', header: $t('deliveryNotes.total'), enableSorting: true },
-  { accessorKey: 'status', header: $t('deliveryNotes.status'), enableSorting: true },
-  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false },
+const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggleableColumns } = useColumnVisibility('storno:delivery-notes:columns', [
+  { key: 'subtotal', label: $t('invoices.subtotal'), default: false },
+  { key: 'vatTotal', label: $t('invoices.vatLabel'), default: false },
+  { key: 'deliveryLocation', label: $t('deliveryNotes.deliveryLocation'), default: false },
+])
+
+const allColumnDefs = [
+  { id: 'select', header: '', accessorKey: 'id', size: 40, enableSorting: false, _always: true },
+  { accessorKey: 'number', header: $t('deliveryNotes.number'), enableSorting: true, _always: true },
+  { accessorKey: 'clientName', header: $t('deliveryNotes.client'), enableSorting: false, _always: true },
+  { accessorKey: 'issueDate', header: $t('deliveryNotes.issueDate'), enableSorting: true, _always: true },
+  { accessorKey: 'subtotal', header: $t('invoices.subtotal'), enableSorting: true, _toggle: 'subtotal' },
+  { accessorKey: 'vatTotal', header: $t('invoices.vatLabel'), enableSorting: true, _toggle: 'vatTotal' },
+  { accessorKey: 'total', header: $t('deliveryNotes.total'), enableSorting: true, _always: true },
+  { accessorKey: 'deliveryLocation', header: $t('deliveryNotes.deliveryLocation'), enableSorting: false, _toggle: 'deliveryLocation' },
+  { accessorKey: 'status', header: $t('deliveryNotes.status'), enableSorting: true, _always: true },
+  { id: 'actions', header: '', accessorKey: 'id', size: 50, enableSorting: false, _always: true },
 ]
+
+const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
@@ -277,6 +288,18 @@ onMounted(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UPopover>
+            <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
+            <template #content>
+              <div class="p-2 min-w-48">
+                <p class="text-xs font-semibold text-muted px-2 pb-1.5">{{ $t('invoices.toggleColumns') }}</p>
+                <label v-for="col in toggleableColumns" :key="col.key" class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-elevated cursor-pointer">
+                  <input type="checkbox" :checked="columnVisibility[col.key]" class="accent-primary" @change="toggleColumn(col.key)">
+                  <span class="text-sm">{{ col.label }}</span>
+                </label>
+              </div>
+            </template>
+          </UPopover>
           <UTooltip :kbds="['C', 'A']">
             <UButton v-if="can(P.INVOICE_CREATE)" icon="i-lucide-plus" @click="openCreateSlideover">
               {{ $t('deliveryNotes.newDeliveryNote') }}
@@ -346,10 +369,19 @@ onMounted(() => {
         <template #clientName-cell="{ row }">
           {{ row.original.clientName || '-' }}
         </template>
+        <template #subtotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.subtotal, row.original.currency) }}</span>
+        </template>
+        <template #vatTotal-cell="{ row }">
+          <span class="tabular-nums text-sm">{{ formatMoney(row.original.vatTotal, row.original.currency) }}</span>
+        </template>
         <template #total-cell="{ row }">
           <span class="font-medium tabular-nums">
             {{ formatMoney(row.original.total, row.original.currency) }}
           </span>
+        </template>
+        <template #deliveryLocation-cell="{ row }">
+          <span class="text-sm truncate max-w-48">{{ row.original.deliveryLocation || '-' }}</span>
         </template>
         <template #status-cell="{ row }">
           <UBadge :color="statusColor(row.original.status)" variant="subtle" size="sm">

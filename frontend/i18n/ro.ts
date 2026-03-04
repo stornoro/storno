@@ -136,6 +136,7 @@ export default defineI18nLocale(async () => {
       quantity: 'Cantitate',
       price: 'Pret',
       vat: 'TVA',
+      description: 'Descriere',
       notes: 'Note',
       days: 'zile',
       createdAt: 'Data crearii',
@@ -580,6 +581,7 @@ export default defineI18nLocale(async () => {
       totalIncluding: 'Total cu TVA',
       toBeCollected: 'De incasat',
       toBePaid: 'De platit',
+      toggleColumns: 'Coloane',
       activeFilters: 'Filtre active',
       resetFilters: 'Reseteaza filtrele',
       datePresets: {
@@ -1175,6 +1177,7 @@ export default defineI18nLocale(async () => {
       cancelled: 'Anulata',
       paid: 'Platita',
       partially_paid: 'Partial platita',
+      unpaid: 'Neplatita',
       overdue: 'Scadenta depasita',
       converted: 'Convertita',
       refund: 'Rambursare',
