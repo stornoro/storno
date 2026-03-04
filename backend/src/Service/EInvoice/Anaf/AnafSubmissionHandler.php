@@ -52,7 +52,7 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
         // Validate
         $validationResult = $this->validator->validate($invoice);
         if (!$validationResult->isValid) {
-            $errorMessage = implode('; ', array_map(fn ($e) => $e->message, $validationResult->errors));
+            $errorMessage = implode("\n", array_map(fn ($e) => $e->message, $validationResult->errors));
 
             $submission->setStatus(EInvoiceSubmissionStatus::REJECTED);
             $submission->setErrorMessage($errorMessage);

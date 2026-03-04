@@ -74,7 +74,7 @@ final class SubmitETransportHandler
 
             $note->setEtransportStatus('validation_failed');
             $note->setEtransportErrorMessage(
-                implode('; ', array_map(fn ($e) => "[{$e['rule']}] {$e['message']}", $entityErrors))
+                implode("\n", array_map(fn ($e) => "[{$e['rule']}] {$e['message']}", $entityErrors))
             );
             $this->entityManager->flush();
             return;
@@ -93,7 +93,7 @@ final class SubmitETransportHandler
 
             $note->setEtransportStatus('validation_failed');
             $note->setEtransportErrorMessage(
-                implode('; ', array_map(fn ($e) => "[{$e['rule']}] {$e['message']}", $xsdErrors))
+                implode("\n", array_map(fn ($e) => "[{$e['rule']}] {$e['message']}", $xsdErrors))
             );
             $this->entityManager->flush();
             return;
@@ -109,7 +109,7 @@ final class SubmitETransportHandler
 
             $note->setEtransportStatus('validation_failed');
             $note->setEtransportErrorMessage(
-                implode('; ', array_map(
+                implode("\n", array_map(
                     fn ($e) => $e->ruleId ? "[{$e->ruleId}] {$e->message}" : $e->message,
                     $schematronResult->errors,
                 ))

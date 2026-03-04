@@ -257,7 +257,7 @@
           </div>
           <div class="text-sm text-error flex items-start gap-2">
             <UIcon name="i-lucide-alert-circle" class="shrink-0 mt-0.5" />
-            <span>{{ invoice.anafErrorMessage || '-' }}</span>
+            <span class="whitespace-pre-line">{{ invoice.anafErrorMessage || '-' }}</span>
           </div>
         </div>
       </div>
