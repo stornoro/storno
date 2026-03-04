@@ -10,863 +10,958 @@
 
     <template #body>
       <div v-if="invoice" class="space-y-6">
-      <div class="flex flex-col gap-3">
-        <!-- Title row -->
-        <div class="flex items-center gap-3 min-w-0">
-          <UButton icon="i-lucide-arrow-left" variant="ghost" to="/invoices" class="shrink-0" />
-          <h1 class="text-2xl font-bold truncate">
-            <span v-if="invoice.invoiceTypeCode" class="text-sm font-bold text-primary tabular-nums mr-1.5">{{ invoiceTypeCodeShort[invoice.invoiceTypeCode] || '' }}</span>{{ invoice.number }}
-          </h1>
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <UBadge :color="directionColor(invoice.direction)" variant="subtle">
-              {{ invoice.direction === 'incoming' ? $t('common.incoming') : $t('common.outgoing') }}
-            </UBadge>
-            <UBadge :color="statusColor(invoice.status)" variant="subtle">
-              {{ $t(`documentStatus.${invoice.status}`) }}
-            </UBadge>
-            <UBadge v-if="invoice.paidAt" color="success" variant="subtle">
-              {{ $t('documentStatus.paid') }}
-            </UBadge>
-            <UBadge v-else-if="!invoice.paidAt && Number(invoice.amountPaid) > 0" color="warning" variant="subtle">
-              {{ $t('documentStatus.partially_paid') }}
-            </UBadge>
-            <UBadge v-if="isOverdue" color="error" variant="subtle">
-              {{ $t('documentStatus.overdue') }}
-            </UBadge>
-            <UBadge v-if="invoice.isDuplicate" color="warning" variant="subtle">
-              {{ $t('invoices.isDuplicate') }}
-            </UBadge>
-            <UBadge v-if="invoice.isLateSubmission" color="error" variant="subtle">
-              {{ $t('invoices.isLateSubmission') }}
-            </UBadge>
-            <UBadge v-if="invoice.cancelledAt && invoice.status !== 'cancelled'" color="error" variant="subtle">
-              {{ $t('documentStatus.cancelled') }}
-            </UBadge>
+
+        <!-- Header: title row + action row -->
+        <div class="flex flex-col gap-3">
+          <!-- Title row -->
+          <div class="flex items-center gap-3 min-w-0">
+            <UButton icon="i-lucide-arrow-left" variant="ghost" to="/invoices" class="shrink-0" />
+            <h1 class="text-2xl font-bold truncate">
+              <span v-if="invoice.invoiceTypeCode" class="text-sm font-bold text-primary tabular-nums mr-1.5">{{ invoiceTypeCodeShort[invoice.invoiceTypeCode] || '' }}</span>{{ invoice.number }}
+            </h1>
+            <!-- Prev / Next navigation -->
+            <div v-if="adjacentInvoices.prev || adjacentInvoices.next" class="flex items-center gap-0.5 shrink-0 ml-auto">
+              <UTooltip :text="adjacentInvoices.prev ? adjacentInvoices.prev.number : $t('invoices.noPrevious')">
+                <UButton
+                  icon="i-lucide-chevron-left"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="!adjacentInvoices.prev"
+                  :to="adjacentInvoices.prev ? `/invoices/${adjacentInvoices.prev.id}` : undefined"
+                />
+              </UTooltip>
+              <UTooltip :text="adjacentInvoices.next ? adjacentInvoices.next.number : $t('invoices.noNext')">
+                <UButton
+                  icon="i-lucide-chevron-right"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="!adjacentInvoices.next"
+                  :to="adjacentInvoices.next ? `/invoices/${adjacentInvoices.next.id}` : undefined"
+                />
+              </UTooltip>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <UBadge :color="directionColor(invoice.direction)" variant="subtle">
+                {{ invoice.direction === 'incoming' ? $t('common.incoming') : $t('common.outgoing') }}
+              </UBadge>
+              <UBadge :color="statusColor(invoice.status)" variant="subtle">
+                {{ $t(`documentStatus.${invoice.status}`) }}
+              </UBadge>
+              <UBadge v-if="invoice.paidAt" color="success" variant="subtle">
+                {{ $t('documentStatus.paid') }}
+              </UBadge>
+              <UBadge v-else-if="!invoice.paidAt && Number(invoice.amountPaid) > 0" color="warning" variant="subtle">
+                {{ $t('documentStatus.partially_paid') }}
+              </UBadge>
+              <UBadge v-if="isOverdue" color="error" variant="subtle">
+                {{ $t('documentStatus.overdue') }}
+              </UBadge>
+              <UBadge v-if="invoice.isDuplicate" color="warning" variant="subtle">
+                {{ $t('invoices.isDuplicate') }}
+              </UBadge>
+              <UBadge v-if="invoice.isLateSubmission" color="error" variant="subtle">
+                {{ $t('invoices.isLateSubmission') }}
+              </UBadge>
+              <UBadge v-if="invoice.cancelledAt && invoice.status !== 'cancelled'" color="error" variant="subtle">
+                {{ $t('documentStatus.cancelled') }}
+              </UBadge>
+            </div>
           </div>
-        </div>
-        <!-- Actions row -->
-        <div class="flex items-center gap-2 flex-wrap">
-          <!-- Primary CTA -->
-          <UButton v-if="invoice.status === 'draft'" icon="i-lucide-file-check" color="primary" :loading="issuing" @click="issueModalOpen = true">
-            {{ $t('invoices.issue') }}
-          </UButton>
-          <UButton
-            v-else-if="isRoClient && invoice.status !== 'cancelled' && invoice.status !== 'sent_to_provider' && (!invoice.anafUploadId || invoice.status === 'rejected')"
-            icon="i-lucide-send"
-            color="primary"
-            :loading="submitting"
-            @click="submitModalOpen = true"
-          >
-            {{ $t('invoices.submitToAnaf') }}
-          </UButton>
 
-          <!-- Payment -->
-          <UButton
-            v-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && !invoice.paidAt"
-            icon="i-lucide-banknote"
-            color="primary"
-            variant="soft"
-            @click="paymentModalOpen = true"
-          >
-            {{ $t('invoices.recordPayment') }}
-          </UButton>
-          <UButton
-            v-else-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.paidAt"
-            icon="i-lucide-circle-check"
-            color="success"
-            variant="soft"
-            :loading="updatingPayment"
-            @click="markUnpaidModalOpen = true"
-          >
-            {{ $t('invoices.markUnpaid') }}
-          </UButton>
-
-          <!-- Separator -->
-          <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block" />
-
-          <!-- Documents dropdown -->
-          <UDropdownMenu :items="downloadMenuItems">
-            <UButton icon="i-lucide-file-down" variant="outline" :loading="viewingPdf || downloadingPdf">
-              {{ $t('invoices.documents') }}
-              <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+          <!-- Actions row -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Primary CTA -->
+            <UButton v-if="invoice.status === 'draft'" icon="i-lucide-file-check" color="primary" :loading="issuing" @click="issueModalOpen = true">
+              {{ $t('invoices.issue') }}
             </UButton>
-          </UDropdownMenu>
-
-          <!-- Share Link -->
-          <UTooltip v-if="invoice.direction === 'outgoing' && !['draft', 'cancelled'].includes(invoice.status)" :text="$t('invoices.copyShareLink')">
             <UButton
-              icon="i-lucide-link"
-              :color="paymentLinkCopied ? 'success' : 'neutral'"
-              variant="outline"
-              :loading="creatingPaymentLink"
-              @click="copyPaymentLink"
+              v-else-if="isRoClient && invoice.status !== 'cancelled' && invoice.status !== 'sent_to_provider' && (!invoice.anafUploadId || invoice.status === 'rejected')"
+              icon="i-lucide-send"
+              color="primary"
+              :loading="submitting"
+              @click="submitModalOpen = true"
             >
-              <UIcon v-if="paymentLinkCopied" name="i-lucide-check" class="size-4" />
+              {{ $t('invoices.submitToAnaf') }}
             </UButton>
-          </UTooltip>
 
-          <!-- Email (outgoing, not draft/cancelled) -->
-          <UTooltip v-if="invoice.direction === 'outgoing' && !['draft', 'cancelled'].includes(invoice.status)" :text="$t('invoices.sendEmail')">
-            <UButton icon="i-lucide-mail" variant="outline" @click="emailModalOpen = true" />
-          </UTooltip>
-
-          <!-- Verify signature -->
-          <UTooltip v-if="invoice.anafMessageId" :text="signatureLabel">
+            <!-- Payment -->
             <UButton
-              :icon="signatureIcon"
-              :color="signatureColor"
-              :variant="signatureResult ? 'subtle' : 'outline'"
-              :loading="verifyingSignature"
-              @click="verifySignature"
-            />
-          </UTooltip>
-
-          <!-- More actions dropdown -->
-          <UDropdownMenu :items="moreActionsItems">
-            <UButton icon="i-lucide-ellipsis" variant="outline" />
-          </UDropdownMenu>
-        </div>
-      </div>
-
-      <!-- Non-editable banner — only for invoices sent to ANAF, not already refunded -->
-      <UCard v-if="invoice.anafUploadId && invoice.status !== 'rejected' && invoice.direction === 'outgoing' && !invoice.cancelledAt && !invoice.parentDocumentId && !invoice.refundInvoices?.length" class="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex items-start gap-3 text-sm">
-            <UIcon name="i-lucide-info" class="text-amber-500 mt-0.5 shrink-0 size-5" />
-            <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.notEditableBanner') }}</span>
-          </div>
-          <UButton
-            icon="i-lucide-file-minus"
-            color="warning"
-            variant="subtle"
-            size="sm"
-            @click="openRefundSlideover"
-          >
-            {{ $t('invoices.createRefund') }}
-          </UButton>
-        </div>
-      </UCard>
-
-      <!-- Refund relationship banner — this is a refund invoice, link to parent -->
-      <UCard v-if="invoice.parentDocumentId" variant="outline" class="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-2 text-sm">
-            <UIcon name="i-lucide-file-minus" class="text-amber-500 shrink-0 size-5" />
-            <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.refundOfBanner', { number: invoice.parentDocumentNumber }) }}</span>
-          </div>
-          <UButton
-            icon="i-lucide-external-link"
-            variant="subtle"
-            color="warning"
-            size="sm"
-            :to="`/invoices/${invoice.parentDocumentId}`"
-          >
-            {{ $t('invoices.refundOfLink') }}
-          </UButton>
-        </div>
-      </UCard>
-
-      <!-- Refunded banner — this invoice was refunded, link to refund children -->
-      <UCard v-if="invoice.refundInvoices?.length" variant="outline" class="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-2 text-sm">
-            <UIcon name="i-lucide-file-x" class="text-amber-500 shrink-0 size-5" />
-            <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.refundedBanner') }}</span>
-          </div>
-          <div class="flex flex-wrap gap-2">
+              v-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && !invoice.paidAt"
+              icon="i-lucide-banknote"
+              color="primary"
+              variant="soft"
+              @click="paymentModalOpen = true"
+            >
+              {{ $t('invoices.recordPayment') }}
+            </UButton>
             <UButton
-              v-for="refundInv in invoice.refundInvoices"
-              :key="refundInv.id"
+              v-else-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.paidAt"
+              icon="i-lucide-circle-check"
+              color="success"
+              variant="soft"
+              :loading="updatingPayment"
+              @click="markUnpaidModalOpen = true"
+            >
+              {{ $t('invoices.markUnpaid') }}
+            </UButton>
+
+            <!-- Separator -->
+            <div class="w-px h-6 bg-(--ui-border) hidden sm:block" />
+
+            <!-- Documents dropdown -->
+            <UDropdownMenu :items="downloadMenuItems">
+              <UButton icon="i-lucide-file-down" variant="outline" :loading="viewingPdf || downloadingPdf">
+                {{ $t('invoices.documents') }}
+                <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+              </UButton>
+            </UDropdownMenu>
+
+            <!-- Share Link -->
+            <UTooltip v-if="invoice.direction === 'outgoing' && !['draft', 'cancelled'].includes(invoice.status)" :text="$t('invoices.copyShareLink')">
+              <UButton
+                icon="i-lucide-link"
+                :color="paymentLinkCopied ? 'success' : 'neutral'"
+                variant="outline"
+                :loading="creatingPaymentLink"
+                @click="copyPaymentLink"
+              >
+                <UIcon v-if="paymentLinkCopied" name="i-lucide-check" class="size-4" />
+              </UButton>
+            </UTooltip>
+
+            <!-- Email (outgoing, not draft/cancelled) -->
+            <UTooltip v-if="invoice.direction === 'outgoing' && !['draft', 'cancelled'].includes(invoice.status)" :text="$t('invoices.sendEmail')">
+              <UButton icon="i-lucide-mail" variant="outline" @click="emailModalOpen = true" />
+            </UTooltip>
+
+            <!-- Verify signature -->
+            <UTooltip v-if="invoice.anafMessageId" :text="signatureLabel">
+              <UButton
+                :icon="signatureIcon"
+                :color="signatureColor"
+                :variant="signatureResult ? 'subtle' : 'outline'"
+                :loading="verifyingSignature"
+                @click="verifySignature"
+              />
+            </UTooltip>
+
+            <!-- More actions dropdown -->
+            <UDropdownMenu :items="moreActionsItems">
+              <UButton icon="i-lucide-ellipsis" variant="outline" />
+            </UDropdownMenu>
+          </div>
+        </div>
+
+        <!-- Non-editable banner -->
+        <div
+          v-if="invoice.anafUploadId && invoice.status !== 'rejected' && invoice.direction === 'outgoing' && !invoice.cancelledAt && !invoice.parentDocumentId && !invoice.refundInvoices?.length"
+          class="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3 text-sm">
+              <UIcon name="i-lucide-info" class="text-amber-500 mt-0.5 shrink-0 size-5" />
+              <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.notEditableBanner') }}</span>
+            </div>
+            <UButton
+              icon="i-lucide-file-minus"
+              color="warning"
+              variant="subtle"
+              size="sm"
+              @click="openRefundSlideover"
+            >
+              {{ $t('invoices.createRefund') }}
+            </UButton>
+          </div>
+        </div>
+
+        <!-- Refund relationship banner -->
+        <div
+          v-if="invoice.parentDocumentId"
+          class="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 text-sm">
+              <UIcon name="i-lucide-file-minus" class="text-amber-500 shrink-0 size-5" />
+              <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.refundOfBanner', { number: invoice.parentDocumentNumber }) }}</span>
+            </div>
+            <UButton
               icon="i-lucide-external-link"
               variant="subtle"
               color="warning"
               size="sm"
-              :to="`/invoices/${refundInv.id}`"
+              :to="`/invoices/${invoice.parentDocumentId}`"
             >
-              {{ $t('invoices.refundedLink') }} {{ refundInv.number }}
+              {{ $t('invoices.refundOfLink') }}
             </UButton>
           </div>
         </div>
-      </UCard>
 
-      <!-- Scheduled ANAF send info -->
-      <UCard v-if="isRoClient && invoice.scheduledSendAt && !invoice.anafUploadId" class="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
-        <div class="flex items-center gap-2 text-sm">
-          <UIcon name="i-lucide-clock" class="text-blue-500 shrink-0 size-5" />
-          <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(invoice.scheduledSendAt) }) }} <span class="text-blue-600/70 dark:text-blue-300/70">({{ formatRelative(invoice.scheduledSendAt) }})</span></span>
+        <!-- Refunded banner -->
+        <div
+          v-if="invoice.refundInvoices?.length"
+          class="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 text-sm">
+              <UIcon name="i-lucide-file-x" class="text-amber-500 shrink-0 size-5" />
+              <span class="text-amber-800 dark:text-amber-200">{{ $t('invoices.refundedBanner') }}</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                v-for="refundInv in invoice.refundInvoices"
+                :key="refundInv.id"
+                icon="i-lucide-external-link"
+                variant="subtle"
+                color="warning"
+                size="sm"
+                :to="`/invoices/${refundInv.id}`"
+              >
+                {{ $t('invoices.refundedLink') }} {{ refundInv.number }}
+              </UButton>
+            </div>
+          </div>
         </div>
-      </UCard>
 
+        <!-- Scheduled ANAF send info -->
+        <div
+          v-if="isRoClient && invoice.scheduledSendAt && !invoice.anafUploadId"
+          class="px-4 py-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30"
+        >
+          <div class="flex items-center gap-2 text-sm">
+            <UIcon name="i-lucide-clock" class="text-blue-500 shrink-0 size-5" />
+            <span class="text-blue-800 dark:text-blue-200">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(invoice.scheduledSendAt) }) }} <span class="text-blue-600/70 dark:text-blue-300/70">({{ formatRelative(invoice.scheduledSendAt) }})</span></span>
+          </div>
+        </div>
 
-      <!-- Validation loading -->
-      <div v-if="validating && !validationResult" class="flex items-center gap-2 text-sm text-(--ui-text-muted) p-3">
-        <UIcon name="i-lucide-loader-2" class="animate-spin size-4" />
-        {{ $t('invoices.validating') }}
-      </div>
+        <!-- Validation loading -->
+        <div v-if="validating && !validationResult" class="flex items-center gap-2 text-sm text-(--ui-text-muted) p-3">
+          <UIcon name="i-lucide-loader-2" class="animate-spin size-4" />
+          {{ $t('invoices.validating') }}
+        </div>
 
-      <!-- Validation Results — success (clean inline) -->
-      <div v-if="validationResult && validationResult.valid && !validationResult.errors.length && !validationResult.warnings.length" class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-3 py-2">
-        <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
-        <span class="font-medium">{{ $t('invoices.validationPassed') }}</span>
-        <UBadge v-if="!validationResult.schematronAvailable" color="warning" variant="subtle" size="sm">
-          {{ $t('invoices.schematronUnavailable') }}
-        </UBadge>
-      </div>
+        <!-- Validation Results — success (clean inline) -->
+        <div v-if="validationResult && validationResult.valid && !validationResult.errors.length && !validationResult.warnings.length" class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-3 py-2">
+          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
+          <span class="font-medium">{{ $t('invoices.validationPassed') }}</span>
+          <UBadge v-if="!validationResult.schematronAvailable" color="warning" variant="subtle" size="sm">
+            {{ $t('invoices.schematronUnavailable') }}
+          </UBadge>
+        </div>
 
-      <!-- Validation Results — errors/warnings (card) -->
-      <UCard v-else-if="validationResult" class="border-red-200 dark:border-red-800">
-        <template #header>
-          <div class="flex items-center gap-2">
+        <!-- Validation Results — errors/warnings -->
+        <div v-else-if="validationResult" class="p-4 rounded-lg border border-red-200 dark:border-red-800">
+          <div class="flex items-center gap-2 mb-3">
             <UIcon name="i-lucide-circle-x" class="text-red-500 size-5" />
             <h3 class="font-semibold text-red-600">{{ $t('invoices.validationFailed') }}</h3>
             <UBadge v-if="!validationResult.schematronAvailable" color="warning" variant="subtle" size="sm">
               {{ $t('invoices.schematronUnavailable') }}
             </UBadge>
           </div>
-        </template>
-        <div v-if="validationResult.errors.length" class="space-y-2">
-          <div v-for="(err, i) in validationResult.errors" :key="i" class="flex items-start gap-2 text-sm">
-            <UIcon name="i-lucide-x" class="text-red-500 mt-0.5 shrink-0" />
-            <div>
-              <span class="font-medium">{{ localizeValidationMessage(err.message) }}</span>
-              <span v-if="err.ruleId" class="text-(--ui-text-muted) ml-1">[{{ err.ruleId }}]</span>
-              <UBadge variant="subtle" size="xs" class="ml-1">{{ err.source }}</UBadge>
-              <span v-if="err.location" class="text-(--ui-text-muted) ml-1 text-xs">{{ err.location }}</span>
+          <div v-if="validationResult.errors.length" class="space-y-2">
+            <div v-for="(err, i) in validationResult.errors" :key="i" class="flex items-start gap-2 text-sm">
+              <UIcon name="i-lucide-x" class="text-red-500 mt-0.5 shrink-0" />
+              <div>
+                <span class="font-medium">{{ localizeValidationMessage(err.message) }}</span>
+                <span v-if="err.ruleId" class="text-(--ui-text-muted) ml-1">[{{ err.ruleId }}]</span>
+                <UBadge variant="subtle" size="xs" class="ml-1">{{ err.source }}</UBadge>
+                <span v-if="err.location" class="text-(--ui-text-muted) ml-1 text-xs">{{ err.location }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="validationResult.warnings.length" class="mt-3 space-y-1">
+            <div v-for="(warn, i) in validationResult.warnings" :key="i" class="flex items-start gap-2 text-sm text-amber-600">
+              <UIcon name="i-lucide-alert-triangle" class="mt-0.5 shrink-0" />
+              <span>{{ localizeValidationMessage(warn) }}</span>
             </div>
           </div>
         </div>
-        <div v-if="validationResult.warnings.length" class="mt-3 space-y-1">
-          <div v-for="(warn, i) in validationResult.warnings" :key="i" class="flex items-start gap-2 text-sm text-amber-600">
-            <UIcon name="i-lucide-alert-triangle" class="mt-0.5 shrink-0" />
-            <span>{{ localizeValidationMessage(warn) }}</span>
-          </div>
-        </div>
-      </UCard>
 
-      <UTabs :items="tabs" v-model="activeTab">
-        <template #details>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <h3 class="font-semibold">{{ $t('invoices.seller') }}</h3>
-                  <UButton v-if="invoice.supplier" variant="ghost" size="xs" :to="`/suppliers/${invoice.supplier.id}`">
-                    {{ $t('common.view') }}
-                  </UButton>
-                </div>
-              </template>
-              <dl class="space-y-2 text-sm">
-                <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.senderName || '-' }}</dd></div>
-                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd></div>
-              </dl>
-            </UCard>
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <h3 class="font-semibold">{{ $t('invoices.buyer') }}</h3>
-                  <UButton v-if="invoice.client" variant="ghost" size="xs" :to="`/clients/${invoice.client.id}`">
-                    {{ $t('common.view') }}
-                  </UButton>
-                </div>
-              </template>
-              <dl class="space-y-2 text-sm">
-                <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.receiverName || '-' }}</dd></div>
-                <div><dt class="text-(--ui-text-muted)">CIF</dt><dd>{{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || $t('clients.typeIndividual') }}</dd></div>
-              </dl>
-            </UCard>
-          </div>
+        <UTabs :items="tabs" v-model="activeTab">
+          <template #details>
+            <div class="space-y-6 mt-4">
 
-          <!-- Invoice metadata -->
-          <UCard class="mt-6">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.issueDate') }}</dt>
-                <dd class="font-medium">{{ formatDate(invoice.issueDate) }}</dd>
-              </div>
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.dueDate') }}</dt>
-                <dd class="font-medium">{{ formatDate(invoice.dueDate) }}</dd>
-              </div>
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.currency') }}</dt>
-                <dd class="font-medium">{{ invoice.currency }}</dd>
-              </div>
-              <div v-if="invoice.invoiceTypeCode">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.invoiceTypeCode') }}</dt>
-                <dd class="font-medium">{{ $t(`invoiceTypeCodes.${invoice.invoiceTypeCode}`) }}</dd>
-              </div>
-              <div v-if="invoice.paymentTerms">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.paymentTerms') }}</dt>
-                <dd class="font-medium">{{ invoice.paymentTerms }}</dd>
-              </div>
-              <div v-if="invoice.deliveryLocation">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.deliveryLocation') }}</dt>
-                <dd class="font-medium">{{ invoice.deliveryLocation }}</dd>
-              </div>
-              <div v-if="invoice.projectReference">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.projectReference') }}</dt>
-                <dd class="font-medium">{{ invoice.projectReference }}</dd>
-              </div>
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.amountPaid') }}</dt>
-                <dd class="font-medium">{{ formatMoney(invoice.amountPaid, invoice.currency) }}</dd>
-              </div>
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.balance') }}</dt>
-                <dd class="font-medium" :class="Number(invoice.balance) > 0 ? 'text-amber-600' : 'text-green-600'">
-                  {{ formatMoney(invoice.balance, invoice.currency) }}
-                </dd>
-              </div>
-              <div v-if="invoice.paidAt">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.paidAt') }}</dt>
-                <dd class="font-medium">{{ formatDate(invoice.paidAt) }}</dd>
-              </div>
-              <div v-if="invoice.paymentMethod">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.paymentMethod') }}</dt>
-                <dd class="font-medium">{{ $t(`invoices.paymentMethods.${invoice.paymentMethod}`) }}</dd>
-              </div>
-            </div>
-          </UCard>
-
-          <!-- Cancellation info -->
-          <UCard v-if="invoice.cancelledAt" class="mt-6 border-red-200 dark:border-red-800">
-            <template #header>
-              <h3 class="font-semibold text-red-600">{{ $t('invoices.cancelledAt') }}</h3>
-            </template>
-            <dl class="space-y-2 text-sm">
-              <div>
-                <dt class="text-(--ui-text-muted)">{{ $t('common.date') }}</dt>
-                <dd class="font-medium">{{ formatDate(invoice.cancelledAt) }}</dd>
-              </div>
-              <div v-if="invoice.cancellationReason">
-                <dt class="text-(--ui-text-muted)">{{ $t('invoices.cancellationReason') }}</dt>
-                <dd class="font-medium">{{ invoice.cancellationReason }}</dd>
-              </div>
-            </dl>
-          </UCard>
-
-          <!-- Client info (for outgoing invoices) -->
-          <UCard v-if="invoice.client && invoice.direction === 'outgoing'" class="mt-6">
-            <template #header>
-              <div class="flex items-center justify-between">
-                <h3 class="font-semibold">{{ $t('clients.details') }}</h3>
-                <UButton variant="ghost" size="sm" :to="`/clients/${invoice.client.id}`">
-                  {{ $t('common.view') }}
-                </UButton>
-              </div>
-            </template>
-            <dl class="grid grid-cols-2 gap-3 text-sm">
-              <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.client.name }}</dd></div>
-              <div v-if="invoice.client.cui"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ formatCif(invoice.client.cui, invoice.client.isVatPayer) }}</dd></div>
-            </dl>
-          </UCard>
-
-          <!-- Supplier info (for incoming invoices) -->
-          <UCard v-if="invoice.supplier && invoice.direction === 'incoming'" class="mt-6">
-            <template #header>
-              <div class="flex items-center justify-between">
-                <h3 class="font-semibold">{{ $t('suppliers.details') }}</h3>
-                <UButton variant="ghost" size="sm" :to="`/suppliers/${invoice.supplier.id}`">
-                  {{ $t('common.view') }}
-                </UButton>
-              </div>
-            </template>
-            <dl class="grid grid-cols-2 gap-3 text-sm">
-              <div><dt class="text-(--ui-text-muted)">{{ $t('common.name') }}</dt><dd class="font-medium">{{ invoice.supplier.name }}</dd></div>
-              <div v-if="invoice.supplier.cif"><dt class="text-(--ui-text-muted)">CIF</dt><dd class="font-medium">{{ formatCif(invoice.supplier.cif, invoice.supplier.isVatPayer) }}</dd></div>
-            </dl>
-          </UCard>
-
-          <UCard class="mt-6">
-            <template #header>
-              <h3 class="font-semibold">{{ $t('invoices.lines') }}</h3>
-            </template>
-            <UTable :data="invoice.lines || []" :columns="lineColumns" />
-            <div class="flex justify-end mt-4 space-y-1 text-right">
-              <div class="space-y-1">
-                <div class="text-sm">{{ $t('invoices.subtotal') }}: <strong>{{ formatMoney(invoice.subtotal, invoice.currency) }}</strong></div>
-                <div class="text-sm">TVA: <strong>{{ formatMoney(invoice.vatTotal, invoice.currency) }}</strong></div>
-                <div class="text-lg font-bold">{{ $t('invoices.total') }}: {{ formatMoney(invoice.total, invoice.currency) }}</div>
-              </div>
-            </div>
-          </UCard>
-
-          <UCard v-if="invoice.notes" class="mt-6">
-            <template #header>
-              <h3 class="font-semibold">{{ $t('common.notes') }}</h3>
-            </template>
-            <p class="text-sm">{{ invoice.notes }}</p>
-          </UCard>
-        </template>
-
-        <template #xml>
-          <UCard class="mt-4">
-            <template #header>
-              <div class="flex items-center justify-between">
-                <h3 class="font-semibold">XML</h3>
-                <UButton
-                  v-if="xmlContent"
-                  :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
-                  variant="ghost"
-                  size="sm"
-                  @click="copyXml"
-                >
-                  {{ copied ? $t('invoices.xmlCopied') : $t('invoices.xmlCopy') }}
-                </UButton>
-              </div>
-            </template>
-            <pre
-              v-if="xmlContent"
-              class="text-xs overflow-auto max-h-[600px] bg-(--ui-bg-elevated) p-4 rounded font-mono leading-relaxed"
-              v-html="highlightedXml"
-            />
-            <div v-else-if="loadingXml" class="text-center py-8">
-              <UIcon name="i-lucide-loader-2" class="animate-spin h-6 w-6 mx-auto text-(--ui-text-muted)" />
-            </div>
-            <div v-else class="text-center py-8 text-(--ui-text-muted)">{{ $t('invoices.noXml') }}</div>
-          </UCard>
-        </template>
-
-        <template #events>
-          <UCard class="mt-4">
-            <div v-if="events.length" class="space-y-0">
-              <div v-for="(event, idx) in events" :key="event.id" class="flex gap-3">
-                <!-- Timeline line + dot -->
-                <div class="flex flex-col items-center">
-                  <div class="size-3 rounded-full shrink-0 mt-1.5" :class="{
-                    'bg-green-500': event.newStatus === 'validated',
-                    'bg-red-500': event.newStatus === 'rejected' || event.newStatus === 'cancelled',
-                    'bg-amber-500': event.newStatus === 'sent_to_provider',
-                    'bg-blue-500': event.newStatus === 'issued' || event.newStatus === 'synced',
-                    'bg-(--ui-text-muted)': !['validated','rejected','cancelled','sent_to_provider','issued','synced'].includes(event.newStatus),
-                  }" />
-                  <div v-if="idx < events.length - 1" class="w-px flex-1 bg-(--ui-border) my-1" />
-                </div>
-                <!-- Content -->
-                <div class="pb-5 min-w-0 flex-1">
-                  <p class="text-sm font-medium">{{ getEventTitle(event) }}</p>
-                  <p class="text-xs text-(--ui-text-muted) mt-0.5">
-                    {{ formatDateTime(event.createdAt) }}
-                    <span v-if="event.createdBy"> · {{ event.createdBy }}</span>
-                  </p>
-                  <!-- Rejection error callout -->
-                  <div
-                    v-if="event.metadata?.action === 'anaf_rejected' && event.metadata?.error"
-                    class="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2"
-                  >
-                    <div class="flex items-start gap-2">
-                      <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 text-red-500 mt-0.5" />
-                      <p class="text-xs text-red-700 dark:text-red-300 break-words">{{ event.metadata.error }}</p>
+              <!-- Seller / Buyer -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Seller -->
+                <div class="rounded-lg border border-(--ui-border) p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-building-2" class="size-3.5" />{{ $t('invoices.seller') }}</h3>
+                    <UButton v-if="invoice.supplier" variant="ghost" size="xs" :to="`/suppliers/${invoice.supplier.id}`">
+                      {{ $t('common.view') }}
+                    </UButton>
+                  </div>
+                  <dl class="space-y-2 text-sm">
+                    <div>
+                      <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
+                      <dd class="font-medium mt-0.5">{{ invoice.senderName || '-' }}</dd>
                     </div>
-                    <button
-                      v-if="invoice?.anafDownloadId"
-                      class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer"
-                      @click="downloadAnafResponse"
+                    <div>
+                      <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <!-- Buyer -->
+                <div class="rounded-lg border border-(--ui-border) p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-user" class="size-3.5" />{{ $t('invoices.buyer') }}</h3>
+                    <UButton v-if="invoice.client" variant="ghost" size="xs" :to="`/clients/${invoice.client.id}`">
+                      {{ $t('common.view') }}
+                    </UButton>
+                  </div>
+                  <dl class="space-y-2 text-sm">
+                    <div>
+                      <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
+                      <dd class="font-medium mt-0.5">{{ invoice.receiverName || '-' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || $t('clients.typeIndividual') }}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- Unified metadata grid -->
+              <dl class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+                <div>
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-calendar" class="size-3" />{{ $t('invoices.issueDate') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ formatDate(invoice.issueDate) }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-calendar-clock" class="size-3" />{{ $t('invoices.dueDate') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ formatDate(invoice.dueDate) || '-' }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-coins" class="size-3" />{{ $t('invoices.currency') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ invoice.currency }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-wallet" class="size-3" />{{ $t('invoices.balance') }}</dt>
+                  <dd class="font-semibold mt-0.5 flex items-center gap-2" :class="Number(invoice.balance) > 0 ? 'text-amber-600' : 'text-green-600'">
+                    {{ formatMoney(invoice.balance, invoice.currency) }}
+                    <UButton
+                      v-if="Number(invoice.balance) > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled'"
+                      size="xs"
+                      variant="soft"
+                      color="success"
+                      icon="i-lucide-check"
+                      :loading="markingAsPaid"
+                      @click="quickMarkAsPaid"
                     >
-                      <UIcon name="i-lucide-download" class="size-3.5" />
-                      {{ $t('invoices.downloadAnafError') }}
-                    </button>
+                      {{ $t('invoices.markPaid') }}
+                    </UButton>
+                  </dd>
+                </div>
+                <div v-if="invoice.invoiceTypeCode">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-file-text" class="size-3" />{{ $t('invoices.invoiceTypeCode') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ $t(`invoiceTypeCodes.${invoice.invoiceTypeCode}`) }}</dd>
+                </div>
+                <div v-if="Number(invoice.amountPaid) > 0">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-banknote" class="size-3" />{{ $t('invoices.amountPaid') }}</dt>
+                  <dd class="font-medium mt-0.5 text-green-600">{{ formatMoney(invoice.amountPaid, invoice.currency) }}</dd>
+                </div>
+                <div v-if="invoice.paidAt">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-calendar-check" class="size-3" />{{ $t('invoices.paidAt') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ formatDate(invoice.paidAt) }}</dd>
+                </div>
+                <div v-if="invoice.paymentMethod">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-credit-card" class="size-3" />{{ $t('invoices.paymentMethod') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ $t(`invoices.paymentMethods.${invoice.paymentMethod}`) }}</dd>
+                </div>
+                <div v-if="invoice.paymentTerms">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-clock" class="size-3" />{{ $t('invoices.paymentTerms') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ invoice.paymentTerms }}</dd>
+                </div>
+                <div v-if="invoice.deliveryLocation">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3" />{{ $t('invoices.deliveryLocation') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ invoice.deliveryLocation }}</dd>
+                </div>
+                <div v-if="invoice.projectReference">
+                  <dt class="text-xs text-(--ui-text-muted) flex items-center gap-1"><UIcon name="i-lucide-folder" class="size-3" />{{ $t('invoices.projectReference') }}</dt>
+                  <dd class="font-medium mt-0.5">{{ invoice.projectReference }}</dd>
+                </div>
+              </dl>
+
+              <!-- Cancellation info -->
+              <div v-if="invoice.cancelledAt" class="rounded-lg border border-red-200 dark:border-red-800 p-4">
+                <h3 class="text-sm font-semibold text-red-600 dark:text-red-400 mb-3 flex items-center gap-1.5"><UIcon name="i-lucide-ban" class="size-3.5" />{{ $t('invoices.cancelledAt') }}</h3>
+                <dl class="space-y-2 text-sm">
+                  <div>
+                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.date') }}</dt>
+                    <dd class="font-medium mt-0.5">{{ formatDate(invoice.cancelledAt) }}</dd>
                   </div>
-                  <!-- Cancellation reason callout -->
-                  <div
-                    v-else-if="event.metadata?.action === 'cancelled' && event.metadata?.reason"
-                    class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2"
-                  >
-                    <UIcon name="i-lucide-message-circle" class="size-4 shrink-0 text-amber-500 mt-0.5" />
-                    <p class="text-xs text-amber-700 dark:text-amber-300">{{ event.metadata.reason }}</p>
+                  <div v-if="invoice.cancellationReason">
+                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('invoices.cancellationReason') }}</dt>
+                    <dd class="font-medium mt-0.5">{{ invoice.cancellationReason }}</dd>
                   </div>
-                  <!-- Scheduled send info -->
-                  <div
-                    v-else-if="event.metadata?.action === 'submitted' && event.metadata?.scheduledSendAt"
-                    class="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2"
-                  >
-                    <UIcon name="i-lucide-clock" class="size-4 shrink-0 text-blue-500 mt-0.5" />
-                    <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(event.metadata.scheduledSendAt) }) }}</p>
+                </dl>
+              </div>
+
+              <!-- Client details (outgoing) -->
+              <div v-if="invoice.client && invoice.direction === 'outgoing'" class="rounded-lg border border-(--ui-border) p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-contact" class="size-3.5" />{{ $t('clients.details') }}</h3>
+                  <UButton variant="ghost" size="sm" :to="`/clients/${invoice.client.id}`">
+                    {{ $t('common.view') }}
+                  </UButton>
+                </div>
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div>
+                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
+                    <dd class="font-medium mt-0.5">{{ invoice.client.name }}</dd>
                   </div>
-                  <!-- Auto submit scheduled -->
-                  <div
-                    v-else-if="event.metadata?.action === 'issued' && event.metadata?.scheduledSendAt"
-                    class="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2"
-                  >
-                    <UIcon name="i-lucide-timer" class="size-4 shrink-0 text-blue-500 mt-0.5" />
-                    <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(event.metadata.scheduledSendAt) }) }}</p>
+                  <div v-if="invoice.client.cui">
+                    <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
+                    <dd class="font-medium mt-0.5">{{ formatCif(invoice.client.cui, invoice.client.isVatPayer) }}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <!-- Supplier details (incoming) -->
+              <div v-if="invoice.supplier && invoice.direction === 'incoming'" class="rounded-lg border border-(--ui-border) p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-truck" class="size-3.5" />{{ $t('suppliers.details') }}</h3>
+                  <UButton variant="ghost" size="sm" :to="`/suppliers/${invoice.supplier.id}`">
+                    {{ $t('common.view') }}
+                  </UButton>
+                </div>
+                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div>
+                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
+                    <dd class="font-medium mt-0.5">{{ invoice.supplier.name }}</dd>
+                  </div>
+                  <div v-if="invoice.supplier.cif">
+                    <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
+                    <dd class="font-medium mt-0.5">{{ formatCif(invoice.supplier.cif, invoice.supplier.isVatPayer) }}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <USeparator />
+
+              <!-- Invoice lines -->
+              <div>
+                <h3 class="text-sm font-semibold text-(--ui-text-muted) mb-3 flex items-center gap-1.5"><UIcon name="i-lucide-list" class="size-3.5" />{{ $t('invoices.lines') }}</h3>
+                <UTable :data="invoice.lines || []" :columns="lineColumns" />
+                <div class="flex justify-end mt-4 pt-4 border-t border-(--ui-border)">
+                  <div class="min-w-48 space-y-1">
+                    <div class="flex justify-between gap-8 text-sm text-(--ui-text-muted)">
+                      <span>{{ $t('invoices.subtotal') }}</span>
+                      <strong class="text-(--ui-text-highlighted)">{{ formatMoney(invoice.subtotal, invoice.currency) }}</strong>
+                    </div>
+                    <div class="flex justify-between gap-8 text-sm text-(--ui-text-muted)">
+                      <span>TVA</span>
+                      <strong class="text-(--ui-text-highlighted)">{{ formatMoney(invoice.vatTotal, invoice.currency) }}</strong>
+                    </div>
+                    <div class="flex justify-between gap-8 font-bold text-base pt-2 border-t border-(--ui-border) mt-2">
+                      <span>{{ $t('invoices.total') }}</span>
+                      <span>{{ formatMoney(invoice.total, invoice.currency) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <UEmpty v-else icon="i-lucide-calendar" :title="$t('common.noData')" class="py-8" />
-          </UCard>
-        </template>
 
-        <template #payments>
-          <UCard class="mt-4">
-            <InvoicesPaymentHistory
-              :payments="payments"
-              :invoice="invoice"
-              :can-delete="invoice.status !== 'cancelled'"
-              @deleted="refreshInvoiceData"
-            />
-          </UCard>
-        </template>
-
-        <template #emails>
-          <!-- Scheduled email banner -->
-          <div v-if="invoice.scheduledEmailAt" class="mt-4 rounded-lg border p-3" :class="isEmailBlocked ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-mail" :class="isEmailBlocked ? 'text-amber-500' : 'text-blue-500'" class="shrink-0 size-5" />
-                <span :class="isEmailBlocked ? 'text-amber-800 dark:text-amber-200' : 'text-blue-800 dark:text-blue-200'">
-                  {{ isEmailBlocked
-                    ? $t('invoices.scheduledEmailBlocked', { date: formatDateTime(invoice.scheduledEmailAt) })
-                    : $t('invoices.scheduledEmailAt', { date: formatDateTime(invoice.scheduledEmailAt) })
-                  }}
-                </span>
+              <!-- Notes -->
+              <div v-if="invoice.notes">
+                <h3 class="text-sm font-semibold text-(--ui-text-muted) mb-2 flex items-center gap-1.5"><UIcon name="i-lucide-sticky-note" class="size-3.5" />{{ $t('common.notes') }}</h3>
+                <p class="text-sm bg-(--ui-bg-elevated) rounded-lg px-4 py-3 border border-(--ui-border)">{{ invoice.notes }}</p>
               </div>
-              <UButton
-                icon="i-lucide-x"
-                :color="isEmailBlocked ? 'warning' : 'primary'"
-                variant="subtle"
-                size="sm"
-                @click="cancelScheduledEmail"
-              >
-                {{ $t('invoices.cancelScheduledEmail') }}
+
+            </div>
+          </template>
+
+          <template #xml>
+            <UCard class="mt-4">
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <h3 class="font-semibold">XML</h3>
+                  <UButton
+                    v-if="xmlContent"
+                    :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+                    variant="ghost"
+                    size="sm"
+                    @click="copyXml"
+                  >
+                    {{ copied ? $t('invoices.xmlCopied') : $t('invoices.xmlCopy') }}
+                  </UButton>
+                </div>
+              </template>
+              <pre
+                v-if="xmlContent"
+                class="text-xs overflow-auto max-h-[600px] bg-(--ui-bg-elevated) p-4 rounded font-mono leading-relaxed"
+                v-html="highlightedXml"
+              />
+              <div v-else-if="loadingXml" class="text-center py-8">
+                <UIcon name="i-lucide-loader-2" class="animate-spin h-6 w-6 mx-auto text-(--ui-text-muted)" />
+              </div>
+              <div v-else class="text-center py-8 text-(--ui-text-muted)">{{ $t('invoices.noXml') }}</div>
+            </UCard>
+          </template>
+
+          <template #events>
+            <UCard class="mt-4">
+              <div v-if="events.length" class="space-y-0">
+                <div v-for="(event, idx) in events" :key="event.id" class="flex gap-3">
+                  <!-- Timeline line + dot -->
+                  <div class="flex flex-col items-center">
+                    <div class="size-3 rounded-full shrink-0 mt-1.5" :class="{
+                      'bg-green-500': event.newStatus === 'validated',
+                      'bg-red-500': event.newStatus === 'rejected' || event.newStatus === 'cancelled',
+                      'bg-amber-500': event.newStatus === 'sent_to_provider',
+                      'bg-blue-500': event.newStatus === 'issued' || event.newStatus === 'synced',
+                      'bg-(--ui-text-muted)': !['validated','rejected','cancelled','sent_to_provider','issued','synced'].includes(event.newStatus),
+                    }" />
+                    <div v-if="idx < events.length - 1" class="w-px flex-1 bg-(--ui-border) my-1" />
+                  </div>
+                  <!-- Content -->
+                  <div class="pb-5 min-w-0 flex-1">
+                    <p class="text-sm font-medium">{{ getEventTitle(event) }}</p>
+                    <p class="text-xs text-(--ui-text-muted) mt-0.5">
+                      {{ formatDateTime(event.createdAt) }}
+                      <span v-if="event.createdBy"> · {{ event.createdBy }}</span>
+                    </p>
+                    <!-- Rejection error callout -->
+                    <div
+                      v-if="event.metadata?.action === 'anaf_rejected' && event.metadata?.error"
+                      class="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2"
+                    >
+                      <div class="flex items-start gap-2">
+                        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 text-red-500 mt-0.5" />
+                        <p class="text-xs text-red-700 dark:text-red-300 break-words">{{ event.metadata.error }}</p>
+                      </div>
+                      <button
+                        v-if="invoice?.anafDownloadId"
+                        class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+                        @click="downloadAnafResponse"
+                      >
+                        <UIcon name="i-lucide-download" class="size-3.5" />
+                        {{ $t('invoices.downloadAnafError') }}
+                      </button>
+                    </div>
+                    <!-- Cancellation reason callout -->
+                    <div
+                      v-else-if="event.metadata?.action === 'cancelled' && event.metadata?.reason"
+                      class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2"
+                    >
+                      <UIcon name="i-lucide-message-circle" class="size-4 shrink-0 text-amber-500 mt-0.5" />
+                      <p class="text-xs text-amber-700 dark:text-amber-300">{{ event.metadata.reason }}</p>
+                    </div>
+                    <!-- Scheduled send info -->
+                    <div
+                      v-else-if="event.metadata?.action === 'submitted' && event.metadata?.scheduledSendAt"
+                      class="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2"
+                    >
+                      <UIcon name="i-lucide-clock" class="size-4 shrink-0 text-blue-500 mt-0.5" />
+                      <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(event.metadata.scheduledSendAt) }) }}</p>
+                    </div>
+                    <!-- Auto submit scheduled -->
+                    <div
+                      v-else-if="event.metadata?.action === 'issued' && event.metadata?.scheduledSendAt"
+                      class="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2"
+                    >
+                      <UIcon name="i-lucide-timer" class="size-4 shrink-0 text-blue-500 mt-0.5" />
+                      <p class="text-xs text-blue-700 dark:text-blue-300">{{ $t('invoices.scheduledSendAt', { date: formatDateTime(event.metadata.scheduledSendAt) }) }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <UEmpty v-else icon="i-lucide-calendar" :title="$t('common.noData')" class="py-8" />
+            </UCard>
+          </template>
+
+          <template #payments>
+            <UCard class="mt-4">
+              <InvoicesPaymentHistory
+                :payments="payments"
+                :invoice="invoice"
+                :can-delete="invoice.status !== 'cancelled'"
+                @deleted="refreshInvoiceData"
+              />
+            </UCard>
+          </template>
+
+          <template #emails>
+            <!-- Scheduled email banner -->
+            <div v-if="invoice.scheduledEmailAt" class="mt-4 rounded-lg border p-3" :class="isEmailBlocked ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-sm">
+                  <UIcon name="i-lucide-mail" :class="isEmailBlocked ? 'text-amber-500' : 'text-blue-500'" class="shrink-0 size-5" />
+                  <span :class="isEmailBlocked ? 'text-amber-800 dark:text-amber-200' : 'text-blue-800 dark:text-blue-200'">
+                    {{ isEmailBlocked
+                      ? $t('invoices.scheduledEmailBlocked', { date: formatDateTime(invoice.scheduledEmailAt) })
+                      : $t('invoices.scheduledEmailAt', { date: formatDateTime(invoice.scheduledEmailAt) })
+                    }}
+                  </span>
+                </div>
+                <UButton
+                  icon="i-lucide-x"
+                  :color="isEmailBlocked ? 'warning' : 'primary'"
+                  variant="subtle"
+                  size="sm"
+                  @click="cancelScheduledEmail"
+                >
+                  {{ $t('invoices.cancelScheduledEmail') }}
+                </UButton>
+              </div>
+            </div>
+
+            <UCard class="mt-4">
+              <div v-if="emailLogs.length" class="space-y-4">
+                <div v-for="log in emailLogs" :key="log.id" class="border border-(--ui-border) rounded-lg overflow-hidden">
+                  <!-- Email log header (always visible) -->
+                  <button
+                    type="button"
+                    class="w-full flex items-center justify-between p-4 hover:bg-(--ui-bg-elevated)/50 transition-colors text-left"
+                    @click="toggleEmailExpanded(log.id)"
+                  >
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                      <UIcon name="i-lucide-mail" class="size-5 shrink-0 text-(--ui-text-muted)" />
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-sm font-medium truncate">{{ log.toEmail }}</span>
+                          <UBadge :color="emailStatusColor(log.status)" variant="subtle" size="sm">
+                            {{ $t(`emailStatus.${log.status}`) }}
+                          </UBadge>
+                        </div>
+                        <p class="text-xs text-(--ui-text-muted) mt-0.5 truncate">{{ log.subject }}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 ml-3">
+                      <span class="text-xs text-(--ui-text-muted)">{{ formatDateTime(log.sentAt) }}</span>
+                      <UIcon
+                        :name="expandedEmails.has(log.id) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                        class="size-4 text-(--ui-text-muted)"
+                      />
+                    </div>
+                  </button>
+
+                  <!-- Expanded: event timeline -->
+                  <div v-if="expandedEmails.has(log.id)" class="border-t border-(--ui-border) bg-(--ui-bg-elevated)/30 px-4 py-3">
+                    <!-- From/CC/BCC info -->
+                    <div v-if="log.fromEmail || log.ccEmails?.length || log.bccEmails?.length" class="mb-3 space-y-1 text-xs text-(--ui-text-muted)">
+                      <div v-if="log.fromEmail">
+                        <span class="font-medium">{{ $t('emailAudit.from') }}:</span> {{ log.fromName ? `${log.fromName} <${log.fromEmail}>` : log.fromEmail }}
+                      </div>
+                      <div v-if="log.ccEmails?.length">
+                        <span class="font-medium">CC:</span> {{ log.ccEmails.join(', ') }}
+                      </div>
+                      <div v-if="log.bccEmails?.length">
+                        <span class="font-medium">BCC:</span> {{ log.bccEmails.join(', ') }}
+                      </div>
+                    </div>
+
+                    <!-- Events timeline -->
+                    <div v-if="log.events?.length" class="space-y-0">
+                      <div v-for="(event, idx) in log.events" :key="event.id" class="flex gap-3">
+                        <!-- Timeline line + dot -->
+                        <div class="flex flex-col items-center">
+                          <div class="size-3 rounded-full shrink-0 mt-1" :class="emailEventDotClass(event.eventType)" />
+                          <div v-if="idx < log.events.length - 1" class="w-px flex-1 bg-(--ui-border) my-1" />
+                        </div>
+                        <!-- Content -->
+                        <div class="pb-4 min-w-0 flex-1">
+                          <div class="flex items-center gap-2">
+                            <UIcon :name="`i-lucide-${emailEventIcon(event.eventType)}`" class="size-3.5" :class="emailEventTextClass(event.eventType)" />
+                            <span class="text-sm font-medium">{{ $t(`emailEventType.${event.eventType}`) }}</span>
+                          </div>
+                          <p class="text-xs text-(--ui-text-muted) mt-0.5">
+                            {{ emailEventRelativeTime(log.sentAt, event.timestamp) }}
+                            <span v-if="event.eventDetail"> · {{ event.eventDetail }}</span>
+                          </p>
+                          <!-- Bounce details -->
+                          <div v-if="event.bounceType" class="mt-1.5 flex items-start gap-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2.5 py-1.5">
+                            <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0 text-red-500 mt-0.5" />
+                            <span class="text-xs text-red-700 dark:text-red-300">{{ event.bounceType }}{{ event.bounceSubType ? ` / ${event.bounceSubType}` : '' }}</span>
+                          </div>
+                          <!-- Link clicked -->
+                          <div v-if="event.linkClicked" class="mt-1 text-xs text-(--ui-text-muted) truncate">
+                            <UIcon name="i-lucide-external-link" class="size-3 inline-block mr-1" />{{ event.linkClicked }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else class="text-xs text-(--ui-text-muted) italic">{{ $t('emailAudit.noEvents') }}</div>
+                  </div>
+                </div>
+              </div>
+              <UEmpty v-else icon="i-lucide-mail" :title="$t('invoices.noEmails')" class="py-8" />
+            </UCard>
+          </template>
+
+          <template #attachments>
+            <UCard class="mt-4">
+              <div class="space-y-3">
+                <div v-for="att in invoice.attachments" :key="att.id" class="flex items-center justify-between p-3 rounded border border-(--ui-border)">
+                  <div class="flex items-center gap-3">
+                    <UIcon name="i-lucide-paperclip" class="text-(--ui-text-muted)" />
+                    <div>
+                      <div class="font-medium text-sm">{{ att.filename }}</div>
+                      <div class="text-xs text-(--ui-text-muted)">{{ att.mimeType }} {{ att.size ? `(${formatSize(att.size)})` : '' }}</div>
+                    </div>
+                  </div>
+                  <UButton icon="i-lucide-download" variant="ghost" size="sm" @click="downloadAttachment(att)">
+                    {{ $t('common.download') }}
+                  </UButton>
+                </div>
+                <div v-if="!invoice.attachments?.length" class="text-center py-4 text-(--ui-text-muted)">{{ $t('invoices.noAttachments') }}</div>
+              </div>
+            </UCard>
+          </template>
+        </UTabs>
+
+        <!-- Payment Modal -->
+        <InvoicesPaymentModal
+          v-if="invoice"
+          v-model:open="paymentModalOpen"
+          :invoice="invoice"
+          @recorded="refreshInvoiceData"
+        />
+
+        <!-- Email Modal -->
+        <InvoicesEmailModal
+          v-if="invoice"
+          v-model:open="emailModalOpen"
+          :invoice="invoice"
+          @sent="refreshInvoiceData"
+        />
+
+        <!-- Issue Modal -->
+        <SharedConfirmModal
+          v-model:open="issueModalOpen"
+          :title="$t('invoices.issueConfirmTitle')"
+          :description="issueModalDescription"
+          icon="i-lucide-file-check"
+          :confirm-label="$t('invoices.issue')"
+          :loading="issuing"
+          @confirm="onIssue"
+        />
+
+        <!-- Submit to SPV Modal -->
+        <SharedConfirmModal
+          v-model:open="submitModalOpen"
+          :title="$t('invoices.submitConfirmTitle')"
+          :description="$t('invoices.submitConfirmDescription')"
+          icon="i-lucide-send"
+          color="warning"
+          :confirm-label="$t('invoices.submitToAnaf')"
+          :loading="submitting"
+          @confirm="onSubmit"
+        >
+          <div class="mt-3 flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+            <UIcon name="i-lucide-alert-triangle" class="size-4 shrink-0 text-amber-500 mt-0.5" />
+            <p class="text-sm text-amber-700 dark:text-amber-300">{{ $t('invoices.submitConfirmWarning') }}</p>
+          </div>
+        </SharedConfirmModal>
+
+        <!-- Mark Unpaid Modal -->
+        <SharedConfirmModal
+          v-model:open="markUnpaidModalOpen"
+          :title="$t('invoices.markUnpaidConfirmTitle')"
+          :description="$t('invoices.markUnpaidConfirmDescription')"
+          icon="i-lucide-banknote"
+          color="warning"
+          :confirm-label="$t('invoices.markUnpaid')"
+          :loading="updatingPayment"
+          @confirm="togglePayment"
+        />
+
+        <!-- Cancel Modal -->
+        <UModal v-model:open="cancelModalOpen">
+          <template #header>
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-ban" class="size-5 shrink-0 text-amber-500" />
+              <h3 class="font-semibold">{{ $t('invoices.cancelInvoice') }}</h3>
+            </div>
+          </template>
+          <template #body>
+            <div class="space-y-4">
+              <!-- Invoice summary -->
+              <div class="rounded-lg bg-(--ui-bg-elevated) p-4 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-lg"><span v-if="invoice.invoiceTypeCode" class="text-xs font-bold text-primary tabular-nums mr-1">{{ invoiceTypeCodeShort[invoice.invoiceTypeCode] || '' }}</span>{{ invoice.number }}</span>
+                  <span class="font-semibold text-lg">{{ formatMoney(invoice.total, invoice.currency as any) }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm text-(--ui-text-muted)">
+                  <span>{{ invoice.clientName || invoice.receiverName }}</span>
+                  <span>{{ formatDate(invoice.issueDate) }}</span>
+                </div>
+                <div v-if="Number(invoice.amountPaid) > 0" class="flex items-center justify-between text-sm">
+                  <span class="text-(--ui-text-muted)">{{ $t('invoices.amountPaid') }}</span>
+                  <span class="text-green-600 dark:text-green-400 font-medium">{{ formatMoney(invoice.amountPaid, invoice.currency as any) }}</span>
+                </div>
+                <div v-if="invoice.anafUploadId" class="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 pt-1">
+                  <UIcon name="i-lucide-cloud" class="size-3.5" />
+                  <span>{{ $t('invoices.sentToAnaf') }}</span>
+                </div>
+              </div>
+
+              <!-- Warning -->
+              <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex gap-2.5">
+                <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 text-amber-500 mt-0.5" />
+                <p class="text-sm text-amber-800 dark:text-amber-200">
+                  {{ $t('invoices.cancelWarning') }}
+                </p>
+              </div>
+
+              <!-- Reason -->
+              <UFormField :label="$t('invoices.cancelReason')">
+                <UTextarea v-model="cancelReason" :rows="3" :placeholder="$t('invoices.cancelReasonPlaceholder')" />
+              </UFormField>
+            </div>
+          </template>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" @click="cancelModalOpen = false">{{ $t('common.cancel') }}</UButton>
+              <UButton color="warning" :loading="cancelling" @click="onCancel">
+                {{ $t('invoices.cancelInvoice') }}
               </UButton>
             </div>
-          </div>
+          </template>
+        </UModal>
 
-          <UCard class="mt-4">
-            <div v-if="emailLogs.length" class="space-y-4">
-              <div v-for="log in emailLogs" :key="log.id" class="border border-(--ui-border) rounded-lg overflow-hidden">
-                <!-- Email log header (always visible) -->
-                <button
-                  type="button"
-                  class="w-full flex items-center justify-between p-4 hover:bg-(--ui-bg-elevated)/50 transition-colors text-left"
-                  @click="toggleEmailExpanded(log.id)"
-                >
-                  <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <UIcon name="i-lucide-mail" class="size-5 shrink-0 text-(--ui-text-muted)" />
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <span class="text-sm font-medium truncate">{{ log.toEmail }}</span>
-                        <UBadge :color="emailStatusColor(log.status)" variant="subtle" size="sm">
-                          {{ $t(`emailStatus.${log.status}`) }}
-                        </UBadge>
-                      </div>
-                      <p class="text-xs text-(--ui-text-muted) mt-0.5 truncate">{{ log.subject }}</p>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2 shrink-0 ml-3">
-                    <span class="text-xs text-(--ui-text-muted)">{{ formatDateTime(log.sentAt) }}</span>
-                    <UIcon
-                      :name="expandedEmails.has(log.id) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                      class="size-4 text-(--ui-text-muted)"
-                    />
-                  </div>
-                </button>
+        <!-- Delete Modal -->
+        <SharedConfirmModal
+          v-model:open="deleteModalOpen"
+          :title="$t('invoices.deleteInvoice')"
+          :description="$t('invoices.deleteConfirmDescription')"
+          icon="i-lucide-trash-2"
+          color="error"
+          :confirm-label="$t('common.delete')"
+          :loading="deleting"
+          @confirm="onDelete"
+        />
 
-                <!-- Expanded: event timeline -->
-                <div v-if="expandedEmails.has(log.id)" class="border-t border-(--ui-border) bg-(--ui-bg-elevated)/30 px-4 py-3">
-                  <!-- From/CC/BCC info -->
-                  <div v-if="log.fromEmail || log.ccEmails?.length || log.bccEmails?.length" class="mb-3 space-y-1 text-xs text-(--ui-text-muted)">
-                    <div v-if="log.fromEmail">
-                      <span class="font-medium">{{ $t('emailAudit.from') }}:</span> {{ log.fromName ? `${log.fromName} <${log.fromEmail}>` : log.fromEmail }}
-                    </div>
-                    <div v-if="log.ccEmails?.length">
-                      <span class="font-medium">CC:</span> {{ log.ccEmails.join(', ') }}
-                    </div>
-                    <div v-if="log.bccEmails?.length">
-                      <span class="font-medium">BCC:</span> {{ log.bccEmails.join(', ') }}
-                    </div>
-                  </div>
-
-                  <!-- Events timeline -->
-                  <div v-if="log.events?.length" class="space-y-0">
-                    <div v-for="(event, idx) in log.events" :key="event.id" class="flex gap-3">
-                      <!-- Timeline line + dot -->
-                      <div class="flex flex-col items-center">
-                        <div class="size-3 rounded-full shrink-0 mt-1" :class="emailEventDotClass(event.eventType)" />
-                        <div v-if="idx < log.events.length - 1" class="w-px flex-1 bg-(--ui-border) my-1" />
-                      </div>
-                      <!-- Content -->
-                      <div class="pb-4 min-w-0 flex-1">
-                        <div class="flex items-center gap-2">
-                          <UIcon :name="`i-lucide-${emailEventIcon(event.eventType)}`" class="size-3.5" :class="emailEventTextClass(event.eventType)" />
-                          <span class="text-sm font-medium">{{ $t(`emailEventType.${event.eventType}`) }}</span>
-                        </div>
-                        <p class="text-xs text-(--ui-text-muted) mt-0.5">
-                          {{ emailEventRelativeTime(log.sentAt, event.timestamp) }}
-                          <span v-if="event.eventDetail"> · {{ event.eventDetail }}</span>
-                        </p>
-                        <!-- Bounce details -->
-                        <div v-if="event.bounceType" class="mt-1.5 flex items-start gap-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2.5 py-1.5">
-                          <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0 text-red-500 mt-0.5" />
-                          <span class="text-xs text-red-700 dark:text-red-300">{{ event.bounceType }}{{ event.bounceSubType ? ` / ${event.bounceSubType}` : '' }}</span>
-                        </div>
-                        <!-- Link clicked -->
-                        <div v-if="event.linkClicked" class="mt-1 text-xs text-(--ui-text-muted) truncate">
-                          <UIcon name="i-lucide-external-link" class="size-3 inline-block mr-1" />{{ event.linkClicked }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="text-xs text-(--ui-text-muted) italic">{{ $t('emailAudit.noEvents') }}</div>
+        <!-- PDF Preview Modal -->
+        <UModal
+          v-model:open="pdfModalOpen"
+          fullscreen
+          @after:leave="cleanupPdfPreview"
+        >
+          <template #content>
+            <div class="flex flex-col h-screen">
+              <div class="flex items-center justify-between p-4 border-b border-(--ui-border)">
+                <h3 class="font-semibold">{{ $t('invoices.viewPdf') }}</h3>
+                <div class="flex items-center gap-2">
+                  <UButton icon="i-lucide-download" variant="ghost" size="sm" @click="downloadPdf">
+                    {{ $t('invoices.downloadPdf') }}
+                  </UButton>
+                  <UButton icon="i-lucide-x" variant="ghost" size="sm" @click="pdfModalOpen = false" />
                 </div>
               </div>
+              <iframe
+                v-if="pdfPreviewUrl"
+                :src="pdfPreviewUrl"
+                class="flex-1 w-full border-0"
+              />
             </div>
-            <UEmpty v-else icon="i-lucide-mail" :title="$t('invoices.noEmails')" class="py-8" />
-          </UCard>
-        </template>
+          </template>
+        </UModal>
 
-        <template #attachments>
-          <UCard class="mt-4">
-            <div class="space-y-3">
-              <div v-for="att in invoice.attachments" :key="att.id" class="flex items-center justify-between p-3 rounded border border-(--ui-border)">
-                <div class="flex items-center gap-3">
-                  <UIcon name="i-lucide-paperclip" class="text-(--ui-text-muted)" />
-                  <div>
-                    <div class="font-medium text-sm">{{ att.filename }}</div>
-                    <div class="text-xs text-(--ui-text-muted)">{{ att.mimeType }} {{ att.size ? `(${formatSize(att.size)})` : '' }}</div>
-                  </div>
-                </div>
-                <UButton icon="i-lucide-download" variant="ghost" size="sm" @click="downloadAttachment(att)">
-                  {{ $t('common.download') }}
-                </UButton>
-              </div>
-              <div v-if="!invoice.attachments?.length" class="text-center py-4 text-(--ui-text-muted)">{{ $t('invoices.noAttachments') }}</div>
-            </div>
-          </UCard>
-        </template>
-      </UTabs>
-
-      <!-- Payment Modal -->
-      <InvoicesPaymentModal
-        v-if="invoice"
-        v-model:open="paymentModalOpen"
-        :invoice="invoice"
-        @recorded="refreshInvoiceData"
-      />
-
-      <!-- Email Modal -->
-      <InvoicesEmailModal
-        v-if="invoice"
-        v-model:open="emailModalOpen"
-        :invoice="invoice"
-        @sent="refreshInvoiceData"
-      />
-      <!-- Issue Modal -->
-      <SharedConfirmModal
-        v-model:open="issueModalOpen"
-        :title="$t('invoices.issueConfirmTitle')"
-        :description="issueModalDescription"
-        icon="i-lucide-file-check"
-        :confirm-label="$t('invoices.issue')"
-        :loading="issuing"
-        @confirm="onIssue"
-      />
-
-      <!-- Submit to SPV Modal -->
-      <SharedConfirmModal
-        v-model:open="submitModalOpen"
-        :title="$t('invoices.submitConfirmTitle')"
-        :description="$t('invoices.submitConfirmDescription')"
-        icon="i-lucide-send"
-        color="warning"
-        :confirm-label="$t('invoices.submitToAnaf')"
-        :loading="submitting"
-        @confirm="onSubmit"
-      >
-        <div class="mt-3 flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
-          <UIcon name="i-lucide-alert-triangle" class="size-4 shrink-0 text-amber-500 mt-0.5" />
-          <p class="text-sm text-amber-700 dark:text-amber-300">{{ $t('invoices.submitConfirmWarning') }}</p>
-        </div>
-      </SharedConfirmModal>
-
-      <!-- Mark Unpaid Modal -->
-      <SharedConfirmModal
-        v-model:open="markUnpaidModalOpen"
-        :title="$t('invoices.markUnpaidConfirmTitle')"
-        :description="$t('invoices.markUnpaidConfirmDescription')"
-        icon="i-lucide-banknote"
-        color="warning"
-        :confirm-label="$t('invoices.markUnpaid')"
-        :loading="updatingPayment"
-        @confirm="togglePayment"
-      />
-
-      <!-- Cancel Modal -->
-      <UModal v-model:open="cancelModalOpen">
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-ban" class="size-5 shrink-0 text-amber-500" />
-            <h3 class="font-semibold">{{ $t('invoices.cancelInvoice') }}</h3>
-          </div>
-        </template>
-        <template #body>
-          <div class="space-y-4">
-            <!-- Invoice summary -->
-            <div class="rounded-lg bg-(--ui-bg-elevated) p-4 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="font-semibold text-lg"><span v-if="invoice.invoiceTypeCode" class="text-xs font-bold text-primary tabular-nums mr-1">{{ invoiceTypeCodeShort[invoice.invoiceTypeCode] || '' }}</span>{{ invoice.number }}</span>
-                <span class="font-semibold text-lg">{{ formatMoney(invoice.total, invoice.currency as any) }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm text-(--ui-text-muted)">
-                <span>{{ invoice.clientName || invoice.receiverName }}</span>
-                <span>{{ formatDate(invoice.issueDate) }}</span>
-              </div>
-              <div v-if="Number(invoice.amountPaid) > 0" class="flex items-center justify-between text-sm">
-                <span class="text-(--ui-text-muted)">{{ $t('invoices.amountPaid') }}</span>
-                <span class="text-green-600 dark:text-green-400 font-medium">{{ formatMoney(invoice.amountPaid, invoice.currency as any) }}</span>
-              </div>
-              <div v-if="invoice.anafUploadId" class="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 pt-1">
-                <UIcon name="i-lucide-cloud" class="size-3.5" />
-                <span>{{ $t('invoices.sentToAnaf') }}</span>
-              </div>
-            </div>
-
-            <!-- Warning -->
-            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex gap-2.5">
-              <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 text-amber-500 mt-0.5" />
-              <p class="text-sm text-amber-800 dark:text-amber-200">
-                {{ $t('invoices.cancelWarning') }}
-              </p>
-            </div>
-
-            <!-- Reason -->
-            <UFormField :label="$t('invoices.cancelReason')">
-              <UTextarea v-model="cancelReason" :rows="3" :placeholder="$t('invoices.cancelReasonPlaceholder')" />
-            </UFormField>
-          </div>
-        </template>
-        <template #footer>
-          <div class="flex justify-end gap-2">
-            <UButton variant="ghost" @click="cancelModalOpen = false">{{ $t('common.cancel') }}</UButton>
-            <UButton color="warning" :loading="cancelling" @click="onCancel">
-              {{ $t('invoices.cancelInvoice') }}
-            </UButton>
-          </div>
-        </template>
-      </UModal>
-
-      <!-- Delete Modal -->
-      <SharedConfirmModal
-        v-model:open="deleteModalOpen"
-        :title="$t('invoices.deleteInvoice')"
-        :description="$t('invoices.deleteConfirmDescription')"
-        icon="i-lucide-trash-2"
-        color="error"
-        :confirm-label="$t('common.delete')"
-        :loading="deleting"
-        @confirm="onDelete"
-      />
-
-      <!-- PDF Preview Modal -->
-      <UModal
-        v-model:open="pdfModalOpen"
-        fullscreen
-        @after:leave="cleanupPdfPreview"
-      >
-        <template #content>
-          <div class="flex flex-col h-screen">
-            <div class="flex items-center justify-between p-4 border-b border-(--ui-border)">
-              <h3 class="font-semibold">{{ $t('invoices.viewPdf') }}</h3>
-              <div class="flex items-center gap-2">
-                <UButton icon="i-lucide-download" variant="ghost" size="sm" @click="downloadPdf">
-                  {{ $t('invoices.downloadPdf') }}
-                </UButton>
-                <UButton icon="i-lucide-x" variant="ghost" size="sm" @click="pdfModalOpen = false" />
-              </div>
-            </div>
-            <iframe
-              v-if="pdfPreviewUrl"
-              :src="pdfPreviewUrl"
-              class="flex-1 w-full border-0"
-            />
-          </div>
-        </template>
-      </UModal>
-
-      <!-- Manual Copy Link Modal -->
-      <UModal v-model:open="manualCopyModalOpen">
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-link" class="size-5 shrink-0 text-(--ui-primary)" />
-            <h3 class="font-semibold">{{ $t('invoices.shareLinkReady') }}</h3>
-          </div>
-        </template>
-        <template #body>
-          <div class="space-y-3">
-            <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.shareLinkManualCopy') }}</p>
+        <!-- Manual Copy Link Modal -->
+        <UModal v-model:open="manualCopyModalOpen">
+          <template #header>
             <div class="flex items-center gap-2">
-              <code class="flex-1 rounded bg-(--ui-bg-elevated) px-3 py-2 font-mono text-xs break-all select-all">{{ manualCopyUrl }}</code>
-              <UButton icon="i-lucide-copy" variant="ghost" size="sm" @click="copyToClipboard(manualCopyUrl).catch(() => {})" />
+              <UIcon name="i-lucide-link" class="size-5 shrink-0 text-(--ui-primary)" />
+              <h3 class="font-semibold">{{ $t('invoices.shareLinkReady') }}</h3>
             </div>
-          </div>
-        </template>
-        <template #footer>
-          <div class="flex justify-end">
-            <UButton @click="manualCopyModalOpen = false">{{ $t('common.close') }}</UButton>
-          </div>
-        </template>
-      </UModal>
+          </template>
+          <template #body>
+            <div class="space-y-3">
+              <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.shareLinkManualCopy') }}</p>
+              <div class="flex items-center gap-2">
+                <code class="flex-1 rounded bg-(--ui-bg-elevated) px-3 py-2 font-mono text-xs break-all select-all">{{ manualCopyUrl }}</code>
+                <UButton icon="i-lucide-copy" variant="ghost" size="sm" @click="copyToClipboard(manualCopyUrl).catch(() => {})" />
+              </div>
+            </div>
+          </template>
+          <template #footer>
+            <div class="flex justify-end">
+              <UButton @click="manualCopyModalOpen = false">{{ $t('common.close') }}</UButton>
+            </div>
+          </template>
+        </UModal>
 
-      <!-- Edit Invoice Slideover -->
-      <USlideover
-        v-model:open="editSlideoverOpen"
-        :ui="{ content: 'sm:max-w-2xl' }"
-      >
-        <template #header>
-          <span class="text-lg font-semibold">{{ $t('invoices.editInvoice') }}</span>
-        </template>
-        <template #body>
-          <InvoicesInvoiceForm
-            v-if="editSlideoverOpen"
-            :invoice="invoice"
-            @saved="onEditSaved"
-            @cancel="editSlideoverOpen = false"
-          />
-        </template>
-      </USlideover>
+        <!-- Edit Invoice Slideover -->
+        <USlideover
+          v-model:open="editSlideoverOpen"
+          :ui="{ content: 'sm:max-w-2xl' }"
+        >
+          <template #header>
+            <span class="text-lg font-semibold">{{ $t('invoices.editInvoice') }}</span>
+          </template>
+          <template #body>
+            <InvoicesInvoiceForm
+              v-if="editSlideoverOpen"
+              :invoice="invoice"
+              @saved="onEditSaved"
+              @cancel="editSlideoverOpen = false"
+            />
+          </template>
+        </USlideover>
 
-      <!-- Refund Invoice Slideover -->
-      <USlideover
-        v-model:open="refundSlideoverOpen"
-        :ui="{ content: 'sm:max-w-2xl' }"
-      >
-        <template #header>
-          <span class="text-lg font-semibold">{{ $t('invoices.createRefund') }}</span>
-        </template>
-        <template #body>
-          <InvoicesInvoiceForm
-            v-if="refundSlideoverOpen"
-            :refund-of="invoice.id"
-            @saved="onRefundSaved"
-            @cancel="refundSlideoverOpen = false"
-          />
-        </template>
-      </USlideover>
+        <!-- Refund Invoice Slideover -->
+        <USlideover
+          v-model:open="refundSlideoverOpen"
+          :ui="{ content: 'sm:max-w-2xl' }"
+        >
+          <template #header>
+            <span class="text-lg font-semibold">{{ $t('invoices.createRefund') }}</span>
+          </template>
+          <template #body>
+            <InvoicesInvoiceForm
+              v-if="refundSlideoverOpen"
+              :refund-of="invoice.id"
+              @saved="onRefundSaved"
+              @cancel="refundSlideoverOpen = false"
+            />
+          </template>
+        </USlideover>
 
-      <!-- Copy Invoice Slideover -->
-      <USlideover
-        v-model:open="copySlideoverOpen"
-        :ui="{ content: 'sm:max-w-2xl' }"
-      >
-        <template #header>
-          <span class="text-lg font-semibold">{{ $t('invoices.copyInvoice') }}</span>
-        </template>
-        <template #body>
-          <InvoicesInvoiceForm
-            v-if="copySlideoverOpen"
-            :copy-of="invoice.id"
-            @saved="onCopySaved"
-            @cancel="copySlideoverOpen = false"
-          />
-        </template>
-      </USlideover>
-    </div>
-    <div v-else class="text-center py-20">
-      <USkeleton class="h-8 w-64 mx-auto mb-4" />
-      <USkeleton class="h-4 w-48 mx-auto" />
-    </div>
+        <!-- Copy Invoice Slideover -->
+        <USlideover
+          v-model:open="copySlideoverOpen"
+          :ui="{ content: 'sm:max-w-2xl' }"
+        >
+          <template #header>
+            <span class="text-lg font-semibold">{{ $t('invoices.copyInvoice') }}</span>
+          </template>
+          <template #body>
+            <InvoicesInvoiceForm
+              v-if="copySlideoverOpen"
+              :copy-of="invoice.id"
+              @saved="onCopySaved"
+              @cancel="copySlideoverOpen = false"
+            />
+          </template>
+        </USlideover>
+
+      </div>
+
+      <!-- Loading skeleton -->
+      <div v-else class="space-y-6">
+        <div class="flex items-center gap-3">
+          <USkeleton class="size-8 rounded-lg shrink-0" />
+          <USkeleton class="h-8 w-64" />
+          <USkeleton class="h-6 w-20 rounded-full" />
+          <USkeleton class="h-6 w-16 rounded-full" />
+        </div>
+        <div class="flex gap-2">
+          <USkeleton class="h-9 w-32 rounded-lg" />
+          <USkeleton class="h-9 w-28 rounded-lg" />
+          <USkeleton class="h-9 w-24 rounded-lg" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <USkeleton class="h-24 rounded-lg" />
+          <USkeleton class="h-24 rounded-lg" />
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <USkeleton v-for="i in 8" :key="i" class="h-10 rounded" />
+        </div>
+        <USkeleton class="h-48 rounded-lg" />
+      </div>
+
     </template>
   </UDashboardPanel>
 </template>
@@ -923,6 +1018,19 @@ const { copy: copyToClipboard } = useClipboard()
 const validating = ref(false)
 const validationResult = ref<any>(null)
 const autoValidated = ref(false)
+const markingAsPaid = ref(false)
+
+// Adjacent invoices for prev/next navigation
+const adjacentInvoices = computed(() => {
+  const items = invoiceStore.items
+  const currentId = route.params.uuid as string
+  const idx = items.findIndex(i => i.id === currentId)
+  if (idx === -1) return { prev: null, next: null }
+  return {
+    prev: idx > 0 ? items[idx - 1] : null,
+    next: idx < items.length - 1 ? items[idx + 1] : null,
+  }
+})
 
 // Scheduled email is blocked when invoice was submitted to ANAF but not yet validated
 const isEmailBlocked = computed(() => {
@@ -1297,6 +1405,22 @@ async function togglePayment() {
   updatingPayment.value = false
 }
 
+async function quickMarkAsPaid() {
+  if (!invoice.value) return
+  markingAsPaid.value = true
+  const result = await invoiceStore.recordPayment(route.params.uuid as string, {
+    amount: invoice.value.balance,
+    paymentMethod: 'bank_transfer',
+  })
+  if (result) {
+    await refreshInvoiceData()
+    useToast().add({ title: $t('invoices.paymentUpdated'), color: 'success', icon: 'i-lucide-check' })
+  } else {
+    useToast().add({ title: invoiceStore.error || $t('invoices.paymentError'), color: 'error' })
+  }
+  markingAsPaid.value = false
+}
+
 async function autoValidate() {
   validating.value = true
   validationResult.value = null
@@ -1644,4 +1768,25 @@ onMounted(async () => {
 onUnmounted(() => {
   invoiceRealtime.stop()
 })
+
+// Keyboard arrow navigation between invoices
+function onKeydown(e: KeyboardEvent) {
+  // Skip if user is typing in an input/textarea or a modal is open
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (editSlideoverOpen.value || refundSlideoverOpen.value || copySlideoverOpen.value) return
+  if (cancelModalOpen.value || deleteModalOpen.value || issueModalOpen.value || submitModalOpen.value || paymentModalOpen.value || emailModalOpen.value || markUnpaidModalOpen.value) return
+
+  const { prev, next } = adjacentInvoices.value
+  if (e.key === 'ArrowLeft' && prev) {
+    e.preventDefault()
+    navigateTo(`/invoices/${prev.id}`)
+  } else if (e.key === 'ArrowRight' && next) {
+    e.preventDefault()
+    navigateTo(`/invoices/${next.id}`)
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
