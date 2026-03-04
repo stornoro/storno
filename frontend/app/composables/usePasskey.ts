@@ -125,7 +125,7 @@ export function usePasskey() {
       }
 
       // 5. Verify with server (public endpoint)
-      const result = await fetchFn<{ token: string }>(
+      const result = await fetchFn<{ token: string; refresh_token?: string }>(
         '/auth/passkey/login',
         {
           baseURL: apiBase,
@@ -134,8 +134,11 @@ export function usePasskey() {
         },
       )
 
-      // 6. Store token
+      // 6. Store token + refresh token
       authStore.token = result.token
+      if (result.refresh_token) {
+        authStore.refreshToken = result.refresh_token
+      }
       await authStore.fetchUser()
 
       return true

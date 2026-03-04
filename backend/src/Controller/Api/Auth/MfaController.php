@@ -11,6 +11,7 @@ use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -191,10 +192,26 @@ class MfaController extends AbstractController
         $user->setLastConnectedAt(new \DateTimeImmutable());
         $this->em->flush();
 
-        return $this->json([
+        $response = $this->json([
             'token' => $jwt,
             'refresh_token' => $refreshToken->getRefreshToken(),
         ]);
+
+        $response->headers->setCookie(
+            new Cookie(
+                $this->getParameter('app.jwt_refresh_token_cookie_name'),
+                $refreshToken->getRefreshToken(),
+                (new \DateTime())->modify('+30 days'),
+                '/',
+                null,
+                true,
+                true,
+                false,
+                Cookie::SAMESITE_NONE
+            )
+        );
+
+        return $response;
     }
 
     // ── Authenticated: MFA status ────────────────────────────────────────
