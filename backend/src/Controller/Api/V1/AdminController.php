@@ -14,6 +14,7 @@ use App\Repository\OrganizationRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminMetricsService;
 use App\Service\LicenseManager;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -510,6 +511,116 @@ class AdminController extends AbstractController
         return $this->json([
             'token' => $token,
             'user' => $this->serializeUser($targetUser),
+        ]);
+    }
+
+    #[Route('/telemetry/stats', methods: ['GET'])]
+    public function telemetryStats(Request $request, Connection $connection): JsonResponse
+    {
+        $dateFrom = $request->query->get('dateFrom');
+        $dateTo = $request->query->get('dateTo');
+
+        $totalEvents = (int) $connection->fetchOne('SELECT COUNT(*) FROM telemetry_event');
+
+        $today = (new \DateTimeImmutable())->format('Y-m-d');
+        $todayEvents = (int) $connection->fetchOne(
+            'SELECT COUNT(*) FROM telemetry_event WHERE created_at >= :today',
+            ['today' => $today . ' 00:00:00']
+        );
+
+        $weekAgo = (new \DateTimeImmutable('-7 days'))->format('Y-m-d');
+        $weekEvents = (int) $connection->fetchOne(
+            'SELECT COUNT(*) FROM telemetry_event WHERE created_at >= :weekAgo',
+            ['weekAgo' => $weekAgo . ' 00:00:00']
+        );
+
+        $thirtyDaysAgo = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+        $uniqueUsers = (int) $connection->fetchOne(
+            'SELECT COUNT(DISTINCT user_id) FROM telemetry_event WHERE created_at >= :since',
+            ['since' => $thirtyDaysAgo . ' 00:00:00']
+        );
+
+        $topEventsFrom = $dateFrom ?? $thirtyDaysAgo;
+        $topEventsTo = $dateTo ?? (new \DateTimeImmutable('+1 day'))->format('Y-m-d');
+
+        $topEvents = $connection->fetchAllAssociative(
+            'SELECT event, COUNT(*) AS count FROM telemetry_event WHERE created_at >= :from AND created_at < :to GROUP BY event ORDER BY count DESC LIMIT 10',
+            ['from' => $topEventsFrom . ' 00:00:00', 'to' => $topEventsTo . ' 00:00:00']
+        );
+        $topEvents = array_map(fn (array $row) => ['event' => $row['event'], 'count' => (int) $row['count']], $topEvents);
+
+        $platformBreakdown = $connection->fetchAllAssociative(
+            'SELECT platform, COUNT(*) AS count FROM telemetry_event WHERE created_at >= :from AND created_at < :to GROUP BY platform ORDER BY count DESC',
+            ['from' => $topEventsFrom . ' 00:00:00', 'to' => $topEventsTo . ' 00:00:00']
+        );
+        $platformBreakdown = array_map(fn (array $row) => ['platform' => $row['platform'], 'count' => (int) $row['count']], $platformBreakdown);
+
+        $dailyTrend = $connection->fetchAllAssociative(
+            'SELECT DATE(created_at) AS date, COUNT(*) AS count FROM telemetry_event WHERE created_at >= :since GROUP BY DATE(created_at) ORDER BY date ASC',
+            ['since' => $thirtyDaysAgo . ' 00:00:00']
+        );
+        $dailyTrend = array_map(fn (array $row) => ['date' => $row['date'], 'count' => (int) $row['count']], $dailyTrend);
+
+        return $this->json([
+            'totalEvents' => $totalEvents,
+            'todayEvents' => $todayEvents,
+            'weekEvents' => $weekEvents,
+            'uniqueUsers' => $uniqueUsers,
+            'topEvents' => $topEvents,
+            'platformBreakdown' => $platformBreakdown,
+            'dailyTrend' => $dailyTrend,
+        ]);
+    }
+
+    #[Route('/telemetry/events', methods: ['GET'])]
+    public function telemetryEvents(Request $request, Connection $connection): JsonResponse
+    {
+        $page = $request->query->getInt('page', 1);
+        $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
+        $event = $request->query->get('event');
+        $platform = $request->query->get('platform');
+
+        $where = [];
+        $params = [];
+
+        if ($event) {
+            $where[] = 'event = :event';
+            $params['event'] = $event;
+        }
+        if ($platform) {
+            $where[] = 'platform = :platform';
+            $params['platform'] = $platform;
+        }
+
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $total = (int) $connection->fetchOne(
+            "SELECT COUNT(*) FROM telemetry_event {$whereClause}",
+            $params
+        );
+
+        $offset = ($page - 1) * $limit;
+        $rows = $connection->fetchAllAssociative(
+            "SELECT id, user_id, company_id, event, properties, platform, app_version, created_at FROM telemetry_event {$whereClause} ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}",
+            $params
+        );
+
+        $items = array_map(fn (array $row) => [
+            'id' => $row['id'],
+            'userId' => $row['user_id'],
+            'companyId' => $row['company_id'],
+            'event' => $row['event'],
+            'properties' => json_decode($row['properties'], true),
+            'platform' => $row['platform'],
+            'appVersion' => $row['app_version'],
+            'createdAt' => $row['created_at'],
+        ], $rows);
+
+        return $this->json([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'limit' => $limit,
         ]);
     }
 
