@@ -62,6 +62,7 @@ class DocumentPdfService
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly LoggerInterface $logger,
+        private readonly string $projectDir,
     ) {}
 
     public function generateInvoicePdf(Invoice $invoice): string
@@ -228,6 +229,7 @@ class DocumentPdfService
 
         $context['primaryColor'] = $config->getPrimaryColor() ?? $defaultColor;
         $context['fontFamily'] = $config->getFontFamily() ?? 'DejaVu Sans';
+        $context['fontsDir'] = $this->projectDir . '/assets/fonts';
         $context['showLogo'] = $config->isShowLogo();
         $context['showBankInfo'] = $config->isShowBankInfo();
         $context['customCss'] = $config->getCustomCss();
@@ -257,6 +259,7 @@ class DocumentPdfService
             'encoding' => 'UTF-8',
             'print-media-type' => true,
             'no-outline' => true,
+            'enable-local-file-access' => true,
         ]);
     }
 
