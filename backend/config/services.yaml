@@ -345,6 +345,10 @@ services:
         arguments:
             $inner: '@.inner'
 
+    App\Service\PushRelayService:
+        arguments:
+            $pushRelayUrl: '%env(default::PUSH_RELAY_URL)%'
+
     App\MessageHandler\DispatchWebhookHandler:
         arguments:
             $webhookRelayUrl: '%env(default::WEBHOOK_RELAY_URL)%'
