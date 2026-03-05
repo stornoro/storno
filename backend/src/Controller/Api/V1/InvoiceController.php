@@ -1034,10 +1034,12 @@ class InvoiceController extends AbstractController
 
         $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
 
-        $signature = $invoice->getSignatureContent();
-        if (!$signature) {
+        $sigPath = $invoice->getSignaturePath();
+        if (!$sigPath || !$this->defaultStorage->fileExists($sigPath)) {
             return $this->json(['error' => 'Signature not available.'], Response::HTTP_NOT_FOUND);
         }
+
+        $signature = $this->defaultStorage->read($sigPath);
 
         return new Response($signature, 200, [
             'Content-Type' => 'application/xml',
@@ -1148,7 +1150,10 @@ class InvoiceController extends AbstractController
         }
 
         $xml = $this->xmlResolver->resolve($invoice);
-        $signature = $invoice->getSignatureContent();
+        $sigPath = $invoice->getSignaturePath();
+        $signature = ($sigPath && $this->defaultStorage->fileExists($sigPath))
+            ? $this->defaultStorage->read($sigPath)
+            : null;
 
         if (!$xml || !$signature) {
             return $this->json([

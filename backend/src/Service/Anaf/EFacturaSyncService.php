@@ -466,7 +466,6 @@ class EFacturaSyncService
         $invoice->setSubtotal($parsed->subtotal);
         $invoice->setVatTotal($parsed->vatTotal);
         $invoice->setTotal($parsed->total);
-        $invoice->setSignatureContent($signatureContent);
         $invoice->setSyncedAt(new \DateTimeImmutable());
 
         if ($parsed->issueDate) {
@@ -648,7 +647,6 @@ class EFacturaSyncService
     {
         $invoice->setAnafMessageId($messageId);
         $invoice->setAnafDownloadId($messageId);
-        $invoice->setSignatureContent($signatureContent);
         $invoice->setSyncedAt(new \DateTimeImmutable());
 
         // Set status to synced if still in issued/sent_to_provider state
