@@ -85,6 +85,11 @@ class SubmitScheduledInvoicesCommand extends Command
                 continue;
             }
 
+            // Clear scheduledSendAt BEFORE dispatching to prevent duplicate submissions
+            // if the scheduler runs again before the handler processes the message
+            $invoice->setScheduledSendAt(null);
+            $this->entityManager->flush();
+
             $this->messageBus->dispatch(new SubmitEInvoiceMessage(
                 invoiceId: $invoiceId,
                 provider: $provider->value,
@@ -95,15 +100,9 @@ class SubmitScheduledInvoicesCommand extends Command
                 'invoiceId' => $invoiceId,
                 'number' => $invoice->getNumber(),
                 'provider' => $provider->value,
-                'scheduledSendAt' => $invoice->getScheduledSendAt()?->format('c'),
             ]);
 
             $io->text(sprintf('  Dispatched: %s (number: %s, provider: %s)', $invoiceId, $invoice->getNumber(), $provider->value));
-
-            // Flush in batches of 50
-            if ($dispatched % 50 === 0) {
-                $this->entityManager->clear();
-            }
         }
 
         if ($dryRun) {
