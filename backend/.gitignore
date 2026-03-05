@@ -22,3 +22,4 @@
 **.DS_Store
 *.pem
 *.p12
+firebase-service-account.json
