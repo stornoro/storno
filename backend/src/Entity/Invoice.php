@@ -79,9 +79,6 @@ class Invoice
     #[Groups(['invoice:list', 'invoice:detail'])]
     private ?string $receiverName = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $signatureContent = null;
-
     #[ORM\Column(nullable: true)]
     #[Groups(['invoice:detail'])]
     private ?bool $signatureValid = null;
@@ -890,18 +887,6 @@ class Invoice
     public function getClientName(): ?string
     {
         return $this->client?->getName();
-    }
-
-    public function getSignatureContent(): ?string
-    {
-        return $this->signatureContent;
-    }
-
-    public function setSignatureContent(?string $signatureContent): static
-    {
-        $this->signatureContent = $signatureContent;
-
-        return $this;
     }
 
     public function getSignatureValid(): ?bool

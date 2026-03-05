@@ -37,9 +37,9 @@ class ZipExportService
             }
 
             // Add signature
-            $signature = $invoice->getSignatureContent();
-            if ($signature) {
-                $zip->addFromString("{$prefix}/{$prefix}.p7s", $signature);
+            $sigPath = $invoice->getSignaturePath();
+            if ($sigPath && $this->defaultStorage->fileExists($sigPath)) {
+                $zip->addFromString("{$prefix}/{$prefix}.p7s", $this->defaultStorage->read($sigPath));
             }
 
             // Add PDF (generate from XML if not cached)
