@@ -33,7 +33,7 @@ class Invoice
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    #[Groups(['invoice:list', 'invoice:detail'])]
+    #[Groups(['invoice:list', 'invoice:detail', 'efactura_message:list'])]
     private ?Uuid $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'invoices', cascade: ['persist'])]
@@ -91,7 +91,7 @@ class Invoice
     private ?\DateTimeImmutable $syncedAt = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['invoice:list', 'invoice:detail'])]
+    #[Groups(['invoice:list', 'invoice:detail', 'efactura_message:list'])]
     private ?string $number = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 2)]
@@ -156,6 +156,7 @@ class Invoice
     private ?string $anafStatus = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['invoice:list', 'invoice:detail'])]
     private ?string $anafErrorMessage = null;
 
     // File paths

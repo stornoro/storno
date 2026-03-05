@@ -407,7 +407,7 @@ class InvoiceRepository extends ServiceEntityRepository
      */
     public function findScheduledForSubmission(\DateTimeImmutable $now, int $limit = 100): array
     {
-        // Exclude invoices that already have a pending or submitted e-invoice submission
+        // Exclude invoices that already have a non-failed e-invoice submission
         $subQuery = $this->getEntityManager()->createQueryBuilder()
             ->select('1')
             ->from(EInvoiceSubmission::class, 's')
@@ -418,6 +418,7 @@ class InvoiceRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('i')
             ->join('i.company', 'c')
             ->where('i.status = :status')
+            ->andWhere('i.scheduledSendAt IS NOT NULL')
             ->andWhere('i.scheduledSendAt <= :now')
             ->andWhere('i.direction = :direction')
             ->andWhere('i.deletedAt IS NULL')
@@ -426,7 +427,7 @@ class InvoiceRepository extends ServiceEntityRepository
             ->setParameter('status', DocumentStatus::ISSUED)
             ->setParameter('now', $now)
             ->setParameter('direction', InvoiceDirection::OUTGOING)
-            ->setParameter('activeStatuses', [EInvoiceSubmissionStatus::PENDING, EInvoiceSubmissionStatus::SUBMITTED])
+            ->setParameter('activeStatuses', [EInvoiceSubmissionStatus::PENDING, EInvoiceSubmissionStatus::SUBMITTED, EInvoiceSubmissionStatus::ACCEPTED])
             ->orderBy('i.scheduledSendAt', 'ASC')
             ->setMaxResults($limit)
             ->getQuery()
