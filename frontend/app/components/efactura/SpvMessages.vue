@@ -34,10 +34,22 @@
         >
           #{{ row.original.invoice.number }}
         </NuxtLink>
-        <span v-else-if="row.original.uploadId" class="text-xs text-(--ui-text-muted)">
-          ID: {{ row.original.uploadId }}
-        </span>
         <span v-else class="text-(--ui-text-muted)">-</span>
+      </template>
+      <template #ids-cell="{ row }">
+        <div class="space-y-1">
+          <div v-if="row.original.uploadId" class="flex items-center gap-1.5">
+            <span class="text-xs text-(--ui-text-muted)">Upload:</span>
+            <code class="text-xs font-mono">{{ row.original.uploadId }}</code>
+            <UButton variant="ghost" size="xs" icon="i-lucide-copy" class="size-5" @click="copyToClipboard(row.original.uploadId)" />
+          </div>
+          <div v-if="row.original.anafMessageId" class="flex items-center gap-1.5">
+            <span class="text-xs text-(--ui-text-muted)">Index:</span>
+            <code class="text-xs font-mono">{{ row.original.anafMessageId }}</code>
+            <UButton variant="ghost" size="xs" icon="i-lucide-copy" class="size-5" @click="copyToClipboard(row.original.anafMessageId)" />
+          </div>
+          <span v-if="!row.original.uploadId && !row.original.anafMessageId" class="text-(--ui-text-muted)">-</span>
+        </div>
       </template>
       <template #errorMessage-cell="{ row }">
         <div v-if="row.original.errorMessage" class="max-w-md">
@@ -96,6 +108,7 @@ const columns = [
   { accessorKey: 'messageType', header: $t('spvMessages.messageType') },
   { accessorKey: 'cif', header: 'CIF' },
   { accessorKey: 'invoice', header: $t('spvMessages.invoice') },
+  { accessorKey: 'ids', header: 'Upload / Index' },
   { accessorKey: 'status', header: $t('spvMessages.status') },
   { accessorKey: 'errorMessage', header: $t('spvMessages.errorMessage') },
 ]
@@ -131,6 +144,13 @@ function statusLabel(status: string) {
     case 'received': return $t('spvMessages.statusReceived')
     default: return status
   }
+}
+
+const toast = useToast()
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text)
+  toast.add({ title: $t('common.copied'), color: 'success' })
 }
 
 const onSearchInput = useDebounceFn(() => {
