@@ -131,9 +131,9 @@ class PdfTemplateConfigController extends AbstractController
                     'date_label', 'due_date', 'subtotal', 'vat_label', 'discount_label', 'total', 'exchange_rate',
                     'payment_method', 'notes', 'payment_terms', 'bank_account', 'footer_text',
                     'supplier', 'supplier_cui', 'supplier_reg_number', 'supplier_address', 'supplier_county',
-                    'supplier_phone', 'supplier_email', 'supplier_website',
+                    'supplier_country', 'supplier_phone', 'supplier_email', 'supplier_website',
                     'client', 'client_cui', 'client_reg_number', 'client_cnp', 'client_address', 'client_county',
-                    'client_phone', 'client_email', 'client_contact',
+                    'client_country', 'client_phone', 'client_email', 'client_contact',
                     'col_description', 'col_code', 'col_unit', 'col_quantity', 'col_unit_price',
                     'col_line_total', 'col_vat_percent', 'col_vat', 'col_total',
                 ];

@@ -28,6 +28,36 @@ class AddressNormalizer
         'PH', 'SB', 'SJ', 'SM', 'SV', 'TL', 'TM', 'TR', 'VL', 'VN', 'VS',
     ];
 
+    private const CODE_TO_NAME_RO = [
+        'AB' => 'Alba', 'AG' => 'Argeș', 'AR' => 'Arad', 'B' => 'București',
+        'BC' => 'Bacău', 'BH' => 'Bihor', 'BN' => 'Bistrița-Năsăud',
+        'BR' => 'Brăila', 'BT' => 'Botoșani', 'BV' => 'Brașov', 'BZ' => 'Buzău',
+        'CJ' => 'Cluj', 'CL' => 'Călărași', 'CS' => 'Caraș-Severin',
+        'CT' => 'Constanța', 'CV' => 'Covasna', 'DB' => 'Dâmbovița', 'DJ' => 'Dolj',
+        'GJ' => 'Gorj', 'GL' => 'Galați', 'GR' => 'Giurgiu',
+        'HD' => 'Hunedoara', 'HR' => 'Harghita', 'IF' => 'Ilfov',
+        'IL' => 'Ialomița', 'IS' => 'Iași', 'MH' => 'Mehedinți',
+        'MM' => 'Maramureș', 'MS' => 'Mureș', 'NT' => 'Neamț', 'OT' => 'Olt',
+        'PH' => 'Prahova', 'SB' => 'Sibiu', 'SJ' => 'Sălaj', 'SM' => 'Satu Mare',
+        'SV' => 'Suceava', 'TL' => 'Tulcea', 'TM' => 'Timiș',
+        'TR' => 'Teleorman', 'VL' => 'Vâlcea', 'VN' => 'Vrancea', 'VS' => 'Vaslui',
+    ];
+
+    private const CODE_TO_NAME_EN = [
+        'AB' => 'Alba', 'AG' => 'Arges', 'AR' => 'Arad', 'B' => 'Bucharest',
+        'BC' => 'Bacau', 'BH' => 'Bihor', 'BN' => 'Bistrita-Nasaud',
+        'BR' => 'Braila', 'BT' => 'Botosani', 'BV' => 'Brasov', 'BZ' => 'Buzau',
+        'CJ' => 'Cluj', 'CL' => 'Calarasi', 'CS' => 'Caras-Severin',
+        'CT' => 'Constanta', 'CV' => 'Covasna', 'DB' => 'Dambovita', 'DJ' => 'Dolj',
+        'GJ' => 'Gorj', 'GL' => 'Galati', 'GR' => 'Giurgiu',
+        'HD' => 'Hunedoara', 'HR' => 'Harghita', 'IF' => 'Ilfov',
+        'IL' => 'Ialomita', 'IS' => 'Iasi', 'MH' => 'Mehedinti',
+        'MM' => 'Maramures', 'MS' => 'Mures', 'NT' => 'Neamt', 'OT' => 'Olt',
+        'PH' => 'Prahova', 'SB' => 'Sibiu', 'SJ' => 'Salaj', 'SM' => 'Satu Mare',
+        'SV' => 'Suceava', 'TL' => 'Tulcea', 'TM' => 'Timis',
+        'TR' => 'Teleorman', 'VL' => 'Valcea', 'VN' => 'Vrancea', 'VS' => 'Vaslui',
+    ];
+
     /**
      * Normalize county to ISO 3166-2:RO code (e.g. "Alba" → "AB", "Bucuresti" → "B").
      * If already a valid code, returns as-is. Unknown values pass through unchanged.
@@ -48,6 +78,18 @@ class AddressNormalizer
 
         // Full name → ISO code
         return self::NAME_TO_CODE[$upper] ?? $county;
+    }
+
+    /**
+     * Convert county ISO code to full name (e.g. "AB" → "Alba", "CJ" → "Cluj").
+     * Uses locale for proper diacritics: 'ro' → "București", 'en' → "Bucharest".
+     * Unknown values pass through unchanged.
+     */
+    public static function countyToName(string $county, string $locale = 'ro'): string
+    {
+        $upper = strtoupper(trim($county));
+        $map = $locale === 'ro' ? self::CODE_TO_NAME_RO : self::CODE_TO_NAME_EN;
+        return $map[$upper] ?? $county;
     }
 
     /**
