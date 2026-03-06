@@ -82,7 +82,7 @@
                         <div class="party-detail">Nr. Reg. Com.: {{ client.registrationNumber }}</div>
                     {% endif %}
                     <div class="party-detail">{{ client.address }}</div>
-                    <div class="party-detail">{{ client.city }}{% if client.county %}, {{ client.county }}{% endif %}</div>
+                    <div class="party-detail">{{ client.city }}{% if client.county %}, {{ client.county|county_name(locale|default('ro')) }}{% endif %}</div>
                     {% if client.email %}
                         <div class="party-detail">Email: {{ client.email }}</div>
                     {% endif %}

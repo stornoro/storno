@@ -61,6 +61,7 @@ const supplierLabels: LabelDef[] = [
   { key: 'supplier_reg_number', label: 'Nr. Reg. Com.', hideable: true },
   { key: 'supplier_address', label: 'Adresa', hideable: true },
   { key: 'supplier_county', label: 'Judet', hideable: true },
+  { key: 'supplier_country', label: 'Tara', hideable: true },
   { key: 'supplier_phone', label: 'Tel', hideable: true },
   { key: 'supplier_email', label: 'Email', hideable: true },
   { key: 'supplier_website', label: 'Web', hideable: true },
@@ -73,6 +74,7 @@ const clientLabels: LabelDef[] = [
   { key: 'client_cnp', label: 'CNP', hideable: true },
   { key: 'client_address', label: 'Adresa', hideable: true },
   { key: 'client_county', label: 'Judet', hideable: true },
+  { key: 'client_country', label: 'Tara', hideable: true },
   { key: 'client_phone', label: 'Tel', hideable: true },
   { key: 'client_email', label: 'Email', hideable: true },
   { key: 'client_contact', label: 'Persoana de contact', hideable: true },
@@ -573,7 +575,7 @@ onMounted(async () => {
                         :placeholder="def.label"
                         size="sm"
                         class="flex-1"
-                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county')"
+                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county') || def.key.endsWith('_country')"
                         @update:model-value="setLabelText(def.key, $event)"
                       />
                     </div>
@@ -599,7 +601,7 @@ onMounted(async () => {
                         :placeholder="def.label"
                         size="sm"
                         class="flex-1"
-                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county')"
+                        :disabled="def.key.endsWith('_address') || def.key.endsWith('_county') || def.key.endsWith('_country')"
                         @update:model-value="setLabelText(def.key, $event)"
                       />
                     </div>
