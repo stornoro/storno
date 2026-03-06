@@ -12,7 +12,7 @@
         {% endif %}
         {% if pdf_visible('supplier_address', labelOverrides|default(null)) %}
             <div class="party-detail">{{ company.address }}</div>
-            <div class="party-detail">{{ company.city }}{% if pdf_visible('supplier_county', labelOverrides|default(null)) and company.state %}, {{ company.state|county_name(locale|default('ro')) }}{% endif %}{% if pdf_visible('supplier_country', labelOverrides|default(null)) and company.country is defined and company.country and company.country != 'RO' %}, {{ company.country|country_name(locale|default('ro')) }}{% endif %}</div>
+            <div class="party-detail">{{ company.city }}{% if pdf_visible('supplier_county', labelOverrides|default(null)) and company.state %}, {{ company.state|county_name(locale|default('ro')) }}{% endif %}{% if pdf_visible('supplier_country', labelOverrides|default(null)) and company.country is defined and company.country %}, {{ company.country|country_name(locale|default('ro')) }}{% endif %}</div>
         {% endif %}
         {% if company.phone %}
             {% if pdf_visible('supplier_phone', labelOverrides|default(null)) %}
@@ -69,7 +69,7 @@
             {% endif %}
             {% if pdf_visible('client_address', labelOverrides|default(null)) %}
                 <div class="party-detail">{{ client.address }}</div>
-                <div class="party-detail">{{ client.city }}{% if pdf_visible('client_county', labelOverrides|default(null)) and client.county is defined and client.county %}, {{ client.county|county_name(locale|default('ro')) }}{% endif %}{% if client.postalCode is defined and client.postalCode %}, {{ client.postalCode }}{% endif %}{% if pdf_visible('client_country', labelOverrides|default(null)) and client.country is defined and client.country and client.country != 'RO' %}, {{ client.country|country_name(locale|default('ro')) }}{% endif %}</div>
+                <div class="party-detail">{{ client.city }}{% if pdf_visible('client_county', labelOverrides|default(null)) and client.county is defined and client.county %}, {{ client.county|county_name(locale|default('ro')) }}{% endif %}{% if client.postalCode is defined and client.postalCode %}, {{ client.postalCode }}{% endif %}{% if pdf_visible('client_country', labelOverrides|default(null)) and client.country is defined and client.country %}, {{ client.country|country_name(locale|default('ro')) }}{% endif %}</div>
             {% endif %}
             {% if client.phone is defined and client.phone %}
                 {% if pdf_visible('client_phone', labelOverrides|default(null)) %}
