@@ -97,7 +97,7 @@ class InvoiceRepository extends ServiceEntityRepository
             ->where('i.company = :company')
             ->setParameter('company', $company)
             ->orderBy('i.' . $sortField, $sortOrder)
-            ->addOrderBy('i.createdAt', 'DESC');
+            ->addOrderBy('i.id', 'DESC');
 
         $this->applyFilters($qb, $filters);
 
