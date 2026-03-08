@@ -95,18 +95,20 @@ class AddressNormalizer
     /**
      * Normalize Bucharest county and city values for DB storage.
      * County is stored as "B", city as "SECTOR1"-"SECTOR6".
+     * If city doesn't contain a sector, tries to extract it from address.
      *
      * @return array{county: string, city: string}
      */
-    public static function normalizeBucharest(string $county, string $city): array
+    public static function normalizeBucharest(string $county, string $city, ?string $address = null): array
     {
         // First normalize county to ISO code
         $county = self::normalizeCounty($county);
 
         if (in_array(strtoupper($county), self::BUCHAREST_COUNTY_VARIANTS, true)) {
+            $sector = self::normalizeBucharestSector($city, $address);
             return [
                 'county' => 'B',
-                'city' => self::normalizeBucharestSector($city),
+                'city' => $sector,
             ];
         }
 
@@ -115,19 +117,36 @@ class AddressNormalizer
 
     /**
      * Normalize Bucharest city to UBL-compliant SECTOR1-SECTOR6 format.
+     * If city is empty or doesn't contain a sector, tries to extract from address.
      */
-    public static function normalizeBucharestSector(?string $city): string
+    public static function normalizeBucharestSector(?string $city, ?string $address = null): string
     {
-        if ($city === null || $city === '') {
-            return 'SECTOR1';
+        // Try to extract sector from city first
+        if ($city !== null && $city !== '') {
+            if (preg_match('/sect(?:or(?:ul)?|\.?)\s*(\d)/i', $city, $m)) {
+                return 'SECTOR' . $m[1];
+            }
         }
 
-        // Extract sector number from: "Sector 6", "SECTOR6", "Sectorul 3", "SECT. 1",
-        // "RO Sector1", "Sector 6 Mun. Bucureşti", etc.
-        if (preg_match('/sect(?:or(?:ul)?|\.?)\s*(\d)/i', $city, $m)) {
-            return 'SECTOR' . $m[1];
+        // Fallback: try to extract sector from address
+        if ($address !== null && $address !== '') {
+            if (preg_match('/sect(?:or(?:ul)?|\.?)\s*(\d)/i', $address, $m)) {
+                return 'SECTOR' . $m[1];
+            }
         }
 
-        return $city;
+        // If city is a Bucharest variant (not a sector), default to SECTOR1
+        if ($city !== null && $city !== '') {
+            $upperCity = strtoupper(trim($city));
+            if (in_array($upperCity, self::BUCHAREST_COUNTY_VARIANTS, true)
+                || in_array($upperCity, ['MUN. BUCURESTI', 'MUN. BUCHAREST', 'MUNICIPIUL BUCURESTI', 'MUN.BUCURESTI'], true)
+            ) {
+                return 'SECTOR1';
+            }
+            // Non-Bucharest city value, return as-is
+            return $city;
+        }
+
+        return 'SECTOR1';
     }
 }
