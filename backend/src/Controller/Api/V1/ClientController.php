@@ -248,9 +248,9 @@ class ClientController extends AbstractController
         $client->setIsVatPayer($data['isVatPayer'] ?? false);
         $client->setRegistrationNumber($registrationNumber);
         $client->setAddress($address);
-        if ($country === 'RO' && $county !== '' && $city !== '') {
-            // Normalize Bucharest sectors to UBL-compliant format
-            $normalized = AddressNormalizer::normalizeBucharest($county, $city);
+        if ($country === 'RO' && $county !== '') {
+            // Normalize Bucharest sectors to UBL-compliant format (falls back to address if city has no sector)
+            $normalized = AddressNormalizer::normalizeBucharest($county, $city, $address);
             $client->setCity($normalized['city']);
             $client->setCounty($normalized['county']);
         } else {
@@ -307,6 +307,7 @@ class ClientController extends AbstractController
         $normalized = AddressNormalizer::normalizeBucharest(
             $anafInfo->getState(),
             $anafInfo->getCity(),
+            $anafInfo->getAddress(),
         );
 
         return $this->json([
@@ -374,7 +375,7 @@ class ClientController extends AbstractController
         if ($anafInfo) {
             $client->setName($anafInfo->getName());
             $client->setAddress($anafInfo->getAddress());
-            $anafAddr = AddressNormalizer::normalizeBucharest($anafInfo->getState(), $anafInfo->getCity());
+            $anafAddr = AddressNormalizer::normalizeBucharest($anafInfo->getState(), $anafInfo->getCity(), $anafInfo->getAddress());
             $client->setCity($anafAddr['city']);
             $client->setCounty($anafAddr['county']);
             $client->setPostalCode($anafInfo->getPostalCode());
@@ -479,9 +480,10 @@ class ClientController extends AbstractController
             if (array_key_exists('city', $data) && ($city === '' || $city === null)) {
                 return $this->json(['error' => 'City cannot be empty.'], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
-            // Normalize Bucharest sectors to UBL-compliant format
-            if ($county !== null && $city !== null) {
-                $normalized = AddressNormalizer::normalizeBucharest($county, $city);
+            // Normalize Bucharest sectors to UBL-compliant format (falls back to address if city has no sector)
+            if ($county !== null) {
+                $effectiveAddress = array_key_exists('address', $data) ? trim($data['address'] ?? '') : $client->getAddress();
+                $normalized = AddressNormalizer::normalizeBucharest($county, $city ?? '', $effectiveAddress);
                 $county = $normalized['county'];
                 $city = $normalized['city'];
             }
