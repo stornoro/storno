@@ -144,7 +144,9 @@ class CompanyRegistryService
     private function loadLocalities(): array
     {
         if ($this->localities === null) {
-            $path = $this->dataDir . '/localitati.json';
+            // Prefer tracked reference data, fall back to var/data for backward compat
+            $tracked = dirname($this->dataDir, 2) . '/data/localitati.json';
+            $path = file_exists($tracked) ? $tracked : $this->dataDir . '/localitati.json';
             if (file_exists($path)) {
                 $this->localities = json_decode(file_get_contents($path), true) ?? [];
             } else {
