@@ -204,28 +204,28 @@ class ClientController extends AbstractController
         $county = trim($data['county'] ?? '');
         $city = trim($data['city'] ?? '');
         $address = trim($data['address'] ?? '');
+        $cui = !empty($data['cui']) ? trim($data['cui']) : null;
 
-        if ($country === 'RO' && $county === '') {
-            $errors[] = ['key' => 'county', 'message' => 'County is required.'];
-        }
-        if ($city === '') {
-            $errors[] = ['key' => 'city', 'message' => 'City is required.'];
-        }
-        if ($address === '') {
-            $errors[] = ['key' => 'address', 'message' => 'Address is required.'];
+        // Skip address validations for RO companies with CUI — ANAF will auto-fill
+        $canEnrichFromAnaf = $cui && $country === 'RO';
+        if (!$canEnrichFromAnaf) {
+            if ($country === 'RO' && $county === '') {
+                $errors[] = ['key' => 'county', 'message' => 'County is required.'];
+            }
+            if ($city === '') {
+                $errors[] = ['key' => 'city', 'message' => 'City is required.'];
+            }
+            if ($address === '') {
+                $errors[] = ['key' => 'address', 'message' => 'Address is required.'];
+            }
         }
 
         $type = $data['type'] ?? 'company';
         $registrationNumber = !empty($data['registrationNumber']) ? trim($data['registrationNumber']) : null;
-        if ($type === 'company' && $country === 'RO' && !$registrationNumber) {
-            $errors[] = ['key' => 'registrationNumber', 'message' => 'Registration number is required for companies.'];
-        }
 
         if ($errors) {
             return $this->json(['errors' => $errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
-
-        $cui = !empty($data['cui']) ? trim($data['cui']) : null;
 
         // Check for existing client with same CUI
         if ($cui) {
@@ -270,6 +270,12 @@ class ClientController extends AbstractController
         $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
         $client->setSource('manual');
 
+        // Auto-enrich Romanian companies from ANAF (fill missing fields only)
+        $anafValidated = false;
+        if ($cui && $country === 'RO' && $type === 'company') {
+            $anafValidated = $this->autoEnrichFromAnaf($client, $data);
+        }
+
         $this->autoPopulateVatCodeFromCui($client);
         $this->autoValidateVies($client);
 
@@ -278,6 +284,7 @@ class ClientController extends AbstractController
 
         return $this->json([
             'client' => $client,
+            'anafValidated' => $anafValidated,
         ], Response::HTTP_CREATED, [], ['groups' => ['client:list']]);
     }
 
@@ -618,6 +625,62 @@ class ClientController extends AbstractController
     private function resolveCompany(Request $request): ?\App\Entity\Company
     {
         return $this->organizationContext->resolveCompany($request);
+    }
+
+    /**
+     * Auto-enrich a Romanian client from ANAF, filling only fields the caller didn't provide.
+     */
+    private function autoEnrichFromAnaf(Client $client, array $data): bool
+    {
+        $cuiClean = preg_replace('/^RO/i', '', $client->getCui());
+
+        try {
+            $anafInfo = $this->anafService->findCompany($cuiClean);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (!$anafInfo) {
+            return false;
+        }
+
+        if (empty($data['registrationNumber']) && $anafInfo->getRegistrationNumber()) {
+            $client->setRegistrationNumber($anafInfo->getRegistrationNumber());
+        }
+        if (empty($data['vatCode']) && $anafInfo->getVatCode()) {
+            $client->setVatCode($anafInfo->getVatCode());
+        }
+        if (!isset($data['isVatPayer'])) {
+            $client->setIsVatPayer($anafInfo->isVatPayer());
+        }
+        if (empty($data['address']) && $anafInfo->getAddress()) {
+            $client->setAddress($anafInfo->getAddress());
+        }
+        if (empty($data['city']) && $anafInfo->getCity()) {
+            $normalized = AddressNormalizer::normalizeBucharest(
+                $anafInfo->getState(),
+                $anafInfo->getCity(),
+                $anafInfo->getAddress(),
+            );
+            $client->setCity($normalized['city']);
+            $client->setCounty($normalized['county']);
+        }
+        if (empty($data['county']) && $anafInfo->getState()) {
+            $normalized = AddressNormalizer::normalizeBucharest(
+                $anafInfo->getState(),
+                $anafInfo->getCity() ?? $client->getCity() ?? '',
+                $anafInfo->getAddress() ?? $client->getAddress() ?? '',
+            );
+            $client->setCounty($normalized['county']);
+        }
+        if (empty($data['postalCode']) && $anafInfo->getPostalCode()) {
+            $client->setPostalCode($anafInfo->getPostalCode());
+        }
+        if (empty($data['phone']) && $anafInfo->getPhone()) {
+            $client->setPhone($anafInfo->getPhone());
+        }
+
+        return true;
     }
 
     /**
