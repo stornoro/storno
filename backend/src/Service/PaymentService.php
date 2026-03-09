@@ -209,6 +209,11 @@ class PaymentService
         ?User $user,
         array $metadata,
     ): void {
+        // Only record an event when the payment actually changes the invoice status
+        if ($previousStatus === $invoice->getStatus()) {
+            return;
+        }
+
         $event = new DocumentEvent();
         $event->setPreviousStatus($previousStatus);
         $event->setNewStatus($invoice->getStatus());
