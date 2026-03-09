@@ -636,10 +636,12 @@ class InvoiceRepository extends ServiceEntityRepository
             ->andWhere('i.direction = :direction')
             ->andWhere('i.status IN (:statuses)')
             ->andWhere('c.syncEnabled = true')
+            ->andWhere('cl.country = :ro OR cl.country IS NULL')
             ->setParameter('start', $targetDate->format('Y-m-d') . ' 00:00:00')
             ->setParameter('end', $targetDate->format('Y-m-d') . ' 23:59:59')
             ->setParameter('direction', InvoiceDirection::OUTGOING)
             ->setParameter('statuses', [DocumentStatus::ISSUED, DocumentStatus::REJECTED])
+            ->setParameter('ro', 'RO')
             ->getQuery()
             ->getResult();
     }

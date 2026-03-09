@@ -1210,13 +1210,21 @@ class EFacturaSyncService
             return 'Eroare internă la procesarea datelor. Reîncercați sincronizarea.';
         }
 
+        if (str_contains($error, 'rate limit') || str_contains($error, 'Rate limit')) {
+            return null; // Transient — will resolve on next sync, don't notify user
+        }
+
         return $error;
     }
 
     private function notifySyncErrors(Company $company, array $errors): void
     {
         try {
-            $userErrors = array_values(array_unique(array_map([$this, 'sanitizeErrorForUser'], $errors)));
+            $userErrors = array_values(array_unique(array_filter(array_map([$this, 'sanitizeErrorForUser'], $errors))));
+
+            if (empty($userErrors)) {
+                return;
+            }
 
             $channel = self::CHANNEL_PREFIX . $company->getId()->toRfc4122();
             $this->centrifugo->publish($channel, [
