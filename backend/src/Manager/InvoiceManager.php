@@ -703,9 +703,12 @@ class InvoiceManager
             throw new \DomainException('Invoice cannot be submitted to e-invoicing (status: ' . $status->value . ').');
         }
 
+        $previousStatus = $status;
+        $invoice->setStatus(DocumentStatus::SENT_TO_PROVIDER);
+
         $event = new DocumentEvent();
-        $event->setPreviousStatus($status);
-        $event->setNewStatus($status);
+        $event->setPreviousStatus($previousStatus);
+        $event->setNewStatus(DocumentStatus::SENT_TO_PROVIDER);
         $event->setCreatedBy($user);
         $event->setMetadata([
             'action' => 'submitted_to_einvoice',
