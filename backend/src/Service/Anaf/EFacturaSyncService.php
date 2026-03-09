@@ -649,8 +649,10 @@ class EFacturaSyncService
         $invoice->setAnafDownloadId($messageId);
         $invoice->setSyncedAt(new \DateTimeImmutable());
 
-        // Set status to synced if still in issued/sent_to_provider state
-        $syncableStatuses = [DocumentStatus::ISSUED, DocumentStatus::SENT_TO_PROVIDER];
+        // Only transition to SYNCED if still in ISSUED state (submitted outside the app).
+        // SENT_TO_PROVIDER invoices must keep their status so the status checker
+        // (AnafStatusChecker / CheckAnafUploadsCommand) can properly validate or reject them.
+        $syncableStatuses = [DocumentStatus::ISSUED];
         if (in_array($invoice->getStatus(), $syncableStatuses, true)) {
             // Check if a synced event already exists to prevent duplicates
             $alreadySynced = false;
@@ -1097,8 +1099,11 @@ class EFacturaSyncService
                 ]);
                 if ($invoice) {
                     $spvMessage->setInvoice($invoice);
-                    $invoice->setStatus(DocumentStatus::REJECTED);
-                    $invoice->setAnafErrorMessage($errorText);
+                    // Only reject if still awaiting validation — don't downgrade already validated/rejected invoices
+                    if ($invoice->getStatus() === DocumentStatus::SENT_TO_PROVIDER) {
+                        $invoice->setStatus(DocumentStatus::REJECTED);
+                        $invoice->setAnafErrorMessage($errorText);
+                    }
                 }
             }
         } catch (\Throwable $e) {
