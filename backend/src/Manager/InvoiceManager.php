@@ -22,10 +22,14 @@ use App\Service\Anaf\AnafTokenResolver;
 use App\Service\EuVatRateService;
 use App\Service\ReverseChargeHelper;
 use App\Validator\UblExtensionsValidator;
+use App\Event\Invoice\InvoiceCreatedEvent;
+use App\Event\Invoice\InvoiceIssuedEvent;
+use App\Event\Invoice\InvoiceSentToProviderEvent;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 class InvoiceManager
 {
@@ -47,6 +51,7 @@ class InvoiceManager
         private readonly AnafTokenResolver $anafTokenResolver,
         private readonly EuVatRateService $euVatRateService,
         private readonly UblExtensionsValidator $ublExtensionsValidator,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {}
 
     public function find(string $uuid): ?Invoice
@@ -237,6 +242,8 @@ class InvoiceManager
 
         $this->entityManager->persist($invoice);
         $this->entityManager->flush();
+
+        $this->eventDispatcher->dispatch(new InvoiceCreatedEvent($invoice));
 
         return $invoice;
     }
@@ -623,6 +630,8 @@ class InvoiceManager
         $invoice->addEvent($event);
 
         $this->entityManager->flush();
+
+        $this->eventDispatcher->dispatch(new InvoiceIssuedEvent($invoice));
     }
 
     /**
@@ -675,6 +684,8 @@ class InvoiceManager
 
         $this->entityManager->flush();
 
+        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
+
         $this->messageBus->dispatch(
             new SubmitEInvoiceMessage(
                 invoiceId: (string) $invoice->getId(),
@@ -717,6 +728,8 @@ class InvoiceManager
         $invoice->addEvent($event);
 
         $this->entityManager->flush();
+
+        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
 
         $this->messageBus->dispatch(
             new SubmitEInvoiceMessage(

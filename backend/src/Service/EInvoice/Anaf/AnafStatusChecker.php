@@ -6,6 +6,8 @@ use App\Entity\DocumentEvent;
 use App\Entity\EInvoiceSubmission;
 use App\Enum\DocumentStatus;
 use App\Enum\EInvoiceSubmissionStatus;
+use App\Event\Invoice\InvoiceRejectedEvent;
+use App\Event\Invoice\InvoiceValidatedEvent;
 use App\Message\EInvoice\CheckEInvoiceStatusMessage;
 use App\Repository\OrganizationMembershipRepository;
 use App\Service\Anaf\AnafTokenResolver;
@@ -18,6 +20,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[AutoconfigureTag('app.einvoice_status_checker', ['provider' => 'anaf'])]
 final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
@@ -45,6 +48,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
         private readonly NotificationService $notificationService,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly CentrifugoService $centrifugo,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {}
 
     public function check(EInvoiceSubmission $submission, CheckEInvoiceStatusMessage $message): void
@@ -118,6 +122,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
+            $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice));
             $this->publishInvoiceChange($invoice, 'invoice.validated');
 
             $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
@@ -148,6 +153,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
+            $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice));
             $this->publishInvoiceChange($invoice, 'invoice.rejected');
 
             $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(

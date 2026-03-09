@@ -4,6 +4,8 @@ namespace App\Command\Efactura;
 
 use App\Entity\DocumentEvent;
 use App\Enum\DocumentStatus;
+use App\Event\Invoice\InvoiceRejectedEvent;
+use App\Event\Invoice\InvoiceValidatedEvent;
 use App\Exception\AnafRateLimitException;
 use App\Repository\InvoiceRepository;
 use App\Repository\OrganizationMembershipRepository;
@@ -17,6 +19,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[AsCommand(
     name: 'app:efactura:check-status',
@@ -32,6 +35,7 @@ class CheckAnafUploadsCommand extends Command
         private readonly LoggerInterface $logger,
         private readonly NotificationService $notificationService,
         private readonly OrganizationMembershipRepository $membershipRepository,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {
         parent::__construct();
     }
@@ -101,6 +105,7 @@ class CheckAnafUploadsCommand extends Command
                     $updated++;
                     $batchCount++;
 
+                    $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice));
                     $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
                         'Factura %s a fost validată de ANAF',
                         $invoice->getNumber(),
@@ -126,6 +131,7 @@ class CheckAnafUploadsCommand extends Command
                     $updated++;
                     $batchCount++;
 
+                    $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice));
                     $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(
                         'Factura %s a fost respinsă de ANAF: %s',
                         $invoice->getNumber(),
