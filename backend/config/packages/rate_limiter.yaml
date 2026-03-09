@@ -94,7 +94,7 @@ when@prod:
                 interval: '1 day'
             anaf_descarcare_message:
                 policy: 'sliding_window'
-                limit: 10
+                limit: 100
                 interval: '1 day'
             anaf_stare_message:
                 policy: 'sliding_window'
