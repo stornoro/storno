@@ -246,6 +246,12 @@
           </template>
 
           <UTable :data="recurringInvoice.lines || []" :columns="lineColumns">
+            <template #description-cell="{ row }">
+              <NuxtLink v-if="row.original.productId" :to="`/products/${row.original.productId}`" class="text-(--ui-primary) hover:underline">
+                {{ row.original.description }}
+              </NuxtLink>
+              <span v-else>{{ row.original.description }}</span>
+            </template>
             <template #unitPrice-cell="{ row }">
               {{ formatMoney(row.original.unitPrice, row.original.referenceCurrency || recurringInvoice.currency) }}
             </template>

@@ -17,6 +17,7 @@ use App\Message\EInvoice\SubmitEInvoiceMessage;
 use App\Repository\ClientRepository;
 use App\Repository\DocumentSeriesRepository;
 use App\Repository\InvoiceRepository;
+use App\Repository\ProductRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\EuVatRateService;
@@ -46,6 +47,7 @@ class InvoiceManager
         private readonly EntityManagerInterface $entityManager,
         private readonly DocumentSeriesRepository $documentSeriesRepository,
         private readonly ClientRepository $clientRepository,
+        private readonly ProductRepository $productRepository,
         private readonly StripeConnectAccountRepository $connectAccountRepository,
         private readonly MessageBusInterface $messageBus,
         private readonly AnafTokenResolver $anafTokenResolver,
@@ -863,6 +865,23 @@ class InvoiceManager
         foreach ($linesData as $i => $lineData) {
             $line = new InvoiceLine();
             $this->populateLineFields($line, $lineData, $i + 1);
+
+            // Link product by productId or productCode
+            if (!empty($lineData['productId'])) {
+                $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
+                if ($product) {
+                    $line->setProduct($product);
+                }
+            } elseif ($line->getProductCode() && $invoice->getCompany()) {
+                $product = $this->productRepository->findOneBy([
+                    'company' => $invoice->getCompany(),
+                    'code' => $line->getProductCode(),
+                ]);
+                if ($product) {
+                    $line->setProduct($product);
+                }
+            }
+
             $invoice->addLine($line);
         }
     }

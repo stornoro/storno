@@ -11,6 +11,7 @@ use App\Enum\ProformaStatus;
 use App\Manager\Trait\DocumentCalculationTrait;
 use App\Repository\ClientRepository;
 use App\Repository\DocumentSeriesRepository;
+use App\Repository\ProductRepository;
 use App\Repository\ProformaInvoiceRepository;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -24,6 +25,7 @@ class ProformaInvoiceManager
         private readonly EntityManagerInterface $entityManager,
         private readonly DocumentSeriesRepository $documentSeriesRepository,
         private readonly ClientRepository $clientRepository,
+        private readonly ProductRepository $productRepository,
         private readonly InvoiceManager $invoiceManager,
     ) {}
 
@@ -337,6 +339,23 @@ class ProformaInvoiceManager
         foreach ($linesData as $i => $lineData) {
             $line = new ProformaInvoiceLine();
             $this->populateLineFields($line, $lineData, $i + 1);
+
+            // Link product by productId or productCode
+            if (!empty($lineData['productId'])) {
+                $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
+                if ($product) {
+                    $line->setProduct($product);
+                }
+            } elseif ($line->getProductCode() && $proforma->getCompany()) {
+                $product = $this->productRepository->findOneBy([
+                    'company' => $proforma->getCompany(),
+                    'code' => $line->getProductCode(),
+                ]);
+                if ($product) {
+                    $line->setProduct($product);
+                }
+            }
+
             $proforma->addLine($line);
         }
     }

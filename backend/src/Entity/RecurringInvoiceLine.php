@@ -83,12 +83,6 @@ class RecurringInvoiceLine implements DocumentLineInterface
     }
 
     #[Groups(['recurring_invoice:detail'])]
-    public function getProductId(): ?string
-    {
-        return $this->product ? (string) $this->product->getId() : null;
-    }
-
-    #[Groups(['recurring_invoice:detail'])]
     public function getProductName(): ?string
     {
         return $this->product?->getName();

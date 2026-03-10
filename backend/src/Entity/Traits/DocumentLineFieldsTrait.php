@@ -117,6 +117,12 @@ trait DocumentLineFieldsTrait
         return $this->product;
     }
 
+    #[Groups(['invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
+    public function getProductId(): ?string
+    {
+        return $this->product ? (string) $this->product->getId() : null;
+    }
+
     public function setProduct(?Product $product): static
     {
         $this->product = $product;

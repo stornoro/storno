@@ -630,6 +630,7 @@ interface LineForm {
   markupPercent: string
   priceRule: string
   productId: string
+  productCode: string
 }
 
 function emptyLine(): LineForm {
@@ -647,6 +648,7 @@ function emptyLine(): LineForm {
     markupPercent: '',
     priceRule: 'fixed',
     productId: '',
+    productCode: '',
   }
 }
 
@@ -724,6 +726,7 @@ if (props.recurringInvoice) {
         markupPercent: l.markupPercent || '',
         priceRule: l.priceRule || 'fixed',
         productId: l.productId || '',
+        productCode: l.productCode || '',
       }))
     : [emptyLine()]
 
@@ -917,6 +920,7 @@ function onProductSelected(product: Product) {
     line.vatRate = normalizeVatRate(product.vatRate)
     line.vatCategoryCode = normalizeVatCategoryCode(product.vatCategoryCode, line.vatRate)
     line.unitOfMeasure = product.unitOfMeasure
+    line.productCode = product.code || ''
     syncInvoiceTypeFromVat()
   }
 }
@@ -1060,6 +1064,7 @@ async function onSave() {
     markupPercent: l.markupPercent || null,
     priceRule: l.priceRule || 'fixed',
     productId: l.productId || null,
+    productCode: l.productCode || null,
   }))
 
   const basePayload = {
