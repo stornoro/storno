@@ -36,7 +36,10 @@
               class="w-full text-left p-3 rounded-lg hover:bg-(--ui-bg-elevated) transition-colors"
               @click="selectProduct(product)"
             >
-              <div class="font-medium text-sm">{{ product.name }}</div>
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-sm">{{ product.name }}</span>
+                <UBadge v-if="product.code" variant="subtle" size="xs">{{ product.code }}</UBadge>
+              </div>
               <div v-if="product.description && product.description !== product.name" class="text-xs text-(--ui-text-dimmed) mt-0.5 line-clamp-2">
                 {{ product.description }}
               </div>

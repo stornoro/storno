@@ -352,6 +352,7 @@ export interface InvoiceLine {
   discount: string
   discountPercent: string
   vatIncluded?: boolean
+  productId?: string | null
   productCode?: string | null
   lineNote?: string | null
   buyerAccountingRef?: string | null
@@ -1144,6 +1145,7 @@ export interface RecurringInvoiceLine {
   markupPercent: string | null
   priceRule: string
   productId: string | null
+  productCode: string | null
   productName: string | null
 }
 
@@ -1205,6 +1207,7 @@ export interface RecurringInvoiceLinePayload {
   markupPercent?: string | null
   priceRule?: string
   productId?: string | null
+  productCode?: string | null
 }
 
 export interface CreateRecurringInvoicePayload {

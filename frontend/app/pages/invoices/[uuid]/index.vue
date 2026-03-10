@@ -444,7 +444,14 @@
               <!-- Invoice lines -->
               <div>
                 <h3 class="text-sm font-semibold text-(--ui-text-muted) mb-3 flex items-center gap-1.5"><UIcon name="i-lucide-list" class="size-3.5" />{{ $t('invoices.lines') }}</h3>
-                <UTable :data="invoice.lines || []" :columns="lineColumns" />
+                <UTable :data="invoice.lines || []" :columns="lineColumns">
+                  <template #description-cell="{ row }">
+                    <NuxtLink v-if="row.original.productId" :to="`/products/${row.original.productId}`" class="text-(--ui-primary) hover:underline">
+                      {{ row.original.description }}
+                    </NuxtLink>
+                    <span v-else>{{ row.original.description }}</span>
+                  </template>
+                </UTable>
                 <div class="flex justify-end mt-4 pt-4 border-t border-(--ui-border)">
                   <div class="min-w-48 space-y-1">
                     <div class="flex justify-between gap-8 text-sm text-(--ui-text-muted)">

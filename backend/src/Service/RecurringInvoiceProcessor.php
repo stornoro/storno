@@ -203,6 +203,8 @@ class RecurringInvoiceProcessor
                 'vatCategoryCode' => $line->getVatCategoryCode(),
                 'discount' => $discount,
                 'discountPercent' => $line->getDiscountPercent(),
+                'productCode' => $line->getProductCode(),
+                'productId' => $line->getProduct() ? (string) $line->getProduct()->getId() : null,
             ];
         }
         $documentData['lines'] = $lines;
