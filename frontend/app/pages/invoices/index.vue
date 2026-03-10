@@ -303,7 +303,7 @@ function getRowActions(inv: any) {
   }
 
   // Mark as paid / unpaid per-row
-  if (!['draft', 'cancelled'].includes(inv.status)) {
+  if (!['draft', 'cancelled'].includes(inv.status) && Number(inv.total) >= 0) {
     if (!inv.paidAt && can(P.INVOICE_EDIT)) {
       group.push({
         label: $t('bulk.markPaid'),
@@ -394,7 +394,8 @@ const eligibleForMarkPaid = computed(() =>
   invoicesStore.items.filter(i =>
     selectedIds.value.includes(i.id)
     && !i.paidAt
-    && !['draft', 'cancelled'].includes(i.status),
+    && !['draft', 'cancelled'].includes(i.status)
+    && Number(i.total) >= 0,
   ),
 )
 
@@ -402,7 +403,8 @@ const eligibleForMarkUnpaid = computed(() =>
   invoicesStore.items.filter(i =>
     selectedIds.value.includes(i.id)
     && (i.paidAt || parseFloat(i.amountPaid) > 0)
-    && !['draft', 'cancelled'].includes(i.status),
+    && !['draft', 'cancelled'].includes(i.status)
+    && Number(i.total) >= 0,
   ),
 )
 
