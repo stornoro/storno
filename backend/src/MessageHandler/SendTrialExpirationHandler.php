@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendTrialExpirationHandler
@@ -18,6 +19,7 @@ class SendTrialExpirationHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -48,40 +50,29 @@ class SendTrialExpirationHandler
             return;
         }
 
+        $locale = $owner->getLocale();
         $billingUrl = sprintf('%s/settings/billing', rtrim($this->frontendUrl, '/'));
         $firstName = $owner->getFirstName() ? ' ' . $owner->getFirstName() : '';
         $daysLeft = $message->daysLeft;
 
-        $urgency = match (true) {
-            $daysLeft <= 1 => 'maine',
-            $daysLeft <= 3 => 'in 3 zile',
-            default => 'in 7 zile',
+        $urgencyKey = match (true) {
+            $daysLeft <= 1 => 'urgency_tomorrow',
+            $daysLeft <= 3 => 'urgency_3days',
+            default => 'urgency_7days',
         };
+        $urgency = $this->translator->trans('trial_expiration.' . $urgencyKey, [], 'emails', $locale);
 
-        $subject = sprintf(
-            'Perioada de proba expira %s — aboneaza-te pentru a pastra accesul',
-            $urgency,
-        );
+        $subject = $this->translator->trans('trial_expiration.subject', [
+            '%urgency%' => $urgency,
+        ], 'emails', $locale);
 
-        $body = sprintf(
-            "Buna%s,\n\n"
-            . "Perioada ta de proba Storno.ro pentru organizatia \"%s\" expira %s "
-            . "(%s).\n\n"
-            . "Dupa expirare, vei pierde accesul la:\n"
-            . "- Sincronizare automata e-Factura\n"
-            . "- Generare PDF facturi\n"
-            . "- Trimitere facturi pe email\n"
-            . "- Rapoarte si statistici\n"
-            . "- Aplicatie mobila\n"
-            . "- Si multe altele din planul Starter\n\n"
-            . "Aboneaza-te acum pentru a pastra toate aceste functii:\n%s\n\n"
-            . "Echipa Storno.ro",
-            $firstName,
-            $org->getName(),
-            $urgency,
-            $org->getTrialEndsAt()?->format('d.m.Y') ?? '',
-            $billingUrl,
-        );
+        $body = $this->translator->trans('trial_expiration.body', [
+            '%firstName%' => $firstName,
+            '%orgName%' => $org->getName(),
+            '%urgency%' => $urgency,
+            '%trialEndsAt%' => $org->getTrialEndsAt()?->format('d.m.Y') ?? '',
+            '%billingUrl%' => $billingUrl,
+        ], 'emails', $locale);
 
         try {
             $email = (new Email())

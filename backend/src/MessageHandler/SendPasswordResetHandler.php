@@ -7,12 +7,14 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendPasswordResetHandler
 {
     public function __construct(
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -25,22 +27,17 @@ class SendPasswordResetHandler
             return;
         }
 
+        $locale = $message->locale;
         $resetUrl = sprintf('%s/reset-password?token=%s', rtrim($this->frontendUrl, '/'), $message->token);
 
         try {
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($message->email)
-                ->subject('Resetare parola — Storno.ro')
-                ->text(sprintf(
-                    "Buna,\n\n"
-                    . "Am primit o cerere de resetare a parolei pentru contul tau Storno.ro.\n\n"
-                    . "Reseteaza parola accesand linkul de mai jos:\n%s\n\n"
-                    . "Linkul este valid 2 ore.\n\n"
-                    . "Daca nu ai solicitat resetarea parolei, ignora acest email.\n\n"
-                    . "Echipa Storno.ro",
-                    $resetUrl,
-                ));
+                ->subject($this->translator->trans('password_reset.subject', [], 'emails', $locale))
+                ->text($this->translator->trans('password_reset.body', [
+                    '%resetUrl%' => $resetUrl,
+                ], 'emails', $locale));
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', 'password_reset');
             $this->mailer->send($email);

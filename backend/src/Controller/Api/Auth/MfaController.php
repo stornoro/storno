@@ -108,7 +108,7 @@ class MfaController extends AbstractController
         }
 
         $code = $this->mfaService->createEmailOtp($user, $mfaToken);
-        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code));
+        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code, $user->getLocale()));
 
         return $this->json(['sent' => true]);
     }

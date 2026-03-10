@@ -7,5 +7,6 @@ final readonly class SendMfaEmailOtpMessage
     public function __construct(
         public string $email,
         public string $code,
+        public string $locale = 'ro',
     ) {}
 }

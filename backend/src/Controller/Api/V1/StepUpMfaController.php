@@ -113,7 +113,7 @@ class StepUpMfaController extends AbstractController
         }
 
         $code = $this->mfaService->createEmailOtp($user, $challengeToken);
-        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code));
+        $this->messageBus->dispatch(new SendMfaEmailOtpMessage($user->getEmail(), $code, $user->getLocale()));
 
         return $this->json(['sent' => true]);
     }

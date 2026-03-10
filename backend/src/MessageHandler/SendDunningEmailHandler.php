@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendDunningEmailHandler
@@ -18,6 +19,7 @@ class SendDunningEmailHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -50,53 +52,23 @@ class SendDunningEmailHandler
             return;
         }
 
+        $locale = $owner->getLocale();
         $billingUrl = sprintf('%s/settings/billing', rtrim($this->frontendUrl, '/'));
         $firstName = $owner->getFirstName() ? ' ' . $owner->getFirstName() : '';
+        $params = [
+            '%firstName%' => $firstName,
+            '%orgName%' => $org->getName(),
+            '%billingUrl%' => $billingUrl,
+        ];
 
-        [$subject, $body] = match ($message->attempt) {
-            1 => [
-                'Plata a esuat — actualizeaza metoda de plata',
-                sprintf(
-                    "Buna%s,\n\n"
-                    . "Plata abonamentului Storno.ro pentru organizatia \"%s\" a esuat.\n\n"
-                    . "Te rugam sa actualizezi metoda de plata pentru a evita intreruperea serviciului:\n%s\n\n"
-                    . "Daca ai intrebari, ne poti contacta la contact@storno.ro.\n\n"
-                    . "Echipa Storno.ro",
-                    $firstName,
-                    $org->getName(),
-                    $billingUrl,
-                ),
-            ],
-            2 => [
-                'Abonamentul tau este in pericol — actualizeaza metoda de plata',
-                sprintf(
-                    "Buna%s,\n\n"
-                    . "Inca nu am reusit sa procesam plata abonamentului Storno.ro pentru organizatia \"%s\".\n\n"
-                    . "Actualizeaza metoda de plata cat mai curand pentru a pastra accesul la toate functiile:\n%s\n\n"
-                    . "Daca nu actualizezi metoda de plata in urmatoarele zile, "
-                    . "accesul la contul tau va fi suspendat.\n\n"
-                    . "Echipa Storno.ro",
-                    $firstName,
-                    $org->getName(),
-                    $billingUrl,
-                ),
-            ],
-            default => [
-                'Ultima sansa — abonamentul tau va fi anulat',
-                sprintf(
-                    "Buna%s,\n\n"
-                    . "Aceasta este ultima notificare privind plata esecuata pentru abonamentul Storno.ro "
-                    . "al organizatiei \"%s\".\n\n"
-                    . "Daca nu actualizezi metoda de plata astazi, abonamentul tau va fi anulat "
-                    . "si vei pierde accesul la toate functiile premium.\n\n"
-                    . "Actualizeaza acum:\n%s\n\n"
-                    . "Echipa Storno.ro",
-                    $firstName,
-                    $org->getName(),
-                    $billingUrl,
-                ),
-            ],
+        $attemptKey = match ($message->attempt) {
+            1 => 'attempt1',
+            2 => 'attempt2',
+            default => 'attempt3',
         };
+
+        $subject = $this->translator->trans('dunning.' . $attemptKey . '_subject', $params, 'emails', $locale);
+        $body = $this->translator->trans('dunning.' . $attemptKey . '_body', $params, 'emails', $locale);
 
         try {
             $email = (new Email())

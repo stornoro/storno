@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendWelcomeEmailHandler
@@ -16,6 +17,7 @@ class SendWelcomeEmailHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -34,6 +36,7 @@ class SendWelcomeEmailHandler
             return;
         }
 
+        $locale = $user->getLocale();
         $baseUrl = rtrim($this->frontendUrl, '/');
         $anafUrl = sprintf('%s/efactura', $baseUrl);
         $invoiceUrl = sprintf('%s/invoices/new', $baseUrl);
@@ -43,28 +46,12 @@ class SendWelcomeEmailHandler
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($user->getEmail())
-                ->subject('Bun venit pe Storno.ro!')
-                ->text(sprintf(
-                    "Buna%s,\n\n"
-                    . "Bun venit pe Storno.ro! Contul tau a fost confirmat si esti gata sa incepi.\n\n"
-                    . "Iata cum sa incepi:\n\n"
-                    . "1. Conecteaza-te la ANAF pentru sincronizarea automata a facturilor e-Factura:\n"
-                    . "   %s\n\n"
-                    . "2. Creeaza prima ta factura:\n"
-                    . "   %s\n\n"
-                    . "Perioada ta de proba de 14 zile iti ofera acces la toate functiile planului Starter:\n"
-                    . "- Sincronizare automata e-Factura (la 12 ore)\n"
-                    . "- Generare PDF facturi\n"
-                    . "- Trimitere facturi pe email\n"
-                    . "- Rapoarte si statistici\n"
-                    . "- Aplicatie mobila\n"
-                    . "- Pana la 3 companii si 3 utilizatori\n\n"
-                    . "Daca ai nevoie de ajutor, raspunde la acest email sau scrie-ne la contact@storno.ro.\n\n"
-                    . "Echipa Storno.ro",
-                    $firstName,
-                    $anafUrl,
-                    $invoiceUrl,
-                ));
+                ->subject($this->translator->trans('welcome.subject', [], 'emails', $locale))
+                ->text($this->translator->trans('welcome.body', [
+                    '%firstName%' => $firstName,
+                    '%anafUrl%' => $anafUrl,
+                    '%invoiceUrl%' => $invoiceUrl,
+                ], 'emails', $locale));
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', 'welcome');
             $this->mailer->send($email);

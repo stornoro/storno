@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendReEngagementEmailHandler
@@ -16,6 +17,7 @@ class SendReEngagementEmailHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -34,6 +36,7 @@ class SendReEngagementEmailHandler
             return;
         }
 
+        $locale = $user->getLocale();
         $baseUrl = rtrim($this->frontendUrl, '/');
         $firstName = $user->getFirstName() ? ' ' . $user->getFirstName() : '';
 
@@ -41,21 +44,11 @@ class SendReEngagementEmailHandler
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($user->getEmail())
-                ->subject('Ne este dor de tine — ce e nou pe Storno.ro')
-                ->text(sprintf(
-                    "Buna%s,\n\n"
-                    . "Nu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam "
-                    . "despre ce am adaugat recent:\n\n"
-                    . "- Sincronizare imbunatatita cu e-Factura ANAF\n"
-                    . "- Export avansat CSV si PDF\n"
-                    . "- Statistici si rapoarte detaliate\n"
-                    . "- Notificari pentru facturi scadente\n\n"
-                    . "Revino si verifica toate noutatile:\n%s\n\n"
-                    . "Daca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\n"
-                    . "Echipa Storno.ro",
-                    $firstName,
-                    $baseUrl,
-                ));
+                ->subject($this->translator->trans('re_engagement.subject', [], 'emails', $locale))
+                ->text($this->translator->trans('re_engagement.body', [
+                    '%firstName%' => $firstName,
+                    '%baseUrl%' => $baseUrl,
+                ], 'emails', $locale));
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', 're_engagement');
             $this->mailer->send($email);
