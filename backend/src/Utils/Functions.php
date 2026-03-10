@@ -16,7 +16,16 @@ class Functions
         file_put_contents($tempFile, $zipData);
 
         $zip = new \ZipArchive();
-        $zip->open($tempFile);
+        $result = $zip->open($tempFile);
+
+        if ($result !== true) {
+            unlink($tempFile);
+            throw new \RuntimeException(sprintf(
+                'Failed to open ZIP (error code %d). Response may not be a valid ZIP archive (received %d bytes).',
+                $result,
+                strlen($zipData)
+            ));
+        }
 
         $xml = false;
         $signature = null;
