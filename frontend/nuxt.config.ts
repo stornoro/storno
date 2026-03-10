@@ -49,11 +49,19 @@ export default defineNuxtConfig({
   i18n: {
     locales: [
       { code: 'ro', name: 'Romana', file: 'ro.ts' },
+      { code: 'en', name: 'English', file: 'en.ts' },
     ],
     defaultLocale: 'ro',
     strategy: 'no_prefix',
     lazy: true,
     langDir: '../i18n/',
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'i18n_locale',
+      redirectOn: 'root',
+      alwaysRedirect: false,
+      fallbackLocale: 'ro',
+    },
     bundle: {
       optimizeTranslationDirective: false,
     },

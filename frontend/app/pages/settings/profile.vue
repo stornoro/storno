@@ -3,12 +3,23 @@ import { z } from 'zod'
 
 definePageMeta({ middleware: 'auth' })
 
-const { t: $t } = useI18n()
+const { t: $t, locale, setLocale } = useI18n()
 useHead({ title: $t('settings.profile.title') })
 const authStore = useAuthStore()
 const passkeyComposable = usePasskey()
 const mfa = useMfa()
 const toast = useToast()
+
+const languageOptions = [
+  { label: 'Romana', value: 'ro' },
+  { label: 'English', value: 'en' },
+]
+const selectedLanguage = ref(locale.value)
+
+async function onLanguageChange(value: string) {
+  selectedLanguage.value = value
+  await setLocale(value)
+}
 
 const loading = ref(false)
 const deleteModalOpen = ref(false)
@@ -316,6 +327,18 @@ onMounted(() => {
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
         <UInput v-model="formState.email" type="email" disabled autocomplete="email" />
+      </UFormField>
+      <USeparator />
+      <UFormField
+        :label="$t('settings.language')"
+        class="flex max-sm:flex-col justify-between items-start gap-4"
+      >
+        <USelect
+          :model-value="selectedLanguage"
+          :items="languageOptions"
+          value-key="value"
+          @update:model-value="onLanguageChange"
+        />
       </UFormField>
     </UPageCard>
   </UForm>
