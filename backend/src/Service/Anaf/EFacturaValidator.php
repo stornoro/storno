@@ -21,7 +21,8 @@ class EFacturaValidator
     public function validate(Invoice $invoice): ValidationResult
     {
         $errors = [];
-        $isRefund = $invoice->getParentDocument() !== null;
+        $isRefund = $invoice->getParentDocument() !== null
+            || bccomp($invoice->getTotal(), '0', 2) < 0;
 
         // Load valid VAT rates from company's configuration
         $company = $invoice->getCompany();
