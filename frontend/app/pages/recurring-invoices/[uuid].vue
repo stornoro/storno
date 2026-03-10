@@ -247,14 +247,14 @@
 
           <UTable :data="recurringInvoice.lines || []" :columns="lineColumns">
             <template #unitPrice-cell="{ row }">
-              {{ formatMoney(row.original.unitPrice, recurringInvoice.currency) }}
+              {{ formatMoney(row.original.unitPrice, row.original.referenceCurrency || recurringInvoice.currency) }}
             </template>
             <template #vatAmount-cell="{ row }">
-              {{ formatMoney(row.original.vatAmount, recurringInvoice.currency) }}
+              {{ formatMoney(row.original.vatAmount, row.original.referenceCurrency || recurringInvoice.currency) }}
               <span class="text-(--ui-text-muted) text-xs">({{ row.original.vatRate }}%)</span>
             </template>
             <template #lineTotal-cell="{ row }">
-              <span class="font-medium">{{ formatMoney(row.original.lineTotal, recurringInvoice.currency) }}</span>
+              <span class="font-medium">{{ formatMoney(row.original.lineTotal, row.original.referenceCurrency || recurringInvoice.currency) }}</span>
             </template>
             <template #quantity-cell="{ row }">
               {{ row.original.quantity }} {{ row.original.unitOfMeasure }}
