@@ -595,8 +595,6 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'At least one line is required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $isRefund = !empty($data['parentDocumentId']) || in_array($data['invoiceTypeCode'] ?? '', ['381', '383', '384'], true);
-
         foreach ($data['lines'] as $i => $line) {
             if (empty($line['description'])) {
                 $this->logger->warning('Invoice create: input validation failed', [
@@ -607,25 +605,13 @@ class InvoiceController extends AbstractController
                 return $this->json(['error' => "Line $i: description is required."], Response::HTTP_BAD_REQUEST);
             }
             $qty = (float) ($line['quantity'] ?? 0);
-            if ($isRefund) {
-                // Refund: quantity must be non-zero (negative for refund lines, positive for new lines)
-                if ($qty == 0) {
-                    $this->logger->warning('Invoice create: input validation failed', [
-                        'error' => "Line $i: quantity must be non-zero.",
-                        'companyId' => (string) $company->getId(),
-                        'userId' => (string) $user->getId(),
-                    ]);
-                    return $this->json(['error' => "Line $i: quantity must be non-zero."], Response::HTTP_BAD_REQUEST);
-                }
-            } else {
-                if ($qty <= 0) {
-                    $this->logger->warning('Invoice create: input validation failed', [
-                        'error' => "Line $i: quantity must be positive.",
-                        'companyId' => (string) $company->getId(),
-                        'userId' => (string) $user->getId(),
-                    ]);
-                    return $this->json(['error' => "Line $i: quantity must be positive."], Response::HTTP_BAD_REQUEST);
-                }
+            if ($qty == 0) {
+                $this->logger->warning('Invoice create: input validation failed', [
+                    'error' => "Line $i: quantity must be non-zero.",
+                    'companyId' => (string) $company->getId(),
+                    'userId' => (string) $user->getId(),
+                ]);
+                return $this->json(['error' => "Line $i: quantity must be non-zero."], Response::HTTP_BAD_REQUEST);
             }
             if (!isset($line['unitPrice']) || (float) $line['unitPrice'] < 0) {
                 $this->logger->warning('Invoice create: input validation failed', [
