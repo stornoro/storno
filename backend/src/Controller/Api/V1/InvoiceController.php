@@ -595,7 +595,7 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'At least one line is required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $isRefund = !empty($data['parentDocumentId']);
+        $isRefund = !empty($data['parentDocumentId']) || in_array($data['invoiceTypeCode'] ?? '', ['381', '383', '384'], true);
 
         foreach ($data['lines'] as $i => $line) {
             if (empty($line['description'])) {
