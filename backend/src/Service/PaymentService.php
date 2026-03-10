@@ -27,6 +27,12 @@ class PaymentService
         }
 
         $balance = $invoice->getBalance();
+
+        // Negative invoices (refunds) are auto-settled — no payments needed
+        if (bccomp($invoice->getTotal(), '0', 2) < 0) {
+            throw new \DomainException('Refund invoices are automatically settled and do not accept payments.');
+        }
+
         if (bccomp($amount, $balance, 2) > 0) {
             throw new \DomainException('Payment amount cannot exceed the remaining balance of ' . $balance . '.');
         }
