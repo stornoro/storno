@@ -603,7 +603,6 @@ class InvoiceManager
             $invoice->setPaymentMethod($parentPaymentMethod);
 
             $settlementEvent = new DocumentEvent();
-            $settlementEvent->setPreviousStatus($newStatus);
             $settlementEvent->setNewStatus($newStatus);
             $settlementEvent->setCreatedBy($user);
             $settlementEvent->setMetadata([
