@@ -1239,8 +1239,16 @@ function getEventTitle(event: any): string {
   if (meta?.action === 'submitted') return $t('invoices.eventSubmitted')
   if (meta?.action === 'cancelled') return $t('invoices.eventCancelled')
   if (meta?.action === 'submitted_to_anaf') return $t('invoices.eventSentToAnaf')
+  if (meta?.action === 'synced_from_anaf') return $t('invoices.eventSyncedFromAnaf')
   if (meta?.action === 'anaf_validated') return $t('invoices.eventAnafValidated')
   if (meta?.action === 'anaf_rejected') return $t('invoices.eventAnafRejected')
+  if (meta?.action === 'payment_recorded') return $t('invoices.eventPaymentRecorded')
+  if (meta?.action === 'payment_deleted') return $t('invoices.eventPaymentDeleted')
+  if (meta?.action === 'all_payments_deleted') return $t('invoices.eventAllPaymentsDeleted')
+  if (meta?.action === 'refunded') return $t('invoices.eventRefunded')
+  if (meta?.action === 'storno_created') return $t('invoices.eventStornoCreated')
+  if (meta?.action === 'refund_issued') return $t('invoices.eventRefundIssued')
+  if (meta?.action === 'restored') return $t('invoices.eventRestored')
   if (event.previousStatus) {
     return `${$t(`documentStatus.${event.previousStatus}`)} → ${$t(`documentStatus.${event.newStatus}`)}`
   }
