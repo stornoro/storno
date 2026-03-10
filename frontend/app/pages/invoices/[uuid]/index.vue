@@ -86,7 +86,7 @@
 
             <!-- Payment -->
             <UButton
-              v-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && !invoice.paidAt"
+              v-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && !invoice.paidAt && Number(invoice.total) >= 0"
               icon="i-lucide-banknote"
               color="primary"
               variant="soft"
@@ -95,7 +95,7 @@
               {{ $t('invoices.recordPayment') }}
             </UButton>
             <UButton
-              v-else-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.paidAt"
+              v-else-if="invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.paidAt && Number(invoice.total) >= 0"
               icon="i-lucide-circle-check"
               color="success"
               variant="soft"
@@ -342,7 +342,7 @@
                   <dd class="font-semibold mt-0.5 flex items-center gap-2" :class="Number(invoice.balance) > 0 ? 'text-amber-600' : 'text-green-600'">
                     {{ formatMoney(invoice.balance, invoice.currency) }}
                     <UButton
-                      v-if="Number(invoice.balance) > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled'"
+                      v-if="Number(invoice.balance) > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && Number(invoice.total) >= 0"
                       size="xs"
                       variant="soft"
                       color="success"
