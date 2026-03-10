@@ -1,0 +1,40 @@
+# Email translations — Romanian
+
+confirmation:
+  subject: 'Confirma adresa de email — Storno.ro'
+  body: "Buna%firstName%,\n\nMultumim pentru inregistrare pe Storno.ro!\n\nConfirma adresa de email accesand linkul de mai jos:\n%confirmUrl%\n\nLinkul este valid 24 de ore.\n\nDaca nu ai creat un cont pe Storno.ro, ignora acest email.\n\nEchipa Storno.ro"
+
+welcome:
+  subject: 'Bun venit pe Storno.ro!'
+  body: "Buna%firstName%,\n\nBun venit pe Storno.ro! Contul tau a fost confirmat si esti gata sa incepi.\n\nIata cum sa incepi:\n\n1. Conecteaza-te la ANAF pentru sincronizarea automata a facturilor e-Factura:\n   %anafUrl%\n\n2. Creeaza prima ta factura:\n   %invoiceUrl%\n\nPerioada ta de proba de 14 zile iti ofera acces la toate functiile planului Starter:\n- Sincronizare automata e-Factura (la 12 ore)\n- Generare PDF facturi\n- Trimitere facturi pe email\n- Rapoarte si statistici\n- Aplicatie mobila\n- Pana la 3 companii si 3 utilizatori\n\nDaca ai nevoie de ajutor, raspunde la acest email sau scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"
+
+password_reset:
+  subject: 'Resetare parola — Storno.ro'
+  body: "Buna,\n\nAm primit o cerere de resetare a parolei pentru contul tau Storno.ro.\n\nReseteaza parola accesand linkul de mai jos:\n%resetUrl%\n\nLinkul este valid 2 ore.\n\nDaca nu ai solicitat resetarea parolei, ignora acest email.\n\nEchipa Storno.ro"
+
+mfa_otp:
+  subject: 'Cod de verificare — Storno.ro'
+  body: "Buna,\n\nCodul tau de verificare este: %code%\n\nCodul este valid 5 minute.\n\nDaca nu ai solicitat acest cod, ignora acest email.\n\nEchipa Storno.ro"
+
+invitation:
+  subject: 'Invitatie Storno.ro — %orgName%'
+  body: "Buna,\n\n%inviterName% te-a invitat sa te alaturi organizatiei \"%orgName%\" pe Storno.ro.\n\nRolul tau va fi: %role%\n\nAccepta invitatia aici:\n%acceptUrl%\n\nInvitatia expira pe %expiresAt%.\n\nDaca nu ai un cont, te poti inregistra folosind linkul de mai sus.\n\nEchipa Storno.ro"
+
+dunning:
+  attempt1_subject: 'Plata a esuat — actualizeaza metoda de plata'
+  attempt1_body: "Buna%firstName%,\n\nPlata abonamentului Storno.ro pentru organizatia \"%orgName%\" a esuat.\n\nTe rugam sa actualizezi metoda de plata pentru a evita intreruperea serviciului:\n%billingUrl%\n\nDaca ai intrebari, ne poti contacta la contact@storno.ro.\n\nEchipa Storno.ro"
+  attempt2_subject: 'Abonamentul tau este in pericol — actualizeaza metoda de plata'
+  attempt2_body: "Buna%firstName%,\n\nInca nu am reusit sa procesam plata abonamentului Storno.ro pentru organizatia \"%orgName%\".\n\nActualizeaza metoda de plata cat mai curand pentru a pastra accesul la toate functiile:\n%billingUrl%\n\nDaca nu actualizezi metoda de plata in urmatoarele zile, accesul la contul tau va fi suspendat.\n\nEchipa Storno.ro"
+  attempt3_subject: 'Ultima sansa — abonamentul tau va fi anulat'
+  attempt3_body: "Buna%firstName%,\n\nAceasta este ultima notificare privind plata esecuata pentru abonamentul Storno.ro al organizatiei \"%orgName%\".\n\nDaca nu actualizezi metoda de plata astazi, abonamentul tau va fi anulat si vei pierde accesul la toate functiile premium.\n\nActualizeaza acum:\n%billingUrl%\n\nEchipa Storno.ro"
+
+trial_expiration:
+  subject: 'Perioada de proba expira %urgency% — aboneaza-te pentru a pastra accesul'
+  body: "Buna%firstName%,\n\nPerioada ta de proba Storno.ro pentru organizatia \"%orgName%\" expira %urgency% (%trialEndsAt%).\n\nDupa expirare, vei pierde accesul la:\n- Sincronizare automata e-Factura\n- Generare PDF facturi\n- Trimitere facturi pe email\n- Rapoarte si statistici\n- Aplicatie mobila\n- Si multe altele din planul Starter\n\nAboneaza-te acum pentru a pastra toate aceste functii:\n%billingUrl%\n\nEchipa Storno.ro"
+  urgency_tomorrow: 'maine'
+  urgency_3days: 'in 3 zile'
+  urgency_7days: 'in 7 zile'
+
+re_engagement:
+  subject: 'Ne este dor de tine — ce e nou pe Storno.ro'
+  body: "Buna%firstName%,\n\nNu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam despre ce am adaugat recent:\n\n- Sincronizare imbunatatita cu e-Factura ANAF\n- Export avansat CSV si PDF\n- Statistici si rapoarte detaliate\n- Notificari pentru facturi scadente\n\nRevino si verifica toate noutatile:\n%baseUrl%\n\nDaca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"

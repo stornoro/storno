@@ -64,7 +64,7 @@ class PasswordResetController extends AbstractController
         $this->entityManager->persist($resetPassword);
         $this->entityManager->flush();
 
-        $this->messageBus->dispatch(new SendPasswordResetMessage($user->getEmail(), $token));
+        $this->messageBus->dispatch(new SendPasswordResetMessage($user->getEmail(), $token, $user->getLocale()));
 
         return $this->json(['message' => 'If an account exists with this email, a reset link has been sent.']);
     }

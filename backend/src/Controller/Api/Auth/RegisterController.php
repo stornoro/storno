@@ -65,6 +65,13 @@ class RegisterController extends AbstractController
             return $this->json(['error' => 'An account with this email already exists.'], Response::HTTP_CONFLICT);
         }
 
+        // Detect locale: prefer explicit payload, fall back to Accept-Language header
+        $locale = $data['locale'] ?? null;
+        if (!$locale || !in_array($locale, ['ro', 'en'], true)) {
+            $acceptLang = $request->headers->get('Accept-Language', '');
+            $locale = str_contains($acceptLang, 'ro') ? 'ro' : 'en';
+        }
+
         $user = new User();
         $user->setEmail($data['email']);
         $user->setFirstName($data['firstName'] ?? null);
@@ -73,6 +80,7 @@ class RegisterController extends AbstractController
         $user->setActive(true);
         $user->setEmailVerified(false);
         $user->setRoles(['ROLE_USER']);
+        $user->setLocale($locale);
 
         // Self-hosted / Community Edition: block creating additional organizations
         if ($this->licenseValidationService->isSelfHosted() || $this->licenseManager->isCommunityEdition()) {

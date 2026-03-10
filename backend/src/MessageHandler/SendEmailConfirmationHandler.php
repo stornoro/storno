@@ -10,6 +10,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendEmailConfirmationHandler
@@ -17,6 +18,7 @@ class SendEmailConfirmationHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -53,23 +55,19 @@ class SendEmailConfirmationHandler
             return;
         }
 
+        $locale = $user->getLocale();
         $confirmUrl = sprintf('%s/confirm-email?token=%s', rtrim($this->frontendUrl, '/'), $confirmation->getToken());
+        $firstName = $user->getFirstName() ? ' ' . $user->getFirstName() : '';
 
         try {
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($user->getEmail())
-                ->subject('Confirma adresa de email — Storno.ro')
-                ->text(sprintf(
-                    "Buna%s,\n\n"
-                    . "Multumim pentru inregistrare pe Storno.ro!\n\n"
-                    . "Confirma adresa de email accesand linkul de mai jos:\n%s\n\n"
-                    . "Linkul este valid 24 de ore.\n\n"
-                    . "Daca nu ai creat un cont pe Storno.ro, ignora acest email.\n\n"
-                    . "Echipa Storno.ro",
-                    $user->getFirstName() ? ' ' . $user->getFirstName() : '',
-                    $confirmUrl,
-                ));
+                ->subject($this->translator->trans('confirmation.subject', [], 'emails', $locale))
+                ->text($this->translator->trans('confirmation.body', [
+                    '%firstName%' => $firstName,
+                    '%confirmUrl%' => $confirmUrl,
+                ], 'emails', $locale));
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', 'email_confirmation');
             $this->mailer->send($email);

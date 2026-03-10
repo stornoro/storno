@@ -1,0 +1,40 @@
+# Email translations — English
+
+confirmation:
+  subject: 'Confirm your email — Storno.ro'
+  body: "Hi%firstName%,\n\nThank you for signing up on Storno.ro!\n\nConfirm your email address by clicking the link below:\n%confirmUrl%\n\nThe link is valid for 24 hours.\n\nIf you did not create an account on Storno.ro, please ignore this email.\n\nThe Storno.ro Team"
+
+welcome:
+  subject: 'Welcome to Storno.ro!'
+  body: "Hi%firstName%,\n\nWelcome to Storno.ro! Your account has been confirmed and you are ready to get started.\n\nHere is how to begin:\n\n1. Connect to ANAF for automatic e-Invoice synchronization:\n   %anafUrl%\n\n2. Create your first invoice:\n   %invoiceUrl%\n\nYour 14-day trial gives you access to all Starter plan features:\n- Automatic e-Invoice sync (every 12 hours)\n- PDF invoice generation\n- Send invoices by email\n- Reports and statistics\n- Mobile app\n- Up to 3 companies and 3 users\n\nIf you need help, reply to this email or write to us at contact@storno.ro.\n\nThe Storno.ro Team"
+
+password_reset:
+  subject: 'Reset your password — Storno.ro'
+  body: "Hi,\n\nWe received a request to reset the password for your Storno.ro account.\n\nReset your password by clicking the link below:\n%resetUrl%\n\nThe link is valid for 2 hours.\n\nIf you did not request a password reset, please ignore this email.\n\nThe Storno.ro Team"
+
+mfa_otp:
+  subject: 'Verification code — Storno.ro'
+  body: "Hi,\n\nYour verification code is: %code%\n\nThe code is valid for 5 minutes.\n\nIf you did not request this code, please ignore this email.\n\nThe Storno.ro Team"
+
+invitation:
+  subject: 'Storno.ro invitation — %orgName%'
+  body: "Hi,\n\n%inviterName% has invited you to join the organization \"%orgName%\" on Storno.ro.\n\nYour role will be: %role%\n\nAccept the invitation here:\n%acceptUrl%\n\nThe invitation expires on %expiresAt%.\n\nIf you do not have an account, you can register using the link above.\n\nThe Storno.ro Team"
+
+dunning:
+  attempt1_subject: 'Payment failed — update your payment method'
+  attempt1_body: "Hi%firstName%,\n\nThe subscription payment for your Storno.ro organization \"%orgName%\" has failed.\n\nPlease update your payment method to avoid service interruption:\n%billingUrl%\n\nIf you have questions, contact us at contact@storno.ro.\n\nThe Storno.ro Team"
+  attempt2_subject: 'Your subscription is at risk — update your payment method'
+  attempt2_body: "Hi%firstName%,\n\nWe still have not been able to process the subscription payment for your Storno.ro organization \"%orgName%\".\n\nPlease update your payment method as soon as possible to keep access to all features:\n%billingUrl%\n\nIf you do not update your payment method in the next few days, your account access will be suspended.\n\nThe Storno.ro Team"
+  attempt3_subject: 'Last chance — your subscription will be cancelled'
+  attempt3_body: "Hi%firstName%,\n\nThis is the final notice regarding the failed payment for the Storno.ro subscription of organization \"%orgName%\".\n\nIf you do not update your payment method today, your subscription will be cancelled and you will lose access to all premium features.\n\nUpdate now:\n%billingUrl%\n\nThe Storno.ro Team"
+
+trial_expiration:
+  subject: 'Your trial expires %urgency% — subscribe to keep access'
+  body: "Hi%firstName%,\n\nYour Storno.ro trial for the organization \"%orgName%\" expires %urgency% (%trialEndsAt%).\n\nAfter expiration, you will lose access to:\n- Automatic e-Invoice sync\n- PDF invoice generation\n- Send invoices by email\n- Reports and statistics\n- Mobile app\n- And more Starter plan features\n\nSubscribe now to keep all these features:\n%billingUrl%\n\nThe Storno.ro Team"
+  urgency_tomorrow: 'tomorrow'
+  urgency_3days: 'in 3 days'
+  urgency_7days: 'in 7 days'
+
+re_engagement:
+  subject: "We miss you — what's new on Storno.ro"
+  body: "Hi%firstName%,\n\nWe have not seen you on Storno.ro for a while and wanted to let you know about what we have added recently:\n\n- Improved e-Invoice ANAF synchronization\n- Advanced CSV and PDF export\n- Detailed statistics and reports\n- Notifications for overdue invoices\n\nCome back and check out all the updates:\n%baseUrl%\n\nIf you have questions or suggestions, write to us at contact@storno.ro.\n\nThe Storno.ro Team"

@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 class SendInvitationEmailHandler
@@ -16,6 +17,7 @@ class SendInvitationEmailHandler
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly TranslatorInterface $translator,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
         private readonly ?MailerInterface $mailer = null,
@@ -40,6 +42,7 @@ class SendInvitationEmailHandler
             return;
         }
 
+        $locale = $invitation->getInvitedBy()->getLocale();
         $orgName = $invitation->getOrganization()->getName();
         $inviterName = sprintf('%s %s', $invitation->getInvitedBy()->getFirstName(), $invitation->getInvitedBy()->getLastName());
         $acceptUrl = sprintf('%s/invite/%s', rtrim($this->frontendUrl, '/'), $invitation->getToken());
@@ -48,20 +51,16 @@ class SendInvitationEmailHandler
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($invitation->getEmail())
-                ->subject(sprintf('Invitatie Storno.ro — %s', $orgName))
-                ->text(sprintf(
-                    "Buna,\n\n%s te-a invitat sa te alaturi organizatiei \"%s\" pe Storno.ro.\n\n"
-                    . "Rolul tau va fi: %s\n\n"
-                    . "Accepta invitatia aici:\n%s\n\n"
-                    . "Invitatia expira pe %s.\n\n"
-                    . "Daca nu ai un cont, te poti inregistra folosind linkul de mai sus.\n\n"
-                    . "Echipa Storno.ro",
-                    $inviterName,
-                    $orgName,
-                    $invitation->getRole()->label(),
-                    $acceptUrl,
-                    $invitation->getExpiresAt()->format('d.m.Y H:i'),
-                ));
+                ->subject($this->translator->trans('invitation.subject', [
+                    '%orgName%' => $orgName,
+                ], 'emails', $locale))
+                ->text($this->translator->trans('invitation.body', [
+                    '%inviterName%' => $inviterName,
+                    '%orgName%' => $orgName,
+                    '%role%' => $invitation->getRole()->label(),
+                    '%acceptUrl%' => $acceptUrl,
+                    '%expiresAt%' => $invitation->getExpiresAt()->format('d.m.Y H:i'),
+                ], 'emails', $locale));
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', 'invitation');
             $this->mailer->send($email);

@@ -7,5 +7,6 @@ final readonly class SendPasswordResetMessage
     public function __construct(
         public string $email,
         public string $token,
+        public string $locale = 'ro',
     ) {}
 }
