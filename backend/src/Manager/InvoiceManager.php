@@ -233,6 +233,11 @@ class InvoiceManager
         // Recalculate totals
         $this->recalculateTotals($invoice);
 
+        // Auto-settle negative invoices (refunds) — balance should be 0
+        if (bccomp($invoice->getTotal(), '0', 2) < 0) {
+            $invoice->setAmountPaid($invoice->getTotal());
+        }
+
         // Add document event
         $event = new DocumentEvent();
         $event->setNewStatus(DocumentStatus::DRAFT);
@@ -461,6 +466,11 @@ class InvoiceManager
 
         // Recalculate totals
         $this->recalculateTotals($invoice);
+
+        // Auto-settle negative invoices (refunds) — balance should be 0
+        if (bccomp($invoice->getTotal(), '0', 2) < 0) {
+            $invoice->setAmountPaid($invoice->getTotal());
+        }
 
         // Invalidate cached XML — it must be regenerated to reflect changes
         $invoice->setXmlPath(null);
