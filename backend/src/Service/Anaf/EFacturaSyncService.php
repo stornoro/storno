@@ -297,12 +297,18 @@ class EFacturaSyncService
             return false;
         }
 
-        // Batch idempotency check
+        // Batch idempotency check — skip if invoice already exists
         if (isset($existingIds[$messageId])) {
             $result->incrementSkippedDuplicates();
             if ($spvMessage) {
                 $spvMessage->setStatus('processed');
             }
+            return false;
+        }
+
+        // Skip messages already processed or permanently failed (avoids re-downloading from ANAF)
+        if ($spvMessage && in_array($spvMessage->getStatus(), ['processed', 'error'], true)) {
+            $result->incrementSkippedDuplicates();
             return false;
         }
 
