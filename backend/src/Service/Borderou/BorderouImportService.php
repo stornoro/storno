@@ -85,10 +85,16 @@ class BorderouImportService
         // 3. Read headers and rows
         $preview = $fileParser->preview($filePath, 1);
         $headers = $preview['headers'];
+        $metadata = $preview['metadata'] ?? [];
         $rows = $fileParser->parse($filePath);
 
         // 4. Find borderou parser
         $bordParser = $this->findBordereauParser($provider, $sourceType, $headers);
+
+        // Pass file metadata (preamble key-value pairs) to the parser if supported
+        if ($bordParser && method_exists($bordParser, 'setMetadata')) {
+            $bordParser->setMetadata($metadata);
+        }
         if (!$bordParser) {
             $job->setStatus('failed');
             $job->setErrors(['No borderou parser found for provider: ' . $provider]);
