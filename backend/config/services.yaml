@@ -201,6 +201,9 @@ services:
     App\Service\Borderou\Parser\BcrBankStatementParser:
         tags: ['app.borderou_parser']
 
+    App\Service\Borderou\Parser\BtBankStatementParser:
+        tags: ['app.borderou_parser']
+
     App\Service\Borderou\Parser\EmagMarketplaceParser:
         tags: ['app.borderou_parser']
 
