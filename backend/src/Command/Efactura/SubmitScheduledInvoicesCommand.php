@@ -2,8 +2,11 @@
 
 namespace App\Command\Efactura;
 
+use App\Entity\DocumentEvent;
 use App\Entity\Invoice;
+use App\Enum\DocumentStatus;
 use App\Enum\EInvoiceProvider;
+use App\Event\Invoice\InvoiceSentToProviderEvent;
 use App\Message\EInvoice\SubmitEInvoiceMessage;
 use App\Repository\CompanyEInvoiceConfigRepository;
 use App\Repository\InvoiceRepository;
@@ -17,6 +20,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[AsCommand(
     name: 'app:efactura:submit-scheduled',
@@ -30,6 +34,7 @@ class SubmitScheduledInvoicesCommand extends Command
         private readonly AnafTokenResolver $anafTokenResolver,
         private readonly MessageBusInterface $messageBus,
         private readonly EntityManagerInterface $entityManager,
+        private readonly EventDispatcherInterface $eventDispatcher,
         private readonly LoggerInterface $logger,
     ) {
         parent::__construct();
@@ -85,10 +90,20 @@ class SubmitScheduledInvoicesCommand extends Command
                 continue;
             }
 
-            // Clear scheduledSendAt BEFORE dispatching to prevent duplicate submissions
-            // if the scheduler runs again before the handler processes the message
+            // Mark as sent_to_provider and create event (same as InvoiceManager::submitToAnaf)
+            $previousStatus = $invoice->getStatus();
+            $invoice->setStatus(DocumentStatus::SENT_TO_PROVIDER);
             $invoice->setScheduledSendAt(null);
+
+            $event = new DocumentEvent();
+            $event->setPreviousStatus($previousStatus);
+            $event->setNewStatus(DocumentStatus::SENT_TO_PROVIDER);
+            $event->setMetadata(['action' => 'submitted_to_anaf']);
+            $invoice->addEvent($event);
+
             $this->entityManager->flush();
+
+            $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
 
             $this->messageBus->dispatch(new SubmitEInvoiceMessage(
                 invoiceId: $invoiceId,
