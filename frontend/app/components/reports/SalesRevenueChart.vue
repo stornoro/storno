@@ -86,6 +86,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { formatMoney } = useMoney()
 const { colorMode, chartColors, defaultChartOptions } = useChartColors()
 
@@ -100,17 +101,17 @@ const hasData = computed(() => props.data.length > 0)
 
 const formattedTotal = computed(() => {
   const total = props.data.reduce((sum, d) => sum + (parseFloat(d.invoiced) || 0), 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
 })
 
 const totalInvoiced = computed(() => {
   const total = props.data.reduce((sum, d) => sum + (parseFloat(d.invoiced) || 0), 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
 })
 
 const totalCollected = computed(() => {
   const total = props.data.reduce((sum, d) => sum + (parseFloat(d.collected) || 0), 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
 })
 
 function formatMonth(ym: string): string {
@@ -118,7 +119,7 @@ function formatMonth(ym: string): string {
   const year = parts[0] ?? ''
   const month = parts[1] ?? '1'
   const date = new Date(Number(year), Number(month) - 1)
-  const short = new Intl.DateTimeFormat('ro-RO', { month: 'short' }).format(date)
+  const short = new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(date)
   return `${short} ${year.slice(2)}`
 }
 
@@ -164,7 +165,7 @@ const chartOptions = computed(() => ({
       callbacks: {
         label: (ctx: { dataset: { label?: string }; parsed: { y: number } }) => {
           const label = ctx.dataset.label ?? ''
-          const value = new Intl.NumberFormat('ro-RO', {
+          const value = new Intl.NumberFormat(intlLocale, {
             style: 'currency',
             currency: 'RON',
             maximumFractionDigits: 0,
@@ -181,7 +182,7 @@ const chartOptions = computed(() => ({
       ticks: {
         ...defaultChartOptions.value.scales?.y?.ticks,
         callback: (value: string | number) =>
-          new Intl.NumberFormat('ro-RO', {
+          new Intl.NumberFormat(intlLocale, {
             notation: 'compact',
             compactDisplay: 'short',
             currency: 'RON',

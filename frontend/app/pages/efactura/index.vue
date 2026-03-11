@@ -289,9 +289,11 @@ const tabItems = computed(() => {
   return items
 })
 
+const intlLocale = useIntlLocale()
+
 function formatDate(date: string | null): string {
   if (!date) return $t('common.never')
-  return new Intl.DateTimeFormat('ro-RO', {
+  return new Intl.DateTimeFormat(intlLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(date))
@@ -314,7 +316,7 @@ function formatRelativeTime(dateStr: string): string {
 
 function formatMoney(amount: string | number, currency = 'RON'): string {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(num)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(num)
 }
 
 function statusColor(status: string): string {

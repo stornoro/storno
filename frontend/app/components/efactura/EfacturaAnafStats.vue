@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 interface AnafStats {
   downtimeHours: number
@@ -87,7 +88,7 @@ function timeAgo(dateStr: string | null): string {
 
 function formatAbsoluteDate(dateStr: string | null): string {
   if (!dateStr) return ''
-  return new Intl.DateTimeFormat('ro-RO', {
+  return new Intl.DateTimeFormat(intlLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(dateStr))

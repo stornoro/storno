@@ -4,6 +4,7 @@ import type { StorageProvider } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('storageConfig.title') })
 const store = useStorageConfigStore()
 const toast = useToast()
@@ -161,7 +162,7 @@ async function onDelete() {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('ro-RO')
+  return new Date(dateStr).toLocaleString(intlLocale)
 }
 
 watch(() => form.value.provider, (newProvider) => {

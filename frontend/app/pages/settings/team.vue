@@ -4,6 +4,7 @@ import type { Invitation, TeamMember } from '~/types'
 definePageMeta({ middleware: ['auth', 'permissions'] })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('settings.team') })
 const teamStore = useTeamStore()
 const toast = useToast()
@@ -52,7 +53,7 @@ function getRoleColor(role: string): BadgeColor {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

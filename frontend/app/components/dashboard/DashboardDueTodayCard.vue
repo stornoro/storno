@@ -7,10 +7,11 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 function formatMoney(amount: string | number) {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(num)
 }
 </script>
 

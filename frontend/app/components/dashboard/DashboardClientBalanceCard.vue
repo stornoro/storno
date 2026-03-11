@@ -8,6 +8,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 // Group by counterparty and sum amounts (top 5 clients)
 const topClients = computed(() => {
@@ -34,7 +35,7 @@ const topClients = computed(() => {
 })
 
 function formatMoney(amount: number) {
-  return new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(amount)
+  return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(amount)
 }
 </script>
 

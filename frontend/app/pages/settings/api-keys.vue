@@ -4,6 +4,7 @@ import type { ApiKey, ApiKeyScope } from '~/types'
 definePageMeta({ middleware: ['auth', 'permissions'] })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('apiKeys.title') })
 const { can } = usePermissions()
 const store = useApiKeyStore()
@@ -77,7 +78,7 @@ function getStatusLabel(key: ApiKey): string {
 
 function formatDate(date: string | null): string {
   if (!date) return $t('apiKeys.never')
-  return new Date(date).toLocaleDateString('ro-RO', {
+  return new Date(date).toLocaleDateString(intlLocale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

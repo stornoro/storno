@@ -12,15 +12,16 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 function formatMoney(amount: string | number, currency = 'RON') {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency, maximumFractionDigits: 2 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency, maximumFractionDigits: 2 }).format(num)
 }
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(dateStr).toLocaleDateString(intlLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 const hasData = computed(() => props.outstandingCount > 0 || props.overdueCount > 0)
@@ -58,7 +59,7 @@ const totalUnpaidAmount = computed(() => Number(props.outstandingAmount || 0))
           <!-- Big amount -->
           <div class="flex items-baseline gap-1.5 mb-4">
             <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
-              {{ new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(totalUnpaidAmount) }}
+              {{ new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(totalUnpaidAmount) }}
             </span>
             <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
           </div>

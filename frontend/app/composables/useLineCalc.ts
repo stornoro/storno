@@ -62,8 +62,10 @@ export function resolveInvoiceTypeCode(
 }
 
 export function useLineCalc() {
+  const intlLocale = useIntlLocale()
+
   function formatMoney(amount: number, currency = 'RON') {
-    return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(amount)
+    return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(amount)
   }
 
   function lineNet(line: LineBase): number {

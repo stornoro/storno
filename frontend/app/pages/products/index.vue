@@ -204,8 +204,10 @@ const allColumnDefs = [
 
 const columns = computed(() => filterColumns(allColumnDefs))
 
+const intlLocale = useIntlLocale()
+
 function formatPrice(amount: number | string, currency?: string) {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency',
     currency: currency || companyStore.currentCompany?.defaultCurrency || 'RON',
     minimumFractionDigits: 2,

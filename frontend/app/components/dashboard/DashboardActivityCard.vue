@@ -7,6 +7,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const activities = computed(() => props.data.slice(0, 8))
 
 function formatDate(dateStr: string | null) {
@@ -15,13 +16,13 @@ function formatDate(dateStr: string | null) {
   const now = new Date()
   const isToday = date.toDateString() === now.toDateString()
 
-  const time = date.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
-  const dateFormatted = date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })
+  const time = date.toLocaleTimeString(intlLocale, { hour: '2-digit', minute: '2-digit' })
+  const dateFormatted = date.toLocaleDateString(intlLocale, { day: 'numeric', month: 'short' })
 
   if (isToday) {
-    return `azi, ${dateFormatted}, ora ${time}`
+    return `${$t('common.today')}, ${dateFormatted}, ${time}`
   }
-  return `${dateFormatted}, ora ${time}`
+  return `${dateFormatted}, ${time}`
 }
 
 function getCompanyName(item: RecentActivityItem) {
@@ -55,7 +56,7 @@ function getActivityLabel(item: RecentActivityItem) {
 
 function formatMoney(amount: string | number, currency = 'RON') {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(num)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(num)
 }
 </script>
 

@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const logs = ref<any[]>([])
 const loading = ref(true)
@@ -62,7 +63,7 @@ function shortEntityType(type: string): string {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleDateString('ro-RO')
+  return new Date(iso).toLocaleDateString(intlLocale)
 }
 
 async function fetchLogs() {

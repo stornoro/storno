@@ -2,6 +2,7 @@
 definePageMeta({ middleware: ['auth', 'permissions'] })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('importExport.title') })
 
 const importStore = useImportStore()
@@ -100,7 +101,7 @@ const statusColors: Record<string, string> = {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

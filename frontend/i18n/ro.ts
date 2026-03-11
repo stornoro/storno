@@ -3,6 +3,7 @@ export default defineI18nLocale(async () => {
     app: {
       name: 'Storno.ro',
       tagline: 'Factureaza cum vrei tu',
+      metaDescription: 'Gestioneaza facturile tale electronice cu Storno.ro.',
     },
 
     // ── Navigation ────────────────────────────────────────────────
@@ -1945,6 +1946,9 @@ export default defineI18nLocale(async () => {
       setActive: 'Seteaza ca activa',
       setActiveSuccess: 'Compania a fost setata ca activa.',
       readOnlyError: 'Nu poti face modificari pe aceasta companie. Fa upgrade sau selecteaza compania activa.',
+      addCompany: 'Adauga companie',
+      manageCompanies: 'Gestioneaza companii',
+      selectCompany: 'Selecteaza',
     },
 
     // ── Settings ─────────────────────────────────────────────────
@@ -2732,6 +2736,10 @@ export default defineI18nLocale(async () => {
       purgeExisting: 'Sterge datele existente',
       purgeExistingDesc: 'Sterge toate datele companiei inainte de restaurare. Aceasta actiune este ireversibila.',
 
+      // Type labels
+      typeBackup: 'Backup',
+      typeRestore: 'Restaurare',
+
       // History
       historyTitle: 'Istoric backup-uri',
       noHistory: 'Nu exista backup-uri anterioare',
@@ -2894,6 +2902,7 @@ export default defineI18nLocale(async () => {
       dateFrom: 'De la',
       dateTo: 'Pana la',
       selectedRange: 'Perioada selectata',
+      invalidDateRange: 'Selecteaza o perioada valida.',
 
       // Target
       targetLabel: 'Exporta pentru',

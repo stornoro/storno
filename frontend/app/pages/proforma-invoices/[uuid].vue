@@ -92,15 +92,15 @@
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.issueDate') }}</dt>
-                <dd class="font-medium">{{ proforma.issueDate ? new Date(proforma.issueDate).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ proforma.issueDate ? new Date(proforma.issueDate).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.dueDate') }}</dt>
-                <dd class="font-medium">{{ proforma.dueDate ? new Date(proforma.dueDate).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ proforma.dueDate ? new Date(proforma.dueDate).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.validUntil') }}</dt>
-                <dd class="font-medium">{{ proforma.validUntil ? new Date(proforma.validUntil).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ proforma.validUntil ? new Date(proforma.validUntil).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.currency') }}</dt>
@@ -108,23 +108,23 @@
               </div>
               <div v-if="proforma.sentAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.sentAt') }}</dt>
-                <dd class="font-medium">{{ new Date(proforma.sentAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(proforma.sentAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="proforma.acceptedAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.acceptedAt') }}</dt>
-                <dd class="font-medium">{{ new Date(proforma.acceptedAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(proforma.acceptedAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="proforma.rejectedAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.rejectedAt') }}</dt>
-                <dd class="font-medium">{{ new Date(proforma.rejectedAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(proforma.rejectedAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="proforma.cancelledAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.cancelledAt') }}</dt>
-                <dd class="font-medium">{{ new Date(proforma.cancelledAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(proforma.cancelledAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="proforma.expiredAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('proformaInvoices.expiredAt') }}</dt>
-                <dd class="font-medium">{{ new Date(proforma.expiredAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(proforma.expiredAt).toLocaleString(intlLocale) }}</dd>
               </div>
             </div>
           </UCard>
@@ -302,6 +302,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const toast = useToast()
 const proformaStore = useProformaInvoiceStore()
 const deliveryNoteStore = useDeliveryNoteStore()
@@ -332,7 +333,7 @@ const lineColumns = [
 ]
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'

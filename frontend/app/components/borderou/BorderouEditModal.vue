@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const store = useBordereauStore()
 const toast = useToast()
 
@@ -122,11 +123,11 @@ function collectAll(doc: any) {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(dateStr).toLocaleDateString(intlLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function formatAmount(amount: string | number, currency?: string): string {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(amount)) + (currency ? ' ' + currency : '')

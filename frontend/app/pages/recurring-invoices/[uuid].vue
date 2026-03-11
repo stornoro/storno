@@ -369,6 +369,7 @@ import type { RecurringInvoice } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const route = useRoute()
 const toast = useToast()
 const store = useRecurringInvoiceStore()
@@ -391,11 +392,11 @@ const lineColumns = [
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO')
+  return new Date(dateStr).toLocaleDateString(intlLocale)
 }
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 async function onToggle() {

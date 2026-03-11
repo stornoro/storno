@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('suppliers.title') })
 const router = useRouter()
 const store = useSupplierStore()
@@ -78,7 +79,7 @@ function getInitials(name: string): string {
 }
 
 function formatMoney(amount: number, cur?: string) {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency',
     currency: cur || store.currency || 'RON',
     minimumFractionDigits: 2,

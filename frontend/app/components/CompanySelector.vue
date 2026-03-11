@@ -21,11 +21,11 @@ const items = computed<DropdownMenuItem[][]>(() => {
       companyStore.selectCompany(company.id)
     }
   })), [{
-    label: 'Adauga companie',
+    label: $t('company.addCompany'),
     icon: 'i-lucide-circle-plus',
     to: '/companies'
   }, {
-    label: 'Gestioneaza companii',
+    label: $t('company.manageCompanies'),
     icon: 'i-lucide-cog',
     to: '/companies'
   }]]
@@ -42,7 +42,7 @@ const selectedCompany = computed(() => companyStore.currentCompany)
   >
     <UButton
       v-bind="{
-        label: collapsed ? undefined : selectedCompany?.name ?? 'Selecteaza',
+        label: collapsed ? undefined : selectedCompany?.name ?? $t('company.selectCompany'),
         trailingIcon: collapsed ? undefined : 'i-lucide-chevrons-up-down'
       }"
       color="neutral"

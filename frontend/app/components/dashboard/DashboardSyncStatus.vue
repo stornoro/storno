@@ -41,9 +41,10 @@ defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -51,7 +52,7 @@ function formatDate(dateStr: string) {
 }
 
 function formatDateFull(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

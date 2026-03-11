@@ -20,19 +20,19 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <UCard>
           <div class="text-sm text-muted">{{ $t('admin.telemetryTotalEvents') }}</div>
-          <div class="text-3xl font-bold mt-1">{{ stats.totalEvents.toLocaleString('ro-RO') }}</div>
+          <div class="text-3xl font-bold mt-1">{{ stats.totalEvents.toLocaleString(intlLocale) }}</div>
         </UCard>
         <UCard>
           <div class="text-sm text-muted">{{ $t('admin.telemetryToday') }}</div>
-          <div class="text-3xl font-bold mt-1">{{ stats.todayEvents.toLocaleString('ro-RO') }}</div>
+          <div class="text-3xl font-bold mt-1">{{ stats.todayEvents.toLocaleString(intlLocale) }}</div>
         </UCard>
         <UCard>
           <div class="text-sm text-muted">{{ $t('admin.telemetryThisWeek') }}</div>
-          <div class="text-3xl font-bold mt-1">{{ stats.weekEvents.toLocaleString('ro-RO') }}</div>
+          <div class="text-3xl font-bold mt-1">{{ stats.weekEvents.toLocaleString(intlLocale) }}</div>
         </UCard>
         <UCard>
           <div class="text-sm text-muted">{{ $t('admin.telemetryActiveUsers') }}</div>
-          <div class="text-3xl font-bold mt-1">{{ stats.uniqueUsers.toLocaleString('ro-RO') }}</div>
+          <div class="text-3xl font-bold mt-1">{{ stats.uniqueUsers.toLocaleString(intlLocale) }}</div>
         </UCard>
       </div>
 
@@ -67,7 +67,7 @@
           </template>
           <UTable :data="stats.topEvents" :columns="topEventsColumns">
             <template #count-cell="{ row }">
-              <span class="font-semibold tabular-nums">{{ row.original.count.toLocaleString('ro-RO') }}</span>
+              <span class="font-semibold tabular-nums">{{ row.original.count.toLocaleString(intlLocale) }}</span>
             </template>
           </UTable>
           <div v-if="!stats.topEvents.length" class="text-muted text-center py-4">
@@ -87,7 +87,7 @@
               class="flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated"
             >
               <UBadge :color="platformColor(p.platform)" variant="subtle">{{ p.platform }}</UBadge>
-              <span class="text-lg font-semibold tabular-nums">{{ p.count.toLocaleString('ro-RO') }}</span>
+              <span class="text-lg font-semibold tabular-nums">{{ p.count.toLocaleString(intlLocale) }}</span>
             </div>
           </div>
           <div v-if="!stats.platformBreakdown.length" class="text-muted text-center py-4">
@@ -163,6 +163,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { colorMode, chartColors, defaultChartOptions } = useChartColors()
 
 const loading = ref(true)
@@ -262,7 +263,7 @@ function platformColor(platform: string): BadgeColor {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('ro-RO')
+  return new Date(iso).toLocaleString(intlLocale)
 }
 
 const { get } = useApi()

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const props = defineProps<{
   summary: {
@@ -14,7 +15,7 @@ const props = defineProps<{
 }>()
 
 function formatAmount(amount: string): string {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(amount))

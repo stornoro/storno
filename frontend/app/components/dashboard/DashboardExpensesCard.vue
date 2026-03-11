@@ -43,9 +43,11 @@ const statusEntries = computed(() => {
   }))
 })
 
+const intlLocale = useIntlLocale()
+
 function formatMoney(amount: number | string) {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(num)
 }
 
 const statusColorMap: Record<string, string> = {

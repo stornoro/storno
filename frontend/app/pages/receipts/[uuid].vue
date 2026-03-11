@@ -92,7 +92,7 @@
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('receipts.issueDate') }}</dt>
-                <dd class="font-medium">{{ receipt.issueDate ? new Date(receipt.issueDate).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ receipt.issueDate ? new Date(receipt.issueDate).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('receipts.currency') }}</dt>
@@ -100,11 +100,11 @@
               </div>
               <div v-if="receipt.issuedAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('receipts.issuedAt') }}</dt>
-                <dd class="font-medium">{{ new Date(receipt.issuedAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(receipt.issuedAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="receipt.cancelledAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('receipts.cancelledAt') }}</dt>
-                <dd class="font-medium">{{ new Date(receipt.cancelledAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(receipt.cancelledAt).toLocaleString(intlLocale) }}</dd>
               </div>
             </div>
           </UCard>
@@ -342,6 +342,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const toast = useToast()
 const receiptStore = useReceiptStore()
 
@@ -372,7 +373,7 @@ const lineColumns = [
 ]
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function formatPaymentMethod(method: string | null): string {

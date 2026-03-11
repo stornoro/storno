@@ -6,6 +6,7 @@ import type { ProformaInvoice } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('proformaInvoices.title') })
 const { can } = usePermissions()
 const router = useRouter()
@@ -181,11 +182,11 @@ const allColumnDefs = [
 const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function formatPlainMoney(amount?: string | number) {
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
 }
 
 type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -334,10 +335,10 @@ onMounted(() => {
           <input :checked="isSelected(row.original.id)" type="checkbox" class="accent-primary" @click.stop @change="toggle(row.original.id)">
         </template>
         <template #issueDate-cell="{ row }">
-          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString('ro-RO') : '-' }}
+          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #validUntil-cell="{ row }">
-          {{ row.original.validUntil ? new Date(row.original.validUntil).toLocaleDateString('ro-RO') : '-' }}
+          {{ row.original.validUntil ? new Date(row.original.validUntil).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #subtotal-cell="{ row }">
           <span class="tabular-nums text-sm">{{ formatMoney(row.original.subtotal, row.original.currency) }}</span>
@@ -346,7 +347,7 @@ onMounted(() => {
           <span class="tabular-nums text-sm">{{ formatMoney(row.original.vatTotal, row.original.currency) }}</span>
         </template>
         <template #dueDate-cell="{ row }">
-          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString('ro-RO') : '-' }}</span>
+          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString(intlLocale) : '-' }}</span>
         </template>
         <template #clientName-cell="{ row }">
           {{ row.original.clientName || '-' }}

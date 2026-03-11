@@ -1,17 +1,19 @@
 interface FormatDateOptions {
-  /** Locale for Intl.DateTimeFormat. Defaults to 'ro-RO'. */
+  /** Locale for Intl.DateTimeFormat. Defaults to current i18n locale. */
   locale?: string
   /** Timezone. Defaults to 'Europe/Bucharest'. */
   timeZone?: string
 }
 
 /**
- * Date formatting composable for Romanian locale.
+ * Date formatting composable with locale-aware output.
  *
  * All date values arrive from the API as ISO-8601 strings and are
  * formatted using Intl.DateTimeFormat.
  */
 export function useDate() {
+  const intlLocale = useIntlLocale()
+
   /**
    * Format as a short date: "10.02.2026"
    */
@@ -23,7 +25,7 @@ export function useDate() {
     const date = typeof value === 'string' ? new Date(value) : value
     if (isNaN(date.getTime())) return '-'
 
-    const { locale = 'ro-RO', timeZone = 'Europe/Bucharest' } = options ?? {}
+    const { locale = intlLocale, timeZone = 'Europe/Bucharest' } = options ?? {}
 
     return new Intl.DateTimeFormat(locale, {
       day: '2-digit',
@@ -44,7 +46,7 @@ export function useDate() {
     const date = typeof value === 'string' ? new Date(value) : value
     if (isNaN(date.getTime())) return '-'
 
-    const { locale = 'ro-RO', timeZone = 'Europe/Bucharest' } = options ?? {}
+    const { locale = intlLocale, timeZone = 'Europe/Bucharest' } = options ?? {}
 
     return new Intl.DateTimeFormat(locale, {
       day: '2-digit',
@@ -67,7 +69,7 @@ export function useDate() {
     const date = typeof value === 'string' ? new Date(value) : value
     if (isNaN(date.getTime())) return '-'
 
-    const { locale = 'ro-RO', timeZone = 'Europe/Bucharest' } = options ?? {}
+    const { locale = intlLocale, timeZone = 'Europe/Bucharest' } = options ?? {}
 
     return new Intl.DateTimeFormat(locale, {
       day: 'numeric',
@@ -88,7 +90,7 @@ export function useDate() {
     const date = typeof value === 'string' ? new Date(value) : value
     if (isNaN(date.getTime())) return '-'
 
-    const { locale = 'ro-RO', timeZone = 'Europe/Bucharest' } = options ?? {}
+    const { locale = intlLocale, timeZone = 'Europe/Bucharest' } = options ?? {}
 
     return new Intl.DateTimeFormat(locale, {
       month: 'long',
@@ -98,7 +100,8 @@ export function useDate() {
   }
 
   /**
-   * Relative time description: "acum 3 zile", "in urma cu 2 ore"
+   * Relative time description using Intl.RelativeTimeFormat.
+   * Outputs locale-aware strings like "3 days ago" / "acum 3 zile".
    */
   function formatRelative(
     value: string | Date | null | undefined,
@@ -108,7 +111,7 @@ export function useDate() {
     const date = typeof value === 'string' ? new Date(value) : value
     if (isNaN(date.getTime())) return '-'
 
-    const { locale = 'ro-RO' } = options ?? {}
+    const { locale = intlLocale } = options ?? {}
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffSeconds = Math.floor(diffMs / 1000)

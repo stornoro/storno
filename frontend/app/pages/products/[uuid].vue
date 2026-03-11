@@ -63,15 +63,16 @@ definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
 const route = useRoute()
+const intlLocale = useIntlLocale()
 
 const product = ref<any>(null)
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('ro-RO', { dateStyle: 'medium' })
+  return new Date(date).toLocaleDateString(intlLocale, { dateStyle: 'medium' })
 }
 
 onMounted(async () => {

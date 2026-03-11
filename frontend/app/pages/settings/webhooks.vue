@@ -4,6 +4,7 @@ import type { WebhookEndpoint, WebhookDelivery } from '~/types'
 definePageMeta({ middleware: ['auth', 'permissions'] })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('webhooks.title') })
 const { can } = usePermissions()
 const store = useWebhookStore()
@@ -203,7 +204,7 @@ function statusColor(status: string): string {
 
 function formatDate(date: string | null): string {
   if (!date) return '-'
-  return new Date(date).toLocaleString('ro-RO')
+  return new Date(date).toLocaleString(intlLocale)
 }
 
 const canSave = computed(() => {

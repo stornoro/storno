@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('bankStatement.title') })
 
 const store = useBordereauStore()
@@ -37,7 +38,7 @@ watch(importModalOpen, (val) => {
 // Total row
 const totalAmount = computed(() => {
   const sum = store.transactions.reduce((acc, t) => acc + Number(t.amount), 0)
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(sum)

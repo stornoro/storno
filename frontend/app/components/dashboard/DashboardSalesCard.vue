@@ -10,6 +10,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const currentMonthAmount = computed(() => {
   if (!props.monthlyData.length) return 0
@@ -28,7 +29,7 @@ const avgDailyValue = computed(() => {
 
 function formatMoney(amount: number | string) {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(num)
 }
 
 // SVG sparkline from monthlyData (outgoing amounts)
@@ -79,7 +80,7 @@ const sparklineLabels = computed(() => {
     const month = Number(parts[1] ?? 1)
     const day = 1
     const date = new Date(Number(parts[0]), month - 1, day)
-    return new Intl.DateTimeFormat('ro-RO', { day: 'numeric', month: 'short' }).format(date)
+    return new Intl.DateTimeFormat(intlLocale, { day: 'numeric', month: 'short' }).format(date)
   }
 
   const first = data[0]

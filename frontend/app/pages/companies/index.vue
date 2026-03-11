@@ -682,6 +682,7 @@ import type { RegistryCompany } from '~/composables/useRegistrySearch'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('companies.title') })
 const companyStore = useCompanyStore()
 const authStore = useAuthStore()
@@ -1005,7 +1006,7 @@ async function handleRefreshAnaf() {
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleString('ro-RO', {
+  return new Date(date).toLocaleString(intlLocale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
