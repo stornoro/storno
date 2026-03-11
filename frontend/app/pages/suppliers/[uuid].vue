@@ -175,6 +175,8 @@ import type { Supplier } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
+const intlLocale = useIntlLocale()
+
 const { t: $t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -204,11 +206,11 @@ function onInvoiceClick(_e: Event, row: any) {
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('ro-RO', { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(date).toLocaleDateString(intlLocale, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function formatMoney(amount: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency, minimumFractionDigits: 2 }).format(Number(amount))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency, minimumFractionDigits: 2 }).format(Number(amount))
 }
 
 function statusColor(status: string) {

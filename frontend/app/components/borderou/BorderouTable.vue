@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const props = defineProps<{
   transactions: any[]
@@ -88,11 +89,11 @@ const docTypeLabels: Record<string, string> = {
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
-  return d.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return d.toLocaleDateString(intlLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function formatAmount(amount: string, currency: string): string {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(amount)) + ' ' + currency

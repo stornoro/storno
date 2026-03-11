@@ -1099,8 +1099,10 @@ function applyLineConversion(index: number) {
   lineConvertMarkup[index] = ''
 }
 
+const intlLocale = useIntlLocale()
+
 function formatAmount(num: number): string {
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
 
 // Client

@@ -112,6 +112,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const rows = computed(() => props.data.slice(0, 8))
 
@@ -152,11 +153,11 @@ function getStatusColor(status: string): 'success' | 'info' | 'warning' | 'error
 
 function formatMoney(amount?: string | number, currency = 'RON') {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(num)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(num)
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: 'short',
   })

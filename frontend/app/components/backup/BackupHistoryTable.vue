@@ -1,36 +1,13 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
 const backupStore = useBackupStore()
+const { formatDateTime, formatRelative } = useDate()
 
 const statusConfig: Record<string, { color: string; icon: string }> = {
   pending: { color: 'neutral', icon: 'i-lucide-clock' },
   processing: { color: 'warning', icon: 'i-lucide-loader' },
   completed: { color: 'success', icon: 'i-lucide-check-circle' },
   failed: { color: 'error', icon: 'i-lucide-x-circle' },
-}
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'acum'
-  if (mins < 60) return `acum ${mins} min`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `acum ${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `acum ${days}z`
-  return formatDate(dateStr)
 }
 
 function formatBytes(bytes: number | null): string {
@@ -98,7 +75,7 @@ async function handleDownload(jobId: string, filename?: string) {
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium">
-              {{ job.type === 'backup' ? 'Backup' : 'Restaurare' }}
+              {{ job.type === 'backup' ? $t('backup.typeBackup') : $t('backup.typeRestore') }}
             </span>
             <UBadge
               :label="$t(`backup.status${job.status.charAt(0).toUpperCase() + job.status.slice(1)}`)"
@@ -109,8 +86,8 @@ async function handleDownload(jobId: string, filename?: string) {
             />
           </div>
           <div class="flex items-center gap-3 mt-0.5">
-            <span class="text-xs text-(--ui-text-muted)" :title="formatDate(job.createdAt)">
-              {{ timeAgo(job.createdAt) }}
+            <span class="text-xs text-(--ui-text-muted)" :title="formatDateTime(job.createdAt)">
+              {{ formatRelative(job.createdAt) }}
             </span>
             <template v-if="job.filename && job.status === 'completed'">
               <span class="text-xs text-(--ui-text-dimmed)">·</span>

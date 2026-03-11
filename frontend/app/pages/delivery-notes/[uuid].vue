@@ -104,11 +104,11 @@
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.issueDate') }}</dt>
-                <dd class="font-medium">{{ deliveryNote.issueDate ? new Date(deliveryNote.issueDate).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ deliveryNote.issueDate ? new Date(deliveryNote.issueDate).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.dueDate') }}</dt>
-                <dd class="font-medium">{{ deliveryNote.dueDate ? new Date(deliveryNote.dueDate).toLocaleDateString('ro-RO') : '-' }}</dd>
+                <dd class="font-medium">{{ deliveryNote.dueDate ? new Date(deliveryNote.dueDate).toLocaleDateString(intlLocale) : '-' }}</dd>
               </div>
               <div>
                 <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.currency') }}</dt>
@@ -116,11 +116,11 @@
               </div>
               <div v-if="deliveryNote.issuedAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.issuedAt') }}</dt>
-                <dd class="font-medium">{{ new Date(deliveryNote.issuedAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(deliveryNote.issuedAt).toLocaleString(intlLocale) }}</dd>
               </div>
               <div v-if="deliveryNote.cancelledAt">
                 <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.cancelledAt') }}</dt>
-                <dd class="font-medium">{{ new Date(deliveryNote.cancelledAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(deliveryNote.cancelledAt).toLocaleString(intlLocale) }}</dd>
               </div>
             </div>
           </UCard>
@@ -211,7 +211,7 @@
               </div>
               <div v-if="deliveryNote.etransportSubmittedAt">
                 <dt class="text-(--ui-text-muted)">Trimis la</dt>
-                <dd class="font-medium">{{ new Date(deliveryNote.etransportSubmittedAt).toLocaleString('ro-RO') }}</dd>
+                <dd class="font-medium">{{ new Date(deliveryNote.etransportSubmittedAt).toLocaleString(intlLocale) }}</dd>
               </div>
             </div>
 
@@ -241,7 +241,7 @@
                 </div>
                 <div v-if="deliveryNote.etransportTransportDate">
                   <dt class="text-(--ui-text-muted)">{{ $t('deliveryNotes.transportDate') }}</dt>
-                  <dd class="font-medium">{{ new Date(deliveryNote.etransportTransportDate).toLocaleDateString('ro-RO') }}</dd>
+                  <dd class="font-medium">{{ new Date(deliveryNote.etransportTransportDate).toLocaleDateString(intlLocale) }}</dd>
                 </div>
               </div>
             </div>
@@ -462,6 +462,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const toast = useToast()
 const deliveryNoteStore = useDeliveryNoteStore()
 
@@ -494,7 +495,7 @@ const lineColumns = [
 ]
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ middleware: ['auth', 'permissions'] })
 
+const intlLocale = useIntlLocale()
 const authStore = useAuthStore()
 if (authStore.isSelfHosted) {
   navigateTo('/settings')
@@ -109,7 +110,7 @@ const planLabel = computed(() => {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', {
+  return new Date(dateStr).toLocaleDateString(intlLocale, {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
@@ -117,7 +118,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 function formatPrice(amount: number, currency: string): string {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency',
     currency: currency.toUpperCase(),
     minimumFractionDigits: 0,
@@ -545,7 +546,7 @@ const intervalItems = computed(() => [
               <tr v-for="inv in billingStore.invoices" :key="inv.id" class="border-b border-(--ui-border) last:border-0">
                 <td class="py-2.5 px-3 font-mono">{{ inv.number }}</td>
                 <td class="py-2.5 px-3">{{ formatDate(inv.issueDate) }}</td>
-                <td class="py-2.5 px-3 text-right font-medium">{{ Number(inv.total).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) }} {{ inv.currency }}</td>
+                <td class="py-2.5 px-3 text-right font-medium">{{ Number(inv.total).toLocaleString(intlLocale, { minimumFractionDigits: 2 }) }} {{ inv.currency }}</td>
                 <td class="py-2.5 px-3">
                   <UBadge :color="inv.paidAt ? 'success' : 'warning'" variant="subtle" size="sm">
                     {{ inv.paidAt ? $t('settings.billingPage.invoicePaid') : inv.status }}

@@ -69,6 +69,7 @@ const emit = defineEmits<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const productStore = useProductStore()
 
 const isOpen = computed({
@@ -102,6 +103,6 @@ function selectProduct(product: Product) {
 
 function formatPrice(price: string): string {
   const num = parseFloat(price) || 0
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
 </script>

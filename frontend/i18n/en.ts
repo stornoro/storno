@@ -3,6 +3,7 @@ export default defineI18nLocale(async () => {
     app: {
       name: 'Storno.ro',
       tagline: 'Invoice your way',
+      metaDescription: 'Manage your electronic invoices with Storno.ro.',
     },
 
     // ── Navigation ────────────────────────────────────────────────
@@ -1946,6 +1947,9 @@ export default defineI18nLocale(async () => {
     setActive: 'Set as active',
     setActiveSuccess: 'Company has been set as active.',
     readOnlyError: 'You cannot make changes to this company. Upgrade or select the active company.',
+    addCompany: 'Add company',
+    manageCompanies: 'Manage companies',
+    selectCompany: 'Select',
   },
 
   // ── Settings ─────────────────────────────────────────────────
@@ -2733,6 +2737,10 @@ export default defineI18nLocale(async () => {
     purgeExisting: 'Delete existing data',
     purgeExistingDesc: 'Delete all company data before restoring. This action is irreversible.',
 
+    // Type labels
+    typeBackup: 'Backup',
+    typeRestore: 'Restore',
+
     // History
     historyTitle: 'Backup history',
     noHistory: 'No previous backups',
@@ -2895,6 +2903,7 @@ export default defineI18nLocale(async () => {
     dateFrom: 'From',
     dateTo: 'To',
     selectedRange: 'Selected period',
+    invalidDateRange: 'Select a valid period.',
 
     // Target
     targetLabel: 'Export for',

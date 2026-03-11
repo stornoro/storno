@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const logs = ref<any[]>([])
 const loading = ref(true)
@@ -111,7 +112,7 @@ function categoryLabel(category: string | null): string {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('ro-RO', { dateStyle: 'short', timeStyle: 'short' })
+  return new Date(iso).toLocaleString(intlLocale, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 function eventTypeColor(type: string): string {

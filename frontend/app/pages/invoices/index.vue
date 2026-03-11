@@ -5,6 +5,7 @@ import type { Invoice, ValidationResponse } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('invoices.title') })
 const router = useRouter()
 const route = useRoute()
@@ -605,11 +606,11 @@ function getCounterparty(inv: any): string {
 }
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function formatPlainMoney(amount?: string | number) {
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
 }
 
 type BadgeColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -887,7 +888,7 @@ onUnmounted(() => {
           </div>
         </template>
         <template #issueDate-cell="{ row }">
-          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString('ro-RO') : '-' }}
+          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #counterparty-cell="{ row }">
           {{ getCounterparty(row.original) }}
@@ -913,7 +914,7 @@ onUnmounted(() => {
           </span>
         </template>
         <template #dueDate-cell="{ row }">
-          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString('ro-RO') : '-' }}</span>
+          <span class="text-sm">{{ row.original.dueDate ? new Date(row.original.dueDate).toLocaleDateString(intlLocale) : '-' }}</span>
         </template>
         <template #paid-cell="{ row }">
           <UBadge v-if="row.original.paidAt" color="success" variant="subtle" size="sm">

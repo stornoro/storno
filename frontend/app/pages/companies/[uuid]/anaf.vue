@@ -306,6 +306,7 @@ import type { AnafToken, AnafStatus } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const route = useRoute()
 const companyStore = useCompanyStore()
 const authStore = useAuthStore()
@@ -371,7 +372,7 @@ const tokenError = computed(() => {
 
 // ── Date helpers ───────────────────────────────────────────────
 function formatDateShort(date: string) {
-  return new Date(date).toLocaleDateString('ro-RO', {
+  return new Date(date).toLocaleDateString(intlLocale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

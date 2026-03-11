@@ -6,6 +6,7 @@ import type { Receipt } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('receipts.title') })
 const { can } = usePermissions()
 const router = useRouter()
@@ -150,11 +151,11 @@ const allColumnDefs = [
 const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function formatPlainMoney(amount?: string | number) {
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0))
 }
 
 function formatPaymentMethod(method: string | null): string {
@@ -297,7 +298,7 @@ onMounted(() => {
         @update:sorting="onSortChange"
       >
         <template #issueDate-cell="{ row }">
-          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString('ro-RO') : '-' }}
+          {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #clientName-cell="{ row }">
           {{ row.original.clientName || row.original.customerName || '-' }}

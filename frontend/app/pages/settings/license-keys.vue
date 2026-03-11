@@ -37,16 +37,11 @@ function getStatusLabel(key: LicenseKey): string {
   return $t('licenseKeys.active')
 }
 
+const { formatRelative } = useDate()
+
 function formatRelativeDate(date: string | null): string {
   if (!date) return $t('licenseKeys.never')
-  const diff = Date.now() - new Date(date).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'acum'
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  return `${days}z`
+  return formatRelative(date)
 }
 
 function formatMetrics(key: LicenseKey): string {

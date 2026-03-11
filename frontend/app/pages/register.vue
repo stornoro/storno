@@ -34,7 +34,7 @@
         <UInput
           v-model="state.email"
           type="email"
-          placeholder="email@exemplu.ro"
+          placeholder="email@example.com"
           size="xl"
           class="w-full"
           :ui="{ base: 'rounded-xl shadow-sm' }"
@@ -143,16 +143,16 @@ const state = reactive({
   confirmPassword: '',
 })
 
-const schema = z.object({
-  firstName: z.string({ required_error: 'Prenumele este obligatoriu' }).min(2, 'Prenumele trebuie sa aiba cel putin 2 caractere'),
-  lastName: z.string({ required_error: 'Numele este obligatoriu' }).min(2, 'Numele trebuie sa aiba cel putin 2 caractere'),
-  email: z.string({ required_error: 'Adresa de email este obligatorie' }).email('Adresa de email nu este valida'),
-  password: z.string({ required_error: 'Parola este obligatorie' }).min(8, 'Parola trebuie sa aiba cel putin 8 caractere'),
-  confirmPassword: z.string({ required_error: 'Confirmarea parolei este obligatorie' }).min(8, 'Parola trebuie sa aiba cel putin 8 caractere'),
+const schema = computed(() => z.object({
+  firstName: z.string({ required_error: $t('validation.required') }).min(2, $t('validation.nameMin')),
+  lastName: z.string({ required_error: $t('validation.required') }).min(2, $t('validation.nameMin')),
+  email: z.string({ required_error: $t('validation.required') }).email($t('validation.emailInvalid')),
+  password: z.string({ required_error: $t('validation.required') }).min(8, $t('validation.minLength', { min: 8 })),
+  confirmPassword: z.string({ required_error: $t('validation.required') }).min(8, $t('validation.minLength', { min: 8 })),
 }).refine(d => d.password === d.confirmPassword, {
-  message: 'Parolele nu se potrivesc',
+  message: $t('validation.passwordMismatch'),
   path: ['confirmPassword'],
-})
+}))
 
 const config = useRuntimeConfig()
 

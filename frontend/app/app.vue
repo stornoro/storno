@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
+const { t: $t } = useI18n()
 
 useHead({
   titleTemplate: (title) => title ? `${title} - Storno.ro` : 'Storno.ro',
@@ -9,7 +10,7 @@ useHead({
     { rel: 'apple-touch-icon', href: '/logo.png' },
   ],
   meta: [
-    { name: 'description', content: 'Gestioneaza facturile tale electronice ANAF cu Storno.ro.' },
+    { name: 'description', content: $t('app.metaDescription') },
     { name: 'theme-color', content: computed(() => colorMode.value === 'dark' ? '#0a0a0a' : '#ffffff') },
   ],
 })

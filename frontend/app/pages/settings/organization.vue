@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('settings.organization') })
 const authStore = useAuthStore()
 const companyStore = useCompanyStore()
@@ -138,7 +139,7 @@ const featureList = computed(() => {
 })
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleString('ro-RO', {
+  return new Date(date).toLocaleString(intlLocale, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

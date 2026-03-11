@@ -104,6 +104,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const loading = ref(true)
 const data = ref<any>({
@@ -146,12 +147,12 @@ function statusColor(status: string | null): string {
 }
 
 function formatCurrency(bani: number): string {
-  return (bani / 100).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (bani / 100).toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleDateString('ro-RO')
+  return new Date(iso).toLocaleDateString(intlLocale)
 }
 
 onMounted(async () => {

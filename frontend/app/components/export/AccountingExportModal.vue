@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { apiFetch, post } = useApi()
 const toast = useToast()
 
@@ -17,7 +18,7 @@ const {
 
 function formatDisplayDate(d: string) {
   if (!d) return '...'
-  return new Date(d).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString(intlLocale, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // ── Target selector ──────────────────────────────────────────────
@@ -61,7 +62,7 @@ const exporting = ref(false)
 async function handleExport() {
   const { dateFrom, dateTo } = resolvedRange.value
   if (!dateFrom || !dateTo) {
-    toast.add({ title: $t('accountingExport.title'), description: 'Selecteaza o perioada valida.', color: 'error' })
+    toast.add({ title: $t('accountingExport.title'), description: $t('accountingExport.invalidDateRange'), color: 'error' })
     return
   }
 

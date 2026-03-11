@@ -3,7 +3,7 @@ type SupportedCurrency = 'RON' | 'EUR' | 'USD' | 'GBP'
 interface FormatMoneyOptions {
   /** Currency code. Defaults to 'RON'. */
   currency?: SupportedCurrency
-  /** Locale for Intl.NumberFormat. Defaults to 'ro-RO'. */
+  /** Locale for Intl.NumberFormat. Defaults to current i18n locale. */
   locale?: string
   /** Show the full currency symbol or the narrow one. Defaults to 'symbol'. */
   currencyDisplay?: 'symbol' | 'narrowSymbol' | 'code' | 'name'
@@ -14,12 +14,13 @@ interface FormatMoneyOptions {
 }
 
 /**
- * Currency formatting composable for Romanian invoicing.
+ * Currency formatting composable with locale-aware output.
  *
  * All monetary values arrive from the API as decimal strings (e.g. "1234.56")
- * and are formatted using Intl.NumberFormat for the Romanian locale.
+ * and are formatted using Intl.NumberFormat for the current i18n locale.
  */
 export function useMoney() {
+  const intlLocale = useIntlLocale()
   /**
    * Format a decimal string or number as a localised currency value.
    *
@@ -44,7 +45,7 @@ export function useMoney() {
 
     const {
       currency = 'RON',
-      locale = 'ro-RO',
+      locale = intlLocale,
       currencyDisplay = 'symbol',
       minimumFractionDigits = 2,
       maximumFractionDigits = 2,
@@ -67,7 +68,7 @@ export function useMoney() {
    */
   function formatNumber(
     value: string | number | null | undefined,
-    locale: string = 'ro-RO',
+    locale: string = intlLocale,
   ): string {
     const numericValue = value === null || value === undefined
       ? 0

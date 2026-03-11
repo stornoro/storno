@@ -8,6 +8,7 @@ const emit = defineEmits<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const invoiceStore = useInvoiceStore()
 const clientStore = useClientStore()
 const toast = useToast()
@@ -274,7 +275,7 @@ function goToInvoice() {
 }
 
 const formatMoney = (val: number) =>
-  new Intl.NumberFormat('ro-RO', { style: 'currency', currency: defaultCurrency.value }).format(val)
+  new Intl.NumberFormat(intlLocale, { style: 'currency', currency: defaultCurrency.value }).format(val)
 </script>
 
 <template>

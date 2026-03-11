@@ -4,6 +4,7 @@ import { z } from 'zod'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t, locale, setLocale } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('settings.profile.title') })
 const authStore = useAuthStore()
 const passkeyComposable = usePasskey()
@@ -68,7 +69,7 @@ const formState = reactive({
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(dateStr).toLocaleDateString(intlLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 async function fetchPasskeys() {

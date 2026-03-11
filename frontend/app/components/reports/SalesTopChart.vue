@@ -116,6 +116,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { colorMode, chartColors, defaultChartOptions } = useChartColors()
 
 const limitOptions = [5, 10, 50] as const
@@ -136,7 +137,7 @@ function itemPercent(value: number): number {
 }
 
 function formatItemValue(value: number): string {
-  return new Intl.NumberFormat('ro-RO', {
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency',
     currency: 'RON',
     maximumFractionDigits: 0,
@@ -186,7 +187,7 @@ const barChartOptions = computed(() => ({
       ticks: {
         ...defaultChartOptions.value.scales?.x?.ticks,
         callback: (value: string | number) =>
-          new Intl.NumberFormat('ro-RO', {
+          new Intl.NumberFormat(intlLocale, {
             notation: 'compact',
             compactDisplay: 'short',
           }).format(Number(value)),

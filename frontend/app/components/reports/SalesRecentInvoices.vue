@@ -107,17 +107,9 @@ function statusDotClass(status: string): string {
   return map[status] ?? 'bg-(--ui-text-muted)'
 }
 
-function relativeDate(dateStr: string): string {
-  const now = new Date()
-  const date = new Date(dateStr)
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+const { formatRelative } = useDate()
 
-  if (diffDays === 0) return 'azi'
-  if (diffDays === 1) return 'ieri'
-  if (diffDays < 7) return `acum ${diffDays} zile`
-  if (diffDays < 30) return `acum ${Math.floor(diffDays / 7)} săpt.`
-  if (diffDays < 365) return `acum ${Math.floor(diffDays / 30)} luni`
-  return `acum ${Math.floor(diffDays / 365)} ani`
+function relativeDate(dateStr: string): string {
+  return formatRelative(dateStr)
 }
 </script>

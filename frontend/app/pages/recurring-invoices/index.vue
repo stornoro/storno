@@ -4,6 +4,7 @@ import type { RecurringInvoice } from '~/types'
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 useHead({ title: $t('recurringInvoices.title') })
 const { can } = usePermissions()
 const router = useRouter()
@@ -153,7 +154,7 @@ const allColumnDefs = [
 const columns = computed(() => filterColumns(allColumnDefs))
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 const onSearchInput = useDebounceFn(() => {
@@ -263,7 +264,7 @@ onMounted(() => {
           <input :checked="isSelected(row.original.id)" type="checkbox" class="accent-primary" @click.stop @change="toggle(row.original.id)">
         </template>
         <template #nextIssuanceDate-cell="{ row }">
-          {{ row.original.nextIssuanceDate ? new Date(row.original.nextIssuanceDate).toLocaleDateString('ro-RO') : '-' }}
+          {{ row.original.nextIssuanceDate ? new Date(row.original.nextIssuanceDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #frequency-cell="{ row }">
           {{ $t(`recurringInvoices.frequencies.${row.original.frequency}`) }}
@@ -285,7 +286,7 @@ onMounted(() => {
           <span class="text-sm">{{ row.original.currency || '-' }}</span>
         </template>
         <template #lastIssuedAt-cell="{ row }">
-          <span class="text-sm">{{ row.original.lastIssuedAt ? new Date(row.original.lastIssuedAt).toLocaleDateString('ro-RO') : '-' }}</span>
+          <span class="text-sm">{{ row.original.lastIssuedAt ? new Date(row.original.lastIssuedAt).toLocaleDateString(intlLocale) : '-' }}</span>
         </template>
         <template #lastInvoiceNumber-cell="{ row }">
           <span class="text-sm">{{ row.original.lastInvoiceNumber || '-' }}</span>

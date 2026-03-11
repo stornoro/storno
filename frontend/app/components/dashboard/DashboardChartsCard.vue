@@ -48,6 +48,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { colorMode, chartColors, defaultChartOptions } = useChartColors()
 
 const activeTab = ref('trends')
@@ -61,7 +62,7 @@ const hasData = computed(() => props.data.length > 0)
 
 const formattedTotal = computed(() => {
   const num = Number(props.totalAmount || 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(num)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(num)
 })
 
 function formatMonth(ym: string): string {
@@ -69,7 +70,7 @@ function formatMonth(ym: string): string {
   const year = parts[0] ?? ''
   const month = parts[1] ?? '1'
   const date = new Date(Number(year), Number(month) - 1)
-  const short = new Intl.DateTimeFormat('ro-RO', { month: 'short' }).format(date)
+  const short = new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(date)
   return `${short} ${year.slice(2)}`
 }
 

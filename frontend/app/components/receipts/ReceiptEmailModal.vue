@@ -123,6 +123,7 @@ const isOpen = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ sent: [] }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const receiptStore = useReceiptStore()
 const emailTemplateStore = useEmailTemplateStore()
 const toast = useToast()
@@ -150,7 +151,7 @@ const templateItems = computed(() =>
 )
 
 function formatMoney(amount?: string | number, currency = 'RON') {
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency }).format(Number(amount || 0))
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
 
 function insertVariable(variable: string) {

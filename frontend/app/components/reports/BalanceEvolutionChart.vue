@@ -48,6 +48,7 @@ const props = defineProps<{
 }>()
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 const { formatMoney } = useMoney()
 const { colorMode, chartColors, defaultChartOptions } = useChartColors()
 
@@ -62,7 +63,7 @@ const hasData = computed(() => props.data.length > 0)
 
 const formattedTotal = computed(() => {
   const total = props.data.reduce((sum, d) => sum + (parseFloat(d.revenue) || 0), 0)
-  return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
+  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(total)
 })
 
 const labels = computed(() =>

@@ -56,15 +56,17 @@ const props = withDefaults(defineProps<Props>(), {
   connected: false,
 })
 
+const intlLocale = useIntlLocale()
+
 const formattedValue = computed(() => {
   if (typeof props.value === 'string') return props.value
   switch (props.format) {
     case 'percent':
       return `${props.value}%`
     case 'currency':
-      return new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON' }).format(props.value)
+      return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON' }).format(props.value)
     default:
-      return props.value.toLocaleString('ro-RO')
+      return props.value.toLocaleString(intlLocale)
   }
 })
 
