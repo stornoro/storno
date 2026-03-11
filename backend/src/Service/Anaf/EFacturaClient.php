@@ -82,7 +82,29 @@ class EFacturaClient
             ],
         ]);
 
-        return $response->getContent(false);
+        $statusCode = $response->getStatusCode();
+        $content = $response->getContent(false);
+
+        if ($statusCode >= 400) {
+            $errorDetail = $this->extractAnafError($content) ?? "HTTP $statusCode";
+            throw new \RuntimeException(sprintf(
+                'ANAF download failed for message %s: %s',
+                $id,
+                $errorDetail,
+            ));
+        }
+
+        // Verify we got a ZIP (starts with PK magic bytes) and not an error response
+        if (strlen($content) < 4 || !str_starts_with($content, "PK")) {
+            $errorDetail = $this->extractAnafError($content) ?? sprintf('invalid response (%d bytes)', strlen($content));
+            throw new \RuntimeException(sprintf(
+                'ANAF download for message %s returned non-ZIP response: %s',
+                $id,
+                $errorDetail,
+            ));
+        }
+
+        return $content;
     }
 
     /**
@@ -171,6 +193,35 @@ class EFacturaClient
             'error' => null,
             'statusCode' => $statusCode,
         ];
+    }
+
+    /**
+     * Try to extract a human-readable error from an ANAF response body (JSON or XML).
+     */
+    private function extractAnafError(string $content): ?string
+    {
+        // Try JSON: {"eroare":"..."}
+        $json = @json_decode($content, true);
+        if (is_array($json) && !empty($json['eroare'])) {
+            return $json['eroare'];
+        }
+
+        // Try XML
+        $xml = @simplexml_load_string($content);
+        if ($xml !== false) {
+            $eroare = (string) ($xml->eroare ?? $xml->Errors ?? '');
+            if ($eroare !== '') {
+                return $eroare;
+            }
+        }
+
+        // Return raw content if short enough to be useful
+        $trimmed = trim($content);
+        if ($trimmed !== '' && strlen($trimmed) <= 500) {
+            return $trimmed;
+        }
+
+        return null;
     }
 
     /**
