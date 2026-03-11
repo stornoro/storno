@@ -6,6 +6,7 @@ use App\Entity\Company;
 use App\Entity\DocumentEvent;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
+use App\Entity\Product;
 use App\Entity\User;
 use App\Enum\DocumentStatus;
 use App\Enum\DocumentType;
@@ -862,28 +863,63 @@ class InvoiceManager
 
     private function setLines(Invoice $invoice, array $linesData): void
     {
+        $company = $invoice->getCompany();
+
         foreach ($linesData as $i => $lineData) {
             $line = new InvoiceLine();
             $this->populateLineFields($line, $lineData, $i + 1);
 
-            // Link product by productId or productCode
+            // Link product by productId or productCode, auto-creating if needed
+            $product = null;
             if (!empty($lineData['productId'])) {
                 $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
-                if ($product) {
-                    $line->setProduct($product);
-                }
-            } elseif ($line->getProductCode() && $invoice->getCompany()) {
+            } elseif ($line->getProductCode() && $company) {
                 $product = $this->productRepository->findOneBy([
-                    'company' => $invoice->getCompany(),
+                    'company' => $company,
                     'code' => $line->getProductCode(),
                 ]);
-                if ($product) {
-                    $line->setProduct($product);
-                }
+            }
+
+            if ($product === null && $company && $line->getDescription()) {
+                $product = $this->findOrCreateProductFromLine($company, $line);
+            }
+
+            if ($product) {
+                $line->setProduct($product);
             }
 
             $invoice->addLine($line);
         }
+    }
+
+    private function findOrCreateProductFromLine(Company $company, InvoiceLine $line): Product
+    {
+        // Look up by name + unit + company
+        $existing = $this->productRepository->findOneBy([
+            'company' => $company,
+            'name' => mb_substr($line->getDescription(), 0, 255),
+            'unitOfMeasure' => $line->getUnitOfMeasure(),
+        ]);
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $product = new Product();
+        $product->setCompany($company);
+        $product->setName(mb_substr($line->getDescription(), 0, 255));
+        $product->setUnitOfMeasure($line->getUnitOfMeasure());
+        $product->setDefaultPrice($line->getUnitPrice());
+        $product->setVatRate($line->getVatRate());
+        $product->setVatCategoryCode($line->getVatCategoryCode());
+        if ($line->getProductCode()) {
+            $product->setCode($line->getProductCode());
+        }
+        $product->setSource('api');
+
+        $this->entityManager->persist($product);
+
+        return $product;
     }
 
     private function recalculateTotals(Invoice $invoice): void
