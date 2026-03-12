@@ -251,7 +251,7 @@ class InvoiceManager
         $this->entityManager->persist($invoice);
         $this->entityManager->flush();
 
-        $this->eventDispatcher->dispatch(new InvoiceCreatedEvent($invoice));
+        $this->eventDispatcher->dispatch(new InvoiceCreatedEvent($invoice), InvoiceCreatedEvent::NAME);
 
         return $invoice;
     }
@@ -643,7 +643,7 @@ class InvoiceManager
 
         $this->entityManager->flush();
 
-        $this->eventDispatcher->dispatch(new InvoiceIssuedEvent($invoice));
+        $this->eventDispatcher->dispatch(new InvoiceIssuedEvent($invoice), InvoiceIssuedEvent::NAME);
     }
 
     /**
@@ -696,7 +696,7 @@ class InvoiceManager
 
         $this->entityManager->flush();
 
-        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
+        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice), InvoiceSentToProviderEvent::NAME);
 
         $this->messageBus->dispatch(
             new SubmitEInvoiceMessage(
@@ -741,7 +741,7 @@ class InvoiceManager
 
         $this->entityManager->flush();
 
-        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
+        $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice), InvoiceSentToProviderEvent::NAME);
 
         $this->messageBus->dispatch(
             new SubmitEInvoiceMessage(

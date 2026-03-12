@@ -103,7 +103,7 @@ class SubmitScheduledInvoicesCommand extends Command
 
             $this->entityManager->flush();
 
-            $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice));
+            $this->eventDispatcher->dispatch(new InvoiceSentToProviderEvent($invoice), InvoiceSentToProviderEvent::NAME);
 
             $this->messageBus->dispatch(new SubmitEInvoiceMessage(
                 invoiceId: $invoiceId,
