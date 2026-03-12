@@ -122,7 +122,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
-            $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice));
+            $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice), InvoiceValidatedEvent::NAME);
             $this->publishInvoiceChange($invoice, 'invoice.validated');
 
             $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
@@ -153,7 +153,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
             $this->entityManager->flush();
 
-            $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice));
+            $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice), InvoiceRejectedEvent::NAME);
             $this->publishInvoiceChange($invoice, 'invoice.rejected');
 
             $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(

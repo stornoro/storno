@@ -105,7 +105,7 @@ class CheckAnafUploadsCommand extends Command
                     $updated++;
                     $batchCount++;
 
-                    $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice));
+                    $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice), InvoiceValidatedEvent::NAME);
                     $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
                         'Factura %s a fost validată de ANAF',
                         $invoice->getNumber(),
@@ -131,7 +131,7 @@ class CheckAnafUploadsCommand extends Command
                     $updated++;
                     $batchCount++;
 
-                    $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice));
+                    $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice), InvoiceRejectedEvent::NAME);
                     $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(
                         'Factura %s a fost respinsă de ANAF: %s',
                         $invoice->getNumber(),
