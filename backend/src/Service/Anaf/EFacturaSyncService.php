@@ -984,7 +984,7 @@ class EFacturaSyncService
     private function isPlaceholderCif(?string $cif): bool
     {
         if ($cif === null || $cif === '') {
-            return true;
+            return false;
         }
 
         // Strip any remaining RO prefix

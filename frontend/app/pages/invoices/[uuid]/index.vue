@@ -299,6 +299,36 @@
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
                       <dd class="font-medium mt-0.5">{{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd>
                     </div>
+                    <template v-if="invoice.supplier && invoice.direction === 'incoming'">
+                      <div v-if="invoice.supplier.registrationNumber">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.registrationNumber') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.supplier.registrationNumber }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.address">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.address') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.supplier.address }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.city || invoice.supplier.county">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.city') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ [invoice.supplier.city, invoice.supplier.county].filter(Boolean).join(', ') }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.email">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.email') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.supplier.email }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.phone">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.phone') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.supplier.phone }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.bankAccount">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankAccount') }}</dt>
+                        <dd class="font-medium mt-0.5 font-mono text-xs">{{ invoice.supplier.bankAccount }}</dd>
+                      </div>
+                      <div v-if="invoice.supplier.bankName">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankName') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.supplier.bankName }}</dd>
+                      </div>
+                    </template>
                   </dl>
                 </div>
 
@@ -317,8 +347,38 @@
                     </div>
                     <div>
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || $t('clients.typeIndividual') }}</dd>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || '-' }}</dd>
                     </div>
+                    <template v-if="invoice.client && invoice.direction === 'outgoing'">
+                      <div v-if="invoice.client.registrationNumber">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.registrationNumber') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.client.registrationNumber }}</dd>
+                      </div>
+                      <div v-if="invoice.client.address">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.address') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.client.address }}</dd>
+                      </div>
+                      <div v-if="invoice.client.city || invoice.client.county">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.city') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ [invoice.client.city, invoice.client.county].filter(Boolean).join(', ') }}</dd>
+                      </div>
+                      <div v-if="invoice.client.email">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.email') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.client.email }}</dd>
+                      </div>
+                      <div v-if="invoice.client.phone">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.phone') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.client.phone }}</dd>
+                      </div>
+                      <div v-if="invoice.client.bankAccount">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankAccount') }}</dt>
+                        <dd class="font-medium mt-0.5 font-mono text-xs">{{ invoice.client.bankAccount }}</dd>
+                      </div>
+                      <div v-if="invoice.client.bankName">
+                        <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankName') }}</dt>
+                        <dd class="font-medium mt-0.5">{{ invoice.client.bankName }}</dd>
+                      </div>
+                    </template>
                   </dl>
                 </div>
               </div>
@@ -395,46 +455,6 @@
                   <div v-if="invoice.cancellationReason">
                     <dt class="text-xs text-(--ui-text-muted)">{{ $t('invoices.cancellationReason') }}</dt>
                     <dd class="font-medium mt-0.5">{{ invoice.cancellationReason }}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              <!-- Client details (outgoing) -->
-              <div v-if="invoice.client && invoice.direction === 'outgoing'" class="rounded-lg border border-(--ui-border) p-4">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-contact" class="size-3.5" />{{ $t('clients.details') }}</h3>
-                  <UButton variant="ghost" size="sm" :to="`/clients/${invoice.client.id}`">
-                    {{ $t('common.view') }}
-                  </UButton>
-                </div>
-                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <div>
-                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
-                    <dd class="font-medium mt-0.5">{{ invoice.client.name }}</dd>
-                  </div>
-                  <div v-if="invoice.client.cui">
-                    <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                    <dd class="font-medium mt-0.5">{{ formatCif(invoice.client.cui, invoice.client.isVatPayer) }}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              <!-- Supplier details (incoming) -->
-              <div v-if="invoice.supplier && invoice.direction === 'incoming'" class="rounded-lg border border-(--ui-border) p-4">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-(--ui-text-muted) flex items-center gap-1.5"><UIcon name="i-lucide-truck" class="size-3.5" />{{ $t('suppliers.details') }}</h3>
-                  <UButton variant="ghost" size="sm" :to="`/suppliers/${invoice.supplier.id}`">
-                    {{ $t('common.view') }}
-                  </UButton>
-                </div>
-                <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <div>
-                    <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.name') }}</dt>
-                    <dd class="font-medium mt-0.5">{{ invoice.supplier.name }}</dd>
-                  </div>
-                  <div v-if="invoice.supplier.cif">
-                    <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                    <dd class="font-medium mt-0.5">{{ formatCif(invoice.supplier.cif, invoice.supplier.isVatPayer) }}</dd>
                   </div>
                 </dl>
               </div>

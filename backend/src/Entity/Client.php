@@ -52,11 +52,11 @@ class Client
     private bool $isVatPayer = false;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['client:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:detail', 'invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private ?string $registrationNumber = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['client:list', 'client:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:list', 'client:detail', 'invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private ?string $address = null;
 
     #[ORM\Column(length: 100, nullable: true)]
@@ -64,7 +64,7 @@ class Client
     private ?string $city = null;
 
     #[ORM\Column(length: 100, nullable: true)]
-    #[Groups(['client:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:detail', 'invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private ?string $county = null;
 
     #[ORM\Column(length: 2)]
@@ -80,15 +80,15 @@ class Client
     private ?string $email = null;
 
     #[ORM\Column(length: 20, nullable: true)]
-    #[Groups(['client:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:detail', 'invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private ?string $phone = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['client:detail'])]
+    #[Groups(['client:detail', 'invoice:detail'])]
     private ?string $bankName = null;
 
     #[ORM\Column(length: 34, nullable: true)]
-    #[Groups(['client:detail'])]
+    #[Groups(['client:detail', 'invoice:detail'])]
     private ?string $bankAccount = null;
 
     #[ORM\Column(nullable: true)]

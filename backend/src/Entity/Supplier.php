@@ -44,23 +44,23 @@ class Supplier
     private bool $isVatPayer = false;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private ?string $registrationNumber = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['supplier:list', 'supplier:detail'])]
+    #[Groups(['supplier:list', 'supplier:detail', 'invoice:detail'])]
     private ?string $address = null;
 
     #[ORM\Column(length: 100, nullable: true)]
-    #[Groups(['supplier:list', 'supplier:detail'])]
+    #[Groups(['supplier:list', 'supplier:detail', 'invoice:detail'])]
     private ?string $city = null;
 
     #[ORM\Column(length: 100, nullable: true)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private ?string $county = null;
 
     #[ORM\Column(length: 2)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private string $country = 'RO';
 
     #[ORM\Column(length: 10, nullable: true)]
@@ -68,19 +68,19 @@ class Supplier
     private ?string $postalCode = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['supplier:list', 'supplier:detail'])]
+    #[Groups(['supplier:list', 'supplier:detail', 'invoice:detail'])]
     private ?string $email = null;
 
     #[ORM\Column(length: 20, nullable: true)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private ?string $phone = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private ?string $bankName = null;
 
     #[ORM\Column(length: 34, nullable: true)]
-    #[Groups(['supplier:detail'])]
+    #[Groups(['supplier:detail', 'invoice:detail'])]
     private ?string $bankAccount = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
