@@ -149,10 +149,12 @@ async function execRequest(
   // SmartCardPin and make the request in the SAME process via Invoke-WebRequest.
   // This avoids the native PIN dialog. Cookies are saved for subsequent requests.
   if (platform() === 'win32' && req.pin && !sessionValid) {
+    console.log(`[proxy] ${req.method} ${req.url} → PowerShell (cert+PIN, establishing session)`);
     const cookiePath = getCookieJarPath(req.certificateId);
     return powershellProxy(req, cookiePath);
   }
 
+  console.log(`[proxy] ${req.method} ${req.url} → curl (${sessionValid ? 'cookies only' : 'cert'})`);
   return execCurl(req, config);
 }
 
@@ -165,26 +167,28 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
       timeout: 120_000,
     });
 
-    let stdout = '';
+    const stdoutChunks: Buffer[] = [];
     let stderr = '';
 
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stdout.on('data', (chunk: Buffer) => { stdoutChunks.push(chunk); });
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
-    // Pipe XML body via stdin (never as CLI arg)
-    if (req.body) {
+    // Pipe body via stdin for POST/PUT (never as CLI arg)
+    if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
       child.stdin.write(req.body);
     }
     child.stdin.end();
 
     child.on('close', (code) => {
-      if (code !== 0 && !stdout) {
+      const rawBuffer = Buffer.concat(stdoutChunks);
+
+      if (code !== 0 && rawBuffer.length === 0) {
         reject(new Error(`curl exited with code ${code}: ${stderr}`));
         return;
       }
 
       try {
-        const result = parseResponse(stdout);
+        const result = parseResponse(rawBuffer);
         resolve(result);
       } catch (err) {
         reject(new Error(`Failed to parse curl response: ${(err as Error).message}`));
@@ -210,8 +214,12 @@ function buildCurlArgs(req: ProxyRequest, config: AgentConfig): string[] {
     '-c', cookiePath,      // Write cookies to jar after response
     '-X', req.method,
     '--max-time', '120',
-    '-d', '@-',            // Read body from stdin
   ];
+
+  // Only pipe body from stdin for methods that have a body
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    args.push('-d', '@-');
+  }
 
   // Add request headers
   for (const [key, value] of Object.entries(req.headers)) {
@@ -245,38 +253,48 @@ function buildCurlArgs(req: ProxyRequest, config: AgentConfig): string[] {
   return args;
 }
 
-function parseResponse(raw: string): ProxyResponse {
+/** Content types that indicate binary data (should be base64-encoded). */
+const BINARY_CONTENT_TYPES = ['application/pdf', 'application/zip', 'application/octet-stream', 'image/'];
+
+function isBinaryContentType(contentType: string | undefined): boolean {
+  if (!contentType) return false;
+  return BINARY_CONTENT_TYPES.some(t => contentType.toLowerCase().includes(t));
+}
+
+function parseResponse(raw: Buffer): ProxyResponse {
   // With -L (follow redirects), curl -D - outputs headers for EVERY response
   // in the redirect chain. We need the LAST response's headers + body.
-  // Split on double CRLF to find all header/body boundaries.
-  // The last HTTP status line starts the final response headers.
+  // Headers are ASCII, so we search for header boundaries in the raw buffer,
+  // then handle the body as binary if needed.
+
+  const headerMarker = Buffer.from('HTTP/');
+  const headerBodySep = Buffer.from('\r\n\r\n');
 
   // Find the last HTTP status line position
   let lastStatusIdx = -1;
   let searchFrom = 0;
   while (true) {
-    const idx = raw.indexOf('HTTP/', searchFrom);
+    const idx = raw.indexOf(headerMarker, searchFrom);
     if (idx === -1) break;
-    // Verify it's a status line (HTTP/x.x NNN)
-    if (idx === 0 || raw[idx - 1] === '\n') {
+    if (idx === 0 || raw[idx - 1] === 0x0A) { // \n
       lastStatusIdx = idx;
     }
     searchFrom = idx + 1;
   }
 
   if (lastStatusIdx === -1) {
-    return { statusCode: 200, headers: {}, body: raw };
+    return { statusCode: 200, headers: {}, body: raw.toString('utf-8') };
   }
 
-  // Parse from the last status line
-  const finalResponse = raw.substring(lastStatusIdx);
-  const headerEnd = finalResponse.indexOf('\r\n\r\n');
+  // Find the header/body separator after the last status line
+  const headerEnd = raw.indexOf(headerBodySep, lastStatusIdx);
   if (headerEnd === -1) {
-    return { statusCode: 200, headers: {}, body: finalResponse };
+    return { statusCode: 200, headers: {}, body: raw.subarray(lastStatusIdx).toString('utf-8') };
   }
 
-  const headerSection = finalResponse.substring(0, headerEnd);
-  const body = finalResponse.substring(headerEnd + 4);
+  // Parse headers as ASCII text
+  const headerSection = raw.subarray(lastStatusIdx, headerEnd).toString('ascii');
+  const bodyBuffer = raw.subarray(headerEnd + 4);
 
   const headerLines = headerSection.split('\r\n');
   const headers: Record<string, string> = {};
@@ -297,5 +315,10 @@ function parseResponse(raw: string): ProxyResponse {
     }
   }
 
-  return { statusCode, headers, body };
+  // For binary content types, base64-encode the body to preserve data integrity
+  if (isBinaryContentType(headers['content-type'])) {
+    return { statusCode, headers, body: bodyBuffer.toString('base64'), bodyEncoding: 'base64' };
+  }
+
+  return { statusCode, headers, body: bodyBuffer.toString('utf-8') };
 }
