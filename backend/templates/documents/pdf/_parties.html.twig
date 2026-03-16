@@ -47,40 +47,36 @@
     </div>
     <div class="party" style="float: right; width: 48%;">
         <div class="party-label">{{ clientLabel|default(pdf_label('client', labelOverrides|default(null), locale|default('ro'), 'client')) }}</div>
-        {# Use buyerSnapshot when available to preserve original buyer identity (e.g. for storno/credit notes) #}
+        {# Use buyerSnapshot exclusively when available to preserve original buyer identity (e.g. for storno/credit notes).
+           Only fall back to live client entity when no snapshot exists (old invoices). #}
         {% set bs = buyerSnapshot|default(null) %}
-        {% set bName = bs ? bs.name|default(null) : null %}
-        {% set bCui = bs ? bs.cui|default(null) : null %}
-        {% set bCnp = bs ? bs.cnp|default(null) : null %}
-        {% set bType = bs ? bs.type|default(null) : null %}
-        {% set bIsVatPayer = bs ? bs.isVatPayer|default(false) : null %}
-        {% set bRegNumber = bs ? bs.registrationNumber|default(null) : null %}
-        {% set bAddress = bs ? bs.address|default(null) : null %}
-        {% set bCity = bs ? bs.city|default(null) : null %}
-        {% set bCounty = bs ? bs.county|default(null) : null %}
-        {% set bPostalCode = bs ? bs.postalCode|default(null) : null %}
-        {% set bCountry = bs ? bs.country|default(null) : null %}
-        {% set bPhone = bs ? bs.phone|default(null) : null %}
-        {% set bEmail = bs ? bs.email|default(null) : null %}
+        {% set effectiveName = bs ? (bs.name|default('')) : (client ? client.name : '') %}
+        {% set effectiveCui = bs ? (bs.cui|default(null)) : (client ? client.cui : null) %}
+        {% set effectiveCnp = bs ? (bs.cnp|default(null)) : (client is not null and client.cnp is defined ? client.cnp : null) %}
+        {% set effectiveType = bs ? (bs.type|default('company')) : (client is not null and client.type is defined ? client.type : 'company') %}
+        {% set effectiveIsVatPayer = bs ? (bs.isVatPayer|default(false)) : (client is not null and client.isVatPayer is defined ? client.isVatPayer : false) %}
+        {% set effectiveRegNumber = bs ? (bs.registrationNumber|default(null)) : (client is not null and client.registrationNumber is defined ? client.registrationNumber : null) %}
+        {% set effectiveAddress = bs ? (bs.address|default('')) : (client ? client.address : '') %}
+        {% set effectiveCity = bs ? (bs.city|default('')) : (client ? client.city : '') %}
+        {% set effectiveCounty = bs ? (bs.county|default(null)) : (client is not null and client.county is defined ? client.county : null) %}
+        {% set effectivePostalCode = bs ? (bs.postalCode|default(null)) : (client is not null and client.postalCode is defined ? client.postalCode : null) %}
+        {% set effectiveCountry = bs ? (bs.country|default(null)) : (client is not null and client.country is defined ? client.country : null) %}
+        {% set effectivePhone = bs ? (bs.phone|default(null)) : (client is not null and client.phone is defined ? client.phone : null) %}
+        {% set effectiveEmail = bs ? (bs.email|default(null)) : (client is not null and client.email is defined ? client.email : null) %}
         {% if client or bs %}
-            <div class="party-name">{{ bName ?? (client ? client.name : '') }}</div>
-            {% set effectiveType = bType ?? (client.type is defined ? client.type : 'company') %}
+            <div class="party-name">{{ effectiveName }}</div>
             {% if effectiveType == 'individual' %}
-                {% set effectiveCnp = bCnp ?? (client is not null and client.cnp is defined ? client.cnp : null) %}
                 {% if effectiveCnp %}
                     {% if pdf_visible('client_cnp', labelOverrides|default(null)) %}
                         <div class="party-detail">{{ pdf_label('client_cnp', labelOverrides|default(null), locale|default('ro'), 'cnp') }}: {{ effectiveCnp }}</div>
                     {% endif %}
                 {% endif %}
             {% else %}
-                {% set effectiveCui = bCui ?? (client ? client.cui : null) %}
                 {% if effectiveCui %}
                     {% if pdf_visible('client_cui', labelOverrides|default(null)) %}
-                        {% set effectiveIsVatPayer = bIsVatPayer ?? (client is not null and client.isVatPayer is defined ? client.isVatPayer : false) %}
                         <div class="party-detail">{{ pdf_label('client_cui', labelOverrides|default(null), locale|default('ro'), 'cui') }}: {% if effectiveIsVatPayer and effectiveCui matches '/^\\d+$/' %}RO{% endif %}{{ effectiveCui }}</div>
                     {% endif %}
                 {% endif %}
-                {% set effectiveRegNumber = bRegNumber ?? (client is not null and client.registrationNumber is defined ? client.registrationNumber : null) %}
                 {% if effectiveRegNumber %}
                     {% if pdf_visible('client_reg_number', labelOverrides|default(null)) %}
                         <div class="party-detail">{{ pdf_label('client_reg_number', labelOverrides|default(null), locale|default('ro'), 'reg_number') }}: {{ effectiveRegNumber }}</div>
@@ -88,26 +84,20 @@
                 {% endif %}
             {% endif %}
             {% if pdf_visible('client_address', labelOverrides|default(null)) %}
-                <div class="party-detail">{{ bAddress ?? (client ? client.address : '') }}</div>
-                {% set effectiveCity = bCity ?? (client ? client.city : '') %}
-                {% set effectiveCounty = bCounty ?? (client is not null and client.county is defined ? client.county : null) %}
-                {% set effectivePostalCode = bPostalCode ?? (client is not null and client.postalCode is defined ? client.postalCode : null) %}
-                {% set effectiveCountry = bCountry ?? (client is not null and client.country is defined ? client.country : null) %}
+                <div class="party-detail">{{ effectiveAddress }}</div>
                 <div class="party-detail">{{ effectiveCity }}{% if pdf_visible('client_county', labelOverrides|default(null)) and effectiveCounty %}, {{ effectiveCounty|county_name(locale|default('ro')) }}{% endif %}{% if effectivePostalCode %}, {{ effectivePostalCode }}{% endif %}{% if pdf_visible('client_country', labelOverrides|default(null)) and effectiveCountry and (company is not defined or company.country is not defined or effectiveCountry != company.country) %}, {{ effectiveCountry|country_name(locale|default('ro')) }}{% endif %}</div>
             {% endif %}
-            {% set effectivePhone = bPhone ?? (client is not null and client.phone is defined ? client.phone : null) %}
             {% if effectivePhone %}
                 {% if pdf_visible('client_phone', labelOverrides|default(null)) %}
                     <div class="party-detail">{{ pdf_label('client_phone', labelOverrides|default(null), locale|default('ro'), 'phone') }}: {{ effectivePhone }}</div>
                 {% endif %}
             {% endif %}
-            {% set effectiveEmail = bEmail ?? (client is not null and client.email is defined ? client.email : null) %}
             {% if effectiveEmail %}
                 {% if pdf_visible('client_email', labelOverrides|default(null)) %}
                     <div class="party-detail">{{ pdf_label('client_email', labelOverrides|default(null), locale|default('ro'), 'email') }}: {{ effectiveEmail }}</div>
                 {% endif %}
             {% endif %}
-            {% if client is not null and client.contactPerson is defined and client.contactPerson %}
+            {% if not bs and client is not null and client.contactPerson is defined and client.contactPerson %}
                 {% if pdf_visible('client_contact', labelOverrides|default(null)) %}
                     <div class="party-detail">{{ pdf_label('client_contact', labelOverrides|default(null), locale|default('ro'), 'contact_person') }}: {{ client.contactPerson }}</div>
                 {% endif %}
