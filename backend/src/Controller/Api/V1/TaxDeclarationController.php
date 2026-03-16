@@ -147,6 +147,35 @@ class TaxDeclarationController extends AbstractController
         }
     }
 
+    #[Route('/declarations/bulk-delete', methods: ['POST'])]
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $ids = $data['ids'] ?? [];
+
+        if (empty($ids) || !is_array($ids)) {
+            return $this->json(['error' => 'Missing required field: ids (non-empty array)'], Response::HTTP_BAD_REQUEST);
+        }
+
+        /** @var \App\Entity\User|null $user */
+        $user = $this->getUser();
+        $deleted = 0;
+
+        foreach ($ids as $uuid) {
+            $declaration = $this->manager->find($uuid);
+            if ($declaration) {
+                $this->manager->delete($declaration, $user);
+                $deleted++;
+            }
+        }
+
+        return $this->json(['deleted' => $deleted]);
+    }
+
     #[Route('/declarations/upload', methods: ['POST'])]
     public function upload(Request $request): JsonResponse
     {
