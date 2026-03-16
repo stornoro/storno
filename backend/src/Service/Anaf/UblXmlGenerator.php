@@ -378,18 +378,31 @@ class UblXmlGenerator
             return;
         }
 
-        // Use buyerSnapshot when available (preserves original buyer identity),
-        // fall back to live Client entity for backwards compatibility
-        $bName = $buyerSnapshot['name'] ?? $client?->getName() ?? '';
-        $bCui = $buyerSnapshot['cui'] ?? $client?->getCui();
-        $bCnp = $buyerSnapshot['cnp'] ?? $client?->getCnp();
-        $bAddress = $buyerSnapshot['address'] ?? $client?->getAddress() ?? '';
-        $bCity = $buyerSnapshot['city'] ?? $client?->getCity() ?? '';
-        $bCounty = $buyerSnapshot['county'] ?? $client?->getCounty() ?? '';
-        $bCountry = $buyerSnapshot['country'] ?? $client?->getCountry() ?? 'RO';
-        $bPostalCode = $buyerSnapshot['postalCode'] ?? $client?->getPostalCode();
-        $bEmail = $buyerSnapshot['email'] ?? $client?->getEmail();
-        $bPhone = $buyerSnapshot['phone'] ?? $client?->getPhone();
+        // When buyerSnapshot exists, use it exclusively (preserves original buyer identity).
+        // Only fall back to live Client entity when no snapshot is available (old invoices).
+        if ($buyerSnapshot !== null) {
+            $bName = $buyerSnapshot['name'] ?? '';
+            $bCui = $buyerSnapshot['cui'] ?? null;
+            $bCnp = $buyerSnapshot['cnp'] ?? null;
+            $bAddress = $buyerSnapshot['address'] ?? '';
+            $bCity = $buyerSnapshot['city'] ?? '';
+            $bCounty = $buyerSnapshot['county'] ?? '';
+            $bCountry = $buyerSnapshot['country'] ?? 'RO';
+            $bPostalCode = $buyerSnapshot['postalCode'] ?? null;
+            $bEmail = $buyerSnapshot['email'] ?? null;
+            $bPhone = $buyerSnapshot['phone'] ?? null;
+        } else {
+            $bName = $client?->getName() ?? '';
+            $bCui = $client?->getCui();
+            $bCnp = $client?->getCnp();
+            $bAddress = $client?->getAddress() ?? '';
+            $bCity = $client?->getCity() ?? '';
+            $bCounty = $client?->getCounty() ?? '';
+            $bCountry = $client?->getCountry() ?? 'RO';
+            $bPostalCode = $client?->getPostalCode();
+            $bEmail = $client?->getEmail();
+            $bPhone = $client?->getPhone();
+        }
 
         // Party name (BT-45) [BR-RO-L204 max 200 chars]
         $clientPartyName = $dom->createElement('cac:PartyName');

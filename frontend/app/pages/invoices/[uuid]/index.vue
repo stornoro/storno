@@ -347,36 +347,36 @@
                     </div>
                     <div>
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.buyerSnapshot?.isVatPayer ?? (invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer)) || '-' }}</dd>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.buyerSnapshot ? invoice.buyerSnapshot.isVatPayer : (invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer)) || '-' }}</dd>
                     </div>
                     <template v-if="(invoice.buyerSnapshot || invoice.client) && invoice.direction === 'outgoing'">
-                      <div v-if="(invoice.buyerSnapshot?.registrationNumber ?? invoice.client?.registrationNumber)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.registrationNumber : invoice.client?.registrationNumber">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.registrationNumber') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot?.registrationNumber ?? invoice.client?.registrationNumber }}</dd>
+                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.registrationNumber : invoice.client?.registrationNumber }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.address ?? invoice.client?.address)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.address : invoice.client?.address">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.address') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot?.address ?? invoice.client?.address }}</dd>
+                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.address : invoice.client?.address }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.city ?? invoice.client?.city) || (invoice.buyerSnapshot?.county ?? invoice.client?.county)">
+                      <div v-if="(invoice.buyerSnapshot ? invoice.buyerSnapshot.city : invoice.client?.city) || (invoice.buyerSnapshot ? invoice.buyerSnapshot.county : invoice.client?.county)">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.city') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ [invoice.buyerSnapshot?.city ?? invoice.client?.city, invoice.buyerSnapshot?.county ?? invoice.client?.county].filter(Boolean).join(', ') }}</dd>
+                        <dd class="font-medium mt-0.5">{{ [invoice.buyerSnapshot ? invoice.buyerSnapshot.city : invoice.client?.city, invoice.buyerSnapshot ? invoice.buyerSnapshot.county : invoice.client?.county].filter(Boolean).join(', ') }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.email ?? invoice.client?.email)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.email : invoice.client?.email">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.email') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot?.email ?? invoice.client?.email }}</dd>
+                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.email : invoice.client?.email }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.phone ?? invoice.client?.phone)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.phone : invoice.client?.phone">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('common.phone') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot?.phone ?? invoice.client?.phone }}</dd>
+                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.phone : invoice.client?.phone }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.bankAccount ?? invoice.client?.bankAccount)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.bankAccount : invoice.client?.bankAccount">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankAccount') }}</dt>
-                        <dd class="font-medium mt-0.5 font-mono text-xs">{{ invoice.buyerSnapshot?.bankAccount ?? invoice.client?.bankAccount }}</dd>
+                        <dd class="font-medium mt-0.5 font-mono text-xs">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.bankAccount : invoice.client?.bankAccount }}</dd>
                       </div>
-                      <div v-if="(invoice.buyerSnapshot?.bankName ?? invoice.client?.bankName)">
+                      <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.bankName : invoice.client?.bankName">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.bankName') }}</dt>
-                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot?.bankName ?? invoice.client?.bankName }}</dd>
+                        <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.bankName : invoice.client?.bankName }}</dd>
                       </div>
                     </template>
                   </dl>
