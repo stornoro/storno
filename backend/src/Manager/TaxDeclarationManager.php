@@ -294,10 +294,6 @@ class TaxDeclarationManager
 
     public function delete(TaxDeclaration $declaration, ?User $user = null): void
     {
-        if ($declaration->getStatus()->isTerminal() && $declaration->getStatus() !== DeclarationStatus::ERROR) {
-            throw new \InvalidArgumentException('Cannot delete an accepted declaration.');
-        }
-
         $declaration->softDelete($user);
         $this->entityManager->flush();
     }
