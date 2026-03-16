@@ -9,9 +9,7 @@ import type { Certificate } from './macos.js';
  * HasPrivateKey property may return false for hardware-backed keys because
  * the private key isn't directly accessible to .NET — it's on the device.
  *
- * We look for certificates that either:
- * - Have a private key (software certs), OR
- * - Were issued by known Romanian CAs (hardware token certs)
+ * Only returns certificates issued by known Romanian qualified CAs accepted by ANAF.
  */
 const KNOWN_RO_CA_ISSUERS = [
   'certsign',
@@ -26,11 +24,22 @@ function isLikelyAnafCert(issuer: string): boolean {
   return KNOWN_RO_CA_ISSUERS.some(ca => lower.includes(ca));
 }
 
+/** Parse .NET JSON date format \/Date(ms)\/ or ISO strings. */
+function parseDotNetDate(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/\/Date\((\d+)\)\//);
+  if (match) {
+    return new Date(parseInt(match[1], 10)).toISOString();
+  }
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export function listWindowsCertificates(): Certificate[] {
   try {
     // Query all certs — filter later to catch hardware tokens without HasPrivateKey
     const script = `
-      Get-ChildItem Cert:\\CurrentUser\\My |
+      Get-ChildItem Cert:/CurrentUser/My |
         Select-Object Thumbprint, Subject, Issuer, NotAfter, HasPrivateKey |
         ConvertTo-Json -Compress
     `;
@@ -46,12 +55,17 @@ export function listWindowsCertificates(): Certificate[] {
     const items = Array.isArray(parsed) ? parsed : [parsed];
 
     return items
-      .filter((item: any) => item.HasPrivateKey || isLikelyAnafCert(item.Issuer ?? ''))
+      .filter((item: any) => {
+        if (!isLikelyAnafCert(item.Issuer ?? '')) return false;
+        const expiry = parseDotNetDate(item.NotAfter);
+        if (expiry && new Date(expiry) < new Date()) return false;
+        return true;
+      })
       .map((item: any) => ({
         id: item.Thumbprint,
         subject: item.Subject ?? '',
         issuer: item.Issuer ?? '',
-        notAfter: item.NotAfter ? new Date(item.NotAfter).toISOString() : null,
+        notAfter: parseDotNetDate(item.NotAfter),
         source: 'windows-store' as const,
       }));
   } catch {

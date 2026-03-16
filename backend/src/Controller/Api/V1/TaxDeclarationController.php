@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Enum\DeclarationStatus;
 use App\Manager\TaxDeclarationManager;
 use App\Message\Declaration\CheckDeclarationStatusMessage;
+use App\Repository\TaxDeclarationRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Constants\Pagination;
@@ -28,6 +29,7 @@ class TaxDeclarationController extends AbstractController
         private readonly AnafTokenResolver $anafTokenResolver,
         private readonly MessageBusInterface $messageBus,
         private readonly EntityManagerInterface $entityManager,
+        private readonly TaxDeclarationRepository $declarationRepository,
     ) {}
 
     #[Route('/declarations', methods: ['GET'])]
@@ -674,8 +676,393 @@ class TaxDeclarationController extends AbstractController
         return $this->json($declaration, context: ['groups' => ['declaration:detail']]);
     }
 
+    /**
+     * Prepare a sync operation — returns the ANAF URL + token for listaMesaje.
+     * The frontend proxies this through the local agent for mTLS.
+     */
+    #[Route('/declarations/sync-prepare', methods: ['POST'])]
+    public function syncPrepare(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $year = $data['year'] ?? (int) date('Y');
+
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        if ($anafToken === null) {
+            return $this->json(['error' => 'No valid ANAF token available for this company.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $cif = (string) $company->getCif();
+        $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
+
+        return $this->json([
+            'anafUrl' => $baseUrl . '/listaMesaje?zile=60&cif=' . $cif,
+            'anafToken' => $anafToken->getToken(),
+            'year' => $year,
+            'cif' => $cif,
+        ]);
+    }
+
+    /**
+     * Process ANAF listaMesaje response from the agent-proxied sync.
+     * Creates/updates declarations and returns recipisas that need downloading.
+     */
+    #[Route('/declarations/sync-agent-result', methods: ['POST'])]
+    public function syncAgentResult(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $statusCode = $data['statusCode'] ?? 200;
+        $body = $data['body'] ?? '';
+        $year = $data['year'] ?? (int) date('Y');
+
+        if ($statusCode >= 400) {
+            return $this->json(['error' => sprintf('ANAF returned HTTP %d: %s', $statusCode, substr($body, 0, 500))], Response::HTTP_BAD_GATEWAY);
+        }
+
+        // Parse ANAF response
+        $parsed = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $xml = @simplexml_load_string($body);
+            if ($xml !== false) {
+                $parsed = json_decode(json_encode($xml), true);
+            } else {
+                return $this->json(['error' => 'Failed to parse ANAF response.'], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        $messages = $parsed['mesaje'] ?? [];
+        $stats = ['created' => 0, 'updated' => 0];
+        $recipisas = [];
+        $cif = (string) $company->getCif();
+        $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
+
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        $token = $anafToken?->getToken();
+
+        foreach ($messages as $msg) {
+            $tip = $msg['tip'] ?? '';
+
+            if (stripos($tip, 'RECIPISA') === false && stripos($tip, 'recipisa') === false) {
+                continue;
+            }
+
+            $detalii = $msg['detalii'] ?? '';
+            $parsedDetails = $this->parseRecipisaDetails($detalii);
+            if ($parsedDetails === null) {
+                continue;
+            }
+
+            $declType = $this->resolveDeclarationType($parsedDetails['type']);
+            if ($declType === null) {
+                continue;
+            }
+
+            if ($parsedDetails['year'] !== $year) {
+                continue;
+            }
+
+            $month = $parsedDetails['month'] ?? 1;
+            $existing = $this->declarationRepository->findByPeriod($company, $declType, $parsedDetails['year'], $month);
+
+            if (empty($existing)) {
+                $declaration = new \App\Entity\TaxDeclaration();
+                $declaration->setCompany($company);
+                $declaration->setType($declType);
+                $declaration->setYear($parsedDetails['year']);
+                $declaration->setMonth($month);
+                $declaration->setPeriodType($declType->periodType());
+                $declaration->setStatus(DeclarationStatus::ACCEPTED);
+                $declaration->setMetadata([
+                    'source' => 'anaf_sync',
+                    'anafMessageId' => $msg['id'] ?? null,
+                ]);
+
+                $this->entityManager->persist($declaration);
+                $this->entityManager->flush();
+                $stats['created']++;
+
+                // Queue recipisa download
+                $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
+                if ($downloadId && $token) {
+                    $recipisas[] = [
+                        'declarationId' => (string) $declaration->getId(),
+                        'downloadId' => (string) $downloadId,
+                        'anafUrl' => $baseUrl . '/descarcare?id=' . $downloadId,
+                        'anafToken' => $token,
+                    ];
+                }
+            } else {
+                foreach ($existing as $declaration) {
+                    $updated = false;
+
+                    if (in_array($declaration->getStatus(), [DeclarationStatus::SUBMITTED, DeclarationStatus::PROCESSING], true)) {
+                        $declaration->setStatus(DeclarationStatus::ACCEPTED);
+                        $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+                            'syncedFromAnaf' => true,
+                            'anafMessageId' => $msg['id'] ?? null,
+                        ]));
+                        $updated = true;
+                        $stats['updated']++;
+                    }
+
+                    if ($declaration->getRecipisaPath() === null) {
+                        $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
+                        if ($downloadId && $token) {
+                            $recipisas[] = [
+                                'declarationId' => (string) $declaration->getId(),
+                                'downloadId' => (string) $downloadId,
+                                'anafUrl' => $baseUrl . '/descarcare?id=' . $downloadId,
+                                'anafToken' => $token,
+                            ];
+                        }
+                        $updated = true;
+                    }
+
+                    if ($updated) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        $this->entityManager->flush();
+
+        return $this->json([
+            'stats' => $stats,
+            'recipisas' => $recipisas,
+        ]);
+    }
+
+    /**
+     * Store a recipisa PDF downloaded via the agent proxy.
+     */
+    #[Route('/declarations/{uuid}/agent-recipisa', methods: ['POST'])]
+    public function agentRecipisa(string $uuid, Request $request): JsonResponse
+    {
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $declaration = $this->manager->find($uuid);
+        if (!$declaration) {
+            return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $statusCode = $data['statusCode'] ?? 200;
+        $body = $data['body'] ?? '';
+
+        if ($statusCode >= 400) {
+            return $this->json(['error' => 'Failed to download recipisa from ANAF.'], Response::HTTP_BAD_GATEWAY);
+        }
+
+        $company = $declaration->getCompany();
+        $recipisaPath = sprintf(
+            'declarations/%s/%s/%s_recipisa.pdf',
+            $company->getId(),
+            $declaration->getType()->value,
+            $declaration->getId()
+        );
+
+        // Body comes as text from the agent — it may be base64 encoded or raw
+        $this->defaultStorage->write($recipisaPath, $body);
+        $declaration->setRecipisaPath($recipisaPath);
+        $this->entityManager->flush();
+
+        return $this->json(['message' => 'Recipisa stored.']);
+    }
+
+    /**
+     * Prepare a refresh-statuses operation — returns ANAF URL + token for listaMesaje.
+     */
+    #[Route('/declarations/refresh-prepare', methods: ['POST'])]
+    public function refreshPrepare(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        if ($anafToken === null) {
+            return $this->json(['error' => 'No valid ANAF token available for this company.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $cif = (string) $company->getCif();
+        $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
+
+        return $this->json([
+            'anafUrl' => $baseUrl . '/listaMesaje?zile=60&cif=' . $cif,
+            'anafToken' => $anafToken->getToken(),
+            'cif' => $cif,
+        ]);
+    }
+
+    /**
+     * Process ANAF listaMesaje response for status refresh.
+     * Updates in-flight declarations and returns recipisas to download.
+     */
+    #[Route('/declarations/refresh-agent-result', methods: ['POST'])]
+    public function refreshAgentResult(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $statusCode = $data['statusCode'] ?? 200;
+        $body = $data['body'] ?? '';
+
+        if ($statusCode >= 400) {
+            return $this->json(['error' => sprintf('ANAF returned HTTP %d: %s', $statusCode, substr($body, 0, 500))], Response::HTTP_BAD_GATEWAY);
+        }
+
+        $parsed = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $xml = @simplexml_load_string($body);
+            if ($xml !== false) {
+                $parsed = json_decode(json_encode($xml), true);
+            } else {
+                return $this->json(['error' => 'Failed to parse ANAF response.'], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        $messages = $parsed['mesaje'] ?? [];
+        $stats = ['accepted' => 0, 'rejected' => 0];
+        $recipisas = [];
+
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        $token = $anafToken?->getToken();
+        $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
+
+        // Index messages by id_solicitare
+        $messagesByUploadId = [];
+        foreach ($messages as $msg) {
+            $idSolicitare = $msg['id_solicitare'] ?? null;
+            if ($idSolicitare !== null) {
+                $messagesByUploadId[(string) $idSolicitare] = $msg;
+            }
+        }
+
+        // Find in-flight declarations
+        $inFlight = $this->declarationRepository->findByCompanyAndStatuses($company, [
+            DeclarationStatus::SUBMITTED,
+            DeclarationStatus::PROCESSING,
+        ]);
+
+        foreach ($inFlight as $declaration) {
+            $uploadId = $declaration->getAnafUploadId();
+            if ($uploadId === null) {
+                continue;
+            }
+
+            $msg = $messagesByUploadId[$uploadId] ?? null;
+            if ($msg === null) {
+                continue;
+            }
+
+            $stare = $msg['stare'] ?? $msg['Stare'] ?? null;
+
+            if ($stare === 'ok' || $stare === '1') {
+                $declaration->setStatus(DeclarationStatus::ACCEPTED);
+                $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+                    'statusRefresh' => $msg,
+                ]));
+                $stats['accepted']++;
+
+                $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
+                if ($downloadId && $declaration->getRecipisaPath() === null && $token) {
+                    $recipisas[] = [
+                        'declarationId' => (string) $declaration->getId(),
+                        'downloadId' => (string) $downloadId,
+                        'anafUrl' => $baseUrl . '/descarcare?id=' . $downloadId,
+                        'anafToken' => $token,
+                    ];
+                }
+            } elseif ($stare === 'nok' || $stare === '2') {
+                $errorMessage = $msg['Errors'] ?? $msg['eroare'] ?? 'Declaration rejected by ANAF.';
+                if (is_array($errorMessage)) {
+                    $errorMessage = implode('; ', $errorMessage);
+                }
+
+                $declaration->setStatus(DeclarationStatus::REJECTED);
+                $declaration->setErrorMessage($errorMessage);
+                $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+                    'statusRefresh' => $msg,
+                ]));
+                $stats['rejected']++;
+            }
+        }
+
+        $this->entityManager->flush();
+
+        return $this->json([
+            'stats' => $stats,
+            'recipisas' => $recipisas,
+        ]);
+    }
+
     private function resolveCompany(Request $request): ?\App\Entity\Company
     {
         return $this->organizationContext->resolveCompany($request);
+    }
+
+    private function parseRecipisaDetails(string $detalii): ?array
+    {
+        $result = [];
+
+        if (preg_match('/tip\s+(D\d+)/i', $detalii, $m)) {
+            $result['type'] = $m[1];
+        } else {
+            return null;
+        }
+
+        if (preg_match('/perioada\s+raportare\s+(\d{1,2})\.(\d{4})/i', $detalii, $m)) {
+            $result['month'] = (int) $m[1];
+            $result['year'] = (int) $m[2];
+        } elseif (preg_match('/perioada\s+raportare\s+(\d{4})/i', $detalii, $m)) {
+            $result['year'] = (int) $m[1];
+            $result['month'] = 1;
+        } else {
+            return null;
+        }
+
+        return $result;
+    }
+
+    private function resolveDeclarationType(string $anafType): ?\App\Enum\DeclarationType
+    {
+        $normalized = strtolower($anafType);
+        if (!str_starts_with($normalized, 'd')) {
+            $normalized = 'd' . $normalized;
+        }
+
+        return \App\Enum\DeclarationType::tryFrom($normalized);
     }
 }

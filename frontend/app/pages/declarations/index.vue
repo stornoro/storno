@@ -27,7 +27,7 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
 )
 // ── Agent Bulk Submit ─────────────────────────────────────────────
 const companyStore = useCompanyStore()
-const { agentAvailable, agentVersion, agentUpdateAvailable, agentLatestVersion, checkAgent, bulkSubmitViaAgent, tryAutoStart, triggerAgentUpdate, getPreferredCertId } = useAnafAgent()
+const { agentAvailable, agentVersion, agentUpdateAvailable, agentLatestVersion, checkAgent, bulkSubmitViaAgent, syncViaAgent, refreshStatusesViaAgent, tryAutoStart, triggerAgentUpdate, getPreferredCertId } = useAnafAgent()
 const agentUpdating = ref(false)
 
 async function onUpdateAgent() {
@@ -205,8 +205,9 @@ async function handleRefreshStatuses() {
   if (!requireAgentConfig()) return
   refreshing.value = true
   try {
-    await store.refreshStatuses()
-    toast.add({ title: $t('declarations.refreshSuccess'), color: 'success' })
+    const stats = await refreshStatusesViaAgent(savedCertId.value!)
+    const msg = `${stats.accepted} accepted, ${stats.rejected} rejected`
+    toast.add({ title: $t('declarations.refreshSuccess') + ` (${msg})`, color: 'success' })
     store.fetchDeclarations()
   } catch (e: any) {
     toast.add({ title: e?.message ?? $t('declarations.syncError'), color: 'error' })
@@ -219,8 +220,9 @@ async function handleSyncFromAnaf() {
   if (!requireAgentConfig()) return
   syncing.value = true
   try {
-    await store.syncFromAnaf(syncYear.value)
-    toast.add({ title: $t('declarations.syncSuccess'), color: 'success' })
+    const stats = await syncViaAgent(syncYear.value, savedCertId.value!)
+    const msg = `${stats.created} created, ${stats.updated} updated`
+    toast.add({ title: $t('declarations.syncSuccess') + ` (${msg})`, color: 'success' })
     syncPopoverOpen.value = false
     store.fetchDeclarations()
   } catch (e: any) {

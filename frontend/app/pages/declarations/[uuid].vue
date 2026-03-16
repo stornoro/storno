@@ -431,8 +431,9 @@
                   >
                     <input v-model="selectedCertId" type="radio" :value="cert.id" class="accent-primary" />
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm font-medium truncate">{{ cert.subject }}</p>
-                      <p class="text-xs text-(--ui-text-muted)">{{ cert.source }} &middot; {{ cert.id.substring(0, 16) }}...</p>
+                      <p class="text-sm font-medium truncate">{{ certDisplayName(cert) }}</p>
+                      <p class="text-xs text-(--ui-text-muted)">{{ certIssuerShort(cert) }}</p>
+                      <p v-if="certExpiry(cert)" class="text-xs text-(--ui-text-muted)">{{ certExpiry(cert) }}</p>
                     </div>
                   </label>
                 </template>
@@ -479,7 +480,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useDeclarationStore()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, checkAgent, listCertificates, submitViaAgent, tryAutoStart, getPreferredCertId } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, checkAgent, listCertificates, submitViaAgent, tryAutoStart, getPreferredCertId, certDisplayName, certIssuerShort, certExpiry } = useAnafAgent()
 
 const agentStarting = ref(false)
 
