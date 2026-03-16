@@ -48,7 +48,7 @@ export const useDeclarationStore = defineStore('declarations', () => {
       if (filters.value.year) params.year = filters.value.year
       if (filters.value.month) params.month = filters.value.month
 
-      const res = await get<{ items: TaxDeclaration[]; total: number; page: number; limit: number }>('/api/v1/declarations', params)
+      const res = await get<{ items: TaxDeclaration[]; total: number; page: number; limit: number }>('/v1/declarations', params)
       items.value = res.items ?? []
       total.value = res.total ?? 0
     } catch (e: any) {
@@ -61,7 +61,7 @@ export const useDeclarationStore = defineStore('declarations', () => {
   async function fetchDeclaration(uuid: string): Promise<TaxDeclaration | null> {
     const { get } = useApi()
     try {
-      return await get<TaxDeclaration>(`/api/v1/declarations/${uuid}`)
+      return await get<TaxDeclaration>(`/v1/declarations/${uuid}`)
     } catch {
       return null
     }
@@ -69,39 +69,39 @@ export const useDeclarationStore = defineStore('declarations', () => {
 
   async function createDeclaration(payload: CreateDeclarationPayload): Promise<TaxDeclaration> {
     const { post } = useApi()
-    return await post<TaxDeclaration>('/api/v1/declarations', payload)
+    return await post<TaxDeclaration>('/v1/declarations', payload)
   }
 
   async function updateDeclaration(uuid: string, data: Record<string, unknown>): Promise<TaxDeclaration> {
     const { patch } = useApi()
-    return await patch<TaxDeclaration>(`/api/v1/declarations/${uuid}`, data)
+    return await patch<TaxDeclaration>(`/v1/declarations/${uuid}`, data)
   }
 
   async function deleteDeclaration(uuid: string): Promise<void> {
     const { del } = useApi()
-    await del(`/api/v1/declarations/${uuid}`)
+    await del(`/v1/declarations/${uuid}`)
   }
 
   async function recalculateDeclaration(uuid: string): Promise<TaxDeclaration> {
     const { post } = useApi()
-    return await post<TaxDeclaration>(`/api/v1/declarations/${uuid}/recalculate`)
+    return await post<TaxDeclaration>(`/v1/declarations/${uuid}/recalculate`)
   }
 
   async function validateDeclaration(uuid: string): Promise<TaxDeclaration> {
     const { post } = useApi()
-    return await post<TaxDeclaration>(`/api/v1/declarations/${uuid}/validate`)
+    return await post<TaxDeclaration>(`/v1/declarations/${uuid}/validate`)
   }
 
   async function submitDeclaration(uuid: string): Promise<TaxDeclaration> {
     const { post } = useApi()
-    return await post<TaxDeclaration>(`/api/v1/declarations/${uuid}/submit`)
+    return await post<TaxDeclaration>(`/v1/declarations/${uuid}/submit`)
   }
 
   async function uploadXml(file: File): Promise<TaxDeclaration> {
     const { apiFetch } = useApi()
     const formData = new FormData()
     formData.append('file', file)
-    return await apiFetch<TaxDeclaration>('/api/v1/declarations/upload', {
+    return await apiFetch<TaxDeclaration>('/v1/declarations/upload', {
       method: 'POST',
       body: formData,
     })
@@ -109,17 +109,17 @@ export const useDeclarationStore = defineStore('declarations', () => {
 
   async function bulkSubmit(ids: string[]): Promise<{ submitted: number }> {
     const { post } = useApi()
-    return await post<{ submitted: number }>('/api/v1/declarations/bulk-submit', { ids })
+    return await post<{ submitted: number }>('/v1/declarations/bulk-submit', { ids })
   }
 
   async function syncFromAnaf(year: number): Promise<void> {
     const { post } = useApi()
-    await post('/api/v1/declarations/sync', { year })
+    await post('/v1/declarations/sync', { year })
   }
 
   async function refreshStatuses(): Promise<void> {
     const { post } = useApi()
-    await post('/api/v1/declarations/refresh-statuses')
+    await post('/v1/declarations/refresh-statuses')
   }
 
   function resetFilters(): void {
