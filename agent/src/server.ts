@@ -1,5 +1,6 @@
 import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { createServer } from 'node:https';
+import { execSync } from 'node:child_process';
 import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
@@ -211,14 +212,34 @@ async function handleBatch(req: IncomingMessage, res: ServerResponse, config: Ag
   }
 
   // Execute requests sequentially (PIN cached after first)
-  const results: Array<{ index: number; statusCode: number; headers: Record<string, string>; body: string; error?: string }> = [];
+  const results: Array<{ index: number; statusCode: number; headers: Record<string, string>; body: string; bodyEncoding?: string; error?: string }> = [];
 
   for (let i = 0; i < payload.requests.length; i++) {
-    try {
-      const result = await curlProxy(payload.requests[i], config);
-      results.push({ index: i, statusCode: result.statusCode, headers: result.headers, body: result.body });
-    } catch (err) {
-      results.push({ index: i, statusCode: 0, headers: {}, body: '', error: (err as Error).message });
+    // Small delay between requests to avoid ANAF rate-limiting / connection resets
+    if (i > 0) await new Promise(r => setTimeout(r, 500));
+
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await curlProxy(payload.requests[i], config);
+        results.push({ index: i, statusCode: result.statusCode, headers: result.headers, body: result.body, bodyEncoding: result.bodyEncoding });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err as Error;
+        const msg = lastErr.message;
+        // PIN errors — stop entire batch immediately to prevent certificate lockout
+        if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) {
+          results.push({ index: i, statusCode: 0, headers: {}, body: '', error: msg });
+          json(res, 200, { results, aborted: true, reason: 'PIN error — batch stopped to prevent certificate lockout' });
+          return;
+        }
+        // Wait before retry for other errors
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    if (lastErr) {
+      results.push({ index: i, statusCode: 0, headers: {}, body: '', error: lastErr.message });
     }
   }
 
@@ -263,9 +284,43 @@ export function startServer(config?: AgentConfig): void {
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${port} is already in use. Is another agent running?`);
-      process.exit(1);
+      console.log(`Port ${port} is already in use. Killing previous agent...`);
+      killProcessOnPort(port);
+      setTimeout(() => {
+        server.listen(port, '127.0.0.1');
+      }, 1000);
+      return;
     }
     throw err;
   });
+}
+
+function killProcessOnPort(port: number): void {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8' });
+      const lines = output.trim().split('\n');
+      const pids = new Set<string>();
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && pid !== '0' && pid !== String(process.pid)) {
+          pids.add(pid);
+        }
+      }
+      for (const pid of pids) {
+        console.log(`  Killing PID ${pid}`);
+        execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' });
+      }
+    } else {
+      const output = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' });
+      const pids = output.trim().split('\n').filter(p => p && p !== String(process.pid));
+      for (const pid of pids) {
+        console.log(`  Killing PID ${pid}`);
+        execSync(`kill -9 ${pid}`);
+      }
+    }
+  } catch {
+    // Process may have already exited
+  }
 }

@@ -3454,6 +3454,7 @@ export default defineI18nLocale(async () => {
     status: 'Status',
     year: 'Year',
     month: 'Month',
+    registrationNumber: 'Registration no.',
     submittedAt: 'Submitted',
     filterType: 'Type',
     filterStatus: 'Status',

@@ -91,7 +91,7 @@
               icon="i-lucide-refresh-cw"
               variant="outline"
               :loading="agentChecking"
-              @click="checkAgent"
+              @click="onRecheckAgent"
             >
               {{ $t('anaf.agentRecheck') }}
             </UButton>
@@ -496,6 +496,13 @@ function saveAgentCertPreference() {
     savePin(agentSelectedCertId.value, agentPin.value)
   }
   toast.add({ title: $t('anaf.agentCertSaved'), color: 'success' })
+}
+
+async function onRecheckAgent() {
+  const running = await checkAgent()
+  if (running) {
+    await loadAgentCerts()
+  }
 }
 
 async function onAutoStartAgent() {

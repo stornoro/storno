@@ -110,6 +110,7 @@ export function useAnafAgent() {
       statusCode: r.statusCode,
       headers: r.headers,
       body: r.body,
+      bodyEncoding: r.bodyEncoding,
     }))
   }
 
@@ -318,6 +319,7 @@ export function useAnafAgent() {
           await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
             statusCode: res.statusCode,
             body: res.body,
+            bodyEncoding: res.bodyEncoding,
           })
         }
       }))
@@ -370,6 +372,7 @@ export function useAnafAgent() {
           await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
             statusCode: res.statusCode,
             body: res.body,
+            bodyEncoding: res.bodyEncoding,
           })
         }
       }))
