@@ -2615,6 +2615,8 @@ export default defineI18nLocale(async () => {
     agentCertSelectDescription: 'Select the default certificate for signing declarations for this company.',
     agentSaveCert: 'Save preference',
     agentCertSaved: 'Certificate preference saved',
+    agentPinPlaceholder: 'Token PIN code',
+    agentPinHint: 'Enter the PIN for your hardware token. It will be remembered for this session.',
     agentUpdateAvailable: 'Agent update available: v{current} → v{latest}',
     agentUpdate: 'Update',
     agentUpdateStarted: 'Agent is updating and restarting...',
