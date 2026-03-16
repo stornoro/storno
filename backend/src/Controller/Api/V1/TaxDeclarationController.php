@@ -750,6 +750,7 @@ class TaxDeclarationController extends AbstractController
         $messages = $parsed['mesaje'] ?? [];
         $stats = ['created' => 0, 'updated' => 0];
         $recipisas = [];
+        $seen = []; // Track type+period combos processed in this sync to prevent duplicates
         $cif = (string) $company->getCif();
         $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
 
@@ -760,6 +761,12 @@ class TaxDeclarationController extends AbstractController
             $tip = $msg['tip'] ?? '';
 
             if (stripos($tip, 'RECIPISA') === false && stripos($tip, 'recipisa') === false) {
+                continue;
+            }
+
+            // Only process messages belonging to this company's CIF
+            $msgCif = (string) ($msg['cif'] ?? '');
+            if ($msgCif !== '' && $msgCif !== $cif) {
                 continue;
             }
 
@@ -779,6 +786,23 @@ class TaxDeclarationController extends AbstractController
             }
 
             $month = $parsedDetails['month'] ?? 1;
+
+            // Deduplicate: skip if we already processed this type+period in this sync
+            $dedupKey = sprintf('%s_%d_%d', $declType->value, $parsedDetails['year'], $month);
+            if (isset($seen[$dedupKey])) {
+                // Still queue recipisa download for the existing declaration
+                $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
+                if ($downloadId && $token && $seen[$dedupKey] !== null) {
+                    $recipisas[] = [
+                        'declarationId' => $seen[$dedupKey],
+                        'downloadId' => (string) $downloadId,
+                        'anafUrl' => $baseUrl . '/descarcare?id=' . $downloadId,
+                        'anafToken' => $token,
+                    ];
+                }
+                continue;
+            }
+
             $existing = $this->declarationRepository->findByPeriod($company, $declType, $parsedDetails['year'], $month);
 
             if (empty($existing)) {
@@ -797,6 +821,7 @@ class TaxDeclarationController extends AbstractController
                 $this->entityManager->persist($declaration);
                 $this->entityManager->flush();
                 $stats['created']++;
+                $seen[$dedupKey] = (string) $declaration->getId();
 
                 // Queue recipisa download
                 $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
@@ -809,6 +834,7 @@ class TaxDeclarationController extends AbstractController
                     ];
                 }
             } else {
+                $seen[$dedupKey] = (string) $existing[0]->getId();
                 foreach ($existing as $declaration) {
                     $updated = false;
 

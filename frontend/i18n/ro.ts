@@ -2614,6 +2614,8 @@ export default defineI18nLocale(async () => {
       agentCertSelectDescription: 'Selectati certificatul implicit pentru semnarea declaratiilor acestei companii.',
       agentSaveCert: 'Salveaza preferinta',
       agentCertSaved: 'Preferinta certificat salvata',
+      agentPinPlaceholder: 'Cod PIN token',
+      agentPinHint: 'Introduceti codul PIN al token-ului hardware. Va fi retinut pe durata sesiunii.',
       agentUpdateAvailable: 'Actualizare agent disponibila: v{current} → v{latest}',
       agentUpdate: 'Actualizeaza',
       agentUpdateStarted: 'Agentul se actualizeaza si restarteaza...',

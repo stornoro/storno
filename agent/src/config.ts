@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 
 export interface AgentConfig {
   port: number;
@@ -23,7 +23,9 @@ const DEFAULT_CONFIG: AgentConfig = {
     'http://localhost:3001',
   ],
   pkcs11Module: null,
-  curlPath: 'curl',
+  // On Windows, use the native System32 curl (Schannel) instead of Git's curl (OpenSSL).
+  // Schannel can access certificates from the Windows Certificate Store by thumbprint.
+  curlPath: platform() === 'win32' ? 'C:\\Windows\\System32\\curl.exe' : 'curl',
 };
 
 export function loadConfig(): AgentConfig {

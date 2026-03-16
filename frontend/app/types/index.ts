@@ -734,6 +734,7 @@ export interface AnafProxyRequest {
   headers: Record<string, string>
   body: string
   certificateId: string
+  pin?: string
 }
 
 export interface AnafProxyResponse {
