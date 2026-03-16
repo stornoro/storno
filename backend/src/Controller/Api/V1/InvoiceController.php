@@ -257,6 +257,7 @@ class InvoiceController extends AbstractController
                 $storno->setSenderCif($invoice->getSenderCif());
                 $storno->setReceiverName($invoice->getReceiverName());
                 $storno->setReceiverCif($invoice->getReceiverCif());
+                $storno->setBuyerSnapshot($invoice->getBuyerSnapshot());
                 $storno->setParentDocument($invoice);
                 $storno->setStatus(DocumentStatus::DRAFT);
                 $storno->setDirection(InvoiceDirection::OUTGOING);

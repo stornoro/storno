@@ -536,6 +536,7 @@ class EFacturaSyncService
         if ($direction === InvoiceDirection::OUTGOING && $parsed->buyer && ($parsed->buyer->cif || $parsed->buyer->name)) {
             $client = $this->findOrCreateClient($company, $parsed->buyer, $result);
             $invoice->setClient($client);
+            $invoice->snapshotBuyer($client);
         }
 
         // INCOMING: seller is our supplier

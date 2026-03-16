@@ -77,6 +77,7 @@ class DocumentPdfService
             'invoice' => $invoice,
             'company' => $invoice->getCompany(),
             'client' => $invoice->getClient(),
+            'buyerSnapshot' => $invoice->getBuyerSnapshot(),
             'config' => $config,
             'logoDataUri' => $this->resolveLogoDataUri($invoice->getCompany(), $config),
             'locale' => $invoice->getLanguage(),

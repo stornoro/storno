@@ -87,6 +87,7 @@ class InvoiceManager
                 $invoice->setClient($client);
                 $invoice->setReceiverName($client->getName());
                 $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+                $invoice->snapshotBuyer($client);
             }
         }
         // Allow setting receiver info directly (without a Client entity)
@@ -422,6 +423,7 @@ class InvoiceManager
                 $invoice->setClient($client);
                 $invoice->setReceiverName($client->getName());
                 $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+                $invoice->snapshotBuyer($client);
             }
         }
         // Manual receiver info (when no client entity selected)
@@ -497,6 +499,7 @@ class InvoiceManager
         foreach ($invoices as $invoice) {
             $invoice->setReceiverName($client->getName());
             $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+            $invoice->snapshotBuyer($client);
 
             // Reapply VAT rules based on updated client data
             $this->applyVatRules($invoice, $client, $company);

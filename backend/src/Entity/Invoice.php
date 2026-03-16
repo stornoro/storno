@@ -381,6 +381,12 @@ class Invoice
     #[Groups(['invoice:detail'])]
     private ?array $ublExtensions = null;
 
+    // Snapshot of buyer (client) details at invoice creation time
+    // Used to preserve original buyer identity for storno/credit notes and XML generation
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['invoice:detail'])]
+    private ?array $buyerSnapshot = null;
+
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['invoice:detail'])]
     private bool $penaltyEnabled = false;
@@ -1502,6 +1508,54 @@ class Invoice
     public function setPayeeLegalRegistrationIdentifier(?string $payeeLegalRegistrationIdentifier): static
     {
         $this->payeeLegalRegistrationIdentifier = $payeeLegalRegistrationIdentifier;
+
+        return $this;
+    }
+
+    public function getBuyerSnapshot(): ?array
+    {
+        return $this->buyerSnapshot;
+    }
+
+    public function setBuyerSnapshot(?array $buyerSnapshot): static
+    {
+        $this->buyerSnapshot = $buyerSnapshot;
+
+        return $this;
+    }
+
+    /**
+     * Capture a snapshot of all buyer-relevant fields from the Client entity.
+     * This snapshot is used for XML generation and storno creation to ensure
+     * buyer details remain consistent even if the Client entity is later modified.
+     */
+    public function snapshotBuyer(?Client $client = null): static
+    {
+        $client = $client ?? $this->client;
+        if ($client === null) {
+            return $this;
+        }
+
+        $this->buyerSnapshot = [
+            'type' => $client->getType(),
+            'name' => $client->getName(),
+            'cui' => $client->getCui(),
+            'cnp' => $client->getCnp(),
+            'vatCode' => $client->getVatCode(),
+            'isVatPayer' => $client->isVatPayer(),
+            'registrationNumber' => $client->getRegistrationNumber(),
+            'address' => $client->getAddress(),
+            'city' => $client->getCity(),
+            'county' => $client->getCounty(),
+            'country' => $client->getCountry(),
+            'postalCode' => $client->getPostalCode(),
+            'email' => $client->getEmail(),
+            'phone' => $client->getPhone(),
+            'bankName' => $client->getBankName(),
+            'bankAccount' => $client->getBankAccount(),
+            'clientCode' => $client->getClientCode(),
+            'einvoiceIdentifiers' => $client->getEinvoiceIdentifiers(),
+        ];
 
         return $this;
     }
