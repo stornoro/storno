@@ -53,7 +53,15 @@ class BackfillBuyerSnapshotCommand extends Command
         // Resolve company IDs from user email via organization memberships
         $companyIds = [];
         if ($email) {
+            $filters = $this->entityManager->getFilters();
+            $filterWasEnabled = $filters->isEnabled('soft_delete');
+            if ($filterWasEnabled) {
+                $filters->disable('soft_delete');
+            }
             $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
+            if ($filterWasEnabled) {
+                $filters->enable('soft_delete');
+            }
             if (!$user) {
                 $io->error(sprintf('User with email "%s" not found.', $email));
                 return Command::FAILURE;
