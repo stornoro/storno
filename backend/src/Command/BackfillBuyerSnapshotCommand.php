@@ -2,7 +2,6 @@
 
 namespace App\Command;
 
-use App\Entity\User;
 use App\Repository\InvoiceRepository;
 use App\Service\Anaf\EFacturaXmlParser;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,7 +35,7 @@ class BackfillBuyerSnapshotCommand extends Command
         $this
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Show what would be done without making changes')
             ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Maximum number of invoices to process', '0')
-            ->addOption('email', null, InputOption::VALUE_REQUIRED, 'Only backfill invoices belonging to companies of this user (by email)');
+            ->addOption('email', null, InputOption::VALUE_REQUIRED, 'Only backfill invoices for clients with this email');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -50,53 +49,16 @@ class BackfillBuyerSnapshotCommand extends Command
             $io->note('Dry-run mode — no changes will be saved.');
         }
 
-        // Resolve company IDs from user email via organization memberships
-        $companyIds = [];
-        if ($email) {
-            $filters = $this->entityManager->getFilters();
-            $filterWasEnabled = $filters->isEnabled('soft_delete');
-            if ($filterWasEnabled) {
-                $filters->disable('soft_delete');
-            }
-            $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
-            if ($filterWasEnabled) {
-                $filters->enable('soft_delete');
-            }
-            if (!$user) {
-                $io->error(sprintf('User with email "%s" not found.', $email));
-                return Command::FAILURE;
-            }
-
-            foreach ($user->getOrganizationMemberships() as $membership) {
-                if ($membership->getAllowedCompanies()->isEmpty()) {
-                    // Access to all companies in the organization
-                    foreach ($membership->getOrganization()->getCompanies() as $company) {
-                        $companyIds[] = $company->getId()->toRfc4122();
-                    }
-                } else {
-                    foreach ($membership->getAllowedCompanies() as $company) {
-                        $companyIds[] = $company->getId()->toRfc4122();
-                    }
-                }
-            }
-
-            $companyIds = array_unique($companyIds);
-            if (empty($companyIds)) {
-                $io->error(sprintf('User "%s" has no companies.', $email));
-                return Command::FAILURE;
-            }
-
-            $io->info(sprintf('Filtering invoices for user "%s" (%d companies).', $email, count($companyIds)));
-        }
-
         $qb = $this->invoiceRepository->createQueryBuilder('i')
             ->where('i.xmlPath IS NOT NULL')
             ->andWhere('i.buyerSnapshot IS NULL')
             ->orderBy('i.issueDate', 'ASC');
 
-        if ($companyIds) {
-            $qb->andWhere('i.company IN (:companyIds)')
-                ->setParameter('companyIds', $companyIds);
+        if ($email) {
+            $qb->join('i.client', 'c')
+                ->andWhere('c.email = :email')
+                ->setParameter('email', $email);
+            $io->info(sprintf('Filtering invoices for client email "%s".', $email));
         }
 
         if ($limit > 0) {
