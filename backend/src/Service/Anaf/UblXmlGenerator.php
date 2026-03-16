@@ -216,7 +216,8 @@ class UblXmlGenerator
         $this->addSupplierParty($dom, $root, $company);
 
         // AccountingCustomerParty (Client)
-        $this->addCustomerParty($dom, $root, $client);
+        // Use buyerSnapshot when available (preserves original buyer identity for storno/credit notes)
+        $this->addCustomerParty($dom, $root, $client, $invoice->getBuyerSnapshot());
 
         // Delivery from ublExtensions (after AccountingCustomerParty, before PayeeParty per XSD)
         if (!empty($extensions['delivery'])) {
@@ -366,28 +367,41 @@ class UblXmlGenerator
         }
     }
 
-    private function addCustomerParty(\DOMDocument $dom, \DOMElement $root, $client): void
+    private function addCustomerParty(\DOMDocument $dom, \DOMElement $root, $client, ?array $buyerSnapshot = null): void
     {
         $customerParty = $dom->createElement('cac:AccountingCustomerParty');
         $root->appendChild($customerParty);
         $clientPartyEl = $dom->createElement('cac:Party');
         $customerParty->appendChild($clientPartyEl);
 
-        if ($client === null) {
+        if ($client === null && $buyerSnapshot === null) {
             return;
         }
 
+        // Use buyerSnapshot when available (preserves original buyer identity),
+        // fall back to live Client entity for backwards compatibility
+        $bName = $buyerSnapshot['name'] ?? $client?->getName() ?? '';
+        $bCui = $buyerSnapshot['cui'] ?? $client?->getCui();
+        $bCnp = $buyerSnapshot['cnp'] ?? $client?->getCnp();
+        $bAddress = $buyerSnapshot['address'] ?? $client?->getAddress() ?? '';
+        $bCity = $buyerSnapshot['city'] ?? $client?->getCity() ?? '';
+        $bCounty = $buyerSnapshot['county'] ?? $client?->getCounty() ?? '';
+        $bCountry = $buyerSnapshot['country'] ?? $client?->getCountry() ?? 'RO';
+        $bPostalCode = $buyerSnapshot['postalCode'] ?? $client?->getPostalCode();
+        $bEmail = $buyerSnapshot['email'] ?? $client?->getEmail();
+        $bPhone = $buyerSnapshot['phone'] ?? $client?->getPhone();
+
         // Party name (BT-45) [BR-RO-L204 max 200 chars]
         $clientPartyName = $dom->createElement('cac:PartyName');
-        $this->addElement($dom, $clientPartyName, 'cbc:Name', $client->getName() ?? '');
+        $this->addElement($dom, $clientPartyName, 'cbc:Name', $bName);
         $clientPartyEl->appendChild($clientPartyName);
 
         // [BR-RO-082] Postal address — StreetName required [BR-RO-L152 max 150 chars]
         $clientAddress = $dom->createElement('cac:PostalAddress');
-        $this->addElement($dom, $clientAddress, 'cbc:StreetName', $client->getAddress() ?? '');
+        $this->addElement($dom, $clientAddress, 'cbc:StreetName', $bAddress);
 
-        $clientCountryCode = $client->getCountry() ?? 'RO';
-        $clientCounty = $client->getCounty() ?? '';
+        $clientCountryCode = $bCountry;
+        $clientCounty = $bCounty;
 
         // Normalize county to ISO code (handles legacy full names like "Alba" → "AB")
         if ($clientCounty !== '' && $clientCountryCode === 'RO') {
@@ -401,15 +415,15 @@ class UblXmlGenerator
 
         // [BR-RO-092] City required [BR-RO-L0502 max 50 chars]
         // [BR-RO-101] Bucharest requires SECTOR1-SECTOR6
-        $clientCity = $client->getCity() ?? '';
+        $clientCity = $bCity;
         if ($clientCounty === 'RO-B') {
             $clientCity = AddressNormalizer::normalizeBucharestSector($clientCity);
         }
         $this->addElement($dom, $clientAddress, 'cbc:CityName', $clientCity);
 
         // PostalZone must come before CountrySubentity per UBL 2.1 schema
-        if ($client->getPostalCode()) {
-            $this->addElement($dom, $clientAddress, 'cbc:PostalZone', $client->getPostalCode());
+        if ($bPostalCode) {
+            $this->addElement($dom, $clientAddress, 'cbc:PostalZone', $bPostalCode);
         }
 
         // [BR-RO-111] CountrySubentity — always required for RO clients
@@ -425,10 +439,10 @@ class UblXmlGenerator
 
         // [BR-RO-120] Tax scheme (CUI/PartyTaxScheme CompanyID)
         // [BR-CO-09] VAT identifier must always have ISO 3166-1 alpha-2 country prefix
-        if ($client->getCui()) {
+        if ($bCui) {
             $clientTaxScheme = $dom->createElement('cac:PartyTaxScheme');
             $clientCountryPrefix = $clientCountryCode ?: 'RO';
-            $clientCompanyId = $clientCountryPrefix . $client->getCui();
+            $clientCompanyId = $clientCountryPrefix . $bCui;
             $this->addElement($dom, $clientTaxScheme, 'cbc:CompanyID', $clientCompanyId);
             $clientTaxSch = $dom->createElement('cac:TaxScheme');
             $this->addElement($dom, $clientTaxSch, 'cbc:ID', 'VAT');
@@ -438,11 +452,11 @@ class UblXmlGenerator
 
         // Legal entity (BT-44) [BR-RO-L203 max 200 chars]
         $clientLegal = $dom->createElement('cac:PartyLegalEntity');
-        $this->addElement($dom, $clientLegal, 'cbc:RegistrationName', $client->getName() ?? '');
-        if ($client->getCui()) {
-            $this->addElement($dom, $clientLegal, 'cbc:CompanyID', $client->getCui());
-        } elseif ($client->getCnp()) {
-            $this->addElement($dom, $clientLegal, 'cbc:CompanyID', $client->getCnp());
+        $this->addElement($dom, $clientLegal, 'cbc:RegistrationName', $bName);
+        if ($bCui) {
+            $this->addElement($dom, $clientLegal, 'cbc:CompanyID', $bCui);
+        } elseif ($bCnp) {
+            $this->addElement($dom, $clientLegal, 'cbc:CompanyID', $bCnp);
         } else {
             // [BR-RO-120] B2C fallback: 13 zeros accepted by ANAF for individuals without CUI/CNP
             $this->addElement($dom, $clientLegal, 'cbc:CompanyID', '0000000000000');
@@ -451,13 +465,13 @@ class UblXmlGenerator
         $clientPartyEl->appendChild($clientLegal);
 
         // Contact [BR-RO-L1010 phone max 100] [BR-RO-L1011 email max 100]
-        if ($client->getEmail() || $client->getPhone()) {
+        if ($bEmail || $bPhone) {
             $clientContact = $dom->createElement('cac:Contact');
-            if ($client->getPhone()) {
-                $this->addElement($dom, $clientContact, 'cbc:Telephone', $client->getPhone());
+            if ($bPhone) {
+                $this->addElement($dom, $clientContact, 'cbc:Telephone', $bPhone);
             }
-            if ($client->getEmail()) {
-                $this->addElement($dom, $clientContact, 'cbc:ElectronicMail', $client->getEmail());
+            if ($bEmail) {
+                $this->addElement($dom, $clientContact, 'cbc:ElectronicMail', $bEmail);
             }
             $clientPartyEl->appendChild($clientContact);
         }
