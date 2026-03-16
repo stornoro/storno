@@ -6,7 +6,7 @@ import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
 import { CERT, KEY } from './certs.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /** Allowed proxy target hosts. */
 const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro'];
