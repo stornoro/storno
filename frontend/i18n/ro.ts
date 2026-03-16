@@ -3453,6 +3453,7 @@ export default defineI18nLocale(async () => {
     status: 'Status',
     year: 'An',
     month: 'Luna',
+    registrationNumber: 'Nr. inregistrare',
     submittedAt: 'Trimisa',
     filterType: 'Tip',
     filterStatus: 'Status',

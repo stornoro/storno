@@ -741,6 +741,7 @@ export interface AnafProxyResponse {
   statusCode: number
   headers: Record<string, string>
   body: string
+  bodyEncoding?: 'text' | 'base64'
 }
 
 // ── Sync status ─────────────────────────────────────────────────────
