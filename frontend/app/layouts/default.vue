@@ -61,6 +61,12 @@ const links = computed(() => {
       to: '/efactura',
       onSelect: close,
     },
+    can(P.DECLARATION_VIEW) && {
+      label: $t('nav.declarations'),
+      icon: 'i-lucide-file-badge',
+      to: '/declarations',
+      onSelect: close,
+    },
     can(P.CLIENT_VIEW) && {
       label: $t('nav.clients'),
       icon: 'i-lucide-users',

@@ -1,4 +1,4 @@
-import type { DocumentStatus, DocumentType, InvoiceDirection, ProformaStatus, DeliveryNoteStatus, ReceiptStatus } from './enums'
+import type { DocumentStatus, DocumentType, InvoiceDirection, ProformaStatus, DeliveryNoteStatus, ReceiptStatus, DeclarationType, DeclarationStatus } from './enums'
 
 // ── Paginated API response ──────────────────────────────────────────
 export interface PaginatedResponse<T> {
@@ -1505,4 +1505,29 @@ export interface BalanceAnalysisReport {
   profitability: BalanceProfitability
   topExpenses: BalanceTopExpense[]
   yoyComparison: BalanceYoyComparison
+}
+
+// ── Tax Declarations ──────────────────────────────────────────────
+export interface TaxDeclaration {
+  id: string
+  type: DeclarationType
+  status: DeclarationStatus
+  year: number
+  month: number
+  periodType: string
+  data: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null
+  anafUploadId: string | null
+  errorMessage: string | null
+  submittedAt: string | null
+  acceptedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface CreateDeclarationPayload {
+  type: string
+  year: number
+  month: number
+  periodType?: string
 }

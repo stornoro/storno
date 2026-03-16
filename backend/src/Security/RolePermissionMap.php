@@ -45,6 +45,7 @@ final class RolePermissionMap
             Permission::REPORT_VIEW,
             Permission::EMAIL_TEMPLATE_VIEW,
             Permission::BORDEROU_VIEW,
+            Permission::DECLARATION_VIEW,
         ];
 
         // ── Accountant: daily invoicing work ─────────────────────────────
@@ -60,6 +61,7 @@ final class RolePermissionMap
             Permission::SERIES_MANAGE,
             Permission::PAYMENT_CREATE, Permission::PAYMENT_DELETE,
             Permission::EFACTURA_SUBMIT,
+            Permission::DECLARATION_SUBMIT,
             Permission::IMPORT_MANAGE,
             Permission::EXPORT_DATA,
             Permission::EMAIL_TEMPLATE_MANAGE,
