@@ -230,6 +230,100 @@ export function useAnafAgent() {
     return anafResponse
   }
 
+  async function syncViaAgent(year: number, certificateId: string): Promise<{ created: number; updated: number }> {
+    const { post } = useApi()
+
+    // Step 1: Get ANAF URL + token for listaMesaje
+    const prepared = await post<{
+      anafUrl: string
+      anafToken: string
+      year: number
+      cif: string
+    }>('/v1/declarations/sync-prepare', { year })
+
+    // Step 2: Proxy listaMesaje through agent
+    const messagesResponse = await proxyToAnaf({
+      url: prepared.anafUrl,
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${prepared.anafToken}` },
+      body: '',
+      certificateId,
+    })
+
+    // Step 3: Send ANAF response to backend for processing
+    const result = await post<{
+      stats: { created: number; updated: number }
+      recipisas: Array<{ declarationId: string; downloadId: string; anafUrl: string; anafToken: string }>
+    }>('/v1/declarations/sync-agent-result', {
+      statusCode: messagesResponse.statusCode,
+      body: messagesResponse.body,
+      year,
+    })
+
+    // Step 4: Download all recipisas in parallel via agent
+    await Promise.allSettled(result.recipisas.map(async (rec) => {
+      const recipisaResponse = await proxyToAnaf({
+        url: rec.anafUrl,
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${rec.anafToken}` },
+        body: '',
+        certificateId,
+      })
+      await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
+        statusCode: recipisaResponse.statusCode,
+        body: recipisaResponse.body,
+      })
+    }))
+
+    return result.stats
+  }
+
+  async function refreshStatusesViaAgent(certificateId: string): Promise<{ accepted: number; rejected: number }> {
+    const { post } = useApi()
+
+    // Step 1: Get ANAF URL + token for listaMesaje
+    const prepared = await post<{
+      anafUrl: string
+      anafToken: string
+      cif: string
+    }>('/v1/declarations/refresh-prepare')
+
+    // Step 2: Proxy listaMesaje through agent
+    const messagesResponse = await proxyToAnaf({
+      url: prepared.anafUrl,
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${prepared.anafToken}` },
+      body: '',
+      certificateId,
+    })
+
+    // Step 3: Send ANAF response to backend for processing
+    const result = await post<{
+      stats: { accepted: number; rejected: number }
+      recipisas: Array<{ declarationId: string; downloadId: string; anafUrl: string; anafToken: string }>
+    }>('/v1/declarations/refresh-agent-result', {
+      statusCode: messagesResponse.statusCode,
+      body: messagesResponse.body,
+    })
+
+    // Step 4: Download all recipisas in parallel via agent
+    await Promise.allSettled(result.recipisas.map(async (rec) => {
+      const recipisaResponse = await proxyToAnaf({
+        url: rec.anafUrl,
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${rec.anafToken}` },
+        body: '',
+        certificateId,
+      })
+      await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
+        statusCode: recipisaResponse.statusCode,
+        body: recipisaResponse.body,
+      })
+    }))
+
+    return result.stats
+  }
+
   function getPreferredCertId(companyId: string): string | null {
     if (!import.meta.client) return null
     return localStorage.getItem(`storno:agent:cert:${companyId}`)
@@ -261,6 +355,22 @@ export function useAnafAgent() {
     return false
   }
 
+  function certDisplayName(cert: AgentCertificate): string {
+    const cn = cert.subject.match(/CN=([^,]+)/)?.[1] ?? cert.subject
+    return cn.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+  }
+
+  function certIssuerShort(cert: AgentCertificate): string {
+    return cert.issuer.match(/CN=([^,]+)/)?.[1] ?? cert.issuer
+  }
+
+  function certExpiry(cert: AgentCertificate): string | null {
+    if (!cert.notAfter) return null
+    const d = new Date(cert.notAfter)
+    if (isNaN(d.getTime())) return null
+    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
+  }
+
   return {
     agentAvailable,
     agentVersion,
@@ -273,9 +383,14 @@ export function useAnafAgent() {
     submitViaAgent,
     bulkSubmitViaAgent,
     checkStatusViaAgent,
+    syncViaAgent,
+    refreshStatusesViaAgent,
     getPreferredCertId,
     setPreferredCertId,
     tryAutoStart,
     triggerAgentUpdate,
+    certDisplayName,
+    certIssuerShort,
+    certExpiry,
   }
 }

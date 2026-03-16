@@ -9,7 +9,7 @@ import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 const VERSION = '1.1.0';
 
 /** Allowed proxy target hosts. */
-const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro'];
+const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro', 'api.anaf.ro'];
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
