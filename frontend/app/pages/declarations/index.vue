@@ -23,7 +23,6 @@ watch([() => store.filters, () => store.page], () => {
 // ── Selection ──────────────────────────────────────────────────────
 const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, count: selectionCount } = useTableSelection(
   computed(() => store.items),
-  { canSelect: (item: any) => ['draft', 'validated'].includes(item.status) },
 )
 // ── Agent Bulk Submit ─────────────────────────────────────────────
 const companyStore = useCompanyStore()
@@ -137,6 +136,25 @@ function closeAgentBulkModal() {
 onMounted(() => {
   checkAgent()
 })
+
+// ── Bulk Delete ──────────────────────────────────────────────────────
+const bulkDeleteModalOpen = ref(false)
+const bulkDeleting = ref(false)
+
+async function handleBulkDelete() {
+  bulkDeleting.value = true
+  try {
+    const result = await store.bulkDeleteDeclarations(selectedIds.value)
+    toast.add({ title: $t('declarations.bulkDeleteSuccess', { count: result.deleted }), color: 'success' })
+    bulkDeleteModalOpen.value = false
+    clearSelection()
+    store.fetchDeclarations()
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.bulkDeleteError'), color: 'error' })
+  } finally {
+    bulkDeleting.value = false
+  }
+}
 
 // ── Create Slideover ───────────────────────────────────────────────
 const createOpen = ref(false)
@@ -475,8 +493,32 @@ function onRowClick(_e: Event, row: any) {
             size="sm"
             @click="handleBulkAgentSubmit"
           />
+          <UButton
+            :label="$t('declarations.bulkDelete')"
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="soft"
+            size="sm"
+            @click="bulkDeleteModalOpen = true"
+          />
         </template>
       </SharedTableBulkBar>
+
+      <!-- Bulk Delete Confirmation Modal -->
+      <UModal v-model:open="bulkDeleteModalOpen">
+        <template #header>
+          <h3 class="font-semibold">{{ $t('declarations.bulkDeleteTitle') }}</h3>
+        </template>
+        <template #body>
+          <p class="text-sm">{{ $t('declarations.bulkDeleteConfirm', { count: selectionCount }) }}</p>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="bulkDeleteModalOpen = false">{{ $t('common.cancel') }}</UButton>
+            <UButton color="error" :loading="bulkDeleting" @click="handleBulkDelete">{{ $t('common.delete') }}</UButton>
+          </div>
+        </template>
+      </UModal>
 
       <!-- Table -->
       <UTable
