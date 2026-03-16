@@ -305,6 +305,28 @@ export interface Client {
   invoiceTotal?: number
 }
 
+// ── Buyer Snapshot (frozen client details at invoice creation time) ──
+export interface BuyerSnapshot {
+  type: 'company' | 'individual'
+  name: string | null
+  cui: string | null
+  cnp: string | null
+  vatCode: string | null
+  isVatPayer: boolean
+  registrationNumber: string | null
+  address: string | null
+  city: string | null
+  county: string | null
+  country: string
+  postalCode: string | null
+  email: string | null
+  phone: string | null
+  bankName: string | null
+  bankAccount: string | null
+  clientCode: string | null
+  einvoiceIdentifiers: Record<string, unknown> | null
+}
+
 // ── Product ─────────────────────────────────────────────────────────
 export interface Product {
   id: string
@@ -552,6 +574,7 @@ export interface Invoice {
   payeeName: string | null
   payeeIdentifier: string | null
   payeeLegalRegistrationIdentifier: string | null
+  buyerSnapshot: BuyerSnapshot | null
   lines: InvoiceLine[]
   client: Client | null
   supplier: Supplier | null
