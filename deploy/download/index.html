@@ -434,7 +434,7 @@
       <span class="logo-sub">ANAF Agent</span>
     </div>
     <div class="header-spacer"></div>
-    <span class="version-badge">v1.0.0</span>
+    <span class="version-badge" id="version-badge">v...</span>
   </header>
 
   <!-- ── Main ────────────────────────────────────────────── -->
@@ -459,7 +459,8 @@
         <a
           class="download-card"
           id="card-macos-arm"
-          href="https://github.com/stornoro/storno/releases/download/agent-v1.0.0/storno-agent-macos-arm64"
+          href="#"
+          data-asset="storno-agent-macos-arm64"
           download
           aria-label="Download for macOS Apple Silicon"
         >
@@ -484,7 +485,8 @@
         <a
           class="download-card"
           id="card-macos-x64"
-          href="https://github.com/stornoro/storno/releases/download/agent-v1.0.0/storno-agent-macos-x64"
+          href="#"
+          data-asset="storno-agent-macos-x64"
           download
           aria-label="Download for macOS Intel"
         >
@@ -508,7 +510,8 @@
         <a
           class="download-card"
           id="card-windows"
-          href="https://github.com/stornoro/storno/releases/download/agent-v1.0.0/storno-agent-win-x64.exe"
+          href="#"
+          data-asset="storno-agent-win-x64.exe"
           download
           aria-label="Download for Windows x64"
         >
@@ -533,7 +536,8 @@
         <a
           class="download-card"
           id="card-linux"
-          href="https://github.com/stornoro/storno/releases/download/agent-v1.0.0/storno-agent-linux-x64"
+          href="#"
+          data-asset="storno-agent-linux-x64"
           download
           aria-label="Download for Linux x64"
         >
@@ -632,6 +636,36 @@
   <script>
     // ── Year ───────────────────────────────────────────────
     document.getElementById('year').textContent = new Date().getFullYear();
+
+    // ── Fetch latest release from GitHub ──────────────────
+    (function fetchLatestRelease() {
+      fetch('https://api.github.com/repos/stornoro/storno/releases?per_page=10', {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(releases) {
+          var release = releases.find(function(r) { return r.tag_name && r.tag_name.startsWith('agent-v'); });
+          if (!release) return;
+
+          var version = release.tag_name.replace('agent-v', '');
+          document.getElementById('version-badge').textContent = 'v' + version;
+
+          // Build asset URL map
+          var assetMap = {};
+          (release.assets || []).forEach(function(a) {
+            assetMap[a.name] = a.browser_download_url;
+          });
+
+          // Update all download cards
+          document.querySelectorAll('[data-asset]').forEach(function(card) {
+            var name = card.getAttribute('data-asset');
+            if (assetMap[name]) {
+              card.href = assetMap[name];
+            }
+          });
+        })
+        .catch(function() {});
+    })();
 
     // ── OS detection + recommended highlight ──────────────
     (function detectOS() {
