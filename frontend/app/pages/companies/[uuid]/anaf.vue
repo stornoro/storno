@@ -53,6 +53,21 @@
           </div>
         </template>
 
+        <!-- Agent update banner -->
+        <div v-if="agentAvailable && agentUpdateAvailable" class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
+          <UIcon name="i-lucide-download" class="text-warning shrink-0" />
+          <p class="text-sm flex-1">
+            {{ $t('anaf.agentUpdateAvailable', { current: agentVersion, latest: agentLatestVersion }) }}
+          </p>
+          <UButton
+            :label="$t('anaf.agentUpdate')"
+            size="xs"
+            color="warning"
+            :loading="agentUpdating"
+            @click="onUpdateAgent"
+          />
+        </div>
+
         <!-- Agent not running -->
         <div v-if="!agentAvailable" class="space-y-4">
           <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.agentInstallHint') }}</p>
@@ -395,7 +410,8 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, checkAgent, listCertificates, tryAutoStart, getPreferredCertId, setPreferredCertId } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId } = useAnafAgent()
+const agentUpdating = ref(false)
 
 const uuid = computed(() => route.params.uuid as string)
 
@@ -421,13 +437,24 @@ const loadingAgentCerts = ref(false)
 const agentSelectedCertId = ref<string | null>(null)
 const agentStarting = ref(false)
 
-const agentDownloadUrl = computed(() => {
-  const base = 'https://downloads.storno.ro/agent/v1.0.0'
-  const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes('win')) return `${base}/storno-agent-windows.exe`
-  if (ua.includes('linux')) return `${base}/storno-agent-linux`
-  return `${base}/storno-agent-macos`
-})
+const agentDownloadUrl = 'https://get.storno.ro/agent'
+
+async function onUpdateAgent() {
+  agentUpdating.value = true
+  try {
+    const result = await triggerAgentUpdate()
+    if (result.success) {
+      toast.add({ title: $t('anaf.agentUpdateStarted'), color: 'success' })
+      // Wait for restart, then re-check
+      await new Promise(r => setTimeout(r, 3000))
+      await checkAgent()
+    } else {
+      toast.add({ title: result.message, color: 'error' })
+    }
+  } finally {
+    agentUpdating.value = false
+  }
+}
 
 async function loadAgentCerts() {
   loadingAgentCerts.value = true

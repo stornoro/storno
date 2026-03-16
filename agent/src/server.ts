@@ -4,6 +4,7 @@ import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
 import { CERT, KEY } from './certs.js';
+import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
 const VERSION = '1.0.0';
 
@@ -65,6 +66,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
 
   if (url === '/health' && req.method === 'GET') {
     handleHealth(res);
+  } else if (url === '/update' && req.method === 'POST') {
+    handleUpdate(res);
   } else if (url === '/certificates' && req.method === 'GET') {
     handleCertificates(res, config);
   } else if (url === '/proxy' && req.method === 'POST') {
@@ -76,12 +79,23 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
   }
 }
 
-function handleHealth(res: ServerResponse): void {
+async function handleHealth(res: ServerResponse): Promise<void> {
+  const update = await checkForUpdate(VERSION);
   json(res, 200, {
     status: 'ok',
     version: VERSION,
     platform: process.platform,
+    update: update.updateAvailable ? {
+      available: true,
+      latest: update.latestVersion,
+      download: update.downloadUrl,
+    } : { available: false },
   });
+}
+
+async function handleUpdate(res: ServerResponse): Promise<void> {
+  const result = await applyUpdate(VERSION);
+  json(res, result.success ? 200 : 400, result);
 }
 
 function handleCertificates(res: ServerResponse, config: AgentConfig): void {
@@ -217,7 +231,7 @@ export function startServer(config?: AgentConfig): void {
   const server = createServer({ cert: CERT, key: KEY }, handler);
   const port = cfg.port;
 
-  server.listen(port, '127.0.0.1', () => {
+  server.listen(port, '127.0.0.1', async () => {
     console.log(`Storno ANAF Agent v${VERSION}`);
     console.log(`Listening on https://agent.storno.ro:${port}`);
     console.log(`Platform: ${process.platform}`);
@@ -227,9 +241,23 @@ export function startServer(config?: AgentConfig): void {
     console.log(`  GET  https://agent.storno.ro:${port}/certificates`);
     console.log(`  POST https://agent.storno.ro:${port}/proxy`);
     console.log(`  POST https://agent.storno.ro:${port}/batch`);
+    console.log(`  POST https://agent.storno.ro:${port}/update`);
     console.log('');
     console.log('Protocol: storno-agent:// registered');
     console.log('Press Ctrl+C to stop.');
+
+    // Check for updates in background
+    try {
+      const update = await checkForUpdate(VERSION);
+      if (update.updateAvailable) {
+        console.log('');
+        console.log(`*** Update available: v${update.latestVersion} (current: v${VERSION}) ***`);
+        console.log(`    Download: https://get.storno.ro/agent`);
+        console.log(`    Or POST https://agent.storno.ro:${port}/update to auto-update`);
+      }
+    } catch {
+      // Silent — don't block startup
+    }
   });
 
   server.on('error', (err: NodeJS.ErrnoException) => {

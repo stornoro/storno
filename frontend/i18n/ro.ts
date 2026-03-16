@@ -2614,6 +2614,9 @@ export default defineI18nLocale(async () => {
       agentCertSelectDescription: 'Selectati certificatul implicit pentru semnarea declaratiilor acestei companii.',
       agentSaveCert: 'Salveaza preferinta',
       agentCertSaved: 'Preferinta certificat salvata',
+      agentUpdateAvailable: 'Actualizare agent disponibila: v{current} → v{latest}',
+      agentUpdate: 'Actualizeaza',
+      agentUpdateStarted: 'Agentul se actualizeaza si restarteaza...',
     },
 
     // ── ANAF Callback ──────────────────────────────────────────

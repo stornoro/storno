@@ -2615,6 +2615,9 @@ export default defineI18nLocale(async () => {
     agentCertSelectDescription: 'Select the default certificate for signing declarations for this company.',
     agentSaveCert: 'Save preference',
     agentCertSaved: 'Certificate preference saved',
+    agentUpdateAvailable: 'Agent update available: v{current} → v{latest}',
+    agentUpdate: 'Update',
+    agentUpdateStarted: 'Agent is updating and restarting...',
   },
 
   // ── ANAF Callback ──────────────────────────────────────────

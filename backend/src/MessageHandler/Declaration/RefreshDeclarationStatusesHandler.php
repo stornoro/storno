@@ -69,7 +69,7 @@ final class RefreshDeclarationStatusesHandler
         try {
             // Retry once on auth failure with a fresh token
             try {
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
             } catch (AnafTokenExpiredException) {
                 $this->logger->info('RefreshDeclarationStatusesHandler: Token expired, re-resolving.');
                 $anafToken = $this->anafTokenResolver->resolveEntity($company);
@@ -77,7 +77,7 @@ final class RefreshDeclarationStatusesHandler
                     throw new \RuntimeException('No valid ANAF token available after refresh.');
                 }
                 $token = $anafToken->getToken();
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
             }
             $messages = $messagesResult['mesaje'] ?? [];
 
@@ -113,7 +113,7 @@ final class RefreshDeclarationStatusesHandler
                     $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
                     if ($downloadId && $declaration->getRecipisaPath() === null) {
                         try {
-                            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token, $anafToken);
+                            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token);
                             $recipisaPath = sprintf(
                                 'declarations/%s/%s/%s_recipisa.pdf',
                                 $company->getId(),

@@ -68,16 +68,16 @@ final class CheckDeclarationStatusHandler
 
         try {
             $company = $declaration->getCompany();
-            [$token, $anafToken] = $this->resolveTokenWithRetry($company);
+            $token = $this->resolveToken($company);
 
-            $result = $this->anafClient->checkStatus($declaration->getAnafUploadId(), $token, $anafToken);
+            $result = $this->anafClient->checkStatus($declaration->getAnafUploadId(), $token);
 
             $stare = $result['stare'] ?? $result['Stare'] ?? null;
 
             // D112 fallback: if SPV has no status yet, try the epatrim endpoint
             if ($stare === null && $declaration->getType()->value === 'd112') {
                 try {
-                    $d112Result = $this->anafClient->checkD112Status($token, $anafToken);
+                    $d112Result = $this->anafClient->checkD112Status($token);
                     $d112Stare = $d112Result['stare'] ?? $d112Result['Stare'] ?? null;
                     if ($d112Stare !== null) {
                         $result = $d112Result;
@@ -99,7 +99,7 @@ final class CheckDeclarationStatusHandler
                 ]));
 
                 // Try to download recipisa
-                $this->tryDownloadRecipisa($declaration, $result, $token, $company, $anafToken);
+                $this->tryDownloadRecipisa($declaration, $result, $token, $company);
 
                 $this->entityManager->flush();
                 $this->eventDispatcher->dispatch(new DeclarationAcceptedEvent($declaration));
@@ -146,19 +146,14 @@ final class CheckDeclarationStatusHandler
         }
     }
 
-    /**
-     * Resolve token entity, retrying once with a forced refresh on 401/403.
-     *
-     * @return array{0: string, 1: \App\Entity\AnafToken}
-     */
-    private function resolveTokenWithRetry(\App\Entity\Company $company): array
+    private function resolveToken(\App\Entity\Company $company): string
     {
         $anafToken = $this->anafTokenResolver->resolveEntity($company);
         if ($anafToken === null) {
             throw new \RuntimeException('No valid ANAF token available.');
         }
 
-        return [$anafToken->getToken(), $anafToken];
+        return $anafToken->getToken();
     }
 
     private function tryDownloadRecipisa(
@@ -166,14 +161,13 @@ final class CheckDeclarationStatusHandler
         array $result,
         string $token,
         \App\Entity\Company $company,
-        ?\App\Entity\AnafToken $anafToken = null,
     ): void {
         // For D112 via epatrim, try the filename-based download
         if (($result['_source'] ?? null) === 'epatrim_d112') {
             $filename = $result['numefisier'] ?? $result['numeFisier'] ?? null;
             if ($filename) {
                 try {
-                    $recipisa = $this->anafClient->downloadD112Recipisa($filename, $token, $anafToken);
+                    $recipisa = $this->anafClient->downloadD112Recipisa($filename, $token);
                     $recipisaPath = sprintf(
                         'declarations/%s/%s/%s_recipisa.pdf',
                         $company->getId(),
@@ -195,7 +189,7 @@ final class CheckDeclarationStatusHandler
         $downloadId = $result['id_descarcare'] ?? $result['id'] ?? null;
         if ($downloadId) {
             try {
-                $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token, $anafToken);
+                $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token);
                 $recipisaPath = sprintf(
                     'declarations/%s/%s/%s_recipisa.pdf',
                     $company->getId(),
