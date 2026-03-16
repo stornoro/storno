@@ -43,7 +43,6 @@
             </UDropdownMenu>
 
             <UButton
-              v-if="!isTerminal || declaration.status === 'error'"
               icon="i-lucide-trash-2"
               variant="outline"
               color="error"

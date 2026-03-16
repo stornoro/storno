@@ -82,6 +82,11 @@ export const useDeclarationStore = defineStore('declarations', () => {
     await del(`/v1/declarations/${uuid}`)
   }
 
+  async function bulkDeleteDeclarations(ids: string[]): Promise<{ deleted: number }> {
+    const { post } = useApi()
+    return await post<{ deleted: number }>('/v1/declarations/bulk-delete', { ids })
+  }
+
   async function recalculateDeclaration(uuid: string): Promise<TaxDeclaration> {
     const { post } = useApi()
     return await post<TaxDeclaration>(`/v1/declarations/${uuid}/recalculate`)
@@ -142,6 +147,7 @@ export const useDeclarationStore = defineStore('declarations', () => {
     createDeclaration,
     updateDeclaration,
     deleteDeclaration,
+    bulkDeleteDeclarations,
     recalculateDeclaration,
     validateDeclaration,
     submitDeclaration,
