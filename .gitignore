@@ -39,5 +39,10 @@ CLAUDE.md
 *.p12
 *.pfx
 
+# Agent build output
+agent/dist/
+agent/build/
+agent/node_modules/
+
 # Logs
 *.log

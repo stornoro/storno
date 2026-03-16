@@ -29,7 +29,7 @@
             <UButton v-if="isDraft" icon="i-lucide-check-circle" variant="outline" color="primary" :loading="actionLoading" @click="validate">
               {{ $t('declarations.validate') }}
             </UButton>
-            <UButton v-if="canSubmit" icon="i-lucide-send" color="primary" :loading="actionLoading" @click="submitModalOpen = true">
+            <UButton v-if="canSubmit" icon="i-lucide-send" color="primary" :loading="actionLoading" @click="agentSubmitModalOpen = true">
               {{ $t('declarations.submit') }}
             </UButton>
 
@@ -322,17 +322,6 @@
         <USkeleton class="h-4 w-48 mx-auto" />
       </div>
 
-      <!-- Submit confirmation -->
-      <SharedConfirmModal
-        v-model:open="submitModalOpen"
-        :title="$t('declarations.submit')"
-        :description="$t('declarations.submitConfirm')"
-        icon="i-lucide-send"
-        :confirm-label="$t('declarations.submit')"
-        :loading="actionLoading"
-        @confirm="submit"
-      />
-
       <!-- Delete confirmation -->
       <SharedConfirmModal
         v-model:open="deleteModalOpen"
@@ -344,6 +333,135 @@
         :loading="actionLoading"
         @confirm="onDelete"
       />
+
+      <!-- Agent submit modal -->
+      <UModal v-model:open="agentSubmitModalOpen">
+        <template #header>
+          <h3 class="font-semibold">{{ !agentAvailable ? $t('anaf.agentStatus') : savedCertInfo ? $t('declarations.agentReadyTitle') : $t('declarations.agentSelectCert') }}</h3>
+        </template>
+        <template #body>
+          <!-- State A: Agent not running -->
+          <div v-if="!agentAvailable" class="space-y-4">
+            <UAlert
+              :title="$t('anaf.agentNotDetected')"
+              :description="$t('anaf.agentInstallHint')"
+              icon="i-lucide-monitor-down"
+              color="warning"
+            />
+            <div class="flex flex-wrap items-center gap-2">
+              <UButton
+                icon="i-lucide-play"
+                :loading="agentStarting"
+                @click="onAutoStartAgent"
+              >
+                {{ agentStarting ? $t('anaf.agentStarting') : $t('anaf.agentAutoStart') }}
+              </UButton>
+              <UButton
+                icon="i-lucide-download"
+                variant="outline"
+                :to="agentDownloadUrl"
+                target="_blank"
+              >
+                {{ $t('anaf.agentDownload') }}
+              </UButton>
+            </div>
+            <UButton variant="outline" icon="i-lucide-refresh-cw" :loading="agentChecking" @click="recheckAgent">
+              {{ $t('anaf.agentRecheck') }}
+            </UButton>
+          </div>
+
+          <!-- State B: Agent running + cert configured -->
+          <div v-else-if="savedCertInfo" class="space-y-4">
+            <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.agentReadyToSubmit') }}</p>
+            <div class="p-3 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) flex items-center justify-between">
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium truncate">{{ savedCertInfo.subject }}</p>
+                <p class="text-xs text-(--ui-text-muted)">{{ savedCertInfo.source }} &middot; {{ savedCertInfo.id.substring(0, 16) }}...</p>
+              </div>
+              <NuxtLink
+                v-if="declaration?.companyId"
+                :to="`/companies/${declaration.companyId}/anaf`"
+                class="text-xs text-primary hover:underline shrink-0 ml-3"
+              >
+                {{ $t('declarations.agentChangeCert') }}
+              </NuxtLink>
+            </div>
+            <div v-if="agentSubmitting" class="flex items-center gap-2 py-2">
+              <UIcon name="i-lucide-loader-2" class="animate-spin h-4 w-4 text-primary" />
+              <span class="text-sm text-primary">{{ $t('declarations.agentWaitingPin') }}</span>
+            </div>
+          </div>
+
+          <!-- State C: Agent running, no cert saved -->
+          <div v-else class="space-y-4">
+            <UAlert
+              :title="$t('declarations.agentNoCertConfigured')"
+              :description="$t('declarations.agentConfigureFirstHint')"
+              icon="i-lucide-alert-triangle"
+              color="warning"
+            />
+            <UButton
+              v-if="declaration?.companyId"
+              icon="i-lucide-settings"
+              variant="outline"
+              :to="`/companies/${declaration.companyId}/anaf`"
+            >
+              {{ $t('declarations.agentConfigureFirst') }}
+            </UButton>
+
+            <!-- Collapsible manual picker fallback -->
+            <details class="group">
+              <summary class="text-sm text-primary cursor-pointer select-none">
+                {{ $t('declarations.agentPickManually') }}
+              </summary>
+              <div class="mt-3 space-y-2">
+                <div v-if="loadingCerts" class="flex items-center gap-2 py-2">
+                  <UIcon name="i-lucide-loader-2" class="animate-spin h-4 w-4" />
+                  <span class="text-sm">{{ $t('common.loading') }}</span>
+                </div>
+                <div v-else-if="agentCerts.length === 0" class="py-2">
+                  <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.agentNoCertificates') }}</p>
+                </div>
+                <template v-else>
+                  <label
+                    v-for="cert in agentCerts"
+                    :key="cert.id"
+                    class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-(--ui-bg-elevated) transition-colors"
+                    :class="selectedCertId === cert.id ? 'border-primary bg-(--ui-bg-elevated)' : 'border-(--ui-border)'"
+                  >
+                    <input v-model="selectedCertId" type="radio" :value="cert.id" class="accent-primary" />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-medium truncate">{{ cert.subject }}</p>
+                      <p class="text-xs text-(--ui-text-muted)">{{ cert.source }} &middot; {{ cert.id.substring(0, 16) }}...</p>
+                    </div>
+                  </label>
+                </template>
+              </div>
+            </details>
+
+            <div v-if="agentSubmitting" class="flex items-center gap-2 py-2">
+              <UIcon name="i-lucide-loader-2" class="animate-spin h-4 w-4 text-primary" />
+              <span class="text-sm text-primary">{{ $t('declarations.agentWaitingPin') }}</span>
+            </div>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="agentSubmitModalOpen = false">
+              {{ $t('common.cancel') }}
+            </UButton>
+            <UButton
+              v-if="agentAvailable"
+              icon="i-lucide-key-round"
+              :loading="agentSubmitting"
+              :disabled="!effectiveCertId || agentSubmitting"
+              @click="submitWithAgent"
+            >
+              {{ $t('declarations.submitViaAgent') }}
+            </UButton>
+          </div>
+        </template>
+      </UModal>
     </template>
   </UDashboardPanel>
 </template>
@@ -351,6 +469,7 @@
 <script setup lang="ts">
 import { DeclarationStatusColor, AUTO_POPULATED_TYPES } from '~/types/enums'
 import type { DeclarationType } from '~/types/enums'
+import type { AgentCertificate } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -360,13 +479,65 @@ const route = useRoute()
 const router = useRouter()
 const store = useDeclarationStore()
 const toast = useToast()
+const { agentAvailable, agentVersion, agentChecking, checkAgent, listCertificates, submitViaAgent, tryAutoStart, getPreferredCertId } = useAnafAgent()
+
+const agentStarting = ref(false)
+
+const agentDownloadUrl = computed(() => {
+  const base = 'https://downloads.storno.ro/agent/v1.0.0'
+  const ua = navigator.userAgent.toLowerCase()
+  if (ua.includes('win')) return `${base}/storno-agent-windows.exe`
+  if (ua.includes('linux')) return `${base}/storno-agent-linux`
+  return `${base}/storno-agent-macos`
+})
+
+async function recheckAgent() {
+  const running = await checkAgent()
+  if (running) {
+    toast.add({ title: $t('anaf.agentRunning', { version: agentVersion.value ?? '?' }), color: 'success' })
+    await loadModalCerts()
+  }
+}
+
+async function onAutoStartAgent() {
+  agentStarting.value = true
+  try {
+    const ok = await tryAutoStart()
+    if (ok) {
+      toast.add({ title: $t('anaf.agentStarted'), color: 'success' })
+      await loadModalCerts()
+    } else {
+      toast.add({ title: $t('anaf.agentStartFailed'), color: 'warning' })
+    }
+  } finally {
+    agentStarting.value = false
+  }
+}
+
+// Saved cert lookup
+const savedCertInfo = computed(() => {
+  if (!declaration.value?.companyId) return null
+  const savedId = getPreferredCertId(declaration.value.companyId)
+  if (!savedId) return null
+  return agentCerts.value.find(c => c.id === savedId) ?? null
+})
+
+const effectiveCertId = computed(() => {
+  return savedCertInfo.value?.id ?? selectedCertId.value
+})
 
 const uuid = route.params.uuid as string
 const declaration = ref<any>(null)
 const loading = ref(true)
 const actionLoading = ref(false)
 const deleteModalOpen = ref(false)
-const submitModalOpen = ref(false)
+
+// Agent submit state
+const agentSubmitModalOpen = ref(false)
+const agentCerts = ref<AgentCertificate[]>([])
+const selectedCertId = ref<string | null>(null)
+const loadingCerts = ref(false)
+const agentSubmitting = ref(false)
 
 useHead({ title: computed(() => declaration.value ? `${declaration.value.type.toUpperCase()} ${declaration.value.year}-${String(declaration.value.month).padStart(2, '0')}` : $t('declarations.title')) })
 
@@ -491,19 +662,6 @@ async function validate() {
   }
 }
 
-async function submit() {
-  actionLoading.value = true
-  try {
-    declaration.value = await store.submitDeclaration(uuid)
-    submitModalOpen.value = false
-    toast.add({ title: $t('declarations.submitSuccess'), color: 'success' })
-  } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.submitError'), color: 'error' })
-  } finally {
-    actionLoading.value = false
-  }
-}
-
 async function onDelete() {
   actionLoading.value = true
   try {
@@ -563,5 +721,46 @@ async function downloadRecipisa() {
   }
 }
 
-onMounted(() => fetchDeclaration())
+// ── Agent ────────────────────────────────────────────────────────────
+async function loadModalCerts() {
+  loadingCerts.value = true
+  selectedCertId.value = null
+  try {
+    agentCerts.value = await listCertificates()
+    if (agentCerts.value.length === 1) {
+      selectedCertId.value = agentCerts.value[0].id
+    }
+  } catch {
+    agentCerts.value = []
+  } finally {
+    loadingCerts.value = false
+  }
+}
+
+watch(agentSubmitModalOpen, async (open) => {
+  if (open) {
+    await loadModalCerts()
+  }
+})
+
+async function submitWithAgent() {
+  const certId = effectiveCertId.value
+  if (!certId) return
+
+  agentSubmitting.value = true
+  try {
+    declaration.value = await submitViaAgent(uuid, certId)
+    agentSubmitModalOpen.value = false
+    toast.add({ title: $t('declarations.submitSuccess'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.submitError'), color: 'error' })
+  } finally {
+    agentSubmitting.value = false
+  }
+}
+
+onMounted(() => {
+  fetchDeclaration()
+  checkAgent()
+})
 </script>

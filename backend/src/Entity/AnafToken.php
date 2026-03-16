@@ -42,6 +42,12 @@ class AnafToken
     #[ORM\Column(nullable: true)]
     private ?array $validatedCifs = null;
 
+    #[ORM\Column(length: 500, nullable: true)]
+    private ?string $certificatePath = null;
+
+    #[ORM\Column(type: "text", nullable: true)]
+    private ?string $certificatePassword = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -178,6 +184,35 @@ class AnafToken
     public function hasValidatedCif(int $cif): bool
     {
         return in_array($cif, $this->validatedCifs ?? [], true);
+    }
+
+    public function getCertificatePath(): ?string
+    {
+        return $this->certificatePath;
+    }
+
+    public function setCertificatePath(?string $certificatePath): static
+    {
+        $this->certificatePath = $certificatePath;
+
+        return $this;
+    }
+
+    public function getCertificatePassword(): ?string
+    {
+        return $this->certificatePassword;
+    }
+
+    public function setCertificatePassword(?string $certificatePassword): static
+    {
+        $this->certificatePassword = $certificatePassword;
+
+        return $this;
+    }
+
+    public function hasCertificate(): bool
+    {
+        return $this->certificatePath !== null;
     }
 
     public function isExpired(): bool

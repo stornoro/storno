@@ -55,27 +55,29 @@ final class RefreshDeclarationStatusesHandler
             return;
         }
 
-        $token = $this->anafTokenResolver->resolve($company);
-        if ($token === null) {
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        if ($anafToken === null) {
             $this->logger->warning('RefreshDeclarationStatusesHandler: No valid ANAF token.', [
                 'companyId' => $message->companyId,
             ]);
             return;
         }
 
+        $token = $anafToken->getToken();
         $cif = (string) $company->getCif();
 
         try {
             // Retry once on auth failure with a fresh token
             try {
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
             } catch (AnafTokenExpiredException) {
                 $this->logger->info('RefreshDeclarationStatusesHandler: Token expired, re-resolving.');
-                $token = $this->anafTokenResolver->resolve($company);
-                if ($token === null) {
+                $anafToken = $this->anafTokenResolver->resolveEntity($company);
+                if ($anafToken === null) {
                     throw new \RuntimeException('No valid ANAF token available after refresh.');
                 }
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
+                $token = $anafToken->getToken();
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
             }
             $messages = $messagesResult['mesaje'] ?? [];
 
@@ -111,7 +113,7 @@ final class RefreshDeclarationStatusesHandler
                     $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
                     if ($downloadId && $declaration->getRecipisaPath() === null) {
                         try {
-                            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token);
+                            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token, $anafToken);
                             $recipisaPath = sprintf(
                                 'declarations/%s/%s/%s_recipisa.pdf',
                                 $company->getId(),

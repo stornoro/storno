@@ -253,4 +253,10 @@ class TaxDeclaration
     {
         return $this->acceptedAt;
     }
+
+    #[Groups(['declaration:list', 'declaration:detail'])]
+    public function getCompanyId(): ?string
+    {
+        return $this->company?->getId()?->toRfc4122();
+    }
 }

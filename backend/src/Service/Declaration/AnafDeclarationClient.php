@@ -2,6 +2,8 @@
 
 namespace App\Service\Declaration;
 
+use App\Entity\AnafToken;
+use App\Service\Anaf\AnafCertificateResolver;
 use App\Service\Anaf\AnafRateLimiter;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -24,6 +26,7 @@ class AnafDeclarationClient
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly AnafRateLimiter $rateLimiter,
+        private readonly AnafCertificateResolver $certificateResolver,
     ) {}
 
     /**
@@ -31,13 +34,13 @@ class AnafDeclarationClient
      *
      * @return array{id_solicitare?: string, ...} Response from ANAF
      */
-    public function upload(string $xml, string $cif, string $token, string $declarationType): array
+    public function upload(string $xml, string $cif, string $token, string $declarationType, ?AnafToken $anafToken = null): array
     {
         $this->rateLimiter->consumeGlobal();
 
         $type = strtoupper($declarationType); // D394, D300, D390, etc.
 
-        $response = $this->httpClient->request('POST', self::BASE_URL . '/cerere', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type' => 'application/xml',
@@ -47,10 +50,20 @@ class AnafDeclarationClient
                 'cui' => $cif,
             ],
             'body' => $xml,
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('POST', self::BASE_URL . '/cerere', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
+
+        $this->cleanupCert($certInfo);
 
         $this->checkForAuthError($statusCode, 'upload');
 
@@ -70,22 +83,31 @@ class AnafDeclarationClient
      *
      * @return array SPV messages list
      */
-    public function listMessages(string $token, int $days = 60): array
+    public function listMessages(string $token, int $days = 60, ?AnafToken $anafToken = null): array
     {
         $this->rateLimiter->consumeGlobal();
 
-        $response = $this->httpClient->request('GET', self::BASE_URL . '/listaMesaje', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
             'query' => [
                 'zile' => $days,
             ],
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::BASE_URL . '/listaMesaje', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'listMessages');
 
         return $this->parseResponse($content);
@@ -95,9 +117,9 @@ class AnafDeclarationClient
      * Check the status of a specific declaration by looking up its upload ID
      * in the SPV messages list.
      */
-    public function checkStatus(string $uploadId, string $token): array
+    public function checkStatus(string $uploadId, string $token, ?AnafToken $anafToken = null): array
     {
-        $messages = $this->listMessages($token, 60);
+        $messages = $this->listMessages($token, 60, $anafToken);
 
         // Look for a message matching our upload ID
         if (isset($messages['mesaje']) && is_array($messages['mesaje'])) {
@@ -114,22 +136,31 @@ class AnafDeclarationClient
     /**
      * Download a document (recipisa PDF) from ANAF SPV.
      */
-    public function downloadRecipisa(string $id, string $token): string
+    public function downloadRecipisa(string $id, string $token, ?AnafToken $anafToken = null): string
     {
         $this->rateLimiter->consumeGlobal();
 
-        $response = $this->httpClient->request('GET', self::BASE_URL . '/descarcare', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
             'query' => [
                 'id' => $id,
             ],
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::BASE_URL . '/descarcare', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'downloadRecipisa');
 
         if ($statusCode >= 400) {
@@ -145,11 +176,11 @@ class AnafDeclarationClient
     /**
      * List recent SPV messages filtered by CIF.
      */
-    public function listMessagesByCif(string $token, string $cif, int $days = 60): array
+    public function listMessagesByCif(string $token, string $cif, int $days = 60, ?AnafToken $anafToken = null): array
     {
         $this->rateLimiter->consumeGlobal();
 
-        $response = $this->httpClient->request('GET', self::BASE_URL . '/listaMesaje', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
@@ -157,11 +188,20 @@ class AnafDeclarationClient
                 'zile' => $days,
                 'cif' => $cif,
             ],
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::BASE_URL . '/listaMesaje', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'listMessagesByCif');
 
         return $this->parseResponse($content);
@@ -170,7 +210,7 @@ class AnafDeclarationClient
     /**
      * Request a read-only report from ANAF SPV (e.g. "Istoric declaratii").
      */
-    public function requestReport(string $token, string $cif, string $tip, ?int $year = null, ?int $month = null): array
+    public function requestReport(string $token, string $cif, string $tip, ?int $year = null, ?int $month = null, ?AnafToken $anafToken = null): array
     {
         $this->rateLimiter->consumeGlobal();
 
@@ -186,16 +226,25 @@ class AnafDeclarationClient
             $query['luna'] = $month;
         }
 
-        $response = $this->httpClient->request('GET', self::BASE_URL . '/cerere', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
             'query' => $query,
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::BASE_URL . '/cerere', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'requestReport');
 
         return $this->parseResponse($content);
@@ -207,19 +256,28 @@ class AnafDeclarationClient
      * This is a separate system from SPV used specifically for D112.
      * 4secunde uses this as a fallback when SPV doesn't have the status yet.
      */
-    public function checkD112Status(string $token): array
+    public function checkD112Status(string $token, ?AnafToken $anafToken = null): array
     {
         $this->rateLimiter->consumeGlobal();
 
-        $response = $this->httpClient->request('GET', self::EPATRIM_D112_URL . '/vizualizareStare.do', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::EPATRIM_D112_URL . '/vizualizareStare.do', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'checkD112Status');
 
         return $this->parseResponse($content);
@@ -230,22 +288,31 @@ class AnafDeclarationClient
      *
      * @param string $filename The filename returned by the D112 status endpoint
      */
-    public function downloadD112Recipisa(string $filename, string $token): string
+    public function downloadD112Recipisa(string $filename, string $token, ?AnafToken $anafToken = null): string
     {
         $this->rateLimiter->consumeGlobal();
 
-        $response = $this->httpClient->request('GET', self::EPATRIM_D112_URL . '/ObtineRecipisa', [
+        $options = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
             ],
             'query' => [
                 'numefisier' => $filename,
             ],
-        ]);
+        ];
+
+        $certInfo = $this->resolveCertOptions($anafToken);
+        if ($certInfo !== null) {
+            $options['local_cert'] = $certInfo['certPath'];
+            $options['passphrase'] = $certInfo['passphrase'];
+        }
+
+        $response = $this->httpClient->request('GET', self::EPATRIM_D112_URL . '/ObtineRecipisa', $options);
 
         $statusCode = $response->getStatusCode();
         $content = $response->getContent(false);
 
+        $this->cleanupCert($certInfo);
         $this->checkForAuthError($statusCode, 'downloadD112Recipisa');
 
         if ($statusCode >= 400) {
@@ -269,6 +336,25 @@ class AnafDeclarationClient
                 $statusCode,
                 $operation,
             ));
+        }
+    }
+
+    /**
+     * @return array{certPath: string, passphrase: string}|null
+     */
+    private function resolveCertOptions(?AnafToken $anafToken): ?array
+    {
+        if ($anafToken === null || !$anafToken->hasCertificate()) {
+            return null;
+        }
+
+        return $this->certificateResolver->resolve($anafToken);
+    }
+
+    private function cleanupCert(?array $certInfo): void
+    {
+        if ($certInfo !== null) {
+            $this->certificateResolver->cleanup($certInfo['certPath']);
         }
     }
 

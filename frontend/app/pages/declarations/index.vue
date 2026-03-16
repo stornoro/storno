@@ -25,7 +25,101 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
   computed(() => store.items),
   { canSelect: (item: any) => ['draft', 'validated'].includes(item.status) },
 )
-const bulkLoading = ref(false)
+// ── Agent Bulk Submit ─────────────────────────────────────────────
+const companyStore = useCompanyStore()
+const { agentAvailable, checkAgent, bulkSubmitViaAgent, tryAutoStart, getPreferredCertId } = useAnafAgent()
+
+const savedCertId = computed(() => {
+  const companyId = companyStore.currentCompanyId
+  return companyId ? getPreferredCertId(companyId) : null
+})
+
+// Returns true if agent+cert are configured, otherwise opens setup modal
+function requireAgentConfig(): boolean {
+  if (!savedCertId.value) {
+    agentBulkModalOpen.value = true
+    agentBulkState.value = 'no-cert'
+    return false
+  }
+  return true
+}
+
+const agentBulkModalOpen = ref(false)
+const agentBulkState = ref<'idle' | 'no-cert' | 'no-agent' | 'starting' | 'preparing' | 'signing' | 'submitting' | 'done'>('idle')
+const agentBulkCurrent = ref(0)
+const agentBulkTotal = ref(0)
+const agentBulkProcessed = ref(0)
+const agentBulkErrors = ref<Array<{ declarationId: string; error: string }>>([])
+const agentBulkRetryableIds = ref<string[]>([])
+
+async function runBulkAgentSubmit(ids: string[]) {
+  agentBulkCurrent.value = 0
+  agentBulkTotal.value = ids.length
+
+  // Check certificate configuration
+  if (!savedCertId.value) {
+    agentBulkState.value = 'no-cert'
+    return
+  }
+
+  // Check agent availability
+  const ok = await checkAgent()
+  if (!ok) {
+    agentBulkState.value = 'starting'
+    const started = await tryAutoStart()
+    if (!started) {
+      agentBulkState.value = 'no-agent'
+      return
+    }
+  }
+
+  agentBulkState.value = 'preparing'
+
+  try {
+    const result = await bulkSubmitViaAgent(
+      ids,
+      savedCertId.value,
+      (progress) => {
+        agentBulkState.value = progress.phase
+        agentBulkCurrent.value = progress.current
+        agentBulkTotal.value = progress.total
+      },
+    )
+    agentBulkProcessed.value += result.processed
+    agentBulkErrors.value.push(...result.errors)
+    agentBulkRetryableIds.value = result.retryableIds
+  } catch (e: any) {
+    agentBulkErrors.value.push({ declarationId: '', error: e?.message ?? 'Unknown error' })
+  }
+
+  agentBulkState.value = 'done'
+}
+
+function handleBulkAgentSubmit() {
+  agentBulkModalOpen.value = true
+  agentBulkProcessed.value = 0
+  agentBulkErrors.value = []
+  agentBulkRetryableIds.value = []
+  runBulkAgentSubmit(selectedIds.value)
+}
+
+function handleBulkAgentRetry() {
+  const ids = [...agentBulkRetryableIds.value]
+  agentBulkRetryableIds.value = []
+  runBulkAgentSubmit(ids)
+}
+
+function closeAgentBulkModal() {
+  agentBulkModalOpen.value = false
+  if (agentBulkProcessed.value > 0) {
+    clearSelection()
+    store.fetchDeclarations()
+  }
+}
+
+onMounted(() => {
+  checkAgent()
+})
 
 // ── Create Slideover ───────────────────────────────────────────────
 const createOpen = ref(false)
@@ -84,20 +178,6 @@ async function onCreate() {
   }
 }
 
-async function handleBulkSubmit() {
-  bulkLoading.value = true
-  try {
-    const result = await store.bulkSubmit(selectedIds.value)
-    toast.add({ title: $t('declarations.bulkSubmitSuccess', { count: result.submitted }), color: 'success' })
-    clearSelection()
-    store.fetchDeclarations()
-  } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.submitError'), color: 'error' })
-  } finally {
-    bulkLoading.value = false
-  }
-}
-
 // ── Sync & Refresh ──────────────────────────────────────────────────
 const refreshing = ref(false)
 const syncing = ref(false)
@@ -105,6 +185,7 @@ const syncPopoverOpen = ref(false)
 const syncYear = ref(new Date().getFullYear())
 
 async function handleRefreshStatuses() {
+  if (!requireAgentConfig()) return
   refreshing.value = true
   try {
     await store.refreshStatuses()
@@ -118,6 +199,7 @@ async function handleRefreshStatuses() {
 }
 
 async function handleSyncFromAnaf() {
+  if (!requireAgentConfig()) return
   syncing.value = true
   try {
     await store.syncFromAnaf(syncYear.value)
@@ -349,16 +431,15 @@ function onRowClick(_e: Event, row: any) {
       </div>
 
       <!-- Bulk Actions Bar -->
-      <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">
+      <SharedTableBulkBar :count="selectionCount" :loading="['preparing', 'signing', 'submitting'].includes(agentBulkState)" @clear="clearSelection">
         <template #actions>
           <UButton
-            :label="$t('declarations.submit')"
-            icon="i-lucide-send"
-            color="primary"
+            :label="$t('declarations.bulkAgentSubmit')"
+            icon="i-lucide-shield-check"
+            color="warning"
             variant="soft"
             size="sm"
-            :loading="bulkLoading"
-            @click="handleBulkSubmit"
+            @click="handleBulkAgentSubmit"
           />
         </template>
       </SharedTableBulkBar>
@@ -496,6 +577,145 @@ function onRowClick(_e: Event, row: any) {
           </div>
         </template>
       </USlideover>
+
+      <!-- Agent Bulk Submit Modal -->
+      <UModal v-model:open="agentBulkModalOpen" :close="false">
+        <template #header>
+          <h3 class="text-lg font-semibold">{{ $t('declarations.bulkAgentSubmit') }}</h3>
+        </template>
+        <template #body>
+          <div class="space-y-4 p-4">
+            <!-- No certificate configured -->
+            <template v-if="agentBulkState === 'no-cert'">
+              <div class="flex flex-col items-center gap-3 py-4">
+                <UIcon name="i-lucide-key-round" class="text-3xl text-warning" />
+                <p class="text-sm font-medium">{{ $t('declarations.agentNoCertConfigured') }}</p>
+                <p class="text-sm text-muted text-center">{{ $t('declarations.agentConfigureFirstHint') }}</p>
+                <UButton
+                  :label="$t('declarations.agentConfigureFirst')"
+                  icon="i-lucide-settings"
+                  variant="outline"
+                  :to="`/companies/${companyStore.currentCompanyId}/anaf`"
+                  @click="agentBulkModalOpen = false"
+                />
+              </div>
+            </template>
+
+            <!-- Agent not running -->
+            <template v-else-if="agentBulkState === 'no-agent' || agentBulkState === 'starting'">
+              <div class="flex flex-col items-center gap-3 py-4">
+                <UIcon name="i-lucide-wifi-off" class="text-3xl text-warning" />
+                <p class="text-sm font-medium">{{ $t('declarations.bulkAgentNotRunning') }}</p>
+                <p class="text-sm text-muted text-center">{{ $t('declarations.bulkAgentStartHint') }}</p>
+                <UButton
+                  v-if="agentBulkState === 'starting'"
+                  :label="$t('common.loading')"
+                  loading
+                  variant="outline"
+                  disabled
+                />
+                <div v-else class="flex gap-2">
+                  <UButton
+                    :label="$t('declarations.agentConfigureFirst')"
+                    icon="i-lucide-settings"
+                    variant="outline"
+                    :to="`/companies/${companyStore.currentCompanyId}/anaf`"
+                    @click="agentBulkModalOpen = false"
+                  />
+                </div>
+              </div>
+            </template>
+
+            <!-- Active phases: preparing / signing / submitting -->
+            <template v-else-if="['preparing', 'signing', 'submitting'].includes(agentBulkState)">
+              <div class="flex flex-col gap-4 py-4">
+                <!-- Phase steps -->
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center justify-center size-7 rounded-full" :class="agentBulkState === 'preparing' ? 'bg-primary text-white' : 'bg-success text-white'">
+                    <UIcon v-if="agentBulkState === 'preparing'" name="i-lucide-loader" class="size-4 animate-spin" />
+                    <UIcon v-else name="i-lucide-check" class="size-4" />
+                  </div>
+                  <span class="text-sm" :class="agentBulkState === 'preparing' ? 'font-medium' : 'text-muted'">{{ $t('declarations.bulkAgentPreparing') }}</span>
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center justify-center size-7 rounded-full" :class="agentBulkState === 'signing' ? 'bg-primary text-white' : agentBulkState === 'submitting' ? 'bg-success text-white' : 'bg-gray-200 dark:bg-gray-700 text-muted'">
+                    <UIcon v-if="agentBulkState === 'signing'" name="i-lucide-loader" class="size-4 animate-spin" />
+                    <UIcon v-else-if="agentBulkState === 'submitting'" name="i-lucide-check" class="size-4" />
+                    <span v-else class="text-xs font-medium">2</span>
+                  </div>
+                  <div class="flex-1">
+                    <span class="text-sm" :class="agentBulkState === 'signing' ? 'font-medium' : 'text-muted'">
+                      <template v-if="agentBulkState === 'signing'">
+                        {{ $t('declarations.bulkAgentSigning', { current: agentBulkCurrent, total: agentBulkTotal }) }}
+                      </template>
+                      <template v-else>{{ $t('declarations.bulkAgentSignPhase') }}</template>
+                    </span>
+                    <div v-if="agentBulkState === 'signing'" class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1.5">
+                      <div
+                        class="bg-primary h-1.5 rounded-full transition-all duration-300"
+                        :style="{ width: agentBulkTotal ? `${(agentBulkCurrent / agentBulkTotal) * 100}%` : '0%' }"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center justify-center size-7 rounded-full" :class="agentBulkState === 'submitting' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-muted'">
+                    <UIcon v-if="agentBulkState === 'submitting'" name="i-lucide-loader" class="size-4 animate-spin" />
+                    <span v-else class="text-xs font-medium">3</span>
+                  </div>
+                  <span class="text-sm" :class="agentBulkState === 'submitting' ? 'font-medium' : 'text-muted'">{{ $t('declarations.bulkAgentSubmitPhase') }}</span>
+                </div>
+
+                <!-- PIN hint during signing -->
+                <p v-if="agentBulkState === 'signing' && agentBulkCurrent <= 1" class="text-xs text-muted text-center mt-2">
+                  {{ $t('declarations.bulkAgentPinHint') }}
+                </p>
+              </div>
+            </template>
+
+            <!-- Done -->
+            <template v-else-if="agentBulkState === 'done'">
+              <div class="flex flex-col items-center gap-3 py-4">
+                <UIcon
+                  :name="agentBulkErrors.length ? 'i-lucide-alert-triangle' : 'i-lucide-check-circle'"
+                  :class="agentBulkErrors.length ? 'text-3xl text-warning' : 'text-3xl text-success'"
+                />
+                <p v-if="!agentBulkErrors.length" class="text-sm font-medium">
+                  {{ $t('declarations.bulkAgentSuccess', { count: agentBulkProcessed }) }}
+                </p>
+                <p v-else class="text-sm font-medium">
+                  {{ $t('declarations.bulkAgentPartialError', { success: agentBulkProcessed, failed: agentBulkErrors.length }) }}
+                </p>
+                <!-- Error list -->
+                <div v-if="agentBulkErrors.length" class="w-full max-h-40 overflow-y-auto space-y-1">
+                  <div v-for="(err, i) in agentBulkErrors" :key="i" class="text-xs text-error bg-error/10 rounded px-2 py-1">
+                    {{ err.error }}
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton
+              v-if="agentBulkState === 'done' && agentBulkRetryableIds.length > 0"
+              :label="$t('declarations.bulkAgentRetry', { count: agentBulkRetryableIds.length })"
+              icon="i-lucide-refresh-cw"
+              color="warning"
+              @click="handleBulkAgentRetry"
+            />
+            <UButton
+              :label="['done', 'no-cert', 'no-agent'].includes(agentBulkState) ? $t('common.close') : $t('common.cancel')"
+              variant="outline"
+              :disabled="['preparing', 'signing', 'submitting'].includes(agentBulkState)"
+              @click="closeAgentBulkModal"
+            />
+          </div>
+        </template>
+      </UModal>
 
       <!-- Create Declaration Slideover -->
       <USlideover v-model:open="createOpen">

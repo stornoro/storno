@@ -45,28 +45,30 @@ final class SyncDeclarationsHandler
             return;
         }
 
-        $token = $this->anafTokenResolver->resolve($company);
-        if ($token === null) {
+        $anafToken = $this->anafTokenResolver->resolveEntity($company);
+        if ($anafToken === null) {
             $this->logger->warning('SyncDeclarationsHandler: No valid ANAF token.', [
                 'companyId' => $message->companyId,
             ]);
             return;
         }
 
+        $token = $anafToken->getToken();
         $cif = (string) $company->getCif();
         $stats = ['created' => 0, 'updated' => 0, 'recipisaDownloaded' => 0];
 
         try {
             // Fetch recent SPV messages filtered by CIF — retry once on auth failure
             try {
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
             } catch (AnafTokenExpiredException) {
                 $this->logger->info('SyncDeclarationsHandler: Token expired, re-resolving.');
-                $token = $this->anafTokenResolver->resolve($company);
-                if ($token === null) {
+                $anafToken = $this->anafTokenResolver->resolveEntity($company);
+                if ($anafToken === null) {
                     throw new \RuntimeException('No valid ANAF token available after refresh.');
                 }
-                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60);
+                $token = $anafToken->getToken();
+                $messagesResult = $this->anafClient->listMessagesByCif($token, $cif, 60, $anafToken);
             }
             $messages = $messagesResult['mesaje'] ?? [];
 
@@ -115,7 +117,7 @@ final class SyncDeclarationsHandler
                     $stats['created']++;
 
                     // Download recipisa
-                    $this->tryDownloadRecipisa($declaration, $msg, $token, $company, $stats);
+                    $this->tryDownloadRecipisa($declaration, $msg, $token, $company, $stats, $anafToken);
                 } else {
                     // Update existing declarations
                     foreach ($existing as $declaration) {
@@ -134,7 +136,7 @@ final class SyncDeclarationsHandler
 
                         // Download recipisa if missing
                         if ($declaration->getRecipisaPath() === null) {
-                            $this->tryDownloadRecipisa($declaration, $msg, $token, $company, $stats);
+                            $this->tryDownloadRecipisa($declaration, $msg, $token, $company, $stats, $anafToken);
                             $updated = true;
                         }
 
@@ -203,6 +205,7 @@ final class SyncDeclarationsHandler
         string $token,
         Company $company,
         array &$stats,
+        ?\App\Entity\AnafToken $anafToken = null,
     ): void {
         $downloadId = $msg['id_descarcare'] ?? $msg['id'] ?? null;
         if ($downloadId === null) {
@@ -210,7 +213,7 @@ final class SyncDeclarationsHandler
         }
 
         try {
-            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token);
+            $recipisa = $this->anafClient->downloadRecipisa((string) $downloadId, $token, $anafToken);
             $recipisaPath = sprintf(
                 'declarations/%s/%s/%s_recipisa.pdf',
                 $company->getId(),
