@@ -86,6 +86,10 @@ export const P = {
   // Borderou / Bank Statements
   BORDEROU_VIEW: 'borderou.view',
   BORDEROU_MANAGE: 'borderou.manage',
+
+  // Tax Declarations
+  DECLARATION_VIEW: 'declaration.view',
+  DECLARATION_SUBMIT: 'declaration.submit',
 } as const
 
 /**
@@ -102,4 +106,5 @@ export const ROUTE_PERMISSIONS: Record<string, string | string[]> = {
   '/settings/backup': P.BACKUP_MANAGE,
   '/settings/import-export': P.IMPORT_MANAGE,
   '/settings/team': P.ORG_MANAGE_MEMBERS,
+  '/declarations': P.DECLARATION_VIEW,
 }

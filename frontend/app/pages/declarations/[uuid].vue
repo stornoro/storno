@@ -1,0 +1,567 @@
+<template>
+  <UDashboardPanel>
+    <template #header>
+      <UDashboardNavbar>
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div v-if="declaration" class="space-y-6">
+        <!-- Title & Actions -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <UButton icon="i-lucide-arrow-left" variant="ghost" to="/declarations" class="shrink-0" />
+            <h1 class="text-2xl font-bold truncate">
+              {{ declaration.type.toUpperCase() }} — {{ declaration.year }}-{{ String(declaration.month).padStart(2, '0') }}
+            </h1>
+            <UBadge :color="(DeclarationStatusColor[declaration.status as keyof typeof DeclarationStatusColor] ?? 'neutral') as any" variant="subtle">
+              {{ $t(`declarations.statuses.${declaration.status}`) }}
+            </UBadge>
+          </div>
+
+          <div v-if="can(P.DECLARATION_SUBMIT)" class="flex flex-wrap items-center gap-2">
+            <UButton v-if="isDraft" icon="i-lucide-refresh-cw" variant="outline" :loading="actionLoading" @click="recalculate">
+              {{ $t('declarations.recalculate') }}
+            </UButton>
+            <UButton v-if="isDraft" icon="i-lucide-check-circle" variant="outline" color="primary" :loading="actionLoading" @click="validate">
+              {{ $t('declarations.validate') }}
+            </UButton>
+            <UButton v-if="canSubmit" icon="i-lucide-send" color="primary" :loading="actionLoading" @click="submitModalOpen = true">
+              {{ $t('declarations.submit') }}
+            </UButton>
+
+            <div class="w-px h-6 bg-(--ui-border) hidden sm:block" />
+
+            <UDropdownMenu :items="documentMenuItems">
+              <UButton icon="i-lucide-file-down" variant="outline">
+                {{ $t('invoices.documents') }}
+                <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+              </UButton>
+            </UDropdownMenu>
+
+            <UButton
+              v-if="!isTerminal || declaration.status === 'error'"
+              icon="i-lucide-trash-2"
+              variant="outline"
+              color="error"
+              @click="deleteModalOpen = true"
+            >
+              {{ $t('common.delete') }}
+            </UButton>
+          </div>
+        </div>
+
+        <!-- Error Banner -->
+        <UAlert
+          v-if="declaration.errorMessage"
+          :title="$t('declarations.errorMessage')"
+          :description="declaration.errorMessage"
+          color="error"
+          icon="i-lucide-alert-circle"
+        />
+
+        <!-- Info Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <UCard>
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.title') }}</h3>
+            </template>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt class="text-(--ui-text-muted)">{{ $t('declarations.type') }}</dt>
+                <dd class="font-medium font-mono">{{ declaration.type.toUpperCase() }}</dd>
+              </div>
+              <div>
+                <dt class="text-(--ui-text-muted)">{{ $t('declarations.status') }}</dt>
+                <dd>
+                  <UBadge :color="(DeclarationStatusColor[declaration.status as keyof typeof DeclarationStatusColor] ?? 'neutral') as any" variant="subtle" size="sm">
+                    {{ $t(`declarations.statuses.${declaration.status}`) }}
+                  </UBadge>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-(--ui-text-muted)">{{ $t('declarations.period') }}</dt>
+                <dd class="font-medium">{{ declaration.year }}-{{ String(declaration.month).padStart(2, '0') }}</dd>
+              </div>
+              <div v-if="declaration.submittedAt">
+                <dt class="text-(--ui-text-muted)">{{ $t('declarations.submittedAt') }}</dt>
+                <dd class="font-medium">{{ new Date(declaration.submittedAt).toLocaleString() }}</dd>
+              </div>
+              <div v-if="declaration.acceptedAt">
+                <dt class="text-(--ui-text-muted)">{{ $t('declarations.acceptedAt') }}</dt>
+                <dd class="font-medium">{{ new Date(declaration.acceptedAt).toLocaleString() }}</dd>
+              </div>
+            </div>
+          </UCard>
+
+          <!-- Metadata Card -->
+          <UCard v-if="declaration.metadata && Object.keys(declaration.metadata).length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.metadata') }}</h3>
+            </template>
+            <pre class="text-xs text-(--ui-text-muted) overflow-auto max-h-48">{{ JSON.stringify(declaration.metadata, null, 2) }}</pre>
+          </UCard>
+        </div>
+
+        <!-- D394: Sales/Purchases -->
+        <template v-if="declaration.type === 'd394' && declaration.data">
+          <!-- Totals -->
+          <div v-if="declaration.data.totals" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.totalSales') }}</h3>
+              </template>
+              <div class="space-y-1">
+                <p class="text-2xl font-bold">{{ formatAmount(declaration.data.totals.sales?.taxableBase) }}</p>
+                <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.vatAmount') }}: {{ formatAmount(declaration.data.totals.sales?.vatAmount) }}</p>
+              </div>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.totalPurchases') }}</h3>
+              </template>
+              <div class="space-y-1">
+                <p class="text-2xl font-bold">{{ formatAmount(declaration.data.totals.purchases?.taxableBase) }}</p>
+                <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.vatAmount') }}: {{ formatAmount(declaration.data.totals.purchases?.vatAmount) }}</p>
+              </div>
+            </UCard>
+          </div>
+
+          <UAlert
+            v-if="declaration.data.incompleteInvoices?.length"
+            :title="$t('declarations.incompleteInvoices')"
+            :description="$t('declarations.incompleteInvoicesDesc', { count: declaration.data.incompleteInvoices.length })"
+            color="warning"
+            icon="i-lucide-alert-triangle"
+          />
+
+          <!-- VAT Summary -->
+          <UCard v-if="declaration.data.rezumat">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.summary') }}</h3>
+            </template>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div v-if="declaration.data.rezumat.sales?.length" class="space-y-2">
+                <h4 class="text-sm text-(--ui-text-muted)">{{ $t('declarations.totalSales') }}</h4>
+                <div v-for="r in declaration.data.rezumat.sales" :key="r.cota" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                  <span class="font-mono">TVA {{ r.cota }}%</span>
+                  <span>{{ formatAmount(r.taxableBase) }} / {{ formatAmount(r.vatAmount) }}</span>
+                </div>
+              </div>
+              <div v-if="declaration.data.rezumat.purchases?.length" class="space-y-2">
+                <h4 class="text-sm text-(--ui-text-muted)">{{ $t('declarations.totalPurchases') }}</h4>
+                <div v-for="r in declaration.data.rezumat.purchases" :key="r.cota" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                  <span class="font-mono">TVA {{ r.cota }}%</span>
+                  <span>{{ formatAmount(r.taxableBase) }} / {{ formatAmount(r.vatAmount) }}</span>
+                </div>
+              </div>
+            </div>
+          </UCard>
+
+          <!-- Partners Tables -->
+          <UCard v-if="declaration.data.sales?.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.salesPartners') }} ({{ declaration.data.sales.length }})</h3>
+            </template>
+            <UTable :data="salesData" :columns="salesColumns">
+              <template #tipPartener-cell="{ row }">
+                <UBadge variant="subtle" color="neutral" size="xs">{{ tipPartenerLabel(row.original.tipPartener) }}</UBadge>
+              </template>
+            </UTable>
+          </UCard>
+
+          <UCard v-if="declaration.data.purchases?.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.purchasesPartners') }} ({{ declaration.data.purchases.length }})</h3>
+            </template>
+            <UTable :data="purchasesData" :columns="salesColumns">
+              <template #tipPartener-cell="{ row }">
+                <UBadge variant="subtle" color="neutral" size="xs">{{ tipPartenerLabel(row.original.tipPartener) }}</UBadge>
+              </template>
+            </UTable>
+          </UCard>
+
+          <!-- Invoice Series -->
+          <UCard v-if="declaration.data.serieFacturi?.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.invoiceSeries') }}</h3>
+            </template>
+            <UTable :data="declaration.data.serieFacturi" :columns="seriesColumns" />
+          </UCard>
+        </template>
+
+        <!-- D300: VAT Return -->
+        <template v-else-if="declaration.type === 'd300' && declaration.data">
+          <div v-if="declaration.data.totals" class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d300.collected') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(declaration.data.totals.collected) }}</p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d300.deductible') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(declaration.data.totals.deductible) }}</p>
+            </UCard>
+            <UCard :class="Number(declaration.data.totals.net) >= 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800'">
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d300.net') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(declaration.data.totals.net) }}</p>
+              <p class="text-sm text-(--ui-text-muted)">{{ Number(declaration.data.totals.net) >= 0 ? $t('declarations.d300.toPay') : $t('declarations.d300.toRecover') }}</p>
+            </UCard>
+          </div>
+
+          <UCard v-if="declaration.data.rows && Object.keys(declaration.data.rows).length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d300.rows') }}</h3>
+            </template>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div v-for="(value, key) in declaration.data.rows" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="font-mono text-xs text-(--ui-text-muted)">{{ key }}</span>
+                <span>{{ formatAmount(value as string) }}</span>
+              </div>
+            </div>
+          </UCard>
+        </template>
+
+        <!-- D390/D392/D393: EU Operations -->
+        <template v-else-if="['d390', 'd392', 'd393'].includes(declaration.type) && declaration.data">
+          <div v-if="declaration.data.rezumat" class="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d390.operations') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ declaration.data.rezumat.nrOPI ?? 0 }}</p>
+            </UCard>
+            <UCard v-for="key in ['bazaL', 'bazaA', 'bazaP', 'bazaS'].filter(k => declaration.data.rezumat[k])" :key="key">
+              <template #header>
+                <h3 class="font-semibold">{{ $t(`declarations.d390.${key}`) }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(declaration.data.rezumat[key]) }}</p>
+            </UCard>
+          </div>
+
+          <UCard v-if="declaration.data.operations?.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d390.operationsList') }} ({{ declaration.data.operations.length }})</h3>
+            </template>
+            <UTable :data="declaration.data.operations" :columns="operationsColumns">
+              <template #baza-cell="{ row }">
+                {{ formatAmount(row.original.baza) }}
+              </template>
+              <template #tip-cell="{ row }">
+                <UBadge variant="subtle" :color="({ L: 'success', A: 'info', P: 'warning', S: 'primary' }[row.original.tip as string] ?? 'neutral') as any" size="xs">
+                  {{ row.original.tip }}
+                </UBadge>
+              </template>
+            </UTable>
+          </UCard>
+        </template>
+
+        <!-- Manual types: Editable rows -->
+        <template v-else-if="isManualType && declaration.data">
+          <UCard>
+            <template #header>
+              <div class="flex items-center justify-between">
+                <h3 class="font-semibold">{{ $t('declarations.declarationData') }}</h3>
+                <div v-if="isDraft" class="flex items-center gap-2">
+                  <UButton
+                    v-if="!editingData"
+                    icon="i-lucide-pencil"
+                    variant="outline"
+                    size="xs"
+                    @click="editingData = true"
+                  >
+                    {{ $t('common.edit') }}
+                  </UButton>
+                  <template v-else>
+                    <UButton icon="i-lucide-check" size="xs" color="primary" :loading="savingData" @click="saveRows">
+                      {{ $t('common.save') }}
+                    </UButton>
+                    <UButton variant="outline" size="xs" @click="editingData = false">
+                      {{ $t('common.cancel') }}
+                    </UButton>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <div v-if="editingData" class="space-y-2">
+              <div v-for="(value, key) in editableRows" :key="key" class="flex items-center gap-2">
+                <UInput :model-value="String(key)" :placeholder="$t('declarations.rowKey')" class="w-1/3 font-mono text-xs" disabled />
+                <UInput v-model="editableRows[key as string]" :placeholder="$t('declarations.rowValue')" class="flex-1" />
+                <UButton icon="i-lucide-x" variant="ghost" color="error" size="xs" @click="removeRow(key)" />
+              </div>
+              <UButton icon="i-lucide-plus" variant="outline" size="xs" @click="addRow">
+                {{ $t('declarations.addRow') }}
+              </UButton>
+            </div>
+
+            <div v-else>
+              <div v-if="Object.keys(declaration.data.rows ?? {}).length" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div v-for="(value, key) in declaration.data.rows" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                  <span class="font-mono text-xs text-(--ui-text-muted)">{{ key }}</span>
+                  <span>{{ value }}</span>
+                </div>
+              </div>
+              <p v-else class="text-sm text-(--ui-text-muted)">{{ $t('declarations.noData') }}</p>
+            </div>
+          </UCard>
+        </template>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div v-else class="text-center py-20">
+        <USkeleton class="h-8 w-64 mx-auto mb-4" />
+        <USkeleton class="h-4 w-48 mx-auto" />
+      </div>
+
+      <!-- Submit confirmation -->
+      <SharedConfirmModal
+        v-model:open="submitModalOpen"
+        :title="$t('declarations.submit')"
+        :description="$t('declarations.submitConfirm')"
+        icon="i-lucide-send"
+        :confirm-label="$t('declarations.submit')"
+        :loading="actionLoading"
+        @confirm="submit"
+      />
+
+      <!-- Delete confirmation -->
+      <SharedConfirmModal
+        v-model:open="deleteModalOpen"
+        :title="$t('common.delete')"
+        :description="$t('declarations.deleteConfirm')"
+        icon="i-lucide-trash-2"
+        color="error"
+        :confirm-label="$t('common.delete')"
+        :loading="actionLoading"
+        @confirm="onDelete"
+      />
+    </template>
+  </UDashboardPanel>
+</template>
+
+<script setup lang="ts">
+import { DeclarationStatusColor, AUTO_POPULATED_TYPES } from '~/types/enums'
+import type { DeclarationType } from '~/types/enums'
+
+definePageMeta({ middleware: 'auth' })
+
+const { t: $t } = useI18n()
+const { can } = usePermissions()
+const route = useRoute()
+const router = useRouter()
+const store = useDeclarationStore()
+const toast = useToast()
+
+const uuid = route.params.uuid as string
+const declaration = ref<any>(null)
+const loading = ref(true)
+const actionLoading = ref(false)
+const deleteModalOpen = ref(false)
+const submitModalOpen = ref(false)
+
+useHead({ title: computed(() => declaration.value ? `${declaration.value.type.toUpperCase()} ${declaration.value.year}-${String(declaration.value.month).padStart(2, '0')}` : $t('declarations.title')) })
+
+// ── Computed ────────────────────────────────────────────────────────
+const isDraft = computed(() => declaration.value?.status === 'draft')
+const isValidated = computed(() => declaration.value?.status === 'validated')
+const canSubmit = computed(() => isDraft.value || isValidated.value)
+const isTerminal = computed(() => ['accepted', 'rejected', 'error'].includes(declaration.value?.status))
+const isAutoPopulated = computed(() => declaration.value && AUTO_POPULATED_TYPES.includes(declaration.value.type as DeclarationType))
+const isManualType = computed(() => !isAutoPopulated.value)
+
+// ── Editable rows (manual types) ────────────────────────────────────
+const editableRows = ref<Record<string, string>>({})
+const editingData = ref(false)
+const savingData = ref(false)
+
+watch(declaration, (d) => {
+  if (d?.data?.rows) {
+    editableRows.value = { ...d.data.rows }
+  }
+}, { immediate: true })
+
+function addRow() {
+  editableRows.value[`field_${Date.now()}`] = ''
+}
+
+function removeRow(key: string) {
+  delete editableRows.value[key]
+}
+
+// ── Table columns ───────────────────────────────────────────────────
+const salesColumns = [
+  { accessorKey: 'partnerCif', header: $t('declarations.partnerCif') },
+  { accessorKey: 'partnerName', header: $t('declarations.partnerName') },
+  { accessorKey: 'tipPartener', header: $t('declarations.partnerType') },
+  { accessorKey: 'invoiceCount', header: $t('declarations.invoiceCount') },
+  { accessorKey: 'taxableBase', header: $t('declarations.taxableBase') },
+  { accessorKey: 'vatAmount', header: $t('declarations.vatAmount') },
+]
+
+const seriesColumns = [
+  { accessorKey: 'serie', header: $t('declarations.series') },
+  { accessorKey: 'firstNumber', header: $t('declarations.firstNumber') },
+  { accessorKey: 'lastNumber', header: $t('declarations.lastNumber') },
+  { accessorKey: 'count', header: $t('declarations.invoiceCount') },
+]
+
+const operationsColumns = [
+  { accessorKey: 'tip', header: $t('declarations.d390.opType') },
+  { accessorKey: 'tara', header: $t('declarations.d390.country') },
+  { accessorKey: 'codO', header: 'CIF' },
+  { accessorKey: 'denO', header: $t('declarations.partnerName') },
+  { accessorKey: 'baza', header: $t('declarations.taxableBase') },
+]
+
+// ── Computed table data ─────────────────────────────────────────────
+const salesData = computed(() =>
+  (declaration.value?.data?.sales ?? []).map((p: any) => ({
+    ...p,
+    taxableBase: formatAmount(p.total?.taxableBase),
+    vatAmount: formatAmount(p.total?.vatAmount),
+  }))
+)
+
+const purchasesData = computed(() =>
+  (declaration.value?.data?.purchases ?? []).map((p: any) => ({
+    ...p,
+    taxableBase: formatAmount(p.total?.taxableBase),
+    vatAmount: formatAmount(p.total?.vatAmount),
+  }))
+)
+
+// ── Menus ───────────────────────────────────────────────────────────
+const documentMenuItems = computed(() => [
+  [
+    { label: $t('declarations.downloadXml'), icon: 'i-lucide-download', onSelect: () => downloadXml() },
+    ...(declaration.value?.status === 'accepted'
+      ? [{ label: $t('declarations.downloadRecipisa'), icon: 'i-lucide-file-check-2', onSelect: () => downloadRecipisa() }]
+      : []),
+  ],
+])
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function formatAmount(val: string | number | undefined) {
+  if (!val) return '0.00'
+  return Number(val).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function tipPartenerLabel(tip: any) {
+  const labels: Record<number, string> = { 1: 'PJ Romania', 2: 'PF Romania', 3: 'UE', 4: 'Extra-UE' }
+  return labels[tip] ?? String(tip)
+}
+
+// ── Actions ─────────────────────────────────────────────────────────
+async function fetchDeclaration() {
+  loading.value = true
+  declaration.value = await store.fetchDeclaration(uuid)
+  loading.value = false
+}
+
+async function recalculate() {
+  actionLoading.value = true
+  try {
+    declaration.value = await store.recalculateDeclaration(uuid)
+    toast.add({ title: $t('declarations.recalculateSuccess'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.recalculateError'), color: 'error' })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function validate() {
+  actionLoading.value = true
+  try {
+    declaration.value = await store.validateDeclaration(uuid)
+    toast.add({ title: $t('declarations.validateSuccess'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.validateError'), color: 'error' })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function submit() {
+  actionLoading.value = true
+  try {
+    declaration.value = await store.submitDeclaration(uuid)
+    submitModalOpen.value = false
+    toast.add({ title: $t('declarations.submitSuccess'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.submitError'), color: 'error' })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function onDelete() {
+  actionLoading.value = true
+  try {
+    await store.deleteDeclaration(uuid)
+    deleteModalOpen.value = false
+    toast.add({ title: $t('declarations.deleteSuccess'), color: 'success' })
+    router.push('/declarations')
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.deleteError'), color: 'error' })
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function saveRows() {
+  savingData.value = true
+  try {
+    declaration.value = await store.updateDeclaration(uuid, {
+      data: { ...declaration.value?.data, rows: editableRows.value },
+    })
+    editingData.value = false
+    toast.add({ title: $t('declarations.dataSaved'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('declarations.saveError'), color: 'error' })
+  } finally {
+    savingData.value = false
+  }
+}
+
+async function downloadXml() {
+  const { apiFetch } = useApi()
+  try {
+    const blob = await apiFetch<Blob>(`/v1/declarations/${uuid}/xml`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${declaration.value?.type ?? 'declaration'}_${declaration.value?.year}_${String(declaration.value?.month).padStart(2, '0')}.xml`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? 'Download failed.', color: 'error' })
+  }
+}
+
+async function downloadRecipisa() {
+  const { apiFetch } = useApi()
+  try {
+    const blob = await apiFetch<Blob>(`/v1/declarations/${uuid}/recipisa`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${declaration.value?.type ?? 'declaration'}_${declaration.value?.year}_${String(declaration.value?.month).padStart(2, '0')}_recipisa.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? 'Download failed.', color: 'error' })
+  }
+}
+
+onMounted(() => fetchDeclaration())
+</script>

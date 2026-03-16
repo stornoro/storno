@@ -357,5 +357,51 @@ services:
             $webhookRelayUrl: '%env(default::WEBHOOK_RELAY_URL)%'
             $webhookRelaySecret: '%env(default::WEBHOOK_RELAY_SECRET)%'
 
+    # ---------------------------------------------------------------------------
+    # Tax Declaration system — populators and XML generators
+    # ---------------------------------------------------------------------------
+
+    # Auto-populated types
+    App\Service\Declaration\Populator\D394Populator:
+        tags: ['app.declaration_data_populator']
+
+    App\Service\Declaration\Populator\D300Populator:
+        tags: ['app.declaration_data_populator']
+
+    App\Service\Declaration\Populator\D390Populator:
+        tags: ['app.declaration_data_populator']
+
+    App\Service\Declaration\Populator\D392Populator:
+        tags: ['app.declaration_data_populator']
+
+    App\Service\Declaration\Populator\D393Populator:
+        tags: ['app.declaration_data_populator']
+
+    # Manual entry types
+    App\Service\Declaration\Populator\ManualPopulator:
+        tags: ['app.declaration_data_populator']
+
+    # XML generators
+    App\Service\Declaration\XmlGenerator\D394XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D300XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D390XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D100XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D101XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D112XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\GenericFlatXmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

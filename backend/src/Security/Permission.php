@@ -88,6 +88,10 @@ final class Permission
     public const BORDEROU_VIEW = 'borderou.view';
     public const BORDEROU_MANAGE = 'borderou.manage';
 
+    // Tax Declarations
+    public const DECLARATION_VIEW = 'declaration.view';
+    public const DECLARATION_SUBMIT = 'declaration.submit';
+
     public static function all(): array
     {
         return [
@@ -110,6 +114,7 @@ final class Permission
             self::EMAIL_TEMPLATE_VIEW, self::EMAIL_TEMPLATE_MANAGE,
             self::REPORT_VIEW,
             self::BORDEROU_VIEW, self::BORDEROU_MANAGE,
+            self::DECLARATION_VIEW, self::DECLARATION_SUBMIT,
         ];
     }
 }
