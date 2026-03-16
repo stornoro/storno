@@ -96,27 +96,30 @@ final class SubmitDeclarationHandler
 
             // Get ANAF token
             $company = $declaration->getCompany();
-            $token = $this->anafTokenResolver->resolve($company);
+            $anafToken = $this->anafTokenResolver->resolveEntity($company);
 
-            if ($token === null) {
+            if ($anafToken === null) {
                 $declaration->setStatus(DeclarationStatus::ERROR);
                 $declaration->setErrorMessage('No valid ANAF token available for this company.');
                 $this->entityManager->flush();
                 return;
             }
 
+            $token = $anafToken->getToken();
+
             // Upload to ANAF — retry once with refreshed token on auth failure
             try {
-                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type);
+                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type, $anafToken);
             } catch (AnafTokenExpiredException) {
                 $this->logger->info('SubmitDeclarationHandler: Token expired, re-resolving.', [
                     'declarationId' => $message->declarationId,
                 ]);
-                $token = $this->anafTokenResolver->resolve($company);
-                if ($token === null) {
+                $anafToken = $this->anafTokenResolver->resolveEntity($company);
+                if ($anafToken === null) {
                     throw new \RuntimeException('No valid ANAF token available after refresh.');
                 }
-                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type);
+                $token = $anafToken->getToken();
+                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type, $anafToken);
             }
 
             $uploadId = $result['id_solicitare'] ?? $result['index_incarcare'] ?? $result['id_incarcare'] ?? null;

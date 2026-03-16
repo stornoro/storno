@@ -25,6 +25,16 @@ class AnafTokenResolver
 
     public function resolve(Company $company): ?string
     {
+        $token = $this->resolveEntity($company);
+
+        return $token?->getToken();
+    }
+
+    /**
+     * Resolve the best AnafToken entity for a company.
+     */
+    public function resolveEntity(Company $company): ?AnafToken
+    {
         $org = $company->getOrganization();
         if (!$org) {
             return null;
@@ -57,7 +67,7 @@ class AnafTokenResolver
             $anafToken->addValidatedCif($cif);
             $this->entityManager->flush();
 
-            return $anafToken->getToken();
+            return $anafToken;
         }
 
         return null;

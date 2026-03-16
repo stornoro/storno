@@ -719,6 +719,29 @@ export interface AnafStatus {
   hasExpiredTokens?: boolean
 }
 
+// ── ANAF Agent ──────────────────────────────────────────────────────
+export interface AgentCertificate {
+  id: string
+  subject: string
+  issuer: string
+  notAfter: string | null
+  source: 'keychain' | 'windows-store' | 'pkcs11'
+}
+
+export interface AnafProxyRequest {
+  url: string
+  method: string
+  headers: Record<string, string>
+  body: string
+  certificateId: string
+}
+
+export interface AnafProxyResponse {
+  statusCode: number
+  headers: Record<string, string>
+  body: string
+}
+
 // ── Sync status ─────────────────────────────────────────────────────
 export interface SyncStatus {
   companyId: string
@@ -1533,6 +1556,7 @@ export interface BalanceAnalysisReport {
 // ── Tax Declarations ──────────────────────────────────────────────
 export interface TaxDeclaration {
   id: string
+  companyId: string
   type: DeclarationType
   status: DeclarationStatus
   year: number

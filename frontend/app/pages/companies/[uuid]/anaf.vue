@@ -39,6 +39,89 @@
     </div>
 
     <div v-else class="space-y-6">
+      <!-- Agent Card -->
+      <UCard variant="outline">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold">{{ $t('anaf.agentSection') }}</h3>
+            <UBadge v-if="agentAvailable" color="success" variant="subtle">
+              {{ $t('anaf.agentRunning', { version: agentVersion ?? '?' }) }}
+            </UBadge>
+            <UBadge v-else color="warning" variant="subtle">
+              {{ $t('anaf.agentNotDetected') }}
+            </UBadge>
+          </div>
+        </template>
+
+        <!-- Agent not running -->
+        <div v-if="!agentAvailable" class="space-y-4">
+          <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.agentInstallHint') }}</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <UButton
+              icon="i-lucide-play"
+              :loading="agentStarting"
+              @click="onAutoStartAgent"
+            >
+              {{ agentStarting ? $t('anaf.agentStarting') : $t('anaf.agentAutoStart') }}
+            </UButton>
+            <UButton
+              icon="i-lucide-download"
+              variant="outline"
+              :to="agentDownloadUrl"
+              target="_blank"
+            >
+              {{ $t('anaf.agentDownload') }}
+            </UButton>
+            <UButton
+              icon="i-lucide-refresh-cw"
+              variant="outline"
+              :loading="agentChecking"
+              @click="checkAgent"
+            >
+              {{ $t('anaf.agentRecheck') }}
+            </UButton>
+          </div>
+        </div>
+
+        <!-- Agent running — cert picker -->
+        <div v-else class="space-y-4">
+          <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.agentCertSelectDescription') }}</p>
+
+          <div v-if="loadingAgentCerts" class="flex items-center gap-2 py-2">
+            <UIcon name="i-lucide-loader-2" class="animate-spin h-4 w-4" />
+            <span class="text-sm">{{ $t('common.loading') }}</span>
+          </div>
+
+          <div v-else-if="agentCerts.length === 0" class="py-2">
+            <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.agentNoCertificates') }}</p>
+          </div>
+
+          <div v-else class="space-y-2">
+            <label
+              v-for="cert in agentCerts"
+              :key="cert.id"
+              class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-(--ui-bg-elevated) transition-colors"
+              :class="agentSelectedCertId === cert.id ? 'border-primary bg-(--ui-bg-elevated)' : 'border-(--ui-border)'"
+            >
+              <input v-model="agentSelectedCertId" type="radio" :value="cert.id" class="accent-primary" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium truncate">{{ cert.subject }}</p>
+                <p class="text-xs text-(--ui-text-muted)">{{ cert.source }} &middot; {{ cert.id.substring(0, 16) }}...</p>
+              </div>
+            </label>
+          </div>
+
+          <UButton
+            v-if="agentCerts.length > 0"
+            icon="i-lucide-save"
+            :disabled="!agentSelectedCertId"
+            @click="saveAgentCertPreference"
+          >
+            {{ $t('anaf.agentSaveCert') }}
+          </UButton>
+        </div>
+      </UCard>
+
       <!-- Aggregate Status Card -->
       <UCard variant="outline">
         <template #header>
@@ -301,7 +384,7 @@
 </template>
 
 <script setup lang="ts">
-import type { AnafToken, AnafStatus } from '~/types'
+import type { AnafToken, AnafStatus, AgentCertificate } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -312,6 +395,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
+const { agentAvailable, agentVersion, agentChecking, checkAgent, listCertificates, tryAutoStart, getPreferredCertId, setPreferredCertId } = useAnafAgent()
 
 const uuid = computed(() => route.params.uuid as string)
 
@@ -330,6 +414,57 @@ const showUpgrade = ref(false)
 const linkToken = ref<string | null>(null)
 const linkUrl = ref<string | null>(null)
 const generatingLink = ref(false)
+
+// Agent state
+const agentCerts = ref<AgentCertificate[]>([])
+const loadingAgentCerts = ref(false)
+const agentSelectedCertId = ref<string | null>(null)
+const agentStarting = ref(false)
+
+const agentDownloadUrl = computed(() => {
+  const base = 'https://downloads.storno.ro/agent/v1.0.0'
+  const ua = navigator.userAgent.toLowerCase()
+  if (ua.includes('win')) return `${base}/storno-agent-windows.exe`
+  if (ua.includes('linux')) return `${base}/storno-agent-linux`
+  return `${base}/storno-agent-macos`
+})
+
+async function loadAgentCerts() {
+  loadingAgentCerts.value = true
+  try {
+    agentCerts.value = await listCertificates()
+    // Pre-select saved preference
+    const saved = getPreferredCertId(uuid.value)
+    if (saved && agentCerts.value.some(c => c.id === saved)) {
+      agentSelectedCertId.value = saved
+    }
+  } catch {
+    agentCerts.value = []
+  } finally {
+    loadingAgentCerts.value = false
+  }
+}
+
+function saveAgentCertPreference() {
+  if (!agentSelectedCertId.value) return
+  setPreferredCertId(uuid.value, agentSelectedCertId.value)
+  toast.add({ title: $t('anaf.agentCertSaved'), color: 'success' })
+}
+
+async function onAutoStartAgent() {
+  agentStarting.value = true
+  try {
+    const ok = await tryAutoStart()
+    if (ok) {
+      toast.add({ title: $t('anaf.agentStarted'), color: 'success' })
+      await loadAgentCerts()
+    } else {
+      toast.add({ title: $t('anaf.agentStartFailed'), color: 'warning' })
+    }
+  } finally {
+    agentStarting.value = false
+  }
+}
 
 const maxCompanies = computed(() => {
   const max = authStore.plan?.features?.maxCompanies
@@ -590,5 +725,9 @@ onMounted(async () => {
     await companyStore.fetchCompanies()
   }
   await fetchData()
+  const running = await checkAgent()
+  if (running) {
+    await loadAgentCerts()
+  }
 })
 </script>

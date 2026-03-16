@@ -9,7 +9,9 @@ use App\Manager\UserManager;
 use App\Repository\AnafTokenLinkRepository;
 use App\Service\Anaf\EFacturaClient;
 use App\Service\Centrifugo\CentrifugoService;
+use App\Service\Storage\CredentialEncryptor;
 use Doctrine\ORM\EntityManagerInterface;
+use League\Flysystem\FilesystemOperator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -28,6 +30,8 @@ class ANAFController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly CentrifugoService $centrifugo,
         private readonly EFacturaClient $eFacturaClient,
+        private readonly FilesystemOperator $defaultStorage,
+        private readonly CredentialEncryptor $credentialEncryptor,
     ) {}
 
     #[Route(path: '/connect/anaf', name: 'connect_anaf_start', methods: ['GET'])]
@@ -186,6 +190,97 @@ class ANAFController extends AbstractController
             'status' => 'ok',
             'message' => 'Token-ul ANAF a fost salvat cu succes.',
         ]);
+    }
+
+    #[Route(path: '/account/anaf/{id}/certificate', name: 'anaf_upload_certificate', methods: ['POST'])]
+    #[IsGranted('ROLE_USER')]
+    public function uploadCertificate(string $id, Request $request): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $anafToken = $this->findUserToken($user, $id);
+
+        if ($anafToken === null) {
+            return $this->json(['error' => 'Token not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $file = $request->files->get('file');
+        $password = $request->request->get('password', '');
+
+        if ($file === null) {
+            return $this->json(['error' => 'No certificate file provided.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (!in_array($ext, ['pfx', 'p12'], true)) {
+            return $this->json(['error' => 'Invalid file type. Only .pfx and .p12 files are accepted.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Validate the certificate with the provided password
+        $pfxContent = file_get_contents($file->getPathname());
+        $certs = [];
+        if (!openssl_pkcs12_read($pfxContent, $certs, $password)) {
+            return $this->json(['error' => 'Invalid certificate or wrong password.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        // Store in S3
+        $storagePath = sprintf('anaf-certs/%s/%s.pfx', $user->getId(), $anafToken->getId());
+        $this->defaultStorage->write($storagePath, $pfxContent);
+
+        // Encrypt password
+        $encryptedPassword = $this->credentialEncryptor->encrypt(['password' => $password]);
+
+        $anafToken->setCertificatePath($storagePath);
+        $anafToken->setCertificatePassword($encryptedPassword);
+        $this->entityManager->flush();
+
+        return $this->json([
+            'status' => 'ok',
+            'message' => 'Certificate uploaded successfully.',
+            'hasCertificate' => true,
+        ]);
+    }
+
+    #[Route(path: '/account/anaf/{id}/certificate', name: 'anaf_delete_certificate', methods: ['DELETE'])]
+    #[IsGranted('ROLE_USER')]
+    public function deleteCertificate(string $id): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $anafToken = $this->findUserToken($user, $id);
+
+        if ($anafToken === null) {
+            return $this->json(['error' => 'Token not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($anafToken->getCertificatePath() !== null) {
+            try {
+                $this->defaultStorage->delete($anafToken->getCertificatePath());
+            } catch (\Throwable) {
+                // File may already be gone
+            }
+        }
+
+        $anafToken->setCertificatePath(null);
+        $anafToken->setCertificatePassword(null);
+        $this->entityManager->flush();
+
+        return $this->json([
+            'status' => 'ok',
+            'message' => 'Certificate removed.',
+            'hasCertificate' => false,
+        ]);
+    }
+
+    private function findUserToken(User $user, string $tokenId): ?AnafToken
+    {
+        foreach ($user->getAnafTokens() as $token) {
+            if ((string) $token->getId() === $tokenId) {
+                return $token;
+            }
+        }
+
+        return null;
     }
 
     /**
