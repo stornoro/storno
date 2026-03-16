@@ -1,0 +1,37 @@
+{
+  "name": "@storno/anaf-agent",
+  "version": "1.0.0",
+  "description": "Local mTLS proxy agent for ANAF SPV — supports hardware USB tokens (SafeNet, Feitian, certSIGN)",
+  "type": "module",
+  "bin": {
+    "storno-agent": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && cp -r src/icons dist/icons",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js start",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=build/agent.cjs && cp -r src/icons build/icons",
+    "package": "npm run bundle && pkg build/agent.cjs --targets node20-macos-x64,node20-macos-arm64,node20-win-x64,node20-linux-x64 --output build/storno-agent",
+    "package:macos": "npm run bundle && pkg build/agent.cjs --targets node20-macos-arm64 --output build/storno-agent-macos",
+    "package:windows": "npm run bundle && pkg build/agent.cjs --targets node20-win-x64 --output build/storno-agent-windows",
+    "package:linux": "npm run bundle && pkg build/agent.cjs --targets node20-linux-x64 --output build/storno-agent-linux"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@yao-pkg/pkg": "^6.14.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  },
+  "pkg": {
+    "assets": ["build/icons/**/*"],
+    "outputPath": "build"
+  }
+}
