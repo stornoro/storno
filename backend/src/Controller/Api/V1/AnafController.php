@@ -410,7 +410,6 @@ class AnafController extends AbstractController
             'lastUsedAt' => $token->getLastUsedAt()?->format('c'),
             'createdAt' => $token->getCreatedAt()?->format('c'),
             'validatedCifs' => $token->getValidatedCifs() ?? [],
-            'hasCertificate' => $token->hasCertificate(),
         ];
     }
 

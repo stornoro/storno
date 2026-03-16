@@ -27,7 +27,24 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
 )
 // ── Agent Bulk Submit ─────────────────────────────────────────────
 const companyStore = useCompanyStore()
-const { agentAvailable, checkAgent, bulkSubmitViaAgent, tryAutoStart, getPreferredCertId } = useAnafAgent()
+const { agentAvailable, agentVersion, agentUpdateAvailable, agentLatestVersion, checkAgent, bulkSubmitViaAgent, tryAutoStart, triggerAgentUpdate, getPreferredCertId } = useAnafAgent()
+const agentUpdating = ref(false)
+
+async function onUpdateAgent() {
+  agentUpdating.value = true
+  try {
+    const result = await triggerAgentUpdate()
+    if (result.success) {
+      toast.add({ title: $t('anaf.agentUpdateStarted'), color: 'success' })
+      await new Promise(r => setTimeout(r, 3000))
+      await checkAgent()
+    } else {
+      toast.add({ title: result.message, color: 'error' })
+    }
+  } finally {
+    agentUpdating.value = false
+  }
+}
 
 const savedCertId = computed(() => {
   const companyId = companyStore.currentCompanyId
@@ -394,6 +411,21 @@ function onRowClick(_e: Event, row: any) {
     </template>
 
     <template #body>
+      <!-- Agent update banner -->
+      <div v-if="agentAvailable && agentUpdateAvailable" class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
+        <UIcon name="i-lucide-download" class="text-warning shrink-0" />
+        <p class="text-sm flex-1">
+          {{ $t('anaf.agentUpdateAvailable', { current: agentVersion, latest: agentLatestVersion }) }}
+        </p>
+        <UButton
+          :label="$t('anaf.agentUpdate')"
+          size="xs"
+          color="warning"
+          :loading="agentUpdating"
+          @click="onUpdateAgent"
+        />
+      </div>
+
       <!-- Filters -->
       <div class="flex flex-wrap items-center gap-1.5">
         <USelectMenu

@@ -109,7 +109,7 @@ final class SubmitDeclarationHandler
 
             // Upload to ANAF — retry once with refreshed token on auth failure
             try {
-                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type, $anafToken);
+                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type);
             } catch (AnafTokenExpiredException) {
                 $this->logger->info('SubmitDeclarationHandler: Token expired, re-resolving.', [
                     'declarationId' => $message->declarationId,
@@ -119,7 +119,7 @@ final class SubmitDeclarationHandler
                     throw new \RuntimeException('No valid ANAF token available after refresh.');
                 }
                 $token = $anafToken->getToken();
-                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type, $anafToken);
+                $result = $this->anafClient->upload($xml, (string) $company->getCif(), $token, $type);
             }
 
             $uploadId = $result['id_solicitare'] ?? $result['index_incarcare'] ?? $result['id_incarcare'] ?? null;

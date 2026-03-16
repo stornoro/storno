@@ -113,9 +113,12 @@ async function main() {
       break;
     }
 
-    default:
+    case 'help':
+    case '--help':
+    case '-h':
       console.log('Storno ANAF Agent — Local mTLS proxy for hardware USB tokens\n');
       console.log('Usage:');
+      console.log('  storno-agent                Start the agent server (default)');
       console.log('  storno-agent start          Start the agent server');
       console.log('  storno-agent status         Check if the agent is running');
       console.log('  storno-agent install        Register storno-agent:// URL protocol');
@@ -126,6 +129,16 @@ async function main() {
       console.log('  storno-agent config --pkcs11-module <path>  Set PKCS#11 module (Linux)');
       console.log('  storno-agent config --port <number>         Set server port');
       console.log('  storno-agent config --show                  Show current config');
+      break;
+
+    default:
+      // No command, URL scheme arg (storno-agent://...), or unknown → start server
+      try {
+        registerProtocol(resolveBinaryCommand());
+      } catch {
+        // Best-effort
+      }
+      startServer();
       break;
   }
 }

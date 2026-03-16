@@ -6,6 +6,8 @@ export function useAnafAgent() {
   const agentAvailable = ref(false)
   const agentVersion = ref<string | null>(null)
   const agentChecking = ref(false)
+  const agentUpdateAvailable = ref(false)
+  const agentLatestVersion = ref<string | null>(null)
 
   async function agentFetch(path: string, opts?: RequestInit): Promise<Response> {
     return await fetch(`${AGENT_BASE}${path}`, opts)
@@ -21,13 +23,30 @@ export function useAnafAgent() {
       const data = await res.json()
       agentAvailable.value = data.status === 'ok'
       agentVersion.value = data.version ?? null
+      agentUpdateAvailable.value = data.update?.available ?? false
+      agentLatestVersion.value = data.update?.latest ?? null
       return agentAvailable.value
     } catch {
       agentAvailable.value = false
       agentVersion.value = null
+      agentUpdateAvailable.value = false
+      agentLatestVersion.value = null
       return false
     } finally {
       agentChecking.value = false
+    }
+  }
+
+  async function triggerAgentUpdate(): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await agentFetch('/update', {
+        method: 'POST',
+        headers: { 'X-Storno-Agent': '1' },
+        signal: AbortSignal.timeout(60_000),
+      })
+      return await res.json()
+    } catch (err) {
+      return { success: false, message: (err as Error).message }
     }
   }
 
@@ -246,6 +265,8 @@ export function useAnafAgent() {
     agentAvailable,
     agentVersion,
     agentChecking,
+    agentUpdateAvailable,
+    agentLatestVersion,
     checkAgent,
     listCertificates,
     proxyToAnaf,
@@ -255,5 +276,6 @@ export function useAnafAgent() {
     getPreferredCertId,
     setPreferredCertId,
     tryAutoStart,
+    triggerAgentUpdate,
   }
 }
