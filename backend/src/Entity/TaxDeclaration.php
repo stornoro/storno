@@ -55,7 +55,7 @@ class TaxDeclaration
     private ?array $data = null;
 
     #[ORM\Column(nullable: true)]
-    #[Groups(['declaration:detail'])]
+    #[Groups(['declaration:list', 'declaration:detail'])]
     private ?array $metadata = null;
 
     #[ORM\Column(length: 255, nullable: true)]

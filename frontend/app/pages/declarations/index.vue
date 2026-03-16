@@ -351,6 +351,7 @@ const statusOptions = [
 
 const tableColumns = [
   { id: 'select', header: '', accessorKey: 'id', size: 40 },
+  { accessorKey: 'registrationNumber', header: $t('declarations.registrationNumber') },
   { accessorKey: 'type', header: $t('declarations.type') },
   { accessorKey: 'period', header: $t('declarations.period') },
   { accessorKey: 'status', header: $t('declarations.status') },
@@ -362,6 +363,7 @@ const tableData = computed(() =>
   store.items.map((d: any) => ({
     ...d,
     period: `${d.year}-${String(d.month).padStart(2, '0')}`,
+    registrationNumber: d.metadata?.registrationNumber ?? null,
   }))
 )
 
@@ -541,13 +543,17 @@ function onRowClick(_e: Event, row: any) {
         </template>
         <template #select-cell="{ row }">
           <input
-            v-if="['draft', 'validated'].includes(row.original.status)"
             :checked="isSelected(row.original.id)"
             type="checkbox"
             class="accent-primary"
             @click.stop
             @change="toggle(row.original.id)"
           >
+        </template>
+
+        <template #registrationNumber-cell="{ row }">
+          <span v-if="row.original.registrationNumber" class="text-sm font-mono truncate max-w-48 block">{{ row.original.registrationNumber }}</span>
+          <span v-else class="text-sm text-dimmed">—</span>
         </template>
 
         <template #type-cell="{ row }">
@@ -562,7 +568,7 @@ function onRowClick(_e: Event, row: any) {
 
         <template #submittedAt-cell="{ row }">
           <span v-if="row.original.submittedAt" class="text-sm text-muted">
-            {{ new Date(row.original.submittedAt).toLocaleDateString() }}
+            {{ row.original.submittedAt }}
           </span>
           <span v-else class="text-sm text-dimmed">—</span>
         </template>
