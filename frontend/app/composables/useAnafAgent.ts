@@ -59,13 +59,20 @@ export function useAnafAgent() {
   }
 
   async function proxyToAnaf(req: AnafProxyRequest): Promise<AnafProxyResponse> {
+    // Auto-attach saved PIN for the certificate if not already provided
+    const payload = { ...req }
+    if (!payload.pin) {
+      const savedPin = getSavedPin(req.certificateId)
+      if (savedPin) payload.pin = savedPin
+    }
+
     const res = await agentFetch('/proxy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Storno-Agent': '1',
       },
-      body: JSON.stringify(req),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(130_000), // 120s for PIN + buffer
     })
     return await res.json()
@@ -334,6 +341,25 @@ export function useAnafAgent() {
     localStorage.setItem(`storno:agent:cert:${companyId}`, certId)
   }
 
+  function getSavedPin(certId: string): string | null {
+    if (!import.meta.client) return null
+    return sessionStorage.getItem(`storno:agent:pin:${certId}`)
+  }
+
+  function savePin(certId: string, pin: string) {
+    if (!import.meta.client) return
+    if (pin) {
+      sessionStorage.setItem(`storno:agent:pin:${certId}`, pin)
+    } else {
+      sessionStorage.removeItem(`storno:agent:pin:${certId}`)
+    }
+  }
+
+  function clearPin(certId: string) {
+    if (!import.meta.client) return
+    sessionStorage.removeItem(`storno:agent:pin:${certId}`)
+  }
+
   async function tryAutoStart(): Promise<boolean> {
     if (!import.meta.client) return false
 
@@ -387,6 +413,9 @@ export function useAnafAgent() {
     refreshStatusesViaAgent,
     getPreferredCertId,
     setPreferredCertId,
+    getSavedPin,
+    savePin,
+    clearPin,
     tryAutoStart,
     triggerAgentUpdate,
     certDisplayName,

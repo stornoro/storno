@@ -127,6 +127,18 @@
             </label>
           </div>
 
+          <!-- PIN input -->
+          <div v-if="agentSelectedCertId" class="space-y-2">
+            <UInput
+              v-model="agentPin"
+              type="password"
+              :placeholder="$t('anaf.agentPinPlaceholder')"
+              class="max-w-56"
+              autocomplete="off"
+            />
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('anaf.agentPinHint') }}</p>
+          </div>
+
           <UButton
             v-if="agentCerts.length > 0"
             icon="i-lucide-save"
@@ -411,7 +423,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, certDisplayName, certIssuerShort, certExpiry } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, certDisplayName, certIssuerShort, certExpiry } = useAnafAgent()
 const agentUpdating = ref(false)
 
 const uuid = computed(() => route.params.uuid as string)
@@ -437,6 +449,7 @@ const agentCerts = ref<AgentCertificate[]>([])
 const loadingAgentCerts = ref(false)
 const agentSelectedCertId = ref<string | null>(null)
 const agentStarting = ref(false)
+const agentPin = ref('')
 
 const agentDownloadUrl = 'https://get.storno.ro/agent'
 
@@ -461,10 +474,12 @@ async function loadAgentCerts() {
   loadingAgentCerts.value = true
   try {
     agentCerts.value = await listCertificates()
-    // Pre-select saved preference
+    // Pre-select saved preference and restore PIN
     const saved = getPreferredCertId(uuid.value)
     if (saved && agentCerts.value.some(c => c.id === saved)) {
       agentSelectedCertId.value = saved
+      const savedPinVal = getSavedPin(saved)
+      if (savedPinVal) agentPin.value = savedPinVal
     }
   } catch {
     agentCerts.value = []
@@ -476,6 +491,10 @@ async function loadAgentCerts() {
 function saveAgentCertPreference() {
   if (!agentSelectedCertId.value) return
   setPreferredCertId(uuid.value, agentSelectedCertId.value)
+  // Persist PIN in sessionStorage (cleared on browser close)
+  if (agentPin.value) {
+    savePin(agentSelectedCertId.value, agentPin.value)
+  }
   toast.add({ title: $t('anaf.agentCertSaved'), color: 'success' })
 }
 
