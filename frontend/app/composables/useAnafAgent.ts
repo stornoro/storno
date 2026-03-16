@@ -78,6 +78,41 @@ export function useAnafAgent() {
     return await res.json()
   }
 
+  /**
+   * Batch multiple requests through the agent sequentially.
+   * The first request authenticates (PIN/cert), subsequent reuse the session.
+   * Avoids multiple PIN prompts for parallel downloads.
+   */
+  async function batchProxyToAnaf(requests: AnafProxyRequest[]): Promise<AnafProxyResponse[]> {
+    if (requests.length === 0) return []
+
+    // Auto-attach saved PIN
+    const enriched = requests.map((req) => {
+      const payload = { ...req }
+      if (!payload.pin) {
+        const savedPin = getSavedPin(req.certificateId)
+        if (savedPin) payload.pin = savedPin
+      }
+      return payload
+    })
+
+    const res = await agentFetch('/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Storno-Agent': '1',
+      },
+      body: JSON.stringify({ requests: enriched }),
+      signal: AbortSignal.timeout(enriched.length * 30_000 + 30_000),
+    })
+    const data = await res.json()
+    return (data.results ?? []).map((r: any) => ({
+      statusCode: r.statusCode,
+      headers: r.headers,
+      body: r.body,
+    }))
+  }
+
   async function submitViaAgent(declarationId: string, certificateId: string): Promise<any> {
     const { get, post } = useApi()
 
@@ -267,20 +302,26 @@ export function useAnafAgent() {
       year,
     })
 
-    // Step 4: Download all recipisas in parallel via agent
-    await Promise.allSettled(result.recipisas.map(async (rec) => {
-      const recipisaResponse = await proxyToAnaf({
+    // Step 4: Download all recipisas via agent batch (sequential — one PIN prompt)
+    if (result.recipisas.length > 0) {
+      const batchRequests = result.recipisas.map((rec) => ({
         url: rec.anafUrl,
         method: 'GET',
         headers: { 'Authorization': `Bearer ${rec.anafToken}` },
         body: '',
         certificateId,
-      })
-      await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
-        statusCode: recipisaResponse.statusCode,
-        body: recipisaResponse.body,
-      })
-    }))
+      }))
+      const batchResults = await batchProxyToAnaf(batchRequests)
+      await Promise.allSettled(batchResults.map(async (res, i) => {
+        const rec = result.recipisas[i]
+        if (rec && res.statusCode === 200) {
+          await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
+            statusCode: res.statusCode,
+            body: res.body,
+          })
+        }
+      }))
+    }
 
     return result.stats
   }
@@ -313,20 +354,26 @@ export function useAnafAgent() {
       body: messagesResponse.body,
     })
 
-    // Step 4: Download all recipisas in parallel via agent
-    await Promise.allSettled(result.recipisas.map(async (rec) => {
-      const recipisaResponse = await proxyToAnaf({
+    // Step 4: Download all recipisas via agent batch (sequential — one PIN prompt)
+    if (result.recipisas.length > 0) {
+      const batchRequests = result.recipisas.map((rec) => ({
         url: rec.anafUrl,
         method: 'GET',
         headers: { 'Authorization': `Bearer ${rec.anafToken}` },
         body: '',
         certificateId,
-      })
-      await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
-        statusCode: recipisaResponse.statusCode,
-        body: recipisaResponse.body,
-      })
-    }))
+      }))
+      const batchResults = await batchProxyToAnaf(batchRequests)
+      await Promise.allSettled(batchResults.map(async (res, i) => {
+        const rec = result.recipisas[i]
+        if (rec && res.statusCode === 200) {
+          await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
+            statusCode: res.statusCode,
+            body: res.body,
+          })
+        }
+      }))
+    }
 
     return result.stats
   }
@@ -406,6 +453,7 @@ export function useAnafAgent() {
     checkAgent,
     listCertificates,
     proxyToAnaf,
+    batchProxyToAnaf,
     submitViaAgent,
     bulkSubmitViaAgent,
     checkStatusViaAgent,

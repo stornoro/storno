@@ -816,6 +816,9 @@ class TaxDeclarationController extends AbstractController
                 $declaration->setMetadata([
                     'source' => 'anaf_sync',
                     'anafMessageId' => $msg['id'] ?? null,
+                    'registrationNumber' => $parsedDetails['registrationNumber'] ?? null,
+                    'anafCreatedAt' => $msg['data_creare'] ?? null,
+                    'anafIdSolicitare' => $msg['id_solicitare'] ?? null,
                 ]);
 
                 $this->entityManager->persist($declaration);
@@ -843,6 +846,9 @@ class TaxDeclarationController extends AbstractController
                         $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
                             'syncedFromAnaf' => true,
                             'anafMessageId' => $msg['id'] ?? null,
+                            'registrationNumber' => $parsedDetails['registrationNumber'] ?? null,
+                            'anafCreatedAt' => $msg['data_creare'] ?? null,
+                            'anafIdSolicitare' => $msg['id_solicitare'] ?? null,
                         ]));
                         $updated = true;
                         $stats['updated']++;
@@ -1063,8 +1069,9 @@ class TaxDeclarationController extends AbstractController
     {
         $result = [];
 
-        if (preg_match('/tip\s+(D\d+)/i', $detalii, $m)) {
-            $result['type'] = $m[1];
+        // Match declaration types: D300, D390, S1005, etc.
+        if (preg_match('/tip\s+([DS]\d+)/i', $detalii, $m)) {
+            $result['type'] = strtoupper($m[1]);
         } else {
             return null;
         }
@@ -1079,15 +1086,22 @@ class TaxDeclarationController extends AbstractController
             return null;
         }
 
+        // Extract numar_inregistrare (e.g. INTERNT-1045624064-2026/26-01-2026)
+        if (preg_match('/numar_inregistrare\s+([^,]+)/i', $detalii, $m)) {
+            $result['registrationNumber'] = trim($m[1]);
+        }
+
+        // Extract CIF from detalii
+        if (preg_match('/CIF\s+(\d+)/i', $detalii, $m)) {
+            $result['cif'] = $m[1];
+        }
+
         return $result;
     }
 
     private function resolveDeclarationType(string $anafType): ?\App\Enum\DeclarationType
     {
         $normalized = strtolower($anafType);
-        if (!str_starts_with($normalized, 'd')) {
-            $normalized = 'd' . $normalized;
-        }
 
         return \App\Enum\DeclarationType::tryFrom($normalized);
     }
