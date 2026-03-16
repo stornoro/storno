@@ -20,6 +20,7 @@ use App\Security\Permission;
 use App\Service\Export\CsvExportService;
 use App\Service\Export\SagaXmlExportService;
 use App\Service\Export\ZipExportService;
+use App\Service\Anaf\EFacturaXmlParser;
 use App\Service\Anaf\UblValidator;
 use App\Service\InvoiceXmlResolver;
 use App\Service\InvoiceEmailService;
@@ -73,6 +74,7 @@ class InvoiceController extends AbstractController
         private readonly InvoiceShareTokenRepository $shareTokenRepository,
         private readonly PaymentRepository $paymentRepository,
         private readonly LoggerInterface $logger,
+        private readonly EFacturaXmlParser $xmlParser,
     ) {}
 
     #[Route('/invoices', methods: ['GET'])]
@@ -255,9 +257,25 @@ class InvoiceController extends AbstractController
                 $storno->setCurrency($invoice->getCurrency());
                 $storno->setSenderName($invoice->getSenderName());
                 $storno->setSenderCif($invoice->getSenderCif());
-                $storno->setReceiverName($invoice->getReceiverName());
-                $storno->setReceiverCif($invoice->getReceiverCif());
-                $storno->setBuyerSnapshot($invoice->getBuyerSnapshot());
+
+                // Use buyerSnapshot as the source of truth for buyer identity.
+                // If the parent invoice doesn't have a snapshot, parse it from the stored XML on-the-fly.
+                $parentSnapshot = $invoice->getBuyerSnapshot();
+                if (!$parentSnapshot) {
+                    $parentSnapshot = $this->buildBuyerSnapshotFromXml($invoice);
+                    if ($parentSnapshot) {
+                        // Also persist the snapshot back to the parent invoice for future use
+                        $invoice->setBuyerSnapshot($parentSnapshot);
+                    }
+                }
+                $storno->setBuyerSnapshot($parentSnapshot);
+                if ($parentSnapshot) {
+                    $storno->setReceiverName($parentSnapshot['name'] ?? $invoice->getReceiverName());
+                    $storno->setReceiverCif($parentSnapshot['cui'] ?? $parentSnapshot['cnp'] ?? $invoice->getReceiverCif());
+                } else {
+                    $storno->setReceiverName($invoice->getReceiverName());
+                    $storno->setReceiverCif($invoice->getReceiverCif());
+                }
                 $storno->setParentDocument($invoice);
                 $storno->setStatus(DocumentStatus::DRAFT);
                 $storno->setDirection(InvoiceDirection::OUTGOING);
@@ -1684,5 +1702,64 @@ class InvoiceController extends AbstractController
                 ],
             ],
         );
+    }
+
+    /**
+     * Parse the stored UBL XML for an invoice and build a buyerSnapshot array.
+     * Returns null if no XML is available or the buyer cannot be parsed.
+     */
+    private function buildBuyerSnapshotFromXml(Invoice $invoice): ?array
+    {
+        $xml = $this->xmlResolver->resolve($invoice);
+        if (!$xml) {
+            return null;
+        }
+
+        try {
+            $parsed = $this->xmlParser->parse($xml);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!$parsed->buyer) {
+            return null;
+        }
+
+        $buyer = $parsed->buyer;
+
+        // Determine type: 13-digit numeric CIF = CNP (individual)
+        $type = 'company';
+        $cui = $buyer->cif;
+        $cnp = null;
+
+        if ($cui && preg_match('/^\d{13}$/', $cui)) {
+            $type = 'individual';
+            $cnp = $cui;
+            $cui = null;
+        } elseif ($cui === '0000000000000') {
+            $type = 'individual';
+            $cui = null;
+        }
+
+        return [
+            'type' => $type,
+            'name' => $buyer->name,
+            'cui' => $cui,
+            'cnp' => $cnp,
+            'vatCode' => $buyer->vatCode,
+            'isVatPayer' => $buyer->isVatPayer(),
+            'registrationNumber' => $buyer->registrationNumber,
+            'address' => $buyer->address,
+            'city' => $buyer->city,
+            'county' => $buyer->county,
+            'country' => $buyer->country,
+            'postalCode' => $buyer->postalCode,
+            'email' => $buyer->email,
+            'phone' => $buyer->phone,
+            'bankName' => $buyer->bankName,
+            'bankAccount' => $buyer->bankAccount,
+            'clientCode' => null,
+            'einvoiceIdentifiers' => null,
+        ];
     }
 }
