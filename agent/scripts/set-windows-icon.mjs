@@ -5,6 +5,10 @@
 import * as ResEdit from 'resedit';
 import { readFileSync, writeFileSync } from 'fs';
 import { basename } from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 
 const exePath = process.argv[2];
 if (!exePath) {
@@ -13,7 +17,7 @@ if (!exePath) {
 }
 
 const icoPath = 'src/icons/icon.ico';
-const version = '1.3.1';
+const version = pkg.version;
 
 const exeData = readFileSync(exePath);
 const exe = ResEdit.NtExecutable.from(exeData);
