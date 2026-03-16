@@ -11,6 +11,24 @@ const COOKIE_DIR = join(tmpdir(), 'storno-agent-cookies');
 /** Session TTL — cookie files older than this are stale. */
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+/** In-memory PIN cache per certificate — avoids re-asking for PIN on every request. */
+const pinCache = new Map<string, { pin: string; cachedAt: number }>();
+const PIN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function cachePin(certificateId: string, pin: string): void {
+  pinCache.set(certificateId, { pin, cachedAt: Date.now() });
+}
+
+function getCachedPin(certificateId: string): string | null {
+  const entry = pinCache.get(certificateId);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > PIN_CACHE_TTL_MS) {
+    pinCache.delete(certificateId);
+    return null;
+  }
+  return entry.pin;
+}
+
 function getCookieJarPath(certificateId: string): string {
   mkdirSync(COOKIE_DIR, { recursive: true });
   // Sanitise thumbprint for use as filename
@@ -71,6 +89,7 @@ export interface ProxyResponse {
   statusCode: number;
   headers: Record<string, string>;
   body: string;
+  bodyEncoding?: 'text' | 'base64';
 }
 
 /**
@@ -82,16 +101,34 @@ export interface ProxyResponse {
  * with the certificate.
  */
 export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
+  // Cache PIN in-memory when provided so subsequent requests don't need it from frontend
+  if (req.pin) {
+    cachePin(req.certificateId, req.pin);
+  } else {
+    const cached = getCachedPin(req.certificateId);
+    if (cached) req = { ...req, pin: cached };
+  }
+
   const cookiePath = getCookieJarPath(req.certificateId);
   const usedSession = hasValidSession(cookiePath);
 
-  const result = await execRequest(req, config, cookiePath, usedSession);
+  let result: ProxyResponse;
+  try {
+    result = await execRequest(req, config, usedSession);
+  } catch (err) {
+    // If PIN verification failed, clear cache and don't retry — prevents certificate lockout
+    const msg = (err as Error).message;
+    if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) {
+      pinCache.delete(req.certificateId);
+    }
+    throw err;
+  }
 
   // If we used cached cookies and the response looks like an expired session,
   // invalidate cookies and retry with full mTLS authentication.
   if (usedSession && isSessionExpired(result)) {
     invalidateSession(req.certificateId);
-    return execRequest(req, config, cookiePath, false);
+    return execRequest(req, config, false);
   }
 
   return result;
@@ -99,27 +136,23 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
 
 /**
  * Choose the best execution strategy:
- * - Session cookies valid → curl with cookies (no cert, fast)
- * - Windows + PIN provided → PowerShell with CNG SmartCardPin (silent)
- * - Otherwise → curl with Schannel/SecureTransport (may show native PIN dialog)
+ * - Windows + PIN + no session → PowerShell (sets CNG PIN + Invoke-WebRequest in same process + saves cookies)
+ * - Session cookies valid → curl with cookies only (no cert, no PIN)
+ * - Otherwise → curl with platform-specific cert handling
  */
 async function execRequest(
   req: ProxyRequest,
   config: AgentConfig,
-  cookiePath: string,
   sessionValid: boolean,
 ): Promise<ProxyResponse> {
-  // When session is valid, always use curl (cookies only, no cert needed)
-  if (sessionValid) {
-    return execCurl(req, config);
-  }
-
-  // On Windows with PIN: use PowerShell to set SmartCardPin on CNG key
-  if (platform() === 'win32' && req.pin) {
+  // On Windows with PIN and no valid session: use PowerShell to set the CNG
+  // SmartCardPin and make the request in the SAME process via Invoke-WebRequest.
+  // This avoids the native PIN dialog. Cookies are saved for subsequent requests.
+  if (platform() === 'win32' && req.pin && !sessionValid) {
+    const cookiePath = getCookieJarPath(req.certificateId);
     return powershellProxy(req, cookiePath);
   }
 
-  // Default: curl with platform-specific cert handling
   return execCurl(req, config);
 }
 

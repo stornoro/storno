@@ -765,14 +765,25 @@ class TaxDeclarationController extends AbstractController
             return $this->json(['error' => sprintf('ANAF returned HTTP %d: %s', $statusCode, substr($body, 0, 500))], Response::HTTP_BAD_GATEWAY);
         }
 
+        // The body may arrive as a JSON string (double-encoded) or raw JSON
+        if (is_string($body) && $body !== '' && $body[0] === '"') {
+            $unwrapped = json_decode($body, true);
+            if (is_string($unwrapped)) {
+                $body = $unwrapped;
+            }
+        }
+
         // Parse ANAF response
-        $parsed = json_decode($body, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        $parsed = is_array($body) ? $body : json_decode($body, true);
+        if (!is_array($parsed)) {
             $xml = @simplexml_load_string($body);
             if ($xml !== false) {
                 $parsed = json_decode(json_encode($xml), true);
             } else {
-                return $this->json(['error' => 'Failed to parse ANAF response.'], Response::HTTP_BAD_REQUEST);
+                return $this->json([
+                    'error' => 'Failed to parse ANAF response.',
+                    'hint' => substr((string) $body, 0, 300),
+                ], Response::HTTP_BAD_REQUEST);
             }
         }
 
@@ -942,7 +953,14 @@ class TaxDeclarationController extends AbstractController
             $declaration->getId()
         );
 
-        // Body comes as text from the agent — it may be base64 encoded or raw
+        // Body may arrive as: byte array [37,80,68,70,...], base64 string, or raw binary string
+        $bodyEncoding = $data['bodyEncoding'] ?? null;
+        if (is_array($body)) {
+            $body = implode('', array_map('chr', $body));
+        } elseif ($bodyEncoding === 'base64') {
+            $body = base64_decode($body) ?: $body;
+        }
+
         $this->defaultStorage->write($recipisaPath, $body);
         $declaration->setRecipisaPath($recipisaPath);
         $this->entityManager->flush();
@@ -1004,13 +1022,24 @@ class TaxDeclarationController extends AbstractController
             return $this->json(['error' => sprintf('ANAF returned HTTP %d: %s', $statusCode, substr($body, 0, 500))], Response::HTTP_BAD_GATEWAY);
         }
 
-        $parsed = json_decode($body, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        // Handle double-encoded JSON strings
+        if (is_string($body) && $body !== '' && $body[0] === '"') {
+            $unwrapped = json_decode($body, true);
+            if (is_string($unwrapped)) {
+                $body = $unwrapped;
+            }
+        }
+
+        $parsed = is_array($body) ? $body : json_decode($body, true);
+        if (!is_array($parsed)) {
             $xml = @simplexml_load_string($body);
             if ($xml !== false) {
                 $parsed = json_decode(json_encode($xml), true);
             } else {
-                return $this->json(['error' => 'Failed to parse ANAF response.'], Response::HTTP_BAD_REQUEST);
+                return $this->json([
+                    'error' => 'Failed to parse ANAF response.',
+                    'hint' => substr((string) $body, 0, 300),
+                ], Response::HTTP_BAD_REQUEST);
             }
         }
 
