@@ -35,16 +35,16 @@ enum DeclarationType: string
             self::D393 => 'D393 - Declaratie informativa VIES servicii',
             self::D100 => 'D100 - Obligatii plata buget de stat',
             self::D101 => 'D101 - Impozit pe profit',
-            self::D106 => 'D106 - Impozit specific activitati',
+            self::D106 => 'D106 - Declaratie informativa dividende actionari',
             self::D112 => 'D112 - Declaratie unica (CAS/CASS/impozit salarii)',
-            self::D120 => 'D120 - Impozit pe veniturile microintreprinderilor',
-            self::D130 => 'D130 - Impozit retinut la sursa',
-            self::D180 => 'D180 - Impozit pe dividende',
+            self::D120 => 'D120 - Decont accize',
+            self::D130 => 'D130 - Decont impozit titei productie interna',
+            self::D180 => 'D180 - Nota de certificare (consultant fiscal)',
             self::D205 => 'D205 - Declaratie informativa retineri la sursa',
-            self::D208 => 'D208 - Declaratie informativa',
+            self::D208 => 'D208 - Declaratie informativa transferuri imobiliare',
             self::D212 => 'D212 - Declaratie unica PF',
             self::D301 => 'D301 - Decont special TVA',
-            self::D311 => 'D311 - Declaratie TVA regim special',
+            self::D311 => 'D311 - Declaratie TVA colectat (cod anulat)',
         };
     }
 
