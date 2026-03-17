@@ -294,36 +294,14 @@ export function useAnafAgent() {
     })
 
     // Step 3: Send ANAF response to backend for processing
+    // Backend downloads recipisas server-side (descarcare only needs Bearer token, not mTLS)
     const result = await post<{
       stats: { created: number; updated: number }
-      recipisas: Array<{ declarationId: string; downloadId: string; anafUrl: string; anafToken: string }>
     }>('/v1/declarations/sync-agent-result', {
       statusCode: messagesResponse.statusCode,
       body: messagesResponse.body,
       year,
     })
-
-    // Step 4: Download all recipisas via agent batch (sequential — one PIN prompt)
-    if (result.recipisas.length > 0) {
-      const batchRequests = result.recipisas.map((rec) => ({
-        url: rec.anafUrl,
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${rec.anafToken}` },
-        body: '',
-        certificateId,
-      }))
-      const batchResults = await batchProxyToAnaf(batchRequests)
-      await Promise.allSettled(batchResults.map(async (res, i) => {
-        const rec = result.recipisas[i]
-        if (rec && res.statusCode === 200) {
-          await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
-            statusCode: res.statusCode,
-            body: res.body,
-            bodyEncoding: res.bodyEncoding,
-          })
-        }
-      }))
-    }
 
     return result.stats
   }
@@ -348,35 +326,13 @@ export function useAnafAgent() {
     })
 
     // Step 3: Send ANAF response to backend for processing
+    // Backend downloads recipisas server-side (descarcare only needs Bearer token, not mTLS)
     const result = await post<{
       stats: { accepted: number; rejected: number }
-      recipisas: Array<{ declarationId: string; downloadId: string; anafUrl: string; anafToken: string }>
     }>('/v1/declarations/refresh-agent-result', {
       statusCode: messagesResponse.statusCode,
       body: messagesResponse.body,
     })
-
-    // Step 4: Download all recipisas via agent batch (sequential — one PIN prompt)
-    if (result.recipisas.length > 0) {
-      const batchRequests = result.recipisas.map((rec) => ({
-        url: rec.anafUrl,
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${rec.anafToken}` },
-        body: '',
-        certificateId,
-      }))
-      const batchResults = await batchProxyToAnaf(batchRequests)
-      await Promise.allSettled(batchResults.map(async (res, i) => {
-        const rec = result.recipisas[i]
-        if (rec && res.statusCode === 200) {
-          await post(`/v1/declarations/${rec.declarationId}/agent-recipisa`, {
-            statusCode: res.statusCode,
-            body: res.body,
-            bodyEncoding: res.bodyEncoding,
-          })
-        }
-      }))
-    }
 
     return result.stats
   }
