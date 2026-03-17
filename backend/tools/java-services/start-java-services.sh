@@ -33,6 +33,7 @@ CP="$CP:$PROJECT_DIR/tools/pdf-generator/dist/generareFactura.jar"
 CP="$CP:$PROJECT_DIR/tools/pdf-generator/dist/lib/*"
 CP="$CP:$PROJECT_DIR/tools/pdf-generator/dist/"
 CP="$CP:$PROJECT_DIR/tools/signature-verifier/verifsignature.jar"
+CP="$CP:$PROJECT_DIR/tools/duk-integrator/*"
 CP="$CP:$SCRIPT_DIR"
 
 # Compile if needed

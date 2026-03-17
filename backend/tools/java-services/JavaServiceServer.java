@@ -16,11 +16,15 @@ import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -36,6 +40,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   POST /validate           XML body → JSON validation result
  *   POST /generate-pdf       XML body → PDF binary
  *   POST /verify-signature   JSON {xml, signature} → JSON result
+ *   POST /duk/validate       XML body → JSON DUK validation result
+ *   POST /duk/generate-pdf   XML body → PDF binary (DUKIntegrator)
  *   GET  /health             JSON status
  */
 public class JavaServiceServer {
@@ -46,10 +52,16 @@ public class JavaServiceServer {
     private static boolean xsdReady = false;
     private static boolean pdfReady = false;
     private static boolean signatureReady = false;
+    private static boolean dukReady = false;
 
     private static final AtomicLong validateCount = new AtomicLong(0);
     private static final AtomicLong pdfCount = new AtomicLong(0);
     private static final AtomicLong signatureCount = new AtomicLong(0);
+    private static final AtomicLong dukValidateCount = new AtomicLong(0);
+    private static final AtomicLong dukPdfCount = new AtomicLong(0);
+
+    // DUKIntegrator base directory (set via system property or auto-detected)
+    private static String dukDir;
 
     // Base directory for schema files (set via system property or CWD)
     private static String schemaDir;
@@ -132,12 +144,41 @@ public class JavaServiceServer {
                 e.getMessage());
         }
 
+        // ── Warm up DUKIntegrator ───────────────────────────────────
+        start = System.currentTimeMillis();
+        dukDir = System.getProperty("duk.dir", "");
+        if (dukDir.isEmpty()) {
+            // Auto-detect: look for DUKIntegrator.jar in tools/duk-integrator/
+            String baseDir = System.getProperty("user.dir");
+            File candidate = new File(baseDir, "tools/duk-integrator/DUKIntegrator.jar");
+            if (candidate.exists()) {
+                dukDir = candidate.getParent();
+            }
+        }
+        try {
+            if (!dukDir.isEmpty() && new File(dukDir, "DUKIntegrator.jar").exists()) {
+                // Verify we can load the DUKIntegrator class
+                Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
+                dukReady = true;
+                System.out.println("[JavaServices] DUKIntegrator loaded in " +
+                    (System.currentTimeMillis() - start) + "ms (dir: " + dukDir + ")");
+            } else {
+                System.err.println("[JavaServices] WARNING: DUKIntegrator not found" +
+                    (dukDir.isEmpty() ? "" : " in " + dukDir));
+            }
+        } catch (Exception e) {
+            System.err.println("[JavaServices] WARNING: DUKIntegrator load failed: " +
+                e.getMessage());
+        }
+
         // ── Start HTTP server ────────────────────────────────────────
         int threads = Math.max(4, Runtime.getRuntime().availableProcessors());
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/validate", new ValidateHandler());
         server.createContext("/generate-pdf", new PdfHandler());
         server.createContext("/verify-signature", new SignatureHandler());
+        server.createContext("/duk/validate", new DukValidateHandler());
+        server.createContext("/duk/generate-pdf", new DukPdfHandler());
         server.createContext("/health", new HealthHandler());
         server.setExecutor(Executors.newFixedThreadPool(threads));
         server.start();
@@ -149,6 +190,10 @@ public class JavaServiceServer {
             (pdfReady ? "OK" : "UNAVAILABLE"));
         System.out.println("[JavaServices]   /verify-signature  " +
             (signatureReady ? "OK" : "UNAVAILABLE"));
+        System.out.println("[JavaServices]   /duk/validate      " +
+            (dukReady ? "OK" : "UNAVAILABLE"));
+        System.out.println("[JavaServices]   /duk/generate-pdf  " +
+            (dukReady ? "OK" : "UNAVAILABLE"));
         System.out.println("[JavaServices]   Thread pool: " + threads);
     }
 
@@ -164,10 +209,13 @@ public class JavaServiceServer {
                 ",\"xsd\":" + xsdReady +
                 ",\"pdf\":" + pdfReady +
                 ",\"signature\":" + signatureReady +
+                ",\"duk\":" + dukReady +
                 ",\"stats\":{" +
                     "\"validations\":" + validateCount.get() +
                     ",\"pdfs\":" + pdfCount.get() +
                     ",\"signatures\":" + signatureCount.get() +
+                    ",\"dukValidations\":" + dukValidateCount.get() +
+                    ",\"dukPdfs\":" + dukPdfCount.get() +
                 "}}";
             sendJson(ex, 200, json);
         }
@@ -444,6 +492,238 @@ public class JavaServiceServer {
     }
 
     // ═════════════════════════════════════════════════════════════════
+    // POST /duk/validate — DUKIntegrator validation
+    // ═════════════════════════════════════════════════════════════════
+
+    static class DukValidateHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+                sendJson(ex, 405, "{\"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            if (!dukReady) {
+                sendJson(ex, 503,
+                    "{\"error\":\"DUK validation unavailable (DUKIntegrator not loaded)\"}");
+                return;
+            }
+
+            byte[] xmlBytes;
+            try (InputStream is = ex.getRequestBody()) {
+                xmlBytes = is.readAllBytes();
+            }
+            if (xmlBytes.length == 0) {
+                sendJson(ex, 400, "{\"error\":\"Empty body\"}");
+                return;
+            }
+
+            // Extract ?type=D394 from query string
+            String type = parseQueryParam(ex.getRequestURI().getRawQuery(), "type");
+            if (type == null || type.isEmpty()) {
+                sendJson(ex, 400, "{\"error\":\"Missing query parameter: type (e.g. ?type=D394)\"}");
+                return;
+            }
+
+            long reqId = dukValidateCount.incrementAndGet();
+            String id = UUID.randomUUID().toString();
+            File tmpXml = new File(System.getProperty("java.io.tmpdir"),
+                "dukval_" + id + ".xml");
+            // DUKIntegrator writes errors to <filename>.err.txt
+            File tmpErr = new File(System.getProperty("java.io.tmpdir"),
+                "dukval_" + id + ".xml.err.txt");
+
+            try {
+                Files.write(tmpXml.toPath(), xmlBytes);
+                long start = System.currentTimeMillis();
+
+                // Use reflection to call DUKIntegrator validation API
+                // DUKIntegrator.validate(String xmlPath, String type) -> boolean
+                Class<?> dukClass = Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
+                Object duk = dukClass.getDeclaredConstructor().newInstance();
+
+                // Set the working directory for DUK JARs
+                Method setDir = dukClass.getMethod("setWorkDir", String.class);
+                setDir.invoke(duk, dukDir);
+
+                Method validateMethod = dukClass.getMethod("validate", String.class, String.class);
+                boolean valid = (Boolean) validateMethod.invoke(duk, tmpXml.getAbsolutePath(), type);
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                // Read error file if it exists
+                List<String> errors = new ArrayList<>();
+                List<String> warnings = new ArrayList<>();
+                if (tmpErr.exists()) {
+                    String errContent = Files.readString(tmpErr.toPath(), StandardCharsets.UTF_8);
+                    for (String line : errContent.split("\\r?\\n")) {
+                        line = line.trim();
+                        if (line.isEmpty()) continue;
+                        if (line.startsWith("WARNING:") || line.startsWith("Avertisment:")) {
+                            warnings.add(line);
+                        } else {
+                            errors.add(line);
+                        }
+                    }
+                }
+
+                // If DUK says invalid but no errors captured, add a generic one
+                if (!valid && errors.isEmpty()) {
+                    errors.add("DUK validation failed for type " + type);
+                }
+
+                System.out.println("[JavaServices] DUK validate #" + reqId + " " +
+                    elapsed + "ms — " + type + " " + (valid ? "VALID" : "INVALID") +
+                    " (" + errors.size() + " errors, " + warnings.size() + " warnings)");
+
+                StringBuilder json = new StringBuilder();
+                json.append("{\"valid\":").append(valid && errors.isEmpty());
+                json.append(",\"elapsed_ms\":").append(elapsed);
+                json.append(",\"errors\":[");
+                for (int i = 0; i < errors.size(); i++) {
+                    if (i > 0) json.append(",");
+                    json.append(escapeJson(errors.get(i)));
+                }
+                json.append("],\"warnings\":[");
+                for (int i = 0; i < warnings.size(); i++) {
+                    if (i > 0) json.append(",");
+                    json.append(escapeJson(warnings.get(i)));
+                }
+                json.append("]}");
+                sendJson(ex, 200, json.toString());
+
+            } catch (Exception e) {
+                System.err.println("[JavaServices] DUK validate #" + reqId +
+                    " error: " + e.getMessage());
+                sendJson(ex, 500,
+                    "{\"error\":" + escapeJson("DUK validation failed: " + e.getMessage()) + "}");
+            } finally {
+                tmpXml.delete();
+                tmpErr.delete();
+            }
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    // POST /duk/generate-pdf — DUKIntegrator PDF generation
+    // ═════════════════════════════════════════════════════════════════
+
+    static class DukPdfHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+                sendJson(ex, 405, "{\"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            if (!dukReady) {
+                sendJson(ex, 503,
+                    "{\"error\":\"DUK PDF generation unavailable (DUKIntegrator not loaded)\"}");
+                return;
+            }
+
+            byte[] xmlBytes;
+            try (InputStream is = ex.getRequestBody()) {
+                xmlBytes = is.readAllBytes();
+            }
+            if (xmlBytes.length == 0) {
+                sendJson(ex, 400, "{\"error\":\"Empty body\"}");
+                return;
+            }
+
+            String type = parseQueryParam(ex.getRequestURI().getRawQuery(), "type");
+            if (type == null || type.isEmpty()) {
+                sendJson(ex, 400, "{\"error\":\"Missing query parameter: type (e.g. ?type=D394)\"}");
+                return;
+            }
+
+            long reqId = dukPdfCount.incrementAndGet();
+            String id = UUID.randomUUID().toString();
+            File tmpXml = new File(System.getProperty("java.io.tmpdir"),
+                "dukpdf_" + id + ".xml");
+            File tmpPdf = new File(System.getProperty("java.io.tmpdir"),
+                "dukpdf_" + id + ".pdf");
+            File tmpErr = new File(System.getProperty("java.io.tmpdir"),
+                "dukpdf_" + id + ".xml.err.txt");
+
+            try {
+                Files.write(tmpXml.toPath(), xmlBytes);
+                long start = System.currentTimeMillis();
+
+                // Use reflection to call DUKIntegrator PDF generation
+                // DUKIntegrator.generatePdf(String xmlPath, String type) -> String pdfPath
+                Class<?> dukClass = Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
+                Object duk = dukClass.getDeclaredConstructor().newInstance();
+
+                Method setDir = dukClass.getMethod("setWorkDir", String.class);
+                setDir.invoke(duk, dukDir);
+
+                Method pdfMethod = dukClass.getMethod("generatePdf", String.class, String.class);
+                String pdfPath = (String) pdfMethod.invoke(duk, tmpXml.getAbsolutePath(), type);
+
+                // Check for errors
+                if (tmpErr.exists()) {
+                    String errContent = Files.readString(tmpErr.toPath(), StandardCharsets.UTF_8).trim();
+                    if (!errContent.isEmpty()) {
+                        // Only fail if the error file has actual errors (not warnings)
+                        boolean hasErrors = false;
+                        for (String line : errContent.split("\\r?\\n")) {
+                            if (!line.trim().startsWith("WARNING:") && !line.trim().startsWith("Avertisment:") && !line.trim().isEmpty()) {
+                                hasErrors = true;
+                                break;
+                            }
+                        }
+                        if (hasErrors) {
+                            sendJson(ex, 422,
+                                "{\"error\":" + escapeJson("DUK PDF validation errors: " + errContent) + "}");
+                            return;
+                        }
+                    }
+                }
+
+                File pdfFile = (pdfPath != null && !pdfPath.isEmpty())
+                    ? new File(pdfPath) : tmpPdf;
+
+                if (!pdfFile.exists()) {
+                    // DUK sometimes puts the PDF next to the XML with .pdf extension
+                    File altPdf = new File(tmpXml.getAbsolutePath().replaceAll("\\.xml$", ".pdf"));
+                    if (altPdf.exists()) {
+                        pdfFile = altPdf;
+                    } else {
+                        sendJson(ex, 500, "{\"error\":\"DUK PDF not created\"}");
+                        return;
+                    }
+                }
+
+                long elapsed = System.currentTimeMillis() - start;
+                System.out.println("[JavaServices] DUK PDF #" + reqId + " " +
+                    elapsed + "ms (" + type + ", " + pdfFile.length() + "b)");
+
+                byte[] pdfBytes = Files.readAllBytes(pdfFile.toPath());
+                ex.getResponseHeaders().set("Content-Type", "application/pdf");
+                ex.getResponseHeaders().set("X-Generation-Time-Ms",
+                    String.valueOf(elapsed));
+                ex.sendResponseHeaders(200, pdfBytes.length);
+                try (OutputStream os = ex.getResponseBody()) {
+                    os.write(pdfBytes);
+                }
+
+                if (!pdfFile.equals(tmpPdf)) pdfFile.delete();
+
+            } catch (Exception e) {
+                System.err.println("[JavaServices] DUK PDF #" + reqId +
+                    " error: " + e.getMessage());
+                sendJson(ex, 500,
+                    "{\"error\":" + escapeJson("DUK PDF failed: " + e.getMessage()) + "}");
+            } finally {
+                tmpXml.delete();
+                tmpPdf.delete();
+                tmpErr.delete();
+            }
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════
     // Helpers
     // ═════════════════════════════════════════════════════════════════
 
@@ -512,6 +792,21 @@ public class JavaServiceServer {
                         .replace("\n", "\\n")
                         .replace("\r", "\\r")
                         .replace("\t", "\\t") + "\"";
+    }
+
+    static String parseQueryParam(String query, String param) {
+        if (query == null || query.isEmpty()) return null;
+        for (String pair : query.split("&")) {
+            String[] kv = pair.split("=", 2);
+            if (kv.length == 2 && kv[0].equals(param)) {
+                try {
+                    return URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    return kv[1];
+                }
+            }
+        }
+        return null;
     }
 
     static void sendJson(HttpExchange ex, int code, String body) throws IOException {

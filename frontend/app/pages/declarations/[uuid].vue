@@ -614,6 +614,9 @@ const purchasesData = computed(() =>
 const documentMenuItems = computed(() => [
   [
     { label: $t('declarations.downloadXml'), icon: 'i-lucide-download', onSelect: () => downloadXml() },
+    ...(['validated', 'submitted', 'processing', 'accepted', 'rejected'].includes(declaration.value?.status ?? '')
+      ? [{ label: $t('declarations.downloadPdf'), icon: 'i-lucide-file-text', onSelect: () => downloadPdf() }]
+      : []),
     ...(declaration.value?.status === 'accepted'
       ? [{ label: $t('declarations.downloadRecipisa'), icon: 'i-lucide-file-check-2', onSelect: () => downloadRecipisa() }]
       : []),
@@ -699,6 +702,21 @@ async function downloadXml() {
     const a = document.createElement('a')
     a.href = url
     a.download = `${declaration.value?.type ?? 'declaration'}_${declaration.value?.year}_${String(declaration.value?.month).padStart(2, '0')}.xml`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? 'Download failed.', color: 'error' })
+  }
+}
+
+async function downloadPdf() {
+  const { apiFetch } = useApi()
+  try {
+    const blob = await apiFetch<Blob>(`/v1/declarations/${uuid}/pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${declaration.value?.type ?? 'declaration'}_${declaration.value?.year}_${String(declaration.value?.month).padStart(2, '0')}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {

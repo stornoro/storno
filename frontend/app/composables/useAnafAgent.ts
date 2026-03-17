@@ -114,29 +114,59 @@ export function useAnafAgent() {
     }))
   }
 
+  async function signAndSubmit(req: {
+    pdf: string
+    certificateId: string
+    pin?: string
+    uploadUrl: string
+    uploadHeaders: Record<string, string>
+    uploadContentType?: string
+  }): Promise<AnafProxyResponse> {
+    const payload = { ...req }
+    if (!payload.pin) {
+      const savedPin = getSavedPin(req.certificateId)
+      if (savedPin) payload.pin = savedPin
+    }
+
+    const res = await agentFetch('/sign-and-submit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Storno-Agent': '1',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(180_000), // 3 min: signing + upload + PIN
+    })
+    return await res.json()
+  }
+
   async function submitViaAgent(declarationId: string, certificateId: string): Promise<any> {
     const { get, post } = useApi()
 
-    // Step 1: Prepare — get XML, ANAF token, URL
+    // Step 1: Prepare — get unsigned PDF, ANAF token, URL
     const prepared = await get<{
-      xml: string
+      pdfBase64: string
       anafUrl: string
       anafToken: string
       declarationType: string
       cif: string
     }>(`/v1/declarations/${declarationId}/prepare`)
 
-    // Step 2: Proxy through local agent to ANAF
-    const anafResponse = await proxyToAnaf({
-      url: prepared.anafUrl,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${prepared.anafToken}`,
-        'Content-Type': 'application/xml',
-      },
-      body: prepared.xml,
+    // Step 2: Sign PDF + upload to ANAF via agent
+    const anafResponse = await signAndSubmit({
+      pdf: prepared.pdfBase64,
       certificateId,
+      uploadUrl: prepared.anafUrl,
+      uploadHeaders: {
+        'Authorization': `Bearer ${prepared.anafToken}`,
+      },
+      uploadContentType: 'application/pdf',
     })
+
+    // Check for agent-level errors
+    if ((anafResponse as any).error) {
+      throw new Error((anafResponse as any).error)
+    }
 
     // Step 3: Send ANAF response back to server
     return await post(`/v1/declarations/${declarationId}/agent-result`, {
@@ -148,7 +178,7 @@ export function useAnafAgent() {
 
   interface PreparedItem {
     declarationId: string
-    xml: string
+    pdfBase64: string
     anafUrl: string
     anafToken: string
     declarationType: string
@@ -197,7 +227,7 @@ export function useAnafAgent() {
       return { processed: 0, errors: prepared.errors, retryableIds: [] }
     }
 
-    // ── Phase 2: Sign — one by one via /proxy for per-item progress ──
+    // ── Phase 2: Sign + Upload — one by one via /sign-and-submit for per-item progress ──
     const signed: BulkSignedResult[] = []
     const signErrors: Array<{ declarationId: string; error: string }> = []
     const retryableIds: string[] = []
@@ -207,16 +237,26 @@ export function useAnafAgent() {
       onProgress?.({ phase: 'signing', current: i + 1, total: prepared.items.length })
 
       try {
-        const result = await proxyToAnaf({
-          url: item.anafUrl,
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${item.anafToken}`,
-            'Content-Type': 'application/xml',
-          },
-          body: item.xml,
+        const result = await signAndSubmit({
+          pdf: item.pdfBase64,
           certificateId,
+          uploadUrl: item.anafUrl,
+          uploadHeaders: {
+            'Authorization': `Bearer ${item.anafToken}`,
+          },
+          uploadContentType: 'application/pdf',
         })
+
+        // Check for agent-level errors (PIN, signing)
+        if ((result as any).error) {
+          const error = (result as any).error
+          signErrors.push({ declarationId: item.declarationId, error })
+          retryableIds.push(item.declarationId)
+          // PIN error — stop batch
+          if ((result as any).pinError) break
+          continue
+        }
+
         signed.push({
           declarationId: item.declarationId,
           statusCode: result.statusCode,
@@ -413,6 +453,7 @@ export function useAnafAgent() {
     listCertificates,
     proxyToAnaf,
     batchProxyToAnaf,
+    signAndSubmit,
     submitViaAgent,
     bulkSubmitViaAgent,
     checkStatusViaAgent,
