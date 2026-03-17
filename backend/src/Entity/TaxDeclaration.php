@@ -66,6 +66,9 @@ class TaxDeclaration
     private ?string $xmlPath = null;
 
     #[ORM\Column(length: 500, nullable: true)]
+    private ?string $pdfPath = null;
+
+    #[ORM\Column(length: 500, nullable: true)]
     private ?string $recipisaPath = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
@@ -216,6 +219,18 @@ class TaxDeclaration
     public function setXmlPath(?string $xmlPath): static
     {
         $this->xmlPath = $xmlPath;
+
+        return $this;
+    }
+
+    public function getPdfPath(): ?string
+    {
+        return $this->pdfPath;
+    }
+
+    public function setPdfPath(?string $pdfPath): static
+    {
+        $this->pdfPath = $pdfPath;
 
         return $this;
     }

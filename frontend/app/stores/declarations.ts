@@ -87,6 +87,11 @@ export const useDeclarationStore = defineStore('declarations', () => {
     return await post<{ deleted: number }>('/v1/declarations/bulk-delete', { ids })
   }
 
+  async function bulkValidateDeclarations(ids: string[]): Promise<{ validated: number; errors: Array<{ id: string; error: string }> }> {
+    const { post } = useApi()
+    return await post<{ validated: number; errors: Array<{ id: string; error: string }> }>('/v1/declarations/batch-validate', { ids })
+  }
+
   async function recalculateDeclaration(uuid: string): Promise<TaxDeclaration> {
     const { post } = useApi()
     return await post<TaxDeclaration>(`/v1/declarations/${uuid}/recalculate`)
@@ -148,6 +153,7 @@ export const useDeclarationStore = defineStore('declarations', () => {
     updateDeclaration,
     deleteDeclaration,
     bulkDeleteDeclarations,
+    bulkValidateDeclarations,
     recalculateDeclaration,
     validateDeclaration,
     submitDeclaration,

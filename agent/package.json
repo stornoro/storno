@@ -1,6 +1,6 @@
 {
   "name": "@storno/anaf-agent",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Local mTLS proxy agent for ANAF SPV — supports hardware USB tokens (SafeNet, Feitian, certSIGN)",
   "type": "module",
   "bin": {
