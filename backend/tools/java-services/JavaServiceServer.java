@@ -157,8 +157,8 @@ public class JavaServiceServer {
         }
         try {
             if (!dukDir.isEmpty() && new File(dukDir, "DUKIntegrator.jar").exists()) {
-                // Verify we can load the DUKIntegrator class
-                Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
+                // Verify we can load the Integrator class (package: general)
+                Class.forName("general.Integrator");
                 dukReady = true;
                 System.out.println("[JavaServices] DUKIntegrator loaded in " +
                     (System.currentTimeMillis() - start) + "ms (dir: " + dukDir + ")");
@@ -537,25 +537,37 @@ public class JavaServiceServer {
                 Files.write(tmpXml.toPath(), xmlBytes);
                 long start = System.currentTimeMillis();
 
-                // Use reflection to call DUKIntegrator validation API
-                // DUKIntegrator.validate(String xmlPath, String type) -> boolean
-                Class<?> dukClass = Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
-                Object duk = dukClass.getDeclaredConstructor().newInstance();
+                // Use general.Integrator API (from DUKIntegrator.jar)
+                // parseDocument(xmlPath, type) returns int: 0=success, >0=errors
+                Class<?> intClass = Class.forName("general.Integrator");
+                Object integrator = intClass.getDeclaredConstructor().newInstance();
 
-                // Set the working directory for DUK JARs
-                Method setDir = dukClass.getMethod("setWorkDir", String.class);
-                setDir.invoke(duk, dukDir);
+                // Set declaration type
+                Method setType = intClass.getMethod("setDeclType", String.class);
+                setType.invoke(integrator, type);
 
-                Method validateMethod = dukClass.getMethod("validate", String.class, String.class);
-                boolean valid = (Boolean) validateMethod.invoke(duk, tmpXml.getAbsolutePath(), type);
+                // Set config path to the DUK directory
+                Method setConfig = intClass.getMethod("setConfigPath", String.class);
+                setConfig.invoke(integrator, dukDir + "/");
+
+                Method parseMethod = intClass.getMethod("parseDocument", String.class, String.class);
+                int result = (Integer) parseMethod.invoke(integrator, tmpXml.getAbsolutePath(), type);
+                boolean valid = (result == 0);
 
                 long elapsed = System.currentTimeMillis() - start;
 
-                // Read error file if it exists
+                // Read errors from the integrator's error file
                 List<String> errors = new ArrayList<>();
                 List<String> warnings = new ArrayList<>();
-                if (tmpErr.exists()) {
-                    String errContent = Files.readString(tmpErr.toPath(), StandardCharsets.UTF_8);
+
+                // Try integrator's own error file accessor
+                Method getErrFile = intClass.getMethod("getFisierEroriParsare");
+                String errFilePath = (String) getErrFile.invoke(integrator);
+                File errFile = (errFilePath != null && !errFilePath.isEmpty())
+                    ? new File(errFilePath) : tmpErr;
+
+                if (errFile.exists()) {
+                    String errContent = Files.readString(errFile.toPath(), StandardCharsets.UTF_8);
                     for (String line : errContent.split("\\r?\\n")) {
                         line = line.trim();
                         if (line.isEmpty()) continue;
@@ -565,11 +577,30 @@ public class JavaServiceServer {
                             errors.add(line);
                         }
                     }
+                    errFile.delete();
+                }
+
+                // Also check the log errors file
+                Method getLogFile = intClass.getMethod("getFisierLogErori");
+                String logFilePath = (String) getLogFile.invoke(integrator);
+                if (logFilePath != null && !logFilePath.isEmpty()) {
+                    File logFile = new File(logFilePath);
+                    if (logFile.exists()) {
+                        String logContent = Files.readString(logFile.toPath(), StandardCharsets.UTF_8);
+                        for (String line : logContent.split("\\r?\\n")) {
+                            line = line.trim();
+                            if (line.isEmpty()) continue;
+                            if (!errors.contains(line) && !warnings.contains(line)) {
+                                errors.add(line);
+                            }
+                        }
+                        logFile.delete();
+                    }
                 }
 
                 // If DUK says invalid but no errors captured, add a generic one
                 if (!valid && errors.isEmpty()) {
-                    errors.add("DUK validation failed for type " + type);
+                    errors.add("DUK validation failed for type " + type + " (code: " + result + ")");
                 }
 
                 System.out.println("[JavaServices] DUK validate #" + reqId + " " +
@@ -650,16 +681,30 @@ public class JavaServiceServer {
                 Files.write(tmpXml.toPath(), xmlBytes);
                 long start = System.currentTimeMillis();
 
-                // Use reflection to call DUKIntegrator PDF generation
-                // DUKIntegrator.generatePdf(String xmlPath, String type) -> String pdfPath
-                Class<?> dukClass = Class.forName("ro.mfinante.dukintegrator.DUKIntegrator");
-                Object duk = dukClass.getDeclaredConstructor().newInstance();
+                // Use general.Integrator API for PDF generation
+                // pdfCreation(xmlPath, type, outputDir, null) returns int: 0=success
+                Class<?> intClass = Class.forName("general.Integrator");
+                Object integrator = intClass.getDeclaredConstructor().newInstance();
 
-                Method setDir = dukClass.getMethod("setWorkDir", String.class);
-                setDir.invoke(duk, dukDir);
+                Method setType = intClass.getMethod("setDeclType", String.class);
+                setType.invoke(integrator, type);
 
-                Method pdfMethod = dukClass.getMethod("generatePdf", String.class, String.class);
-                String pdfPath = (String) pdfMethod.invoke(duk, tmpXml.getAbsolutePath(), type);
+                Method setConfig = intClass.getMethod("setConfigPath", String.class);
+                setConfig.invoke(integrator, dukDir + "/");
+
+                // Don't sign the PDF (we sign separately with USB cert)
+                Method noSign = intClass.getMethod("setNoCertificate");
+                noSign.invoke(integrator);
+
+                String outputDir = System.getProperty("java.io.tmpdir");
+                Method pdfMethod = intClass.getMethod("pdfCreation",
+                    String.class, String.class, String.class, String.class);
+                int pdfResult = (Integer) pdfMethod.invoke(integrator,
+                    tmpXml.getAbsolutePath(), type, outputDir, null);
+
+                // Get the generated PDF path from the integrator
+                Method getPdfFile = intClass.getMethod("getFisierPdf");
+                String pdfPath = (String) getPdfFile.invoke(integrator);
 
                 // Check for errors
                 if (tmpErr.exists()) {
