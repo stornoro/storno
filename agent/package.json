@@ -1,6 +1,6 @@
 {
   "name": "@storno/anaf-agent",
-  "version": "1.3.4",
+  "version": "1.4.0",
   "description": "Local mTLS proxy agent for ANAF SPV — supports hardware USB tokens (SafeNet, Feitian, certSIGN)",
   "type": "module",
   "bin": {
@@ -11,8 +11,8 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js start",
     "bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --define:__VERSION__=\\\"$(node -p 'require(\"./package.json\").version')\\\" --outfile=build/agent.cjs && cp -r src/icons build/icons",
-    "package": "npm run bundle && pkg build/agent.cjs --targets node20-macos-x64,node20-macos-arm64,node20-win-x64,node20-linux-x64 --output build/storno-agent && node scripts/set-windows-icon.mjs build/storno-agent-win-x64.exe",
-    "package:macos": "npm run bundle && pkg build/agent.cjs --targets node20-macos-arm64 --output build/storno-agent-macos",
+    "package": "npm run bundle && pkg build/agent.cjs --targets node20-macos-x64,node20-macos-arm64,node20-win-x64,node20-linux-x64 --output build/storno-agent && node scripts/set-windows-icon.mjs build/storno-agent-win-x64.exe && ./scripts/create-macos-app.sh build/storno-agent-macos-arm64 arm64 && ./scripts/create-macos-app.sh build/storno-agent-macos-x64 x64",
+    "package:macos": "npm run bundle && pkg build/agent.cjs --targets node20-macos-arm64 --output build/storno-agent-macos-arm64 && ./scripts/create-macos-app.sh build/storno-agent-macos-arm64 arm64",
     "package:windows": "npm run bundle && pkg build/agent.cjs --targets node20-win-x64 --output build/storno-agent-windows && node scripts/set-windows-icon.mjs build/storno-agent-windows.exe",
     "package:linux": "npm run bundle && pkg build/agent.cjs --targets node20-linux-x64 --output build/storno-agent-linux"
   },
