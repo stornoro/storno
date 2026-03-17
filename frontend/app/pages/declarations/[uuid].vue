@@ -220,10 +220,10 @@
             <template #header>
               <h3 class="font-semibold">{{ $t('declarations.d300.rows') }}</h3>
             </template>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div v-for="(value, key) in declaration.data.rows" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
-                <span class="font-mono text-xs text-(--ui-text-muted)">{{ key }}</span>
-                <span>{{ formatAmount(value as string) }}</span>
+                <span class="text-xs text-(--ui-text-muted)" :title="String(key)">{{ $t(`declarations.d300.fields.${key}`) }}</span>
+                <span class="font-mono whitespace-nowrap ml-2">{{ formatAmount(value as string) }}</span>
               </div>
             </div>
           </UCard>
