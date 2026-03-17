@@ -1,8 +1,8 @@
 /**
  * macOS CMS/PKCS#7 signing using the Security framework.
  *
- * Uses `security cms -S` with the keychain identity, or falls back to
- * `openssl cms -sign` if security cms isn't available.
+ * Uses `security cms -S -N <certName>` which accesses the private key
+ * directly from the keychain (works with USB tokens / smart cards).
  */
 
 import { execFile } from 'node:child_process';
@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 export async function signHashMacos(
   data: Buffer,
   certificateId: string,
-  pin?: string,
+  _pin?: string,
 ): Promise<Buffer> {
   const id = randomUUID();
   const workDir = join(tmpdir(), 'storno-pdfsign');
@@ -26,9 +26,28 @@ export async function signHashMacos(
   writeFileSync(dataPath, data);
 
   try {
-    // Try using openssl cms with keychain identity
-    // macOS curl uses the thumbprint as cert identity (same as certificateId)
-    await signWithOpenssl(dataPath, sigPath, certificateId, pin);
+    // Resolve thumbprint → certificate common name for `security cms -S -N`
+    const certName = await resolveCertName(certificateId);
+
+    // Sign using `security cms -S -N <name> -T` — detached CMS signature
+    // -T excludes content from the CMS structure (required for PDF /adbe.pkcs7.detached)
+    await new Promise<void>((resolve, reject) => {
+      execFile('/usr/bin/security', [
+        'cms', '-S',
+        '-N', certName,
+        '-T',
+        '-H', 'SHA256',
+        '-i', dataPath,
+        '-o', sigPath,
+      ], { timeout: 60_000 }, (err, _stdout, stderr) => {
+        if (err) {
+          reject(new Error(`macOS signing failed: ${stderr || err.message}`));
+          return;
+        }
+        resolve();
+      });
+    });
+
     return readFileSync(sigPath);
   } finally {
     try { unlinkSync(dataPath); } catch { /* ignore */ }
@@ -36,106 +55,35 @@ export async function signHashMacos(
   }
 }
 
-async function signWithOpenssl(
-  dataPath: string,
-  sigPath: string,
-  certificateId: string,
-  pin?: string,
-): Promise<void> {
-  // First, export the certificate from keychain to a temp file
-  const id = randomUUID();
-  const workDir = join(tmpdir(), 'storno-pdfsign');
-  const certPemPath = join(workDir, `${id}_cert.pem`);
-  const keyPemPath = join(workDir, `${id}_key.pem`);
-
-  try {
-    // Export certificate using security find-certificate with SHA-1 hash
-    await new Promise<void>((resolve, reject) => {
-      execFile('security', [
-        'find-certificate', '-c', certificateId, '-p',
-      ], { timeout: 10_000 }, (err, stdout, stderr) => {
-        if (err) {
-          // Fall back: try to use the thumbprint directly as identity label
-          reject(new Error(`Failed to export certificate: ${stderr || err.message}`));
-          return;
-        }
-        writeFileSync(certPemPath, stdout);
-        resolve();
-      });
-    });
-
-    // Use security cms -S for signing (uses keychain for private key access)
-    // This avoids needing to export the private key
-    await new Promise<void>((resolve, reject) => {
-      const args = [
-        'cms', '-sign',
-        '-signer', certPemPath,
-        '-indata', dataPath,
-        '-outform', 'der',
-        '-out', sigPath,
-        '-nodetach', // We'll handle detachment ourselves
-      ];
-
-      // If PIN is needed, set it via environment or expect keychain to handle it
-      const env = { ...process.env };
-      if (pin) {
-        // macOS keychain PIN is handled at the USB token driver level
-        // The PIN dialog will appear unless it's been cached
-        env['STORNO_PIN'] = pin;
-      }
-
-      execFile('/usr/bin/security', args, {
-        timeout: 60_000,
-        env,
-      }, (err, stdout, stderr) => {
-        if (err) {
-          // Fallback: use openssl directly
-          signWithOpensslDirect(dataPath, sigPath, certificateId, pin)
-            .then(resolve)
-            .catch(reject);
-          return;
-        }
-        resolve();
-      });
-    });
-  } finally {
-    try { unlinkSync(certPemPath); } catch { /* ignore */ }
-    try { unlinkSync(keyPemPath); } catch { /* ignore */ }
-  }
-}
-
-async function signWithOpensslDirect(
-  dataPath: string,
-  sigPath: string,
-  certificateId: string,
-  pin?: string,
-): Promise<void> {
-  // Use openssl with PKCS#11 engine if available, otherwise fall back to keychain
-  return new Promise<void>((resolve, reject) => {
-    const args = [
-      'cms', '-sign',
-      '-binary',
-      '-in', dataPath,
-      '-outform', 'DER',
-      '-out', sigPath,
-      '-md', 'sha256',
-      '-nodetach',
-    ];
-
-    // Try to use macOS keychain via the engine
-    // On macOS, smart card tokens appear as identities in the keychain
-    args.push('-keyform', 'engine');
-
-    if (pin) {
-      args.push('-passin', `pass:${pin}`);
-    }
-
-    execFile('openssl', args, { timeout: 60_000 }, (err, stdout, stderr) => {
+/**
+ * Resolve a SHA-1 certificate thumbprint to the certificate's common name
+ * (label) in the macOS keychain. This is needed because `security cms -S -N`
+ * expects a certificate nickname, not a thumbprint.
+ */
+async function resolveCertName(thumbprint: string): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    execFile('security', [
+      'find-certificate', '-a', '-Z',
+    ], { timeout: 10_000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
-        reject(new Error(`macOS signing failed: ${stderr || err.message}`));
+        reject(new Error(`Failed to list certificates: ${stderr || err.message}`));
         return;
       }
-      resolve();
+
+      // Parse output to find the certificate with matching SHA-1 hash
+      const blocks = stdout.split('SHA-256 hash:');
+      for (const block of blocks) {
+        if (block.includes(`SHA-1 hash: ${thumbprint.toUpperCase()}`)) {
+          // Extract the label ("labl" attribute) — this is the certificate nickname
+          const lablMatch = block.match(/"labl"<blob>="([^"]+)"/);
+          if (lablMatch) {
+            resolve(lablMatch[1]);
+            return;
+          }
+        }
+      }
+
+      reject(new Error(`Certificate ${thumbprint} not found in keychain`));
     });
   });
 }
