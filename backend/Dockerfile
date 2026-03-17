@@ -17,9 +17,10 @@ WORKDIR /build
 COPY resources/validator/ROeFacturaValidator.jar validator/
 COPY tools/pdf-generator/dist/ pdf/dist/
 COPY tools/signature-verifier/verifsignature.jar signature/
+COPY tools/duk-integrator/*.jar duk/
 COPY tools/java-services/JavaServiceServer.java .
 
-RUN javac -cp "validator/ROeFacturaValidator.jar:pdf/dist/generareFactura.jar:pdf/dist/lib/*:pdf/dist/:signature/verifsignature.jar" \
+RUN javac -cp "validator/ROeFacturaValidator.jar:pdf/dist/generareFactura.jar:pdf/dist/lib/*:pdf/dist/:signature/verifsignature.jar:duk/*" \
     JavaServiceServer.java
 
 # ── Stage 3: wkhtmltopdf (pre-built for Alpine) ──────────────────
@@ -89,6 +90,8 @@ COPY --from=vendor /app .
 
 # Copy compiled unified Java service
 COPY --from=java-build /build/JavaServiceServer.class tools/java-services/
+# Copy DUK Integrator JARs
+COPY --from=java-build /build/duk/ tools/duk-integrator/
 
 # Copy .env.example as .env defaults — Symfony needs all vars declared.
 # Real values come from Docker environment and override these.

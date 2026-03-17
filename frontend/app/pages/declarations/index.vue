@@ -137,6 +137,36 @@ onMounted(() => {
   checkAgent()
 })
 
+// ── Bulk Validate ────────────────────────────────────────────────────
+const bulkValidating = ref(false)
+
+const hasSelectedDrafts = computed(() =>
+  store.items.some((d: any) => selectedIds.value.includes(d.id) && d.status === 'draft'),
+)
+
+const hasSelectedSubmittable = computed(() =>
+  store.items.some((d: any) => selectedIds.value.includes(d.id) && ['draft', 'validated'].includes(d.status)),
+)
+
+async function handleBulkValidate() {
+  bulkValidating.value = true
+  try {
+    const result = await store.bulkValidateDeclarations(selectedIds.value)
+    if (result.validated > 0) {
+      toast.add({ title: $t('declarations.bulkValidateSuccess', { count: result.validated }), color: 'success' })
+    }
+    if (result.errors.length > 0) {
+      toast.add({ title: `${result.errors.length} declaration(s) skipped`, color: 'warning' })
+    }
+    clearSelection()
+    store.fetchDeclarations()
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? 'Validation failed', color: 'error' })
+  } finally {
+    bulkValidating.value = false
+  }
+}
+
 // ── Bulk Delete ──────────────────────────────────────────────────────
 const bulkDeleteModalOpen = ref(false)
 const bulkDeleting = ref(false)
@@ -488,11 +518,22 @@ function onRowClick(_e: Event, row: any) {
       <SharedTableBulkBar :count="selectionCount" :loading="['preparing', 'signing', 'submitting'].includes(agentBulkState)" @clear="clearSelection">
         <template #actions>
           <UButton
+            :label="$t('declarations.bulkValidate')"
+            icon="i-lucide-check-circle"
+            color="primary"
+            variant="soft"
+            size="sm"
+            :loading="bulkValidating"
+            :disabled="!hasSelectedDrafts"
+            @click="handleBulkValidate"
+          />
+          <UButton
             :label="$t('declarations.bulkAgentSubmit')"
             icon="i-lucide-shield-check"
             color="warning"
             variant="soft"
             size="sm"
+            :disabled="!hasSelectedSubmittable"
             @click="handleBulkAgentSubmit"
           />
           <UButton
