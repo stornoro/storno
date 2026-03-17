@@ -10,6 +10,7 @@ use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
+use App\Service\Declaration\AnafDeclarationClient;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -30,6 +31,7 @@ class TaxDeclarationController extends AbstractController
         private readonly MessageBusInterface $messageBus,
         private readonly EntityManagerInterface $entityManager,
         private readonly TaxDeclarationRepository $declarationRepository,
+        private readonly AnafDeclarationClient $anafClient,
     ) {}
 
     #[Route('/declarations', methods: ['GET'])]
@@ -916,9 +918,11 @@ class TaxDeclarationController extends AbstractController
 
         $this->entityManager->flush();
 
+        // Download recipisas server-side (descarcare only needs Bearer token, not mTLS)
+        $this->downloadRecipisasServerSide($recipisas);
+
         return $this->json([
             'stats' => $stats,
-            'recipisas' => $recipisas,
         ]);
     }
 
@@ -1112,10 +1116,41 @@ class TaxDeclarationController extends AbstractController
 
         $this->entityManager->flush();
 
+        // Download recipisas server-side (descarcare only needs Bearer token, not mTLS)
+        $this->downloadRecipisasServerSide($recipisas);
+
         return $this->json([
             'stats' => $stats,
-            'recipisas' => $recipisas,
         ]);
+    }
+
+    /**
+     * Download recipisas server-side using Bearer token (no mTLS needed).
+     */
+    private function downloadRecipisasServerSide(array $recipisas): void
+    {
+        foreach ($recipisas as $rec) {
+            try {
+                $declaration = $this->declarationRepository->find($rec['declarationId']);
+                if (!$declaration || $declaration->getRecipisaPath() !== null) {
+                    continue;
+                }
+
+                $content = $this->anafClient->downloadRecipisa($rec['downloadId'], $rec['anafToken']);
+
+                $recipisaPath = sprintf(
+                    'declarations/%s/%s/%s_recipisa.pdf',
+                    $declaration->getCompany()->getId(),
+                    $declaration->getType()->value,
+                    $declaration->getId()
+                );
+                $this->defaultStorage->write($recipisaPath, $content);
+                $declaration->setRecipisaPath($recipisaPath);
+                $this->entityManager->flush();
+            } catch (\Throwable) {
+                // Non-critical — recipisa can be retried later
+            }
+        }
     }
 
     private function resolveCompany(Request $request): ?\App\Entity\Company
