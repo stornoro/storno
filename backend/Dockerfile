@@ -17,8 +17,11 @@ WORKDIR /build
 COPY resources/validator/ROeFacturaValidator.jar validator/
 COPY tools/pdf-generator/dist/ pdf/dist/
 COPY tools/signature-verifier/verifsignature.jar signature/
-COPY tools/duk-integrator/*.jar duk/
+COPY tools/duk-integrator/ duk-src/
 COPY tools/java-services/JavaServiceServer.java .
+
+# Move JARs to duk/ (may be empty if JARs not yet downloaded)
+RUN mkdir -p duk && (cp duk-src/*.jar duk/ 2>/dev/null || true)
 
 RUN javac -cp "validator/ROeFacturaValidator.jar:pdf/dist/generareFactura.jar:pdf/dist/lib/*:pdf/dist/:signature/verifsignature.jar:duk/*" \
     JavaServiceServer.java
@@ -90,7 +93,7 @@ COPY --from=vendor /app .
 
 # Copy compiled unified Java service
 COPY --from=java-build /build/JavaServiceServer.class tools/java-services/
-# Copy DUK Integrator JARs
+# Copy DUK Integrator JARs (may be empty if not yet downloaded)
 COPY --from=java-build /build/duk/ tools/duk-integrator/
 
 # Copy .env.example as .env defaults — Symfony needs all vars declared.
