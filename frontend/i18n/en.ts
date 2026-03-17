@@ -3554,6 +3554,7 @@ export default defineI18nLocale(async () => {
       toPay: 'VAT to pay',
       toRecover: 'VAT to recover',
       rows: 'D300 Rows',
+      headerInfo: 'Declaration Info',
       fields: {
         // Header fields
         luna: 'Reporting period - Month',

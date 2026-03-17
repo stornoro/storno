@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:d208:declaratie:v7" targetNamespace="mfp:anaf:dgti:d208:declaratie:v7" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.02" xml:lang="ro">
+	<!-- ===== Element Declarations ===== -->
+	<xs:element name="D208" type="D208Type"/>
+	<!-- ===== Type Definitions ===== -->
+	<xs:complexType name="D208Type">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="tranzactie" type="TranzactieType" minOccurs="0" maxOccurs="unbounded"/>
+					<xs:element name="dezmembr" type="DezmembrType" minOccurs="0" maxOccurs="unbounded"/>
+				</xs:sequence>
+				<xs:attribute name="d_rec" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="luna" type="IntInt1_12SType" use="required"/>
+				<xs:attribute name="an" type="IntInt2024_2100SType" use="required"/>
+				<xs:attribute name="totalPlata_A" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="nume" type="Str250" use="required"/>
+				<xs:attribute name="cif" type="CifSType" use="required"/>
+				<xs:attribute name="domiciuliuFiscal" type="Str250" use="required"/>
+				<xs:attribute name="email" type="Email200SType"/>
+				<xs:attribute name="telefon" type="Str15"/>
+				<xs:attribute name="fax" type="Str15"/>
+				<xs:attribute name="nume_Intocmit" type="Str200" use="required"/>
+				<xs:attribute name="functia_intocmit" type="Str200" use="required"/>
+				<xs:attribute name="nr_beneficiari" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="val_piata_T" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="val_tranzactii_T" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="baza_calcul_T" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="impozit_T" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="impozit_scutit_T" type="IntPoz15SType" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="TranzactieType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="imobile" type="ImobileType" maxOccurs="unbounded"/>
+				</xs:sequence>
+				<xs:attribute name="nuda_proprietate" type="IntInt0_1SType"/>
+				<xs:attribute name="nr_act_notarial" type="Str250" use="required"/>
+				<xs:attribute name="mod_transfer" type="IntInt1_4SType" use="required"/>
+				<xs:attribute name="alt_mod_transfer" type="Str250"/>
+				<xs:attribute name="val_piata" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="val_tranzactie" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="baza_calcul" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="taxa_notar" type="IntPoz15SType" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="ImobileType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="beneficiari" type="BeneficiariType" maxOccurs="unbounded"/>
+					<xs:element name="parti" type="PartiType" maxOccurs="unbounded"/>
+				</xs:sequence>
+				<xs:attribute name="judet" type="Str_listaCodJudSType" use="required"/>
+				<xs:attribute name="localitate" type="Str250" use="required"/>
+				<xs:attribute name="codSIRUTA" type="IntPoz8SType" use="required"/>
+				<xs:attribute name="tip_nr_cadastral" type="IntInt1_3SType" use="required"/>
+				<xs:attribute name="tip_imobil_teren" type="IntInt1_2SType" use="required"/>
+				<xs:attribute name="tip_imobil_cladire" type="IntInt1_8SType" use="required"/>
+				<xs:attribute name="tip_imobil_unitate" type="IntInt1_8SType" use="required"/>
+				<xs:attribute name="nr_cadastral" type="IntPoz6SType"/>
+				<xs:attribute name="nr_cadastral_alt_format" type="Str50"/>
+				<xs:attribute name="nr_cadastral_cladire" type="IntPoz6SType"/>
+				<xs:attribute name="nr_cadastral_unitate" type="IntPoz6SType"/>
+				<xs:attribute name="val_piata_imobil" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="val_tranzactie_imobil" type="IntPoz15SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="BeneficiariType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="nume_beneficiar" type="Str250" use="required"/>
+				<xs:attribute name="cui_beneficiar" type="CnpSType" use="required"/>
+				<xs:attribute name="cota_beneficiar" type="DblPoz3_2SType" use="required"/>
+				<xs:attribute name="baza_calcul_beneficiar" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="cotaImpozit_beneficiar" type="IntPoz1SType"/>
+				<xs:attribute name="impozit_beneficiar" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="impozit_scutit_beneficiar" type="IntPoz15SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="PartiType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="nume_parte" type="Str250" use="required"/>
+				<xs:attribute name="cui_parte" type="CifSType"/>
+				<xs:attribute name="cota_parte" type="DblPoz3_2SType" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="DezmembrType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="beneficiari_dezmembr" type="Beneficiari_dezmembrType" maxOccurs="unbounded"/>
+					<xs:element name="parti_dezmembr" type="Parti_dezmembrType" maxOccurs="unbounded"/>
+				</xs:sequence>
+				<xs:attribute name="nr_act_ dezmembr" type="Str250" use="required"/>
+				<xs:attribute name="tip_ dezmembr" type="IntPoz1SType" use="required"/>
+				<xs:attribute name="val_piata_dezmembr" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="val_tranzactie_dezmembr" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="baza_calcul_dezmembr" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="taxa_notar_c" type="IntPoz15SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="Beneficiari_dezmembrType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="nume_beneficiar_dezmembr" type="Str250" use="required"/>
+				<xs:attribute name="cui_beneficiar_dezmembr" type="CnpSType" use="required"/>
+				<xs:attribute name="baza_calcul_beneficiar_dezmembr" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="cotaImpozit_dezmembr" type="IntPoz1SType"/>
+				<xs:attribute name="impozit_beneficiar_dezmembr" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="impozit_scutit_beneficiar_dezmembr" type="IntPoz15SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="Parti_dezmembrType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="nume_parte_dezmembr" type="Str250" use="required"/>
+				<xs:attribute name="cui_parte_dezmembr" type="CifSType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<!-- ===== SimpleType Definitions ===== -->
+	<xs:simpleType name="IntInt0_1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="1"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_12SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="12"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt2024_2100SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="2024"/>
+			<xs:maxInclusive value="2100"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str250">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="250"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CifSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{12}|[1-9]\d{1,9}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Email200SType">
+		<xs:restriction base="xs:token">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str15">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="15"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str200">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_4SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="4"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_listaCodJudSType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="256"/>
+			<xs:enumeration value="1"/>
+			<xs:enumeration value="2"/>
+			<xs:enumeration value="3"/>
+			<xs:enumeration value="4"/>
+			<xs:enumeration value="5"/>
+			<xs:enumeration value="6"/>
+			<xs:enumeration value="7"/>
+			<xs:enumeration value="8"/>
+			<xs:enumeration value="9"/>
+			<xs:enumeration value="10"/>
+			<xs:enumeration value="11"/>
+			<xs:enumeration value="51"/>
+			<xs:enumeration value="12"/>
+			<xs:enumeration value="13"/>
+			<xs:enumeration value="14"/>
+			<xs:enumeration value="15"/>
+			<xs:enumeration value="16"/>
+			<xs:enumeration value="17"/>
+			<xs:enumeration value="52"/>
+			<xs:enumeration value="18"/>
+			<xs:enumeration value="19"/>
+			<xs:enumeration value="20"/>
+			<xs:enumeration value="21"/>
+			<xs:enumeration value="22"/>
+			<xs:enumeration value="23"/>
+			<xs:enumeration value="24"/>
+			<xs:enumeration value="25"/>
+			<xs:enumeration value="26"/>
+			<xs:enumeration value="27"/>
+			<xs:enumeration value="28"/>
+			<xs:enumeration value="29"/>
+			<xs:enumeration value="30"/>
+			<xs:enumeration value="31"/>
+			<xs:enumeration value="32"/>
+			<xs:enumeration value="33"/>
+			<xs:enumeration value="34"/>
+			<xs:enumeration value="35"/>
+			<xs:enumeration value="36"/>
+			<xs:enumeration value="37"/>
+			<xs:enumeration value="38"/>
+			<xs:enumeration value="39"/>
+			<xs:enumeration value="40"/>
+			<xs:enumeration value="41"/>
+			<xs:enumeration value="42"/>
+			<xs:enumeration value="43"/>
+			<xs:enumeration value="44"/>
+			<xs:enumeration value="45"/>
+			<xs:enumeration value="46"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz8SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="99999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_3SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="3"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_2SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="2"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_8SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="8"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz6SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str50">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="50"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CnpSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{12}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DblPoz3_2SType">
+		<xs:restriction base="xs:double">
+			<xs:minInclusive value="0."/>
+			<xs:pattern value="\d{0,3}(\.\d{0,2})?"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>

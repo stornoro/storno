@@ -276,6 +276,37 @@ class TaxDeclarationController extends AbstractController
         try {
             $declaration = $this->manager->validate($declaration);
 
+            // Generate and store PDF after successful validation
+            $company = $declaration->getCompany();
+            try {
+                $xml = $this->manager->generateXml($declaration);
+
+                // Store XML
+                $xmlPath = sprintf(
+                    'declarations/%s/%s/%s.xml',
+                    $company->getId(),
+                    $declaration->getType()->value,
+                    $declaration->getId()
+                );
+                $this->defaultStorage->write($xmlPath, $xml);
+                $declaration->setXmlPath($xmlPath);
+
+                // Generate unsigned PDF via DUKIntegrator
+                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+
+                $pdfPath = sprintf(
+                    'declarations/%s/%s/%s.pdf',
+                    $company->getId(),
+                    $declaration->getType()->value,
+                    $declaration->getId()
+                );
+                $this->defaultStorage->write($pdfPath, $pdfBinary);
+                $declaration->setPdfPath($pdfPath);
+                $this->entityManager->flush();
+            } catch (\Throwable) {
+                // PDF generation is best-effort during validation — don't fail the whole validate
+            }
+
             return $this->json($declaration, context: ['groups' => ['declaration:detail']]);
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);

@@ -3553,6 +3553,7 @@ export default defineI18nLocale(async () => {
       toPay: 'TVA de plata',
       toRecover: 'TVA de recuperat',
       rows: 'Randuri D300',
+      headerInfo: 'Informatii declaratie',
       fields: {
         // Header fields
         luna: 'Perioada de raportare - Luna',
