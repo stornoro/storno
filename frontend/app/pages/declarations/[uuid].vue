@@ -216,12 +216,26 @@
             </UCard>
           </div>
 
-          <UCard v-if="declaration.data.rows && Object.keys(declaration.data.rows).length">
+          <!-- D300 header info (from uploaded XML) -->
+          <UCard v-if="d300Header && Object.keys(d300Header).length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d300.headerInfo') }}</h3>
+            </template>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div v-for="(value, key) in d300Header" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="text-xs text-(--ui-text-muted)" :title="String(key)">{{ $t(`declarations.d300.fields.${key}`) }}</span>
+                <span class="font-mono whitespace-nowrap ml-2">{{ value }}</span>
+              </div>
+            </div>
+          </UCard>
+
+          <!-- D300 row data (R*_* fields only, non-zero) -->
+          <UCard v-if="d300Rows && Object.keys(d300Rows).length">
             <template #header>
               <h3 class="font-semibold">{{ $t('declarations.d300.rows') }}</h3>
             </template>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div v-for="(value, key) in declaration.data.rows" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+              <div v-for="(value, key) in d300Rows" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
                 <span class="text-xs text-(--ui-text-muted)" :title="String(key)">{{ $t(`declarations.d300.fields.${key}`) }}</span>
                 <span class="font-mono whitespace-nowrap ml-2">{{ formatAmount(value as string) }}</span>
               </div>
@@ -548,6 +562,41 @@ const canSubmit = computed(() => isDraft.value || isValidated.value)
 const isTerminal = computed(() => ['accepted', 'rejected', 'error'].includes(declaration.value?.status))
 const isAutoPopulated = computed(() => declaration.value && AUTO_POPULATED_TYPES.includes(declaration.value.type as DeclarationType))
 const isManualType = computed(() => !isAutoPopulated.value)
+
+// D300: separate header metadata from actual row data
+const D300_HEADER_KEYS = new Set([
+  'luna', 'an', 'depusReprezentant', 'bifa_interne', 'temei', 'cuiSuccesor',
+  'prenume_declar', 'nume_declar', 'functie_declar', 'cui', 'den', 'adresa',
+  'telefon', 'fax', 'mail', 'banca', 'cont', 'caen', 'tip_decont', 'pro_rata',
+  'bifa_cereale', 'bifa_mob', 'bifa_disp', 'bifa_cons', 'solicit_ramb', 'nr_evid',
+  'totalPlata_A', 'xmlns:xsi', 'xsi:schemaLocation', 'xmlns', 'uploadedXml',
+])
+
+const D300_SKIP_KEYS = new Set(['xmlns:xsi', 'xsi:schemaLocation', 'xmlns', 'uploadedXml'])
+
+const d300Header = computed(() => {
+  const rows = declaration.value?.data?.rows
+  if (!rows) return null
+  const header: Record<string, string> = {}
+  for (const [key, value] of Object.entries(rows)) {
+    if (D300_HEADER_KEYS.has(key) && !D300_SKIP_KEYS.has(key) && value !== '' && value !== null && value !== undefined) {
+      header[key] = String(value)
+    }
+  }
+  return Object.keys(header).length ? header : null
+})
+
+const d300Rows = computed(() => {
+  const rows = declaration.value?.data?.rows
+  if (!rows) return null
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(rows)) {
+    if (!D300_HEADER_KEYS.has(key) && !D300_SKIP_KEYS.has(key) && Number(value) !== 0) {
+      result[key] = String(value)
+    }
+  }
+  return Object.keys(result).length ? result : null
+})
 
 // ── Editable rows (manual types) ────────────────────────────────────
 const editableRows = ref<Record<string, string>>({})
