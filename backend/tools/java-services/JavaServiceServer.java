@@ -696,15 +696,51 @@ public class JavaServiceServer {
                 Method noSign = intClass.getMethod("setNoCertificate");
                 noSign.invoke(integrator);
 
-                String outputDir = System.getProperty("java.io.tmpdir");
+                // pdfCreation(xmlPath, type, zipFile, pdfOutputPath)
+                // null zipFile = no zip, null pdfOutputPath = auto from XML (.xml→.pdf)
                 Method pdfMethod = intClass.getMethod("pdfCreation",
                     String.class, String.class, String.class, String.class);
                 int pdfResult = (Integer) pdfMethod.invoke(integrator,
-                    tmpXml.getAbsolutePath(), type, outputDir, null);
+                    tmpXml.getAbsolutePath(), type, null, tmpPdf.getAbsolutePath());
+
+                System.out.println("[JavaServices] DUK PDF #" + reqId +
+                    " pdfCreation result=" + pdfResult);
 
                 // Get the generated PDF path from the integrator
                 Method getPdfFile = intClass.getMethod("getFisierPdf");
                 String pdfPath = (String) getPdfFile.invoke(integrator);
+                System.out.println("[JavaServices] DUK PDF #" + reqId +
+                    " pdfPath=" + pdfPath);
+
+                // Check for error log
+                Method getLogFile = intClass.getMethod("getFisierLogErori");
+                String logPath = (String) getLogFile.invoke(integrator);
+                if (logPath != null && !logPath.isEmpty()) {
+                    File logFile = new File(logPath);
+                    if (logFile.exists()) {
+                        String logContent = Files.readString(logFile.toPath(),
+                            StandardCharsets.UTF_8).trim();
+                        if (!logContent.isEmpty()) {
+                            System.out.println("[JavaServices] DUK PDF #" + reqId +
+                                " log: " + logContent);
+                        }
+                    }
+                }
+
+                // Check for parse error file
+                Method getErrFile = intClass.getMethod("getFisierEroriParsare");
+                String errPath = (String) getErrFile.invoke(integrator);
+                if (errPath != null && !errPath.isEmpty()) {
+                    File errFile = new File(errPath);
+                    if (errFile.exists()) {
+                        String errContent2 = Files.readString(errFile.toPath(),
+                            StandardCharsets.UTF_8).trim();
+                        if (!errContent2.isEmpty()) {
+                            System.out.println("[JavaServices] DUK PDF #" + reqId +
+                                " errors: " + errContent2);
+                        }
+                    }
+                }
 
                 // Check for errors
                 if (tmpErr.exists()) {
@@ -735,7 +771,17 @@ public class JavaServiceServer {
                     if (altPdf.exists()) {
                         pdfFile = altPdf;
                     } else {
-                        sendJson(ex, 500, "{\"error\":\"DUK PDF not created\"}");
+                        // List files in outputDir matching our prefix
+                        File[] related = tmpXml.getParentFile().listFiles(
+                            f -> f.getName().startsWith("dukpdf_" + id));
+                        StringBuilder sb = new StringBuilder();
+                        if (related != null) {
+                            for (File f : related) sb.append(f.getName()).append(" ");
+                        }
+                        sendJson(ex, 500,
+                            "{\"error\":\"DUK PDF not created (result=" + pdfResult +
+                            ", pdfPath=" + (pdfPath == null ? "null" : pdfPath) +
+                            ", files=[" + sb.toString().trim() + "])\"}");
                         return;
                     }
                 }
