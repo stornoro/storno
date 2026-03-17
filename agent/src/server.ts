@@ -5,6 +5,7 @@ import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
 import { CERT, KEY } from './certs.js';
+import { signPdf } from './signing/pdf-signer.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
 declare const __VERSION__: string;
@@ -76,6 +77,10 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleProxy(req, res, config);
   } else if (url === '/batch' && req.method === 'POST') {
     handleBatch(req, res, config);
+  } else if (url === '/sign-and-submit' && req.method === 'POST') {
+    handleSignAndSubmit(req, res, config);
+  } else if (url === '/batch-sign-and-submit' && req.method === 'POST') {
+    handleBatchSignAndSubmit(req, res, config);
   } else {
     json(res, 404, { error: 'Not found' });
   }
@@ -246,6 +251,228 @@ async function handleBatch(req: IncomingMessage, res: ServerResponse, config: Ag
   json(res, 200, { results });
 }
 
+interface SignAndSubmitRequest {
+  pdf: string; // base64-encoded unsigned PDF
+  certificateId: string;
+  pin?: string;
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  uploadContentType?: string;
+}
+
+interface SignAndSubmitResult {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: string;
+  bodyEncoding?: string;
+}
+
+async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+
+  let body: string;
+  try {
+    body = await readBody(req);
+  } catch {
+    json(res, 400, { error: 'Failed to read request body' });
+    return;
+  }
+
+  let payload: SignAndSubmitRequest;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+
+  if (!payload.pdf || !payload.certificateId || !payload.uploadUrl) {
+    json(res, 400, { error: 'Missing required fields: pdf, certificateId, uploadUrl' });
+    return;
+  }
+
+  // Validate upload URL
+  try {
+    const targetUrl = new URL(payload.uploadUrl);
+    if (!ALLOWED_HOSTS.includes(targetUrl.hostname)) {
+      json(res, 403, { error: `Host not allowed: ${targetUrl.hostname}` });
+      return;
+    }
+  } catch {
+    json(res, 400, { error: 'Invalid uploadUrl' });
+    return;
+  }
+
+  try {
+    // Step 1: Sign the PDF
+    console.log(`[sign-and-submit] Signing PDF for cert ${payload.certificateId.substring(0, 8)}...`);
+    const unsignedPdf = Buffer.from(payload.pdf, 'base64');
+    const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config.pkcs11Module);
+    console.log(`[sign-and-submit] PDF signed (${signedPdf.length} bytes)`);
+
+    // Step 2: Upload signed PDF to ANAF via curl mTLS
+    console.log(`[sign-and-submit] Uploading to ${payload.uploadUrl}`);
+    const uploadResult = await curlProxy({
+      url: payload.uploadUrl,
+      method: 'POST',
+      headers: {
+        ...payload.uploadHeaders,
+        'Content-Type': payload.uploadContentType || 'application/pdf',
+      },
+      body: signedPdf.toString('base64'),
+      certificateId: payload.certificateId,
+      pin: payload.pin,
+    }, config);
+
+    console.log(`[sign-and-submit] ANAF response: ${uploadResult.statusCode}`);
+
+    json(res, 200, {
+      statusCode: uploadResult.statusCode,
+      headers: uploadResult.headers,
+      body: uploadResult.body,
+      bodyEncoding: uploadResult.bodyEncoding,
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.error(`[sign-and-submit] Error: ${msg}`);
+
+    if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) {
+      json(res, 200, { error: msg, pinError: true });
+    } else {
+      json(res, 502, { error: `Sign and submit failed: ${msg}` });
+    }
+  }
+}
+
+async function handleBatchSignAndSubmit(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+
+  let body: string;
+  try {
+    body = await readBody(req);
+  } catch {
+    json(res, 400, { error: 'Failed to read request body' });
+    return;
+  }
+
+  let payload: {
+    requests: Array<{
+      pdf: string;
+      uploadUrl: string;
+      uploadHeaders: Record<string, string>;
+      uploadContentType?: string;
+    }>;
+    certificateId: string;
+    pin?: string;
+  };
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+
+  if (!Array.isArray(payload.requests) || payload.requests.length === 0) {
+    json(res, 400, { error: 'Missing required field: requests (non-empty array)' });
+    return;
+  }
+  if (!payload.certificateId) {
+    json(res, 400, { error: 'Missing required field: certificateId' });
+    return;
+  }
+
+  // Validate all upload URLs
+  for (let i = 0; i < payload.requests.length; i++) {
+    const r = payload.requests[i];
+    if (!r.pdf || !r.uploadUrl) {
+      json(res, 400, { error: `Request [${i}]: missing required fields: pdf, uploadUrl` });
+      return;
+    }
+    try {
+      const targetUrl = new URL(r.uploadUrl);
+      if (!ALLOWED_HOSTS.includes(targetUrl.hostname)) {
+        json(res, 400, { error: `Request [${i}]: host not allowed: ${targetUrl.hostname}` });
+        return;
+      }
+    } catch {
+      json(res, 400, { error: `Request [${i}]: invalid uploadUrl` });
+      return;
+    }
+  }
+
+  // Process sequentially (USB token can only sign one at a time)
+  const results: Array<{
+    index: number;
+    success: boolean;
+    statusCode?: number;
+    headers?: Record<string, string>;
+    body?: string;
+    bodyEncoding?: string;
+    error?: string;
+  }> = [];
+
+  for (let i = 0; i < payload.requests.length; i++) {
+    const item = payload.requests[i];
+
+    // Small delay between requests
+    if (i > 0) await new Promise(r => setTimeout(r, 500));
+
+    try {
+      // Sign
+      console.log(`[batch-sign-and-submit] Signing ${i + 1}/${payload.requests.length}...`);
+      const unsignedPdf = Buffer.from(item.pdf, 'base64');
+      const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config.pkcs11Module);
+
+      // Upload
+      console.log(`[batch-sign-and-submit] Uploading ${i + 1}/${payload.requests.length} to ${item.uploadUrl}`);
+      const uploadResult = await curlProxy({
+        url: item.uploadUrl,
+        method: 'POST',
+        headers: {
+          ...item.uploadHeaders,
+          'Content-Type': item.uploadContentType || 'application/pdf',
+        },
+        body: signedPdf.toString('base64'),
+        certificateId: payload.certificateId,
+        pin: payload.pin,
+      }, config);
+
+      results.push({
+        index: i,
+        success: uploadResult.statusCode < 400,
+        statusCode: uploadResult.statusCode,
+        headers: uploadResult.headers,
+        body: uploadResult.body,
+        bodyEncoding: uploadResult.bodyEncoding,
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      console.error(`[batch-sign-and-submit] Error on ${i + 1}/${payload.requests.length}: ${msg}`);
+
+      // PIN errors — abort entire batch
+      if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) {
+        results.push({ index: i, success: false, error: msg });
+        json(res, 200, {
+          results,
+          aborted: true,
+          reason: 'PIN error — batch stopped to prevent certificate lockout',
+        });
+        return;
+      }
+
+      results.push({ index: i, success: false, error: msg });
+    }
+  }
+
+  json(res, 200, { results });
+}
+
 export function startServer(config?: AgentConfig): void {
   const cfg = config ?? loadConfig();
   const handler = (req: IncomingMessage, res: ServerResponse) => handleRequest(req, res, cfg);
@@ -263,6 +490,8 @@ export function startServer(config?: AgentConfig): void {
     console.log(`  GET  https://agent.storno.ro:${port}/certificates`);
     console.log(`  POST https://agent.storno.ro:${port}/proxy`);
     console.log(`  POST https://agent.storno.ro:${port}/batch`);
+    console.log(`  POST https://agent.storno.ro:${port}/sign-and-submit`);
+    console.log(`  POST https://agent.storno.ro:${port}/batch-sign-and-submit`);
     console.log(`  POST https://agent.storno.ro:${port}/update`);
     console.log('');
     console.log('Protocol: storno-agent:// registered');

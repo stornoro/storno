@@ -11,6 +11,7 @@ use App\Security\Permission;
 use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Declaration\AnafDeclarationClient;
+use App\Service\Declaration\DukIntegratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -32,6 +33,7 @@ class TaxDeclarationController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly TaxDeclarationRepository $declarationRepository,
         private readonly AnafDeclarationClient $anafClient,
+        private readonly DukIntegratorService $dukIntegrator,
     ) {}
 
     #[Route('/declarations', methods: ['GET'])]
@@ -333,6 +335,31 @@ class TaxDeclarationController extends AbstractController
         ]);
     }
 
+    #[Route('/declarations/{uuid}/pdf', methods: ['GET'])]
+    public function downloadPdf(string $uuid): Response
+    {
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $declaration = $this->manager->find($uuid);
+        if (!$declaration) {
+            return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$declaration->getPdfPath() || !$this->defaultStorage->fileExists($declaration->getPdfPath())) {
+            return $this->json(['error' => 'PDF not available. Validate or prepare the declaration first.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $content = $this->defaultStorage->read($declaration->getPdfPath());
+        $filename = sprintf('%s_%d_%02d.pdf', $declaration->getType()->value, $declaration->getYear(), $declaration->getMonth());
+
+        return new Response($content, Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+        ]);
+    }
+
     #[Route('/declarations/{uuid}/recipisa', methods: ['GET'])]
     public function downloadRecipisa(string $uuid): Response
     {
@@ -407,6 +434,11 @@ class TaxDeclarationController extends AbstractController
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        // Guard: do not prepare accepted/processing/submitted declarations
+        if (in_array($declaration->getStatus(), [DeclarationStatus::ACCEPTED, DeclarationStatus::PROCESSING, DeclarationStatus::SUBMITTED], true)) {
+            return $this->json(['error' => 'Cannot prepare a declaration with status: ' . $declaration->getStatus()->value . '.'], Response::HTTP_BAD_REQUEST);
+        }
+
         $company = $declaration->getCompany();
         $operation = $request->query->get('operation', 'submit');
 
@@ -433,10 +465,23 @@ class TaxDeclarationController extends AbstractController
                 );
                 $this->defaultStorage->write($xmlPath, $xml);
                 $declaration->setXmlPath($xmlPath);
+
+                // Generate unsigned PDF via DUKIntegrator
+                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+
+                // Store PDF
+                $pdfPath = sprintf(
+                    'declarations/%s/%s/%s.pdf',
+                    $company->getId(),
+                    $declaration->getType()->value,
+                    $declaration->getId()
+                );
+                $this->defaultStorage->write($pdfPath, $pdfBinary);
+                $declaration->setPdfPath($pdfPath);
                 $this->entityManager->flush();
 
                 return $this->json([
-                    'xml' => $xml,
+                    'pdfBase64' => base64_encode($pdfBinary),
                     'anafUrl' => $baseUrl . '/cerere?tip=' . $type . '&cui=' . $cif,
                     'anafToken' => $anafToken->getToken(),
                     'declarationType' => $type,
@@ -532,13 +577,26 @@ class TaxDeclarationController extends AbstractController
                 $this->defaultStorage->write($xmlPath, $xml);
                 $declaration->setXmlPath($xmlPath);
 
+                // Generate unsigned PDF via DUKIntegrator
+                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+
+                // Store PDF
+                $pdfPath = sprintf(
+                    'declarations/%s/%s/%s.pdf',
+                    $company->getId(),
+                    $declaration->getType()->value,
+                    $declaration->getId()
+                );
+                $this->defaultStorage->write($pdfPath, $pdfBinary);
+                $declaration->setPdfPath($pdfPath);
+
                 $cif = (string) $company->getCif();
                 $type = strtoupper($declaration->getType()->value);
                 $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
 
                 $items[] = [
                     'declarationId' => (string) $declaration->getId(),
-                    'xml' => $xml,
+                    'pdfBase64' => base64_encode($pdfBinary),
                     'anafUrl' => $baseUrl . '/cerere?tip=' . $type . '&cui=' . $cif,
                     'anafToken' => $resolvedToken->getToken(),
                     'declarationType' => $type,
@@ -552,6 +610,46 @@ class TaxDeclarationController extends AbstractController
         $this->entityManager->flush();
 
         return $this->json(['items' => $items, 'errors' => $errors]);
+    }
+
+    #[Route('/declarations/batch-validate', methods: ['POST'])]
+    public function batchValidate(Request $request): JsonResponse
+    {
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $ids = $data['ids'] ?? [];
+
+        if (empty($ids) || !is_array($ids)) {
+            return $this->json(['error' => 'Missing required field: ids (array of UUIDs).'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $validated = 0;
+        $errors = [];
+
+        foreach ($ids as $id) {
+            $declaration = $this->manager->find($id);
+            if (!$declaration) {
+                $errors[] = ['id' => $id, 'error' => 'Declaration not found.'];
+                continue;
+            }
+
+            if ($declaration->getStatus() !== DeclarationStatus::DRAFT) {
+                $errors[] = ['id' => $id, 'error' => 'Only draft declarations can be validated. Current status: ' . $declaration->getStatus()->value . '.'];
+                continue;
+            }
+
+            try {
+                $this->manager->validate($declaration);
+                $validated++;
+            } catch (\Exception $e) {
+                $errors[] = ['id' => $id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return $this->json(['validated' => $validated, 'errors' => $errors]);
     }
 
     #[Route('/declarations/batch-agent-result', methods: ['POST'])]

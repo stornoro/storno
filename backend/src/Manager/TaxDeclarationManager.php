@@ -14,6 +14,7 @@ use App\Message\Declaration\SyncDeclarationsMessage;
 use App\Repository\TaxDeclarationRepository;
 use App\Service\Declaration\DeclarationDataPopulatorInterface;
 use App\Service\Declaration\DeclarationXmlGeneratorInterface;
+use App\Service\Declaration\DukIntegratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\TaggedIterator;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -33,6 +34,7 @@ class TaxDeclarationManager
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $messageBus,
         private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly DukIntegratorService $dukIntegrator,
         #[TaggedIterator('app.declaration_data_populator')]
         iterable $dataPopulators,
         #[TaggedIterator('app.declaration_xml_generator')]
@@ -173,6 +175,25 @@ class TaxDeclarationManager
         $doc = new \DOMDocument();
         if (!$doc->loadXML($xml)) {
             throw new \RuntimeException('Generated XML is not valid.');
+        }
+
+        // DUK validation (ANAF-grade) — if available
+        if ($this->dukIntegrator->isAvailable()) {
+            $dukResult = $this->dukIntegrator->validate($xml, $declaration->getType()->value);
+            if (!$dukResult->valid) {
+                throw new \RuntimeException(sprintf(
+                    'DUK validation failed: %s',
+                    implode('; ', $dukResult->errors)
+                ));
+            }
+
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+                'dukValidation' => [
+                    'valid' => true,
+                    'warnings' => $dukResult->warnings,
+                    'validatedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                ],
+            ]));
         }
 
         $declaration->setStatus(DeclarationStatus::VALIDATED);
