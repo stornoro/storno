@@ -486,7 +486,7 @@
           class="download-card"
           id="card-macos-arm"
           href="#"
-          data-asset="storno-agent-macos-arm64"
+          data-asset="storno-agent-macos-arm64.zip"
           download
           aria-label="Download for macOS Apple Silicon"
         >
@@ -512,7 +512,7 @@
           class="download-card"
           id="card-macos-x64"
           href="#"
-          data-asset="storno-agent-macos-x64"
+          data-asset="storno-agent-macos-x64.zip"
           download
           aria-label="Download for macOS Intel"
         >
@@ -602,22 +602,20 @@
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-body">
-            <div class="step-title">Make it executable and run it</div>
+            <div class="step-title">Run it</div>
             <div class="step-os-tabs">
               <div class="code-block">
-                <span class="code-os-label">macOS / Linux</span>
-                <span class="code-text" id="cmd-unix">chmod +x storno-agent-* &amp;&amp; ./storno-agent start</span>
-                <button class="copy-btn" aria-label="Copy macOS/Linux command" onclick="copyCode('cmd-unix', this)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
+                <span class="code-os-label">macOS</span>
+                <span class="code-text" id="cmd-mac">Unzip &amp; double-click "Storno Agent.app"</span>
               </div>
               <div class="code-block">
                 <span class="code-os-label">Windows</span>
-                <span class="code-text" id="cmd-win">storno-agent-win-x64.exe start</span>
-                <button class="copy-btn" aria-label="Copy Windows command" onclick="copyCode('cmd-win', this)">
+                <span class="code-text" id="cmd-win">Double-click storno-agent-win-x64.exe</span>
+              </div>
+              <div class="code-block">
+                <span class="code-os-label">Linux</span>
+                <span class="code-text" id="cmd-linux">chmod +x storno-agent-linux-x64 &amp;&amp; ./storno-agent-linux-x64 start</span>
+                <button class="copy-btn" aria-label="Copy Linux command" onclick="copyCode('cmd-linux', this)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
