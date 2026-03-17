@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:d101:declaratie:v3" targetNamespace="mfp:anaf:dgti:d101:declaratie:v3" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.02" xml:lang="ro">
+	<xs:element name="declaratie101" type="Declaratie101Type"/>
+	<xs:complexType name="Declaratie101Type">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="luna_i" type="IntPoz2SType" use="required"/>
+				<xs:attribute name="luna" type="IntPoz2SType" use="required"/>
+				<xs:attribute name="an" type="IntPoz4SType" use="required"/>
+				<xs:attribute name="an_i" type="IntPoz4SType" use="required"/>
+				<xs:attribute name="d_rec" type="IntPoz1SType" use="required"/>
+				<xs:attribute name="d_recN" type="IntPoz1SType"/>
+				<xs:attribute name="d_anulare" type="IntPoz1SType" use="required"/>
+				<xs:attribute name="temei" type="IntPoz1SType"/>
+				<xs:attribute name="d_succ" type="IntPoz1SType" use="required"/>
+				<xs:attribute name="d_alte" type="IntPoz1SType" use="required"/>
+				<xs:attribute name="d_reglem" type="IntPoz1SType"  use="required"/>
+				<xs:attribute name="d_grup" type="IntPoz1SType"/>
+				<xs:attribute name="cifs" type="IntPoz13SType" use="required"/>
+				<xs:attribute name="trim_micro" type="IntPoz1SType" />
+				<xs:attribute name="primul_an_modif" type="IntPoz1SType" />
+				<xs:attribute name="ultimul_an_modif" type="IntPoz1SType" />					
+				<xs:attribute name="data_m" type="DateSType"/>
+				<xs:attribute name="data_l" type="DateSType"/>
+				<xs:attribute name="data_b" type="DateSType"/>
+				<xs:attribute name="data_i" type="DateSType" use="required"/>
+				<xs:attribute name="data_s" type="DateSType" use="required"/>
+				<xs:attribute name="cod_obligatie" type="IntPoz3SType" use="required"/>				
+				<xs:attribute name="scadenta" type="Str6" use="required"/>
+				<xs:attribute name="cod_bug" type="Str10" use="required"/>
+				<xs:attribute name="nr_evid" type="IntPoz23SType" use="required"/>
+				<xs:attribute name="totalPlata_A" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="nume_declar" type="Str75" use="required"/>
+				<xs:attribute name="prenume_declar" type="Str75" use="required"/>
+				<xs:attribute name="functie_declar" type="Str50" use="required"/>
+				<xs:attribute name="cif" type="IntPoz10SType" use="required"/>
+				<xs:attribute name="caen" type="IntPoz4SType" use="required"/>
+				<xs:attribute name="denumire" type="Str200" use="required"/>
+				<xs:attribute name="adresa" type="Str1000" use="required"/>
+				<xs:attribute name="telefon" type="Str15"/>
+				<xs:attribute name="fax" type="Str15"/>
+				<xs:attribute name="email" type="Str200"/>
+				<xs:attribute name="cifR" type="IntPoz13SType"/>
+				<xs:attribute name="denR" type="Str200"/>
+				<xs:attribute name="adrR" type="Str1000"/>
+				<xs:attribute name="telR" type="Str15"/>
+				<xs:attribute name="faxR" type="Str15"/>
+				<xs:attribute name="emailR" type="Str200"/>				
+				<xs:attribute name="P1" type="IntPoz15SType"/>
+				<xs:attribute name="P2" type="IntPoz15SType"/>
+				<xs:attribute name="P3" type="IntPoz15SType"/>
+				<xs:attribute name="P4" type="IntPoz15SType"/>
+				<xs:attribute name="P5" type="IntPoz15SType"/>
+				<xs:attribute name="P6" type="IntPoz15SType"/>
+				<xs:attribute name="P7" type="IntPoz15SType"/>
+				<xs:attribute name="P8" type="IntPoz15SType"/>
+				<xs:attribute name="P81" type="IntPoz15SType"/>
+				<xs:attribute name="P82" type="IntPoz15SType"/>
+				<xs:attribute name="P83" type="IntPoz15SType"/>
+				<xs:attribute name="P84" type="IntPoz15SType"/>
+				<xs:attribute name="P9" type="IntPoz15SType"/>
+				<xs:attribute name="P91" type="IntPoz15SType"/>
+				<xs:attribute name="P10" type="IntPoz15SType"/>
+				<xs:attribute name="P11" type="IntPoz15SType"/>
+				<xs:attribute name="P111" type="IntPoz15SType"/>
+				<xs:attribute name="P112" type="IntPoz15SType"/>
+				<xs:attribute name="P113" type="IntPoz15SType"/>
+				<xs:attribute name="P12" type="IntPoz15SType"/>
+				<xs:attribute name="P121" type="IntPoz15SType"/>
+				<xs:attribute name="P122" type="IntPoz15SType"/>
+				<xs:attribute name="P13" type="IntPoz15SType"/>
+				<xs:attribute name="P14" type="IntPoz15SType"/>				
+				<xs:attribute name="P15" type="IntPoz15SType"/>
+				<xs:attribute name="P151" type="IntPoz15SType"/>
+				<xs:attribute name="P16" type="IntPoz15SType"/>
+				<xs:attribute name="P17" type="IntPoz15SType"/>
+				<xs:attribute name="P171" type="IntPoz15SType"/>
+				<xs:attribute name="P172" type="IntPoz15SType"/>
+				<xs:attribute name="P173" type="IntPoz15SType"/>
+				<xs:attribute name="P18" type="IntPoz15SType"/>
+				<xs:attribute name="P19" type="IntPoz15SType"/>
+				<xs:attribute name="P20" type="IntPoz15SType"/>
+				<xs:attribute name="P21" type="IntPoz15SType"/>
+				<xs:attribute name="P22" type="IntPoz15SType"/>
+				<xs:attribute name="P23" type="IntPoz15SType"/>
+				<xs:attribute name="P24" type="IntPoz15SType"/>
+				<xs:attribute name="P25" type="IntPoz15SType"/>
+				<xs:attribute name="P26" type="IntPoz15SType"/>
+				<xs:attribute name="P27" type="IntPoz15SType"/>
+				<xs:attribute name="P28" type="IntPoz15SType"/>
+				<xs:attribute name="P29" type="IntPoz15SType"/>
+				<xs:attribute name="P30" type="IntPoz15SType"/>
+				<xs:attribute name="P31" type="IntPoz15SType"/>
+				<xs:attribute name="P32" type="IntPoz15SType"/>
+				<xs:attribute name="P33" type="IntPoz15SType"/>
+				<xs:attribute name="P34" type="IntPoz15SType"/>
+				<xs:attribute name="P35" type="IntPoz15SType"/>
+				<xs:attribute name="P36" type="IntPoz15SType"/>
+				<xs:attribute name="P37" type="IntPoz15SType"/>
+				<xs:attribute name="P38" type="IntPoz15SType"/>
+				<xs:attribute name="P39" type="IntPoz15SType"/>
+				<xs:attribute name="P40" type="IntPoz15SType"/>
+				<xs:attribute name="P41" type="IntPoz15SType"/>	
+				<xs:attribute name="P411" type="IntPoz15SType"/>
+				<xs:attribute name="P412" type="IntPoz15SType"/>	
+				<xs:attribute name="P42" type="IntPoz15SType"/>
+				<xs:attribute name="P421" type="IntPoz15SType"/>
+				<xs:attribute name="P422" type="IntPoz15SType"/>
+				<xs:attribute name="P4221" type="IntPoz15SType"/>
+				<xs:attribute name="P4222" type="IntPoz15SType"/>
+				<xs:attribute name="P423" type="IntPoz15SType"/>
+				<xs:attribute name="P4231" type="IntPoz15SType"/>	
+				<xs:attribute name="P43" type="IntPoz15SType"/>
+				<xs:attribute name="P431" type="IntPoz15SType"/>
+				<xs:attribute name="P432 "type="IntPoz15SType"/>			
+				<xs:attribute name="P44" type="IntPoz15SType"/>				
+				<xs:attribute name="P45" type="IntPoz15SType"/>
+				<xs:attribute name="P46" type="IntPoz15SType"/>
+				<xs:attribute name="P47" type="IntPoz15SType"/>
+				<xs:attribute name="P48" type="IntPoz15SType"/>
+				<xs:attribute name="P49" type="IntPoz15SType"/>	
+				<xs:attribute name="P50" type="IntPoz15SType"/>	
+				<xs:attribute name="P51" type="IntPoz15SType"/>
+				<xs:attribute name="P52" type="IntPoz15SType"/>
+				<xs:attribute name="P53" type="IntPoz15SType"/>	
+				<xs:attribute name="P38a" type="IntPoz15SType"/>
+				<xs:attribute name="P39a" type="IntPoz15SType"/>
+				<xs:attribute name="P40a" type="IntPoz15SType"/>
+				<xs:attribute name="P43a" type="IntPoz15SType"/>
+				<xs:attribute name="P481" type="IntPoz15SType"/>
+				<xs:attribute name="P482" type="IntPoz15SType"/>	
+
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:simpleType name="IntPoz2SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="99"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz4SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz3SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str2">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="2"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str8">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="8"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str6">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="6"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str10">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="10"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz23SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="99999999999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+		<xs:simpleType name="IntPoz13SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str75">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="75"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str50">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="50"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz10SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str200">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str1000">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="1000"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str15">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="15"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DateSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="([1-9]|0[1-9]|[12][0-9]|3[01])\.([1-9]|0[1-9]|1[012])\.\d{4}"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>

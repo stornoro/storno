@@ -212,16 +212,16 @@ const createTypeOptions = [
   { label: '── Manual ──', value: '', disabled: true },
   { label: 'D100 - Obligatii plata buget de stat', value: 'd100' },
   { label: 'D101 - Impozit pe profit', value: 'd101' },
-  { label: 'D106 - Impozit specific activitati', value: 'd106' },
+  { label: 'D106 - Declaratie informativa dividende actionari', value: 'd106' },
   { label: 'D112 - Declaratie unica (CAS/CASS)', value: 'd112' },
-  { label: 'D120 - Impozit microintreprinderi', value: 'd120' },
-  { label: 'D130 - Impozit retinut la sursa', value: 'd130' },
-  { label: 'D180 - Impozit pe dividende', value: 'd180' },
+  { label: 'D120 - Decont accize', value: 'd120' },
+  { label: 'D130 - Decont impozit titei productie interna', value: 'd130' },
+  { label: 'D180 - Nota de certificare (consultant fiscal)', value: 'd180' },
   { label: 'D205 - Informativa retineri la sursa', value: 'd205' },
-  { label: 'D208 - Declaratie informativa', value: 'd208' },
+  { label: 'D208 - Declaratie informativa transferuri imobiliare', value: 'd208' },
   { label: 'D212 - Declaratie unica PF', value: 'd212' },
   { label: 'D301 - Decont special TVA', value: 'd301' },
-  { label: 'D311 - TVA regim special', value: 'd311' },
+  { label: 'D311 - Declaratie TVA colectat (cod anulat)', value: 'd311' },
 ]
 
 async function onCreate() {

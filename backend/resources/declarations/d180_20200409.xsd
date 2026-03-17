@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:d180:declaratie:v1" targetNamespace="mfp:anaf:dgti:d180:declaratie:v1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.02" xml:lang="ro">
+	<xs:element name="declaratie180" type="Declaratie180Type"/>
+	<xs:complexType name="Declaratie180Type">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="an" type="IntInt2014_2100SType" use="required"/>
+				<xs:attribute name="luna" type="IntInt1_12SType" use="required"/>
+				<xs:attribute name="totalPlata_A" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="cifContr" type="CifSType" use="required"/>
+				<xs:attribute name="denContr" type="Str75" use="required"/>
+				<xs:attribute name="adresaContr" type="Str200"/>
+				<xs:attribute name="emailContr" type="Email200SType"/>
+				<xs:attribute name="cifConslt" type="CifSType" use="required"/>
+				<xs:attribute name="denConslt" type="Str75" use="required"/>
+				<xs:attribute name="adresaConslt" type="Str200"/>
+				<xs:attribute name="telefonConslt" type="IntPoz10SType"/>
+				<xs:attribute name="faxConslt" type="IntPoz10SType"/>
+				<xs:attribute name="emailConslt" type="Email200SType"/>
+				<xs:attribute name="nume_declar" type="Str75" use="required"/>
+				<xs:attribute name="prenume_declar" type="Str75" use="required"/>
+				<xs:attribute name="functie_declar" type="Str50" use="required"/>
+				<xs:attribute name="tipForm" type="Str_tipFormSType" use="required"/>
+				<xs:attribute name="dclRectf" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="motvRectf" type="Str1000"/>
+				<xs:attribute name="natCr" type="Str_natCrSType" use="required"/>
+				<xs:attribute name="valCr" type="IntNeg15SType"/>
+				<xs:attribute name="tipCertific" type="Int_tipCertificSType" use="required"/>
+				<xs:attribute name="motvRez" type="Str1000" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:simpleType name="IntInt2014_2100SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="2014"/>
+			<xs:maxInclusive value="2100"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_12SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="12"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CifSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{12}|[1-9]\d{1,9}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str75">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="75"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str200">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Email200SType">
+		<xs:restriction base="xs:token">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz10SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str50">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="50"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_tipFormSType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="5"/>
+			<xs:enumeration value="100"/>
+			<xs:enumeration value="101"/>
+			<xs:enumeration value="104"/>
+			<xs:enumeration value="112"/>
+			<xs:enumeration value="300"/>
+			<xs:enumeration value="301"/>
+			<xs:enumeration value="307"/>
+			<xs:enumeration value="311"/>
+			<xs:enumeration value="710"/>
+			<xs:enumeration value="200"/>
+			<xs:enumeration value="201"/>
+			<xs:enumeration value="106"/>
+			<xs:enumeration value="120"/>
+			<xs:enumeration value="130"/>
+			<xs:enumeration value="205"/>
+			<xs:enumeration value="390"/>
+			<xs:enumeration value="392A"/>
+			<xs:enumeration value="392B"/>
+			<xs:enumeration value="393"/>
+			<xs:enumeration value="394"/>
+			<xs:enumeration value="400"/>
+			<xs:enumeration value="204"/>
+			<xs:enumeration value="107"/>
+			<xs:enumeration value="108"/>
+			<xs:enumeration value="109"/>
+			<xs:enumeration value="110"/>
+			<xs:enumeration value="207"/>
+			<xs:enumeration value="208"/>
+			<xs:enumeration value="212"/>
+			<xs:enumeration value="222"/>
+			<xs:enumeration value="223"/>
+			<xs:enumeration value="224"/>
+			<xs:enumeration value="399"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt0_1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="1"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str1000">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="1000"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_natCrSType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="7"/>
+			<xs:enumeration value="102"/>
+			<xs:enumeration value="103"/>
+			<xs:enumeration value="106"/>
+			<xs:enumeration value="105"/>
+			<xs:enumeration value="150"/>
+			<xs:enumeration value="121"/>
+			<xs:enumeration value="710"/>
+			<xs:enumeration value="604"/>
+			<xs:enumeration value="605"/>
+			<xs:enumeration value="609"/>
+			<xs:enumeration value="617"/>
+			<xs:enumeration value="606"/>
+			<xs:enumeration value="608"/>
+			<xs:enumeration value="621"/>
+			<xs:enumeration value="620"/>
+			<xs:enumeration value="690"/>
+			<xs:enumeration value="631"/>
+			<xs:enumeration value="632"/>
+			<xs:enumeration value="633"/>
+			<xs:enumeration value="634"/>
+			<xs:enumeration value="635"/>
+			<xs:enumeration value="640"/>
+			<xs:enumeration value="636"/>
+			<xs:enumeration value="637"/>
+			<xs:enumeration value="638"/>
+			<xs:enumeration value="639"/>
+			<xs:enumeration value="810"/>
+			<xs:enumeration value="750"/>
+			<xs:enumeration value="755"/>
+			<xs:enumeration value="756"/>
+			<xs:enumeration value="780"/>
+			<xs:enumeration value="781"/>
+			<xs:enumeration value="111"/>
+			<xs:enumeration value="211"/>
+			<xs:enumeration value="216"/>
+			<xs:enumeration value="212"/>
+			<xs:enumeration value="217"/>
+			<xs:enumeration value="213"/>
+			<xs:enumeration value="214"/>
+			<xs:enumeration value="215"/>
+			<xs:enumeration value="221"/>
+			<xs:enumeration value="222"/>
+			<xs:enumeration value="224"/>
+			<xs:enumeration value="225"/>
+			<xs:enumeration value="231"/>
+			<xs:enumeration value="232"/>
+			<xs:enumeration value="233"/>
+			<xs:enumeration value="234"/>
+			<xs:enumeration value="235"/>
+			<xs:enumeration value="236"/>
+			<xs:enumeration value="238"/>
+			<xs:enumeration value="237"/>
+			<xs:enumeration value="270"/>
+			<xs:enumeration value="244"/>
+			<xs:enumeration value="242"/>
+			<xs:enumeration value="243"/>
+			<xs:enumeration value="261"/>
+			<xs:enumeration value="275"/>
+			<xs:enumeration value="251"/>
+			<xs:enumeration value="252"/>
+			<xs:enumeration value="253"/>
+			<xs:enumeration value="254"/>
+			<xs:enumeration value="255"/>
+			<xs:enumeration value="256"/>
+			<xs:enumeration value="257"/>
+			<xs:enumeration value="258"/>
+			<xs:enumeration value="259"/>
+			<xs:enumeration value="945"/>
+			<xs:enumeration value="941"/>
+			<xs:enumeration value="942"/>
+			<xs:enumeration value="943"/>
+			<xs:enumeration value="944"/>
+			<xs:enumeration value="504"/>
+			<xs:enumeration value="536"/>
+			<xs:enumeration value="537"/>
+			<xs:enumeration value="535"/>
+			<xs:enumeration value="946"/>
+			<xs:enumeration value="758"/>
+			<xs:enumeration value="713"/>
+			<xs:enumeration value="712"/>
+			<xs:enumeration value="711"/>
+			<xs:enumeration value="701"/>
+			<xs:enumeration value="450"/>
+			<xs:enumeration value="641"/>
+			<xs:enumeration value="104"/>
+			<xs:enumeration value="102"/>
+			<xs:enumeration value="103"/>
+			<xs:enumeration value="105"/>
+			<xs:enumeration value="602"/>
+			<xs:enumeration value="412"/>
+			<xs:enumeration value="413"/>
+			<xs:enumeration value="418"/>
+			<xs:enumeration value="411"/>
+			<xs:enumeration value="416"/>
+			<xs:enumeration value="432"/>
+			<xs:enumeration value="433"/>
+			<xs:enumeration value="438"/>
+			<xs:enumeration value="441"/>
+			<xs:enumeration value="435"/>
+			<xs:enumeration value="437"/>
+			<xs:enumeration value="431"/>
+			<xs:enumeration value="440"/>
+			<xs:enumeration value="439"/>
+			<xs:enumeration value="422"/>
+			<xs:enumeration value="421"/>
+			<xs:enumeration value="423"/>
+			<xs:enumeration value="444"/>
+			<xs:enumeration value="445"/>
+			<xs:enumeration value="446"/>
+			<xs:enumeration value="447"/>
+			<xs:enumeration value="449"/>
+			<xs:enumeration value="448"/>
+			<xs:enumeration value="607"/>
+			<xs:enumeration value="451"/>
+			<xs:enumeration value="461"/>
+			<xs:enumeration value="462"/>
+			<xs:enumeration value="452"/>
+			<xs:enumeration value="453"/>
+			<xs:enumeration value="463"/>
+			<xs:enumeration value="464"/>
+			<xs:enumeration value="465"/>
+			<xs:enumeration value="611"/>
+			<xs:enumeration value="616"/>
+			<xs:enumeration value="615"/>
+			<xs:enumeration value="469"/>
+			<xs:enumeration value="619"/>
+			<xs:enumeration value="122"/>
+			<xs:enumeration value="30001"/>
+			<xs:enumeration value="30101"/>
+			<xs:enumeration value="30701"/>
+			<xs:enumeration value="31101"/>
+			<xs:enumeration value="20001"/>
+			<xs:enumeration value="20002"/>
+			<xs:enumeration value="20003"/>
+			<xs:enumeration value="20004"/>
+			<xs:enumeration value="20005"/>
+			<xs:enumeration value="20006"/>
+			<xs:enumeration value="20007"/>
+			<xs:enumeration value="20008"/>
+			<xs:enumeration value="20009"/>
+			<xs:enumeration value="20010"/>
+			<xs:enumeration value="20101"/>
+			<xs:enumeration value="20102"/>
+			<xs:enumeration value="20103"/>
+			<xs:enumeration value="20104"/>
+			<xs:enumeration value="20105"/>
+			<xs:enumeration value="20106"/>
+			<xs:enumeration value="20107"/>
+			<xs:enumeration value="20108"/>
+			<xs:enumeration value="20109"/>
+			<xs:enumeration value="20110"/>
+			<xs:enumeration value="20111"/>
+			<xs:enumeration value="20112"/>
+			<xs:enumeration value="20113"/>
+			<xs:enumeration value="20114"/>
+			<xs:enumeration value="20115"/>
+			<xs:enumeration value="20116"/>
+			<xs:enumeration value="20117"/>
+			<xs:enumeration value="20118"/>
+			<xs:enumeration value="10401"/>
+			<xs:enumeration value="10601"/>
+			<xs:enumeration value="12001"/>
+			<xs:enumeration value="13001"/>
+			<xs:enumeration value="20401"/>
+			<xs:enumeration value="20402"/>
+			<xs:enumeration value="20403"/>
+			<xs:enumeration value="20404"/>
+			<xs:enumeration value="20405"/>
+			<xs:enumeration value="20406"/>
+			<xs:enumeration value="20501"/>
+			<xs:enumeration value="20502"/>
+			<xs:enumeration value="20503"/>
+			<xs:enumeration value="20504"/>
+			<xs:enumeration value="20505"/>
+			<xs:enumeration value="20506"/>
+			<xs:enumeration value="20507"/>
+			<xs:enumeration value="20508"/>
+			<xs:enumeration value="20509"/>
+			<xs:enumeration value="20510"/>
+			<xs:enumeration value="20511"/>
+			<xs:enumeration value="20512"/>
+			<xs:enumeration value="20513"/>
+			<xs:enumeration value="20514"/>
+			<xs:enumeration value="20515"/>
+			<xs:enumeration value="20516"/>
+			<xs:enumeration value="20517"/>
+			<xs:enumeration value="20518"/>
+			<xs:enumeration value="39001"/>
+			<xs:enumeration value="392a01"/>
+			<xs:enumeration value="392b01"/>
+			<xs:enumeration value="39301"/>
+			<xs:enumeration value="39401"/>
+			<xs:enumeration value="40001"/>
+			<xs:enumeration value="622"/>
+			<xs:enumeration value="623"/>
+			<xs:enumeration value="160"/>
+			<xs:enumeration value="763"/>
+			<xs:enumeration value="20901"/>
+			<xs:enumeration value="22401"/>
+			<xs:enumeration value="39901"/>
+			<xs:enumeration value="21201"/>
+			<xs:enumeration value="20701"/>
+			<xs:enumeration value="20801"/>
+			<xs:enumeration value="22201"/>
+			<xs:enumeration value="22301"/>
+			<xs:enumeration value="10701"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntNeg15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="-999999999999999"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Int_tipCertificSType">
+		<xs:restriction base="xs:integer">
+			<xs:enumeration value="1"/>
+			<xs:enumeration value="2"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>

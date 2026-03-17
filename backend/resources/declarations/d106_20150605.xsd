@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:d106:declaratie:v1" targetNamespace="mfp:anaf:dgti:d106:declaratie:v1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.02" xml:lang="ro">
+	<xs:element name="declaratie106" type="Declaratie106Type"/>
+	<xs:complexType name="Declaratie106Type">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="dividende" type="DividendeType" maxOccurs="unbounded"/>
+				</xs:sequence>
+				<xs:attribute name="d_rec" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="an" type="IntInt2013_2100SType" use="required"/>
+				<xs:attribute name="luna" type="IntInt12_12SType" use="required"/>
+				<xs:attribute name="totalPlata_A" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="cif" type="CuiSType" use="required"/>
+				<xs:attribute name="den" type="Str75" use="required"/>
+				<xs:attribute name="adresa" type="Str200"/>
+				<xs:attribute name="telefon" type="Str10"/>
+				<xs:attribute name="fax" type="Str10"/>
+				<xs:attribute name="email" type="Email200SType"/>
+				<xs:attribute name="nume_declar" type="Str75" use="required"/>
+				<xs:attribute name="prenume_declar" type="Str75" use="required"/>
+				<xs:attribute name="functie_declar" type="Str50" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="DividendeType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="denAct" type="Str200" use="required"/>
+				<xs:attribute name="cifAct" type="CifSType" use="required"/>
+				<xs:attribute name="cotaAct" type="DblPoz3_6SType" use="required"/>
+				<xs:attribute name="divd" type="IntPoz15SType" use="required"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:simpleType name="IntInt0_1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="1"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt2013_2100SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="2013"/>
+			<xs:maxInclusive value="2100"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt12_12SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="12"/>
+			<xs:maxInclusive value="12"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CuiSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{1,9}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str75">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="75"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str200">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str10">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="10"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Email200SType">
+		<xs:restriction base="xs:token">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str50">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="50"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CifSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{12}|[1-9]\d{1,9}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DblPoz3_6SType">
+		<xs:restriction base="xs:double">
+			<xs:minInclusive value="0."/>
+			<xs:pattern value="\d{0,3}(\.\d{0,6})?"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>
