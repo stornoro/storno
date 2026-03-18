@@ -62,6 +62,15 @@ data:
             "allow_history_for_client": true,
             "history_size": 10,
             "history_ttl": "300s"
+          },
+          {
+            "name": "backup",
+            "allow_subscribe_for_client": true,
+            "allow_publish_for_client": false,
+            "allow_presence_for_client": false,
+            "allow_history_for_client": true,
+            "history_size": 10,
+            "history_ttl": "300s"
           }
         ]
       },
