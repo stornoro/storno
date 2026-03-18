@@ -115,6 +115,7 @@ function formatDate(dateStr: string): string {
 
 function handleWizardComplete() {
   importStore.fetchHistory()
+  subscribeImportProgress()
   toast.add({
     title: $t('importExport.completed'),
     color: 'success',
@@ -279,12 +280,71 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+// Real-time progress for import history table
+const progressMap = ref<Record<string, { processed: number; totalRows: number; created: number; updated: number; skipped: number; errors: number }>>({})
+let importChannel: string | null = null
+
+function subscribeImportProgress() {
+  if (importChannel) {
+    const { unsubscribe } = useCentrifugo()
+    unsubscribe(importChannel)
+  }
+  if (!companyStore.currentCompanyId) return
+
+  const { subscribe } = useCentrifugo()
+  const channel = `import:company_${companyStore.currentCompanyId}`
+  importChannel = channel
+
+  subscribe(channel, (data: any) => {
+    if (data?.type !== 'import_progress') return
+    const jobId = data.jobId
+
+    progressMap.value[jobId] = {
+      processed: data.processed ?? 0,
+      totalRows: data.totalRows ?? 0,
+      created: data.created ?? 0,
+      updated: data.updated ?? 0,
+      skipped: data.skipped ?? 0,
+      errors: data.errors ?? 0,
+    }
+
+    // Update job status in history list
+    const job = importStore.history.find(j => j.id === jobId)
+    if (job) {
+      job.status = data.status
+      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+        job.createdCount = data.created
+        job.updatedCount = data.updated
+        job.skippedCount = data.skipped
+        job.errorCount = data.errors
+        delete progressMap.value[jobId]
+      }
+    }
+  })
+}
+
+function progressPercent(jobId: string): number {
+  const p = progressMap.value[jobId]
+  if (!p || p.totalRows === 0) return 0
+  return Math.min(Math.round((p.processed / p.totalRows) * 100), 100)
+}
+
 watch(() => companyStore.currentCompanyId, () => {
   importStore.fetchHistory()
+  subscribeImportProgress()
 })
 
 onMounted(() => {
   importStore.fetchHistory()
+  subscribeImportProgress()
+})
+
+onUnmounted(() => {
+  if (importChannel) {
+    const { unsubscribe } = useCentrifugo()
+    unsubscribe(importChannel)
+    importChannel = null
+  }
 })
 </script>
 
@@ -590,7 +650,18 @@ onMounted(() => {
         </template>
 
         <template #stats-cell="{ row }">
-          <div v-if="row.original.status === 'completed'" class="flex items-center gap-2 text-xs">
+          <div v-if="row.original.status === 'processing' && progressMap[row.original.id]" class="space-y-1">
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-green-600">+{{ progressMap[row.original.id].created }}</span>
+              <span class="text-blue-600">~{{ progressMap[row.original.id].updated }}</span>
+              <span v-if="progressMap[row.original.id].errors > 0" class="text-red-600">!{{ progressMap[row.original.id].errors }}</span>
+              <span class="text-(--ui-text-muted)">{{ progressPercent(row.original.id) }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full bg-primary transition-all duration-300" :style="{ width: `${progressPercent(row.original.id)}%` }" />
+            </div>
+          </div>
+          <div v-else-if="['completed', 'cancelled'].includes(row.original.status)" class="flex items-center gap-2 text-xs">
             <span class="text-green-600">+{{ row.original.createdCount }}</span>
             <span class="text-blue-600">~{{ row.original.updatedCount }}</span>
             <span v-if="row.original.errorCount > 0" class="text-red-600">!{{ row.original.errorCount }}</span>
