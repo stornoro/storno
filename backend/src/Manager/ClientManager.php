@@ -18,10 +18,10 @@ class ClientManager
     }
 
     /**
-     * @return array{data: array<array<string, mixed>>, total: int}
+     * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool, distinctCountries: string[]}
      */
-    public function listGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null): array
+    public function listGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null, ?string $country = null): array
     {
-        return $this->clientRepository->findByCompanyGrouped($company, $page, $limit, $search);
+        return $this->clientRepository->findByCompanyGrouped($company, $page, $limit, $search, $country);
     }
 }

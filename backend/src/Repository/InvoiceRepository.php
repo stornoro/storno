@@ -221,6 +221,26 @@ class InvoiceRepository extends ServiceEntityRepository
             $qb->andWhere("$a.supplier = :supplierId")
                 ->setParameter('supplierId', $filters['supplierId']);
         }
+
+        if (isset($filters['vatTotalMin'])) {
+            $qb->andWhere("$a.vatTotal >= :vatTotalMin")
+                ->setParameter('vatTotalMin', $filters['vatTotalMin']);
+        }
+
+        if (isset($filters['vatTotalMax'])) {
+            $qb->andWhere("$a.vatTotal <= :vatTotalMax")
+                ->setParameter('vatTotalMax', $filters['vatTotalMax']);
+        }
+
+        if (isset($filters['totalMin'])) {
+            $qb->andWhere("$a.total >= :totalMin")
+                ->setParameter('totalMin', $filters['totalMin']);
+        }
+
+        if (isset($filters['totalMax'])) {
+            $qb->andWhere("$a.total <= :totalMax")
+                ->setParameter('totalMax', $filters['totalMax']);
+        }
     }
 
     public function findByCompanyFiltered(Company $company, array $filters = [], int $limit = 500): array

@@ -53,6 +53,10 @@ const currencyFilter = ref((route.query.currency as string) || defaultCurrency)
 const dateFrom = ref((route.query.dateFrom as string) || thisMonth.from)
 const dateTo = ref((route.query.dateTo as string) || thisMonth.to)
 const activeDatePreset = ref((route.query.datePreset as string) || 'thisMonth')
+const vatTotalMin = ref((route.query.vatTotalMin as string) || '')
+const vatTotalMax = ref((route.query.vatTotalMax as string) || '')
+const totalMin = ref((route.query.totalMin as string) || '')
+const totalMax = ref((route.query.totalMax as string) || '')
 
 const sorting = ref<SortingState>(
   route.query.sort
@@ -71,6 +75,10 @@ function syncFiltersToUrl() {
   if (dateFrom.value) q.dateFrom = dateFrom.value
   if (dateTo.value) q.dateTo = dateTo.value
   if (activeDatePreset.value && activeDatePreset.value !== 'thisMonth') q.datePreset = activeDatePreset.value
+  if (vatTotalMin.value) q.vatTotalMin = vatTotalMin.value
+  if (vatTotalMax.value) q.vatTotalMax = vatTotalMax.value
+  if (totalMin.value) q.totalMin = totalMin.value
+  if (totalMax.value) q.totalMax = totalMax.value
   if (page.value > 1) q.page = String(page.value)
   const firstSort = sorting.value[0]
   if (firstSort) {
@@ -186,6 +194,10 @@ function resetAllFilters() {
   paidFilter.value = 'all'
   activeDirection.value = 'all'
   currencyFilter.value = companyStore.currentCompany?.defaultCurrency || 'RON'
+  vatTotalMin.value = ''
+  vatTotalMax.value = ''
+  totalMin.value = ''
+  totalMax.value = ''
   applyDatePreset(datePresets.value.find(p => p.value === 'thisMonth')!)
   page.value = 1
   syncFiltersToUrl()
@@ -598,11 +610,20 @@ const allColumnDefs = [
 
 const columns = computed(() => filterColumns(allColumnDefs))
 
+function countryFlag(code: string): string {
+  if (!code || code.length !== 2) return ''
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65))
+}
+
 function getCounterparty(inv: any): string {
   if (inv.direction === 'incoming') {
     return inv.senderName || formatCif(inv.senderCif, inv.supplier?.isVatPayer) || '-'
   }
   return inv.receiverName || formatCif(inv.receiverCif, inv.client?.isVatPayer) || '-'
+}
+
+function getCounterpartyFlag(inv: any): string {
+  return countryFlag(inv.client?.country || '')
 }
 
 function formatMoney(amount?: string | number, currency = 'RON') {
@@ -625,6 +646,12 @@ const onSearchInput = useDebounceFn(() => {
   syncFiltersToUrl()
   fetchInvoices()
 }, 300)
+
+const onRangeFilterInput = useDebounceFn(() => {
+  page.value = 1
+  syncFiltersToUrl()
+  fetchInvoices()
+}, 400)
 
 function onSortChange(newSorting: SortingState | undefined) {
   sorting.value = newSorting ?? []
@@ -686,6 +713,10 @@ async function fetchInvoices() {
     dateFrom: dateFrom.value || null,
     dateTo: dateTo.value || null,
     currency: currencyFilter.value || null,
+    vatTotalMin: vatTotalMin.value || null,
+    vatTotalMax: vatTotalMax.value || null,
+    totalMin: totalMin.value || null,
+    totalMax: totalMax.value || null,
   })
   invoicesStore.page = page.value
   invoicesStore.limit = limit.value
@@ -805,6 +836,26 @@ onUnmounted(() => {
             <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('invoices.filterByStatus')" class="w-full sm:w-40" />
             <USelectMenu v-model="paidFilter" :items="paidOptions" value-key="value" :placeholder="$t('invoices.filterPaid')" class="w-full sm:w-28" />
 
+            <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
+
+            <!-- VAT range -->
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-muted whitespace-nowrap">{{ $t('invoices.vatLabel') }}</span>
+              <UInput v-model="vatTotalMin" type="number" :placeholder="$t('invoices.vatTotalMin')" class="w-24" @update:model-value="onRangeFilterInput" />
+              <span class="text-xs text-muted">—</span>
+              <UInput v-model="vatTotalMax" type="number" :placeholder="$t('invoices.vatTotalMax')" class="w-24" @update:model-value="onRangeFilterInput" />
+            </div>
+
+            <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
+
+            <!-- Total range -->
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-muted whitespace-nowrap">{{ $t('invoices.total') }}</span>
+              <UInput v-model="totalMin" type="number" :placeholder="$t('invoices.totalMin')" class="w-24" @update:model-value="onRangeFilterInput" />
+              <span class="text-xs text-muted">—</span>
+              <UInput v-model="totalMax" type="number" :placeholder="$t('invoices.totalMax')" class="w-24" @update:model-value="onRangeFilterInput" />
+            </div>
+
             <!-- Currency filter -->
             <template v-if="invoicesStore.distinctCurrencies.length > 1">
               <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
@@ -891,7 +942,10 @@ onUnmounted(() => {
           {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #counterparty-cell="{ row }">
-          {{ getCounterparty(row.original) }}
+          <span class="flex items-center gap-1.5">
+            <span v-if="getCounterpartyFlag(row.original)" class="text-base leading-none" aria-hidden="true">{{ getCounterpartyFlag(row.original) }}</span>
+            <span>{{ getCounterparty(row.original) }}</span>
+          </span>
         </template>
         <template #direction-cell="{ row }">
           <UBadge :color="row.original.direction === 'incoming' ? 'info' : 'success'" variant="subtle" size="sm">

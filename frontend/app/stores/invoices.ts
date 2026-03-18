@@ -15,6 +15,10 @@ export interface InvoiceFilters {
   isPaid: boolean | null
   supplierId: string | null
   currency: string | null
+  vatTotalMin: string | null
+  vatTotalMax: string | null
+  totalMin: string | null
+  totalMax: string | null
 }
 
 interface InvoiceTotals {
@@ -53,6 +57,10 @@ export const useInvoiceStore = defineStore('invoices', () => {
     isPaid: null,
     supplierId: null,
     currency: null,
+    vatTotalMin: null,
+    vatTotalMax: null,
+    totalMin: null,
+    totalMax: null,
   })
 
   const page = ref(1)
@@ -105,6 +113,10 @@ export const useInvoiceStore = defineStore('invoices', () => {
       if (filters.value.isPaid !== null) params.isPaid = filters.value.isPaid
       if (filters.value.supplierId) params.supplierId = filters.value.supplierId
       if (filters.value.currency) params.currency = filters.value.currency
+      if (filters.value.vatTotalMin) params.vatTotalMin = filters.value.vatTotalMin
+      if (filters.value.vatTotalMax) params.vatTotalMax = filters.value.vatTotalMax
+      if (filters.value.totalMin) params.totalMin = filters.value.totalMin
+      if (filters.value.totalMax) params.totalMax = filters.value.totalMax
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -168,6 +180,10 @@ export const useInvoiceStore = defineStore('invoices', () => {
       isPaid: null,
       supplierId: null,
       currency: null,
+      vatTotalMin: null,
+      vatTotalMax: null,
+      totalMin: null,
+      totalMax: null,
     }
     page.value = 1
   }
