@@ -128,7 +128,6 @@ class ClientPersister implements EntityPersisterInterface
     public function flush(): void
     {
         $this->entityManager->flush();
-        $this->entityManager->clear();
         $this->batchCount = 0;
     }
 
