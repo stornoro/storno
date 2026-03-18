@@ -35,8 +35,7 @@ class ViesValidateClientsCommand extends Command
             ->addOption('company', null, InputOption::VALUE_OPTIONAL, 'Limit to a specific company UUID')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only show what would be validated, without calling VIES')
             ->addOption('delay', null, InputOption::VALUE_OPTIONAL, 'Delay in ms between VIES calls (avoid rate limiting)', '500')
-            ->addOption('fix-invoices', null, InputOption::VALUE_NONE, 'Also update existing invoices for validated clients to 0% VAT (reverse charge)')
-            ->addOption('retry-failed', null, InputOption::VALUE_NONE, 'Re-check clients that were previously marked as vies_valid=0');
+            ->addOption('fix-invoices', null, InputOption::VALUE_NONE, 'Also update existing invoices for validated clients to 0% VAT (reverse charge)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -45,10 +44,9 @@ class ViesValidateClientsCommand extends Command
         $dryRun = $input->getOption('dry-run');
         $delayMs = (int) $input->getOption('delay');
         $fixInvoices = $input->getOption('fix-invoices');
-        $retryFailed = $input->getOption('retry-failed');
-
-        // Find all clients that might have EU VAT numbers and need VIES validation.
-        $viesCondition = $retryFailed ? '(vies_valid IS NULL OR vies_valid = 0)' : 'vies_valid IS NULL';
+        // Only validate clients that have never been checked (vies_valid IS NULL).
+        // Clients with vies_valid = 0 were confirmed invalid by VIES — do not retry.
+        $viesCondition = 'vies_valid IS NULL';
         $sql = <<<SQL
             SELECT id, name, vat_code, cui, country, company_id
             FROM client
