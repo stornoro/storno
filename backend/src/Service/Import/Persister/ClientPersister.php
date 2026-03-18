@@ -12,14 +12,17 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class ClientPersister implements EntityPersisterInterface
 {
-    private const BATCH_SIZE = 50;
+    private const BATCH_SIZE = 100;
     private int $batchCount = 0;
 
-    /** @var array<string, Client> In-memory dedup cache keyed by companyId:cui:value or companyId:name:value */
-    private array $pendingCache = [];
+    /** @var array<string, true> Known client keys (survives clear) */
+    private array $knownClients = [];
 
-    /** @var array<string, true> In-memory dedup cache for bank accounts keyed by companyId:iban */
+    /** @var array<string, true> Known bank accounts */
     private array $bankAccountCache = [];
+
+    private bool $initialized = false;
+    private ?string $companyId = null;
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -32,92 +35,118 @@ class ClientPersister implements EntityPersisterInterface
         return $importType === 'clients';
     }
 
+    /**
+     * Pre-load all existing client keys (cui, email, name) for fast dedup.
+     */
+    private function initialize(Company $company): void
+    {
+        if ($this->initialized && $this->companyId === $company->getId()->toRfc4122()) {
+            return;
+        }
+
+        $companyId = $company->getId()->toRfc4122();
+        $conn = $this->entityManager->getConnection();
+
+        $rows = $conn->fetchAllAssociative(
+            'SELECT LOWER(name) as name, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
+            ['companyId' => $companyId],
+        );
+
+        foreach ($rows as $row) {
+            if (!empty($row['cui'])) {
+                $this->knownClients[$companyId . ':cui:' . $row['cui']] = true;
+            }
+            if (!empty($row['email'])) {
+                $this->knownClients[$companyId . ':email:' . $row['email']] = true;
+            }
+            if (!empty($row['name'])) {
+                $this->knownClients[$companyId . ':name:' . $row['name']] = true;
+            }
+        }
+
+        $this->companyId = $companyId;
+        $this->initialized = true;
+    }
+
     public function persist(array $mappedData, Company $company, ImportResult $result): void
     {
+        $this->initialize($company);
+
         $name = $mappedData['name'] ?? null;
         if (empty($name)) {
             return;
         }
 
+        $companyId = $company->getId()->toRfc4122();
         $cui = !empty($mappedData['cui']) ? trim($mappedData['cui']) : null;
+        $email = !empty($mappedData['email']) ? trim($mappedData['email']) : null;
         $type = $mappedData['type'] ?? ($cui ? 'company' : 'individual');
 
-        // Try to find existing client — CUI-based dedup first (most reliable)
-        $existing = null;
-        if ($cui) {
-            $cacheKey = $company->getId()->toRfc4122() . ':cui:' . $cui;
-            $existing = $this->pendingCache[$cacheKey]
-                ?? $this->clientRepository->findOneBy(['company' => $company, 'cui' => $cui, 'deletedAt' => null]);
+        // Fast dedup check against pre-loaded set
+        $isExisting = false;
+        if ($cui && isset($this->knownClients[$companyId . ':cui:' . $cui])) {
+            $isExisting = true;
+        } elseif ($email && isset($this->knownClients[$companyId . ':email:' . mb_strtolower($email)])) {
+            $isExisting = true;
+        } elseif (isset($this->knownClients[$companyId . ':name:' . mb_strtolower($name)])) {
+            $isExisting = true;
         }
 
-        // Try email-based dedup (more reliable than name for imports without CUI)
-        $email = !empty($mappedData['email']) ? trim($mappedData['email']) : null;
-        if (!$existing && $email) {
-            $cacheKey = $company->getId()->toRfc4122() . ':email:' . mb_strtolower($email);
-            $existing = $this->pendingCache[$cacheKey]
-                ?? $this->clientRepository->findOneBy(['company' => $company, 'email' => $email, 'deletedAt' => null]);
-        }
-
-        // Fall back to name-based dedup
-        if (!$existing) {
-            $cacheKey = $company->getId()->toRfc4122() . ':name:' . mb_strtolower($name);
-            $existing = $this->pendingCache[$cacheKey]
-                ?? $this->clientRepository->findOneBy(['company' => $company, 'name' => $name, 'deletedAt' => null]);
-        }
-
-        if ($existing) {
-            // Update existing client with new data (only non-empty fields)
-            $this->updateClient($existing, $mappedData);
-            $this->findOrCreateBankAccount($company, $mappedData);
+        if ($isExisting) {
             $result->incrementUpdated();
-        } else {
-            // Create new client
-            $client = new Client();
-            $client->setCompany($company);
-            $client->setName($name);
-            $client->setType($type);
-
-            if ($cui) {
-                // Handle RO prefix: means VAT-registered (plătitor TVA)
-                if (str_starts_with(strtoupper($cui), 'RO')) {
-                    $client->setVatCode(strtoupper($cui));
-                    $client->setCui(substr($cui, 2));
-                    $client->setIsVatPayer(true);
-                } else {
-                    $client->setCui($cui);
-                    $client->setIsVatPayer($mappedData['isVatPayer'] ?? false);
-                }
-            }
-
-            $this->setClientFields($client, $mappedData);
-            $client->setSource('import:' . ($mappedData['_source'] ?? 'generic'));
-
-            if (!empty($mappedData['createdAt'])) {
-                try {
-                    $client->setCreatedAt(new \DateTimeImmutable($mappedData['createdAt']));
-                } catch (\Exception) {
-                    // Invalid date — let the AuditableListener set it
-                }
-            }
-
-            if (isset($mappedData['_importJob'])) {
-                $client->setImportJob($mappedData['_importJob']);
-            }
-
-            $this->entityManager->persist($client);
-            $this->findOrCreateBankAccount($company, $mappedData);
-
-            // Populate in-memory cache to prevent within-batch duplicates
-            if ($cui) {
-                $this->pendingCache[$company->getId()->toRfc4122() . ':cui:' . $cui] = $client;
-            }
-            if ($email) {
-                $this->pendingCache[$company->getId()->toRfc4122() . ':email:' . mb_strtolower($email)] = $client;
-            }
-            $this->pendingCache[$company->getId()->toRfc4122() . ':name:' . mb_strtolower($name)] = $client;
-
-            $result->incrementCreated();
+            return;
         }
+
+        // Create new client
+        $client = new Client();
+        $client->setCompany($company);
+        $client->setName($name);
+        $client->setType($type);
+
+        if ($cui) {
+            if (str_starts_with(strtoupper($cui), 'RO')) {
+                $client->setVatCode(strtoupper($cui));
+                $client->setCui(substr($cui, 2));
+                $client->setIsVatPayer(true);
+            } else {
+                $client->setCui($cui);
+                $client->setIsVatPayer($mappedData['isVatPayer'] ?? false);
+            }
+        }
+
+        // Set vatCode from mapped data (EU VAT numbers handled by mapper)
+        if (!empty($mappedData['vatCode'])) {
+            $client->setVatCode($mappedData['vatCode']);
+        }
+        if (isset($mappedData['isVatPayer']) && $mappedData['isVatPayer']) {
+            $client->setIsVatPayer(true);
+        }
+
+        $this->setClientFields($client, $mappedData);
+        $client->setSource('import:' . ($mappedData['_source'] ?? 'generic'));
+
+        if (!empty($mappedData['createdAt'])) {
+            try {
+                $client->setCreatedAt(new \DateTimeImmutable($mappedData['createdAt']));
+            } catch (\Exception) {}
+        }
+
+        if (isset($mappedData['_importJob'])) {
+            $client->setImportJob($mappedData['_importJob']);
+        }
+
+        $this->entityManager->persist($client);
+
+        // Track in known set
+        if ($cui) {
+            $this->knownClients[$companyId . ':cui:' . $cui] = true;
+        }
+        if ($email) {
+            $this->knownClients[$companyId . ':email:' . mb_strtolower($email)] = true;
+        }
+        $this->knownClients[$companyId . ':name:' . mb_strtolower($name)] = true;
+
+        $result->incrementCreated();
 
         $this->batchCount++;
         if ($this->batchCount >= self::BATCH_SIZE) {
@@ -128,52 +157,17 @@ class ClientPersister implements EntityPersisterInterface
     public function flush(): void
     {
         $this->entityManager->flush();
+        $this->entityManager->clear();
         $this->batchCount = 0;
     }
 
     public function reset(): void
     {
-        $this->pendingCache = [];
+        $this->knownClients = [];
         $this->bankAccountCache = [];
+        $this->initialized = false;
+        $this->companyId = null;
         $this->batchCount = 0;
-    }
-
-    private function updateClient(Client $client, array $data): void
-    {
-        $this->setClientFields($client, $data);
-    }
-
-    private function findOrCreateBankAccount(Company $company, array $data): void
-    {
-        $iban = !empty($data['bankAccount']) ? trim($data['bankAccount']) : null;
-        if (!$iban) {
-            return;
-        }
-
-        $cacheKey = $company->getId()->toRfc4122() . ':' . strtoupper($iban);
-        if (isset($this->bankAccountCache[$cacheKey])) {
-            return;
-        }
-
-        $existing = $this->bankAccountRepository->findByIban($company, $iban);
-        if ($existing) {
-            // Update bank name if provided
-            if (!empty($data['bankName'])) {
-                $existing->setBankName($data['bankName']);
-            }
-            $this->bankAccountCache[$cacheKey] = true;
-            return;
-        }
-
-        $bankAccount = new BankAccount();
-        $bankAccount->setCompany($company);
-        $bankAccount->setIban($iban);
-        $bankAccount->setBankName($data['bankName'] ?? null);
-        $bankAccount->setCurrency($data['currency'] ?? 'RON');
-        $bankAccount->setSource('import:' . ($data['_source'] ?? 'generic'));
-
-        $this->entityManager->persist($bankAccount);
-        $this->bankAccountCache[$cacheKey] = true;
     }
 
     private function setClientFields(Client $client, array $data): void
@@ -188,8 +182,6 @@ class ClientPersister implements EntityPersisterInterface
             'postalCode'             => 'setPostalCode',
             'email'                  => 'setEmail',
             'phone'                  => 'setPhone',
-            'bankName'               => 'setBankName',
-            'bankAccount'            => 'setBankAccount',
             'contactPerson'          => 'setContactPerson',
             'clientCode'             => 'setClientCode',
             'notes'                  => 'setNotes',
@@ -203,10 +195,6 @@ class ClientPersister implements EntityPersisterInterface
 
         if (isset($data['defaultPaymentTermDays']) && $data['defaultPaymentTermDays'] !== '') {
             $client->setDefaultPaymentTermDays((int) $data['defaultPaymentTermDays']);
-        }
-
-        if (!empty($data['vatCode'])) {
-            $client->setVatCode($data['vatCode']);
         }
     }
 }
