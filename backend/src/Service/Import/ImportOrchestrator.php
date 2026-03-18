@@ -106,7 +106,7 @@ class ImportOrchestrator
 
         try {
             // Send initial progress
-            $this->sendProgress($channel, $job, $result, 'processing', 0);
+            $this->sendProgress($channel, $jobId->toRfc4122(), $result, 'processing', 0);
 
             foreach ($parser->parse($tempPath) as $rawRow) {
                 $rowNumber++;
@@ -147,7 +147,7 @@ class ImportOrchestrator
 
                 // Send progress periodically
                 if ($rowNumber % self::PROGRESS_INTERVAL === 0) {
-                    $this->sendProgress($channel, $job, $result, 'processing', $rowNumber);
+                    $this->sendProgress($channel, $jobId->toRfc4122(), $result, 'processing', $rowNumber);
                 }
 
                 // Check for cancellation periodically (raw SQL to avoid issues with detached entities)
@@ -172,7 +172,7 @@ class ImportOrchestrator
                             ],
                         );
 
-                        $this->sendProgress($channel, $job, $result, 'cancelled', $rowNumber);
+                        $this->sendProgress($channel, $jobId->toRfc4122(), $result, 'cancelled', $rowNumber);
 
                         $this->logger->info('Import cancelled by user', [
                             'job' => $jobId->toRfc4122(),
@@ -205,7 +205,7 @@ class ImportOrchestrator
             );
 
             // Send final progress
-            $this->sendProgress($channel, $job, $result, 'completed', $rowNumber);
+            $this->sendProgress($channel, $jobId->toRfc4122(), $result, 'completed', $rowNumber);
 
             $this->logger->info('Import completed', [
                 'job' => $jobId->toRfc4122(),
@@ -230,7 +230,7 @@ class ImportOrchestrator
                 // Connection may be broken — just log
             }
 
-            $this->sendProgress($channel, $job, $result, 'failed', $rowNumber);
+            $this->sendProgress($channel, $jobId->toRfc4122(), $result, 'failed', $rowNumber);
 
             $this->logger->error('Import failed', [
                 'job' => $job->getId()->toRfc4122(),
@@ -390,12 +390,13 @@ class ImportOrchestrator
         };
     }
 
-    private function sendProgress(string $channel, ImportJob $job, ImportResult $result, string $status, int $rowNumber = 0): void
+    private function sendProgress(string $channel, ImportJob|string $jobOrId, ImportResult $result, string $status, int $rowNumber = 0): void
     {
+        $jobId = $jobOrId instanceof ImportJob ? $jobOrId->getId()->toRfc4122() : $jobOrId;
         try {
             $this->centrifugo->publish($channel, [
                 'type' => 'import_progress',
-                'jobId' => $job->getId()->toRfc4122(),
+                'jobId' => $jobId,
                 'status' => $status,
                 'totalRows' => $result->getTotalRows(),
                 'processed' => $rowNumber,
