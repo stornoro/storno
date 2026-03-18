@@ -299,8 +299,13 @@ function subscribeImportProgress() {
     if (data?.type !== 'import_progress') return
     const jobId = data.jobId
 
+    // Only accept progress if it moves forward (ignore out-of-order messages)
+    const prev = progressMap.value[jobId]
+    const processed = data.processed ?? 0
+    if (prev && processed < prev.processed) return
+
     progressMap.value[jobId] = {
-      processed: data.processed ?? 0,
+      processed,
       totalRows: data.totalRows ?? 0,
       created: data.created ?? 0,
       updated: data.updated ?? 0,
