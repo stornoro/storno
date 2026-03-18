@@ -179,7 +179,7 @@ class InvoiceRepository extends ServiceEntityRepository
         }
 
         if (isset($filters['search'])) {
-            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search OR $a.senderName LIKE :search OR $a.receiverName LIKE :search")
+            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search OR $a.senderName LIKE :search OR $a.receiverName LIKE :search OR $a.senderCif LIKE :search OR $a.receiverCif LIKE :search")
                 ->setParameter('search', '%' . $filters['search'] . '%');
         }
 
