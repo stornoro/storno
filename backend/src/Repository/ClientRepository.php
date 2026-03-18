@@ -46,9 +46,9 @@ class ClientRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool}
+     * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool, distinctCountries: string[]}
      */
-    public function findByCompanyGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null): array
+    public function findByCompanyGrouped(Company $company, int $page = 1, int $limit = 20, ?string $search = null, ?string $country = null): array
     {
         $conn = $this->getEntityManager()->getConnection();
         $companyId = $company->getId()->toRfc4122();
@@ -65,10 +65,23 @@ class ClientRepository extends ServiceEntityRepository
             $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%"];
         }
 
+        $countryClause = '';
+        $countryParams = [];
+        if ($country) {
+            $countryClause = 'AND c.country = ?';
+            $countryParams = [$country];
+        }
+
         // Check if any foreign-currency invoices exist for this company
         $hasForeignCurrencies = (bool) $conn->fetchOne(
             "SELECT 1 FROM invoice WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing' AND currency != ? LIMIT 1",
             [$companyId, $defaultCurrency],
+        );
+
+        // Distinct country codes for the filter dropdown (unaffected by country filter)
+        $distinctCountriesRows = $conn->fetchFirstColumn(
+            "SELECT DISTINCT c.country FROM client c WHERE c.company_id = ? AND c.deleted_at IS NULL AND c.country IS NOT NULL AND c.country != '' ORDER BY c.country ASC",
+            [$companyId],
         );
 
         // Main query: group clients by identifier, join outgoing invoice stats with currency conversion
@@ -87,15 +100,16 @@ class ClientRepository extends ServiceEntityRepository
             ) s ON s.cif = COALESCE(c.cui, c.cnp)
             WHERE c.company_id = ? AND c.deleted_at IS NULL
             $searchClause
+            $countryClause
             GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
             ORDER BY c.created_at DESC
             LIMIT ? OFFSET ?
         ";
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([$companyId, $companyId], $searchParams, [$limit, $offset]);
+        $params = array_merge([$companyId, $companyId], $searchParams, $countryParams, [$limit, $offset]);
         $types = array_merge(
-            array_fill(0, 2 + count($searchParams), ParameterType::STRING),
+            array_fill(0, 2 + count($searchParams) + count($countryParams), ParameterType::STRING),
             [ParameterType::INTEGER, ParameterType::INTEGER],
         );
 
@@ -116,14 +130,15 @@ class ClientRepository extends ServiceEntityRepository
                 FROM client c
                 WHERE c.company_id = ? AND c.deleted_at IS NULL
                 $searchClause
+                $countryClause
                 GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
             ) grouped
         ";
 
-        $countParams = array_merge([$companyId], $searchParams);
+        $countParams = array_merge([$companyId], $searchParams, $countryParams);
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
-        return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
+        return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies, 'distinctCountries' => $distinctCountriesRows];
     }
 
     /**
