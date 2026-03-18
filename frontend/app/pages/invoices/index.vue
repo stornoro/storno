@@ -623,7 +623,24 @@ function getCounterparty(inv: any): string {
 }
 
 function getCounterpartyFlag(inv: any): string {
-  return countryFlag(inv.client?.country || '')
+  const country = inv.direction === 'incoming'
+    ? (inv.supplier?.country || '')
+    : (inv.client?.country || '')
+  return countryFlag(country)
+}
+
+function getCounterpartyCif(inv: any): string {
+  if (inv.direction === 'incoming') {
+    return inv.senderCif || ''
+  }
+  return inv.receiverCif || ''
+}
+
+function getCounterpartyCountry(inv: any): string {
+  if (inv.direction === 'incoming') {
+    return inv.supplier?.country || ''
+  }
+  return inv.client?.country || ''
 }
 
 function formatMoney(amount?: string | number, currency = 'RON') {
@@ -942,10 +959,17 @@ onUnmounted(() => {
           {{ row.original.issueDate ? new Date(row.original.issueDate).toLocaleDateString(intlLocale) : '-' }}
         </template>
         <template #counterparty-cell="{ row }">
-          <span class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5">
             <span v-if="getCounterpartyFlag(row.original)" class="text-base leading-none" aria-hidden="true">{{ getCounterpartyFlag(row.original) }}</span>
-            <span>{{ getCounterparty(row.original) }}</span>
-          </span>
+            <div class="min-w-0">
+              <div class="truncate font-medium text-sm">{{ getCounterparty(row.original) }}</div>
+              <div v-if="getCounterpartyCif(row.original) || getCounterpartyCountry(row.original)" class="flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
+                <span v-if="getCounterpartyCif(row.original)">{{ getCounterpartyCif(row.original) }}</span>
+                <span v-if="getCounterpartyCif(row.original) && getCounterpartyCountry(row.original)">·</span>
+                <span v-if="getCounterpartyCountry(row.original)">{{ getCounterpartyCountry(row.original) }}</span>
+              </div>
+            </div>
+          </div>
         </template>
         <template #direction-cell="{ row }">
           <UBadge :color="row.original.direction === 'incoming' ? 'info' : 'success'" variant="subtle" size="sm">
