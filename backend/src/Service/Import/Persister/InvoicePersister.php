@@ -208,10 +208,19 @@ class InvoicePersister implements EntityPersisterInterface
         }
         $invoice->setStatus($status);
 
-        // Direction
-        if (!empty($data['direction'])) {
+        // Direction — explicit value or derived from import type
+        $direction = $data['direction'] ?? null;
+        if (empty($direction)) {
+            $importType = $data['_importType'] ?? null;
+            if ($importType === 'invoices_issued') {
+                $direction = 'issued';
+            } elseif ($importType === 'invoices_received') {
+                $direction = 'received';
+            }
+        }
+        if (!empty($direction)) {
             try {
-                $invoice->setDirection(InvoiceDirection::from($data['direction']));
+                $invoice->setDirection(InvoiceDirection::from($direction));
             } catch (\ValueError) {
                 // Unknown direction — leave null
             }
