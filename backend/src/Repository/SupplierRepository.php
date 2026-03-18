@@ -91,8 +91,8 @@ class SupplierRepository extends ServiceEntityRepository
         $searchClause = '';
         $searchParams = [];
         if ($search) {
-            $searchClause = 'AND (s.name LIKE ? OR s.cif LIKE ?)';
-            $searchParams = ["%$search%", "%$search%"];
+            $searchClause = 'AND (s.name LIKE ? OR s.cif LIKE ? OR s.vat_code LIKE ?)';
+            $searchParams = ["%$search%", "%$search%", "%$search%"];
         }
 
         $hasForeignCurrencies = (bool) $conn->fetchOne(

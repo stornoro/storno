@@ -61,8 +61,8 @@ class ClientRepository extends ServiceEntityRepository
         $searchClause = '';
         $searchParams = [];
         if ($search) {
-            $searchClause = 'AND (c.name LIKE ? OR c.cui LIKE ? OR c.cnp LIKE ? OR c.email LIKE ? OR c.id_number LIKE ?)';
-            $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%"];
+            $searchClause = 'AND (c.name LIKE ? OR c.cui LIKE ? OR c.cnp LIKE ? OR c.email LIKE ? OR c.id_number LIKE ? OR c.vat_code LIKE ?)';
+            $searchParams = ["%$search%", "%$search%", "%$search%", "%$search%", "%$search%", "%$search%"];
         }
 
         $countryClause = '';
