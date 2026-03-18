@@ -18,19 +18,20 @@ use Symfony\Component\Uid\Uuid;
 
 class InvoicePersister implements EntityPersisterInterface
 {
-    private const BATCH_SIZE = 20;
+    private const BATCH_SIZE = 100;
     private int $batchCount = 0;
 
-    /**
-     * In-memory dedup cache keyed by the composite dedup key.
-     * Value is the Invoice entity so multi-line formats can append lines.
-     *
-     * @var array<string, Invoice>
-     */
+    /** @var array<string, Invoice> In-memory dedup cache for multi-line formats */
     private array $pendingCache = [];
 
-    /** @var array<string, string|null> In-memory client ID cache (stores UUID strings, not entities) */
+    /** @var array<string, string|null> client lookup key → client UUID (pre-loaded) */
     private array $clientCache = [];
+
+    /** @var array<string, true> Known existing invoice numbers for this company (pre-loaded) */
+    private array $existingInvoiceNumbers = [];
+
+    private bool $initialized = false;
+    private ?string $companyId = null;
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -43,8 +44,55 @@ class InvoicePersister implements EntityPersisterInterface
         return in_array($importType, ['invoices', 'invoices_issued', 'invoices_received'], true);
     }
 
+    /**
+     * Pre-load all client IDs and existing invoice numbers for the company.
+     * This replaces thousands of individual DB queries with just 2 queries.
+     */
+    private function initialize(Company $company): void
+    {
+        if ($this->initialized && $this->companyId === $company->getId()->toRfc4122()) {
+            return;
+        }
+
+        $companyId = $company->getId()->toRfc4122();
+        $conn = $this->entityManager->getConnection();
+
+        // Pre-load all clients: name → id, email → id, cui → id
+        $rows = $conn->fetchAllAssociative(
+            'SELECT id, LOWER(name) as name, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
+            ['companyId' => $companyId],
+        );
+
+        foreach ($rows as $row) {
+            $clientId = $row['id'];
+            if (!empty($row['name'])) {
+                $this->clientCache[$companyId . ':name:' . $row['name']] = $clientId;
+            }
+            if (!empty($row['email'])) {
+                $this->clientCache[$companyId . ':email:' . $row['email']] = $clientId;
+            }
+            if (!empty($row['cui'])) {
+                $this->clientCache[$companyId . ':cui:' . $row['cui']] = $clientId;
+            }
+        }
+
+        // Pre-load all existing invoice numbers for dedup
+        $numbers = $conn->fetchFirstColumn(
+            'SELECT LOWER(number) FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL',
+            ['companyId' => $companyId],
+        );
+        foreach ($numbers as $num) {
+            $this->existingInvoiceNumbers[$num] = true;
+        }
+
+        $this->companyId = $companyId;
+        $this->initialized = true;
+    }
+
     public function persist(array $mappedData, Company $company, ImportResult $result): void
     {
+        $this->initialize($company);
+
         $number = $mappedData['number'] ?? null;
         if (empty($number)) {
             return;
@@ -54,7 +102,7 @@ class InvoicePersister implements EntityPersisterInterface
         $receiverCif = !empty($mappedData['receiverCif']) ? trim($mappedData['receiverCif']) : null;
         $direction   = $mappedData['direction'] ?? null;
 
-        // Build composite dedup key: number + both CIFs + direction
+        // Build composite dedup key
         $dedupKey = implode(':', [
             $company->getId()->toRfc4122(),
             mb_strtolower($number),
@@ -87,14 +135,13 @@ class InvoicePersister implements EntityPersisterInterface
                 $existingInvoice->setTotal(number_format($existingTotal + (float) $mappedData['total'], 2, '.', ''));
             }
 
-            return; // don't increment any counter
+            return;
         }
 
-        // Database check: match by number + senderCif/receiverCif + direction
-        $existing = $this->findExistingInvoice($company, $number, $senderCif, $receiverCif, $direction);
-        if ($existing !== null) {
-            // Invoices are never updated on re-import — skip to preserve data integrity
-            $this->pendingCache[$dedupKey] = $existing;
+        // Fast dedup check against pre-loaded invoice numbers (no DB query)
+        $lowerNumber = mb_strtolower($number);
+        if (isset($this->existingInvoiceNumbers[$lowerNumber])) {
+            $this->pendingCache[$dedupKey] = new Invoice(); // placeholder to skip future multi-line rows
             $result->incrementSkipped();
             return;
         }
@@ -147,7 +194,9 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->setPaidAt($paidAt);
         }
 
+        // Track for dedup
         $this->pendingCache[$dedupKey] = $invoice;
+        $this->existingInvoiceNumbers[$lowerNumber] = true;
         $result->incrementCreated();
 
         $this->batchCount++;
@@ -168,14 +217,14 @@ class InvoicePersister implements EntityPersisterInterface
     {
         $this->pendingCache = [];
         $this->clientCache = [];
+        $this->existingInvoiceNumbers = [];
+        $this->initialized = false;
+        $this->companyId = null;
         $this->batchCount = 0;
     }
 
     /**
      * Link the invoice to a Client entity and auto-populate sender/receiver fields.
-     *
-     * For issued invoices: sender = company, receiver = client (matched by email → CUI → name).
-     * For received invoices: sender = external, receiver = company.
      */
     private function linkClientAndSender(Invoice $invoice, array $data, Company $company): void
     {
@@ -217,115 +266,42 @@ class InvoicePersister implements EntityPersisterInterface
             return;
         }
 
-        $client = $this->findClient($company, $clientEmail, $clientCif, $clientName);
-        if ($client) {
-            $invoice->setClient($client);
+        $clientId = $this->findClientId($company, $clientEmail, $clientCif, $clientName);
+        if ($clientId) {
+            // Use getReference — no DB query, just sets the FK
+            $invoice->setClient($this->entityManager->getReference(Client::class, Uuid::fromString($clientId)));
         }
     }
 
     /**
-     * Find a client by email → CUI → name. Caches client IDs (not entities)
-     * so the cache survives entityManager->clear() between batches.
+     * Find a client ID from the pre-loaded cache. No DB queries.
      */
-    private function findClient(Company $company, ?string $email, ?string $cui, ?string $name): ?Client
+    private function findClientId(Company $company, ?string $email, ?string $cui, ?string $name): ?string
     {
         $companyId = $company->getId()->toRfc4122();
 
-        // Try email first
         if (!empty($email)) {
-            $cacheKey = $companyId . ':email:' . mb_strtolower(trim($email));
-            if (array_key_exists($cacheKey, $this->clientCache)) {
-                $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
-            }
-            $client = $this->clientRepository->findOneBy([
-                'company' => $company,
-                'email' => trim($email),
-                'deletedAt' => null,
-            ]);
-            if ($client) {
-                $this->clientCache[$cacheKey] = (string) $client->getId();
-                return $client;
+            $key = $companyId . ':email:' . mb_strtolower(trim($email));
+            if (isset($this->clientCache[$key])) {
+                return $this->clientCache[$key];
             }
         }
 
-        // Try CUI
         if (!empty($cui)) {
-            $cleanCui = trim($cui);
-            $cacheKey = $companyId . ':cui:' . $cleanCui;
-            if (array_key_exists($cacheKey, $this->clientCache)) {
-                $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
-            }
-            $client = $this->clientRepository->findOneBy([
-                'company' => $company,
-                'cui' => $cleanCui,
-                'deletedAt' => null,
-            ]);
-            if ($client) {
-                $this->clientCache[$cacheKey] = (string) $client->getId();
-                return $client;
+            $key = $companyId . ':cui:' . trim($cui);
+            if (isset($this->clientCache[$key])) {
+                return $this->clientCache[$key];
             }
         }
 
-        // Try name
         if (!empty($name)) {
-            $cacheKey = $companyId . ':name:' . mb_strtolower(trim($name));
-            if (array_key_exists($cacheKey, $this->clientCache)) {
-                $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
-            }
-            $client = $this->clientRepository->findOneBy([
-                'company' => $company,
-                'name' => trim($name),
-                'deletedAt' => null,
-            ]);
-            if ($client) {
-                $this->clientCache[$cacheKey] = (string) $client->getId();
-                return $client;
+            $key = $companyId . ':name:' . mb_strtolower(trim($name));
+            if (isset($this->clientCache[$key])) {
+                return $this->clientCache[$key];
             }
         }
 
         return null;
-    }
-
-    private function findExistingInvoice(
-        Company $company,
-        string $number,
-        ?string $senderCif,
-        ?string $receiverCif,
-        ?string $direction,
-    ): ?Invoice {
-        $qb = $this->entityManager->createQueryBuilder()
-            ->select('i')
-            ->from(Invoice::class, 'i')
-            ->where('i.company = :company')
-            ->andWhere('i.number = :number')
-            ->andWhere('i.deletedAt IS NULL')
-            ->setParameter('company', $company)
-            ->setParameter('number', $number);
-
-        if ($senderCif !== null) {
-            $qb->andWhere('i.senderCif = :senderCif')
-                ->setParameter('senderCif', $senderCif);
-        }
-
-        if ($receiverCif !== null) {
-            $qb->andWhere('i.receiverCif = :receiverCif')
-                ->setParameter('receiverCif', $receiverCif);
-        }
-
-        if ($direction !== null) {
-            try {
-                $directionEnum = InvoiceDirection::from($direction);
-                $qb->andWhere('i.direction = :direction')
-                    ->setParameter('direction', $directionEnum);
-            } catch (\ValueError) {
-                // Unknown direction string — ignore filter
-            }
-        }
-
-        return $qb->setMaxResults(1)->getQuery()->getOneOrNullResult();
     }
 
     private function buildInvoice(array $data, Company $company): Invoice
@@ -333,32 +309,24 @@ class InvoicePersister implements EntityPersisterInterface
         $invoice = new Invoice();
         $invoice->setCompany($company);
 
-        // Required: number
         $invoice->setNumber($data['number']);
 
-        // Document type — default to invoice
         $documentType = DocumentType::INVOICE;
         if (!empty($data['documentType'])) {
             try {
                 $documentType = DocumentType::from($data['documentType']);
-            } catch (\ValueError) {
-                // Unknown type — keep default
-            }
+            } catch (\ValueError) {}
         }
         $invoice->setDocumentType($documentType);
 
-        // Status — imported invoices are set to SYNCED (read-only, from external source)
         $status = DocumentStatus::SYNCED;
         if (!empty($data['status'])) {
             try {
                 $status = DocumentStatus::from($data['status']);
-            } catch (\ValueError) {
-                // Unknown status — keep SYNCED
-            }
+            } catch (\ValueError) {}
         }
         $invoice->setStatus($status);
 
-        // Direction — explicit value or derived from import type
         $direction = $data['direction'] ?? null;
         if (empty($direction)) {
             $importType = $data['_importType'] ?? null;
@@ -371,12 +339,9 @@ class InvoicePersister implements EntityPersisterInterface
         if (!empty($direction)) {
             try {
                 $invoice->setDirection(InvoiceDirection::from($direction));
-            } catch (\ValueError) {
-                // Unknown direction — leave null
-            }
+            } catch (\ValueError) {}
         }
 
-        // CIF fields
         if (!empty($data['senderCif'])) {
             $invoice->setSenderCif(trim($data['senderCif']));
         }
@@ -390,7 +355,6 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->setReceiverName($data['receiverName']);
         }
 
-        // Financials
         if (isset($data['subtotal']) && $data['subtotal'] !== '') {
             $invoice->setSubtotal(number_format((float) $data['subtotal'], 2, '.', ''));
         }
@@ -404,28 +368,21 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->setDiscount(number_format((float) $data['discount'], 2, '.', ''));
         }
 
-        // Currency
         if (!empty($data['currency'])) {
             $invoice->setCurrency(strtoupper(trim($data['currency'])));
         }
 
-        // Dates
         if (!empty($data['issueDate'])) {
             try {
                 $invoice->setIssueDate(new \DateTime($data['issueDate']));
-            } catch (\Exception) {
-                // Keep default (today)
-            }
+            } catch (\Exception) {}
         }
         if (!empty($data['dueDate'])) {
             try {
                 $invoice->setDueDate(new \DateTime($data['dueDate']));
-            } catch (\Exception) {
-                // Leave null
-            }
+            } catch (\Exception) {}
         }
 
-        // Optional text fields
         if (!empty($data['notes'])) {
             $invoice->setNotes($data['notes']);
         }
@@ -448,16 +405,12 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->setPaymentMethod($data['paymentMethod']);
         }
 
-        // Created-at override from source data
         if (!empty($data['createdAt'])) {
             try {
                 $invoice->setCreatedAt(new \DateTimeImmutable($data['createdAt']));
-            } catch (\Exception) {
-                // Invalid date — let the AuditableListener set it
-            }
+            } catch (\Exception) {}
         }
 
-        // Build a stable idempotency key for the import source
         $source = $data['_source'] ?? 'generic';
         $idempotencyKey = 'import:' . $source . ':' . $company->getId()->toRfc4122() . ':' . $data['number'];
         if (!empty($data['senderCif'])) {
@@ -473,49 +426,38 @@ class InvoicePersister implements EntityPersisterInterface
         $line = new InvoiceLine();
         $line->setPosition($position);
 
-        // Description is required on the entity (length: 500)
         $line->setDescription(!empty($lineData['description']) ? mb_substr($lineData['description'], 0, 500) : '-');
 
         if (isset($lineData['quantity']) && $lineData['quantity'] !== '') {
             $line->setQuantity(number_format((float) $lineData['quantity'], 4, '.', ''));
         }
-
         if (!empty($lineData['unitOfMeasure'])) {
             $line->setUnitOfMeasure($lineData['unitOfMeasure']);
         }
-
         if (isset($lineData['unitPrice']) && $lineData['unitPrice'] !== '') {
             $line->setUnitPrice(number_format((float) $lineData['unitPrice'], 2, '.', ''));
         }
-
         if (isset($lineData['vatRate']) && $lineData['vatRate'] !== '') {
             $line->setVatRate((string) $lineData['vatRate']);
         }
-
         if (!empty($lineData['vatCategoryCode'])) {
             $line->setVatCategoryCode($lineData['vatCategoryCode']);
         }
-
         if (isset($lineData['vatAmount']) && $lineData['vatAmount'] !== '') {
             $line->setVatAmount(number_format((float) $lineData['vatAmount'], 2, '.', ''));
         }
-
         if (isset($lineData['lineTotal']) && $lineData['lineTotal'] !== '') {
             $line->setLineTotal(number_format((float) $lineData['lineTotal'], 2, '.', ''));
         }
-
         if (isset($lineData['discount']) && $lineData['discount'] !== '') {
             $line->setDiscount(number_format((float) $lineData['discount'], 2, '.', ''));
         }
-
         if (isset($lineData['discountPercent']) && $lineData['discountPercent'] !== '') {
             $line->setDiscountPercent(number_format((float) $lineData['discountPercent'], 2, '.', ''));
         }
-
         if (isset($lineData['vatIncluded'])) {
             $line->setVatIncluded((bool) $lineData['vatIncluded']);
         }
-
         if (!empty($lineData['productCode'])) {
             $line->setProductCode($lineData['productCode']);
         }
