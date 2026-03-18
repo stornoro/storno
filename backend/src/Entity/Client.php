@@ -74,7 +74,7 @@ class Client
 
     #[ORM\Column(length: 2)]
     #[Groups(['client:list', 'client:detail', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
-    private string $country = 'RO';
+    private string $country = 'US';
 
     #[ORM\Column(length: 10, nullable: true)]
     #[Groups(['client:detail', 'delivery_note:detail', 'receipt:detail'])]
