@@ -31,10 +31,12 @@ class ImportRowValidator
             $errors['email'] = 'Adresa de email nu este validă.';
         }
 
-        // Validate CUI/CIF format if present (Romanian fiscal code: digits only, optionally prefixed with RO)
+        // Validate CUI/CIF format if present
         if (!empty($mappedData['cui'])) {
-            $cui = preg_replace('/^RO/i', '', trim($mappedData['cui']));
-            if (!preg_match('/^\d{1,10}$/', $cui)) {
+            $cui = trim($mappedData['cui']);
+            // Accept: digits only, RO + digits, or EU country prefix + alphanumeric (VAT number)
+            $euPrefixes = 'AT|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK';
+            if (!preg_match('/^((' . $euPrefixes . ')[A-Z0-9]{2,20}|\d{1,13})$/i', $cui)) {
                 $errors['cui'] = 'CUI/CIF invalid.';
             }
         }
