@@ -50,7 +50,15 @@ class ClientPersister implements EntityPersisterInterface
                 ?? $this->clientRepository->findOneBy(['company' => $company, 'cui' => $cui, 'deletedAt' => null]);
         }
 
-        // For clients without CUI, fall back to name-based dedup
+        // Try email-based dedup (more reliable than name for imports without CUI)
+        $email = !empty($mappedData['email']) ? trim($mappedData['email']) : null;
+        if (!$existing && $email) {
+            $cacheKey = $company->getId()->toRfc4122() . ':email:' . mb_strtolower($email);
+            $existing = $this->pendingCache[$cacheKey]
+                ?? $this->clientRepository->findOneBy(['company' => $company, 'email' => $email, 'deletedAt' => null]);
+        }
+
+        // Fall back to name-based dedup
         if (!$existing) {
             $cacheKey = $company->getId()->toRfc4122() . ':name:' . mb_strtolower($name);
             $existing = $this->pendingCache[$cacheKey]
@@ -92,12 +100,19 @@ class ClientPersister implements EntityPersisterInterface
                 }
             }
 
+            if (isset($mappedData['_importJob'])) {
+                $client->setImportJob($mappedData['_importJob']);
+            }
+
             $this->entityManager->persist($client);
             $this->findOrCreateBankAccount($company, $mappedData);
 
             // Populate in-memory cache to prevent within-batch duplicates
             if ($cui) {
                 $this->pendingCache[$company->getId()->toRfc4122() . ':cui:' . $cui] = $client;
+            }
+            if ($email) {
+                $this->pendingCache[$company->getId()->toRfc4122() . ':email:' . mb_strtolower($email)] = $client;
             }
             $this->pendingCache[$company->getId()->toRfc4122() . ':name:' . mb_strtolower($name)] = $client;
 
@@ -113,6 +128,7 @@ class ClientPersister implements EntityPersisterInterface
     public function flush(): void
     {
         $this->entityManager->flush();
+        $this->entityManager->clear();
         $this->batchCount = 0;
     }
 

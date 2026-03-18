@@ -73,7 +73,7 @@ class FacturisInvoiceMapper extends AbstractInvoiceMapper
     {
         $result = parent::mapRow($row, $columnMapping);
 
-        $result['direction'] = 'issued';
+        $result['direction'] = 'outgoing';
 
         // Compute invoice-level totals from line data (will be accumulated by persister)
         $lines = $result['lines'] ?? [];

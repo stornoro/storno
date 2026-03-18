@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Entity\Traits\AuditableTrait;
 use App\Entity\Traits\SoftDeletableTrait;
 use App\Repository\ClientRepository;
+use App\Entity\ImportJob;
 use Doctrine\ORM\Mapping as ORM;
 use App\Doctrine\Type\UuidType;
 use Symfony\Component\Uid\Uuid;
@@ -26,6 +27,10 @@ class Client
     #[ORM\ManyToOne(inversedBy: 'clients')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Company $company = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?ImportJob $importJob = null;
 
     #[ORM\Column(length: 20)]
     #[Groups(['client:list', 'client:detail', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
@@ -498,6 +503,18 @@ class Client
     public function setViesName(?string $viesName): static
     {
         $this->viesName = $viesName;
+
+        return $this;
+    }
+
+    public function getImportJob(): ?ImportJob
+    {
+        return $this->importJob;
+    }
+
+    public function setImportJob(?ImportJob $importJob): static
+    {
+        $this->importJob = $importJob;
 
         return $this;
     }
