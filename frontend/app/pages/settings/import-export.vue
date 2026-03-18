@@ -63,6 +63,7 @@ const historyColumns = [
   { accessorKey: 'originalFilename', header: 'Fisier' },
   { accessorKey: 'status', header: 'Status' },
   { accessorKey: 'stats', header: 'Rezultat' },
+  { accessorKey: 'actions', header: '' },
 ]
 
 const sourceLabels: Record<string, string> = {
@@ -97,6 +98,8 @@ const statusColors: Record<string, string> = {
   processing: 'warning',
   completed: 'success',
   failed: 'error',
+  cancelled: 'warning',
+  reverted: 'neutral',
 }
 
 function formatDate(dateStr: string): string {
@@ -117,6 +120,14 @@ function handleWizardComplete() {
     color: 'success',
     icon: 'i-lucide-check-circle',
   })
+}
+
+const reverting = ref<string | null>(null)
+
+async function handleRevert(jobId: string) {
+  reverting.value = jobId
+  await importStore.revertImport(jobId)
+  reverting.value = null
 }
 
 // ── Accounting Export Modal ────────────────────────────────────────
@@ -585,6 +596,19 @@ onMounted(() => {
             <span v-if="row.original.errorCount > 0" class="text-red-600">!{{ row.original.errorCount }}</span>
           </div>
           <span v-else class="text-sm text-gray-400">-</span>
+        </template>
+
+        <template #actions-cell="{ row }">
+          <UButton
+            v-if="['completed', 'cancelled'].includes(row.original.status)"
+            :label="$t('importExport.revert')"
+            size="xs"
+            color="error"
+            variant="ghost"
+            icon="i-lucide-undo-2"
+            :loading="reverting === row.original.id"
+            @click="handleRevert(row.original.id)"
+          />
         </template>
       </UTable>
 

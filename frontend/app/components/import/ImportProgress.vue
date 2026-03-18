@@ -8,6 +8,7 @@ const { t: $t } = useI18n()
 
 const isCompleted = computed(() => props.job?.status === 'completed')
 const isFailed = computed(() => props.job?.status === 'failed')
+const isCancelled = computed(() => props.job?.status === 'cancelled')
 const isProcessing = computed(() => props.job?.status === 'processing')
 
 const totalRows = computed(() => props.progress?.totalRows || props.job?.totalRows || 0)
@@ -64,6 +65,13 @@ const stats = computed(() => [
         <span class="text-lg font-medium">{{ $t('importExport.completed') }}</span>
       </div>
       <div
+        v-else-if="isCancelled"
+        class="inline-flex items-center gap-2 text-amber-600 dark:text-amber-400"
+      >
+        <UIcon name="i-lucide-ban" class="w-6 h-6" />
+        <span class="text-lg font-medium">{{ $t('importExport.cancelled') }}</span>
+      </div>
+      <div
         v-else-if="isFailed"
         class="inline-flex items-center gap-2 text-red-600 dark:text-red-400"
       >
@@ -73,7 +81,7 @@ const stats = computed(() => [
     </div>
 
     <!-- Progress bar -->
-    <div v-if="isProcessing || isCompleted">
+    <div v-if="isProcessing || isCompleted || isCancelled">
       <div class="flex justify-between text-sm mb-1">
         <span>{{ $t('importExport.processedRows') }}</span>
         <span>{{ processed }} / {{ totalRows }}</span>
@@ -81,7 +89,7 @@ const stats = computed(() => [
       <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
         <div
           class="h-3 rounded-full transition-all duration-300"
-          :class="isCompleted ? 'bg-green-500' : 'bg-primary'"
+          :class="isCompleted ? 'bg-green-500' : isCancelled ? 'bg-amber-500' : 'bg-primary'"
           :style="{ width: `${progressPercent}%` }"
         />
       </div>

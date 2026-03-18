@@ -2839,6 +2839,9 @@ export default defineI18nLocale(async () => {
     processing: 'Processing...',
     completed: 'Import completed',
     failed: 'Import failed',
+    cancelled: 'Import cancelled',
+    reverted: 'Import reverted',
+    revert: 'Revert',
 
     // Results
     created: 'Created',
@@ -2894,6 +2897,8 @@ export default defineI18nLocale(async () => {
     statusProcessing: 'Processing',
     statusCompleted: 'Completed',
     statusFailed: 'Failed',
+    statusCancelled: 'Cancelled',
+    statusReverted: 'Reverted',
 
     // Actions
     next: 'Next',

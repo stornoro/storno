@@ -386,6 +386,109 @@ class ImportController extends AbstractController
     }
 
     /**
+     * POST /api/v1/import/{id}/cancel
+     *
+     * Sets the job status to 'cancelled'. The async worker will pick this up
+     * on its next cancellation check and stop processing.
+     */
+    #[Route('/{id}/cancel', methods: ['POST'])]
+    public function cancel(string $id, Request $request): JsonResponse
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+
+        if (!$this->organizationContext->hasPermission(Permission::IMPORT_MANAGE)) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        $job = $this->resolveJob($id, $request);
+        if ($job instanceof JsonResponse) {
+            return $job;
+        }
+
+        if ($job->getStatus() !== 'processing') {
+            return $this->json(
+                ['error' => 'Only processing imports can be cancelled.'],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        $job->setStatus('cancelled');
+        $this->entityManager->flush();
+
+        return $this->json(
+            ['job' => $job],
+            Response::HTTP_OK,
+            [],
+            ['groups' => ['import_job:detail']],
+        );
+    }
+
+    /**
+     * POST /api/v1/import/{id}/revert
+     *
+     * Hard-deletes all records created by this import job and sets the job status to 'reverted'.
+     * Only works on 'completed' or 'cancelled' jobs.
+     */
+    #[Route('/{id}/revert', methods: ['POST'])]
+    public function revert(string $id, Request $request): JsonResponse
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+
+        if (!$this->organizationContext->hasPermission(Permission::IMPORT_MANAGE)) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        $job = $this->resolveJob($id, $request);
+        if ($job instanceof JsonResponse) {
+            return $job;
+        }
+
+        if (!in_array($job->getStatus(), ['completed', 'cancelled'], true)) {
+            return $this->json(
+                ['error' => 'Only completed or cancelled imports can be reverted.'],
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+            );
+        }
+
+        $conn = $this->entityManager->getConnection();
+        $jobId = (string) $job->getId();
+
+        // Hard delete payments created by this import
+        $conn->executeStatement(
+            'DELETE FROM payment WHERE import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
+        // Hard delete invoice lines for invoices created by this import
+        $conn->executeStatement(
+            'DELETE il FROM invoice_line il INNER JOIN invoice i ON il.invoice_id = i.id WHERE i.import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
+        // Hard delete invoices created by this import
+        $conn->executeStatement(
+            'DELETE FROM invoice WHERE import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
+        // Hard delete clients created by this import
+        $conn->executeStatement(
+            'DELETE FROM client WHERE import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
+        $job->setStatus('reverted');
+        $this->entityManager->flush();
+
+        return $this->json(
+            ['job' => $job],
+            Response::HTTP_OK,
+            [],
+            ['groups' => ['import_job:detail']],
+        );
+    }
+
+    /**
      * GET /api/v1/import/history
      *
      * Returns the list of past import jobs for the current company.

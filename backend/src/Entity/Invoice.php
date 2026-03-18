@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\ImportJob;
 use App\Entity\Traits\AuditableTrait;
 use App\Entity\Traits\SoftDeletableTrait;
 use App\Enum\DocumentStatus;
@@ -46,6 +47,9 @@ class Invoice
     #[Groups(['invoice:list', 'invoice:detail'])]
     private ?Client $client = null;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?ImportJob $importJob = null;
 
     #[ORM\Column(length: 20, enumType: DocumentType::class)]
     #[Groups(['invoice:list', 'invoice:detail'])]
@@ -1556,6 +1560,18 @@ class Invoice
             'clientCode' => $client->getClientCode(),
             'einvoiceIdentifiers' => $client->getEinvoiceIdentifiers(),
         ];
+
+        return $this;
+    }
+
+    public function getImportJob(): ?ImportJob
+    {
+        return $this->importJob;
+    }
+
+    public function setImportJob(?ImportJob $importJob): static
+    {
+        $this->importJob = $importJob;
 
         return $this;
     }
