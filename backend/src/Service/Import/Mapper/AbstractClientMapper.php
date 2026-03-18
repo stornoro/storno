@@ -73,18 +73,43 @@ abstract class AbstractClientMapper implements ColumnMapperInterface
             $result[$targetField] = $value;
         }
 
-        // --- CUI normalisation ---
+        // --- CUI / VAT code normalisation ---
         if (isset($result['cui'])) {
             $raw = trim((string) $result['cui']);
+            $euPrefixes = [
+                'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+                'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+                'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+            ];
+            $prefix = strtoupper(substr($raw, 0, 2));
 
-            if (stripos($raw, 'RO') === 0) {
-                // Extract the numeric part and record the full VAT code.
+            if (in_array($prefix, $euPrefixes, true) && strlen($raw) > 2) {
+                // EU VAT number: store full value as vatCode, numeric part as CUI
                 $numeric = trim(substr($raw, 2));
-                $result['vatCode']    = 'RO' . $numeric;
-                $result['cui']        = $numeric;
+                $result['vatCode'] = strtoupper($raw);
                 $result['isVatPayer'] = true;
+
+                // CUI = numeric part only (if it's actually numeric)
+                if (preg_match('/^\d+$/', $numeric)) {
+                    $result['cui'] = $numeric;
+                } else {
+                    // Non-numeric remainder (e.g. ESA62148457) — clear CUI, keep only vatCode
+                    unset($result['cui']);
+                }
+
+                // Derive country from prefix if not set
+                if (empty($result['country'])) {
+                    $result['country'] = $prefix === 'EL' ? 'GR' : $prefix;
+                }
+            } elseif (preg_match('/^\d+$/', $raw)) {
+                // Plain numeric — keep as CUI, not a VAT payer (unless already set)
+                $result['cui'] = $raw;
+                if (!isset($result['isVatPayer'])) {
+                    $result['isVatPayer'] = false;
+                }
             } else {
-                // No RO prefix — keep as-is, not a VAT payer (unless already set).
+                // Non-numeric, non-EU prefix — not a valid CUI, discard
+                unset($result['cui']);
                 if (!isset($result['isVatPayer'])) {
                     $result['isVatPayer'] = false;
                 }
