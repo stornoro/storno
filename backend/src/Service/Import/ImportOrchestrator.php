@@ -109,6 +109,7 @@ class ImportOrchestrator
                     // Map the row
                     $mappedData = $mapper->mapRow($rawRow, $columnMapping);
                     $mappedData['_source'] = $sourceTag;
+                    $mappedData['_importType'] = $job->getImportType();
                     $mappedData['_importOptions'] = $job->getImportOptions() ?? [];
 
                     // Validate
