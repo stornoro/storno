@@ -45,15 +45,17 @@ class ViesValidateClientsCommand extends Command
         $delayMs = (int) $input->getOption('delay');
         $fixInvoices = $input->getOption('fix-invoices');
 
-        // Find clients with vatCode that starts with EU prefix, not yet VIES-validated, excluding RO
+        // Find all clients not yet VIES-validated that might have EU VAT numbers.
+        // Covers: vatCode with EU prefix, CUI with EU prefix, or CUI + EU country.
         $sql = <<<'SQL'
             SELECT id, name, vat_code, cui, country, company_id
             FROM client
             WHERE deleted_at IS NULL
               AND vies_valid IS NULL
-              AND vat_code IS NOT NULL
-              AND vat_code != ''
-              AND country != 'RO'
+              AND (
+                (vat_code IS NOT NULL AND vat_code != '')
+                OR (cui IS NOT NULL AND cui != '')
+              )
         SQL;
 
         $params = [];
@@ -64,32 +66,7 @@ class ViesValidateClientsCommand extends Command
 
         $sql .= ' ORDER BY company_id, name';
 
-        $clients = $this->conn->fetchAllAssociative($sql, $params);
-
-        // Also find clients without vatCode but with CUI + EU country (might have been imported without prefix)
-        $sql2 = <<<'SQL'
-            SELECT id, name, vat_code, cui, country, company_id
-            FROM client
-            WHERE deleted_at IS NULL
-              AND vies_valid IS NULL
-              AND (vat_code IS NULL OR vat_code = '')
-              AND cui IS NOT NULL
-              AND cui != ''
-              AND country IS NOT NULL
-              AND country != 'RO'
-              AND country != ''
-        SQL;
-
-        if ($companyId) {
-            $sql2 .= ' AND company_id = :companyId';
-        }
-
-        $sql2 .= ' ORDER BY company_id, name';
-
-        $clientsWithCui = $this->conn->fetchAllAssociative($sql2, $params);
-
-        // Merge and deduplicate
-        $allClients = array_merge($clients, $clientsWithCui);
+        $allClients = $this->conn->fetchAllAssociative($sql, $params);
         $seen = [];
         $toValidate = [];
         foreach ($allClients as $c) {
@@ -106,6 +83,7 @@ class ViesValidateClientsCommand extends Command
             $checkCountry = null;
             $checkVatNum = null;
 
+            // 1. Try vatCode (e.g. "DE274281064")
             if ($vatCode) {
                 $parsed = $this->viesService->parseVatCode($vatCode);
                 if ($parsed && in_array($parsed['countryCode'], self::EU_PREFIXES, true)) {
@@ -114,9 +92,24 @@ class ViesValidateClientsCommand extends Command
                 }
             }
 
+            // 2. Try CUI field — might contain full VAT number with EU prefix (e.g. imported as "DE274281064")
+            if (!$checkCountry && $cui) {
+                $parsed = $this->viesService->parseVatCode($cui);
+                if ($parsed && in_array($parsed['countryCode'], self::EU_PREFIXES, true)) {
+                    $checkCountry = $parsed['countryCode'];
+                    $checkVatNum = $parsed['vatNumber'];
+                }
+            }
+
+            // 3. Try CUI + country (e.g. cui="274281064", country="DE")
             if (!$checkCountry && $country && $cui && in_array($country, self::EU_PREFIXES, true)) {
                 $checkCountry = $country;
                 $checkVatNum = $cui;
+            }
+
+            // Skip RO — validated via ANAF, not VIES
+            if ($checkCountry === 'RO') {
+                continue;
             }
 
             // Map Greece country code
@@ -165,19 +158,20 @@ class ViesValidateClientsCommand extends Command
                 ));
                 $errors++;
             } elseif ($result['valid']) {
-                $this->conn->executeStatement(
-                    'UPDATE client SET vies_valid = 1, is_vat_payer = 1, vies_validated_at = :now WHERE id = :id',
-                    ['now' => $now, 'id' => $c['id']],
-                );
+                $countryFromPrefix = $c['_checkCountry'] === 'EL' ? 'GR' : $c['_checkCountry'];
+                $fullVatCode = $c['_checkCountry'] . $c['_checkVatNum'];
 
-                // Also update country from VAT prefix if client has no country set
-                if (empty($c['country'])) {
-                    $countryFromPrefix = $c['_checkCountry'] === 'EL' ? 'GR' : $c['_checkCountry'];
-                    $this->conn->executeStatement(
-                        'UPDATE client SET country = :country WHERE id = :id AND (country IS NULL OR country = \'\')',
-                        ['country' => $countryFromPrefix, 'id' => $c['id']],
-                    );
-                }
+                // Update client: VIES valid, VAT payer, fix country and vatCode
+                $this->conn->executeStatement(
+                    'UPDATE client SET vies_valid = 1, is_vat_payer = 1, vies_validated_at = :now, vat_code = :vatCode, cui = :cui, country = :country WHERE id = :id',
+                    [
+                        'now' => $now,
+                        'vatCode' => $fullVatCode,
+                        'cui' => $c['_checkVatNum'],
+                        'country' => $countryFromPrefix,
+                        'id' => $c['id'],
+                    ],
+                );
 
                 $output->writeln(sprintf(
                     '  <info>[%d/%d] %s — %s%s — VALID</info>%s',
