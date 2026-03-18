@@ -35,7 +35,8 @@ class ViesValidateClientsCommand extends Command
             ->addOption('company', null, InputOption::VALUE_OPTIONAL, 'Limit to a specific company UUID')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only show what would be validated, without calling VIES')
             ->addOption('delay', null, InputOption::VALUE_OPTIONAL, 'Delay in ms between VIES calls (avoid rate limiting)', '500')
-            ->addOption('fix-invoices', null, InputOption::VALUE_NONE, 'Also update existing invoices for validated clients to 0% VAT (reverse charge)');
+            ->addOption('fix-invoices', null, InputOption::VALUE_NONE, 'Also update existing invoices for validated clients to 0% VAT (reverse charge)')
+            ->addOption('reset-invalid', null, InputOption::VALUE_NONE, 'Reset vies_valid=0 clients back to NULL so they can be re-checked');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -44,8 +45,20 @@ class ViesValidateClientsCommand extends Command
         $dryRun = $input->getOption('dry-run');
         $delayMs = (int) $input->getOption('delay');
         $fixInvoices = $input->getOption('fix-invoices');
-        // Only validate clients that have never been checked (vies_valid IS NULL).
-        // Clients with vies_valid = 0 were confirmed invalid by VIES — do not retry.
+        $resetInvalid = $input->getOption('reset-invalid');
+
+        // Reset wrongly-marked invalid clients back to NULL
+        if ($resetInvalid) {
+            $resetSql = 'UPDATE client SET vies_valid = NULL, vies_validated_at = NULL WHERE vies_valid = 0 AND deleted_at IS NULL';
+            $resetParams = [];
+            if ($companyId) {
+                $resetSql .= ' AND company_id = :companyId';
+                $resetParams['companyId'] = $companyId;
+            }
+            $resetCount = $this->conn->executeStatement($resetSql, $resetParams);
+            $output->writeln(sprintf('Reset <info>%d</info> previously-invalid clients back to NULL', $resetCount));
+        }
+
         $viesCondition = 'vies_valid IS NULL';
         $sql = <<<SQL
             SELECT id, name, vat_code, cui, country, company_id
