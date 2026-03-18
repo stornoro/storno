@@ -2,6 +2,7 @@
 
 namespace App\Service\Import;
 
+use App\Entity\Company;
 use App\Entity\ImportJob;
 use App\Service\Centrifugo\CentrifugoService;
 use App\Service\Import\Mapper\ColumnMapperInterface;
@@ -16,6 +17,7 @@ class ImportOrchestrator
 {
     private const CHANNEL_PREFIX = 'import:company_';
     private const PROGRESS_INTERVAL = 100; // Send progress every N rows
+    private const CANCEL_CHECK_INTERVAL = 500; // Check for cancellation every N rows
 
     /** @var FileParserInterface[] */
     private iterable $parsers;
@@ -89,8 +91,12 @@ class ImportOrchestrator
 
         $columnMapping = $job->getColumnMapping() ?? $mapper->getDefaultMapping();
 
-        // Add source info for persister
+        // Store IDs and scalar values so we can survive entityManager->clear()
         $sourceTag = $job->getSource();
+        $importType = $job->getImportType();
+        $importOptions = $job->getImportOptions() ?? [];
+        $jobId = $job->getId();
+        $companyId = $company->getId();
 
         $tempPath = $this->downloadToTemp($job);
         $persister->reset();
@@ -106,11 +112,18 @@ class ImportOrchestrator
                 $rowNumber++;
 
                 try {
+                    // Re-fetch references after entityManager->clear() in batch flush
+                    if (!$this->entityManager->contains($job)) {
+                        $job = $this->entityManager->getReference(ImportJob::class, $jobId);
+                        $company = $this->entityManager->getReference(Company::class, $companyId);
+                    }
+
                     // Map the row
                     $mappedData = $mapper->mapRow($rawRow, $columnMapping);
                     $mappedData['_source'] = $sourceTag;
-                    $mappedData['_importType'] = $job->getImportType();
-                    $mappedData['_importOptions'] = $job->getImportOptions() ?? [];
+                    $mappedData['_importType'] = $importType;
+                    $mappedData['_importOptions'] = $importOptions;
+                    $mappedData['_importJob'] = $job;
 
                     // Validate
                     $validationErrors = $this->validator->validate($mappedData, $mapper);
@@ -136,36 +149,86 @@ class ImportOrchestrator
                 if ($rowNumber % self::PROGRESS_INTERVAL === 0) {
                     $this->sendProgress($channel, $job, $result, 'processing', $rowNumber);
                 }
+
+                // Check for cancellation periodically (raw SQL to avoid issues with detached entities)
+                if ($rowNumber % self::CANCEL_CHECK_INTERVAL === 0) {
+                    $status = $this->entityManager->getConnection()->fetchOne(
+                        'SELECT status FROM import_job WHERE id = :id',
+                        ['id' => $jobId->toRfc4122()],
+                    );
+                    if ($status === 'cancelled') {
+                        $persister->flush();
+
+                        $this->entityManager->getConnection()->executeStatement(
+                            'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, processed_at = :processedAt WHERE id = :id',
+                            [
+                                'status' => 'cancelled',
+                                'created' => $result->getCreatedCount(),
+                                'updated' => $result->getUpdatedCount(),
+                                'skipped' => $result->getSkippedCount(),
+                                'errors' => $result->getErrorCount(),
+                                'processedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                                'id' => $jobId->toRfc4122(),
+                            ],
+                        );
+
+                        $this->sendProgress($channel, $job, $result, 'cancelled', $rowNumber);
+
+                        $this->logger->info('Import cancelled by user', [
+                            'job' => $jobId->toRfc4122(),
+                            'processedRows' => $rowNumber,
+                            'created' => $result->getCreatedCount(),
+                        ]);
+
+                        return $result;
+                    }
+                }
             }
 
             // Final flush
             $persister->flush();
 
-            // Update job with results
-            $job->setStatus('completed');
-            $job->setCreatedCount($result->getCreatedCount());
-            $job->setUpdatedCount($result->getUpdatedCount());
-            $job->setSkippedCount($result->getSkippedCount());
-            $job->setErrorCount($result->getErrorCount());
-            $job->setErrors($result->getErrors());
-            $job->setProcessedAt(new \DateTimeImmutable());
-            $this->entityManager->flush();
+            // Update job with results (raw SQL — entity may be detached after clear())
+            $conn = $this->entityManager->getConnection();
+            $conn->executeStatement(
+                'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, errors = :errorList, processed_at = :processedAt WHERE id = :id',
+                [
+                    'status' => 'completed',
+                    'created' => $result->getCreatedCount(),
+                    'updated' => $result->getUpdatedCount(),
+                    'skipped' => $result->getSkippedCount(),
+                    'errors' => $result->getErrorCount(),
+                    'errorList' => json_encode($result->getErrors()),
+                    'processedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                    'id' => $jobId->toRfc4122(),
+                ],
+            );
 
             // Send final progress
             $this->sendProgress($channel, $job, $result, 'completed', $rowNumber);
 
             $this->logger->info('Import completed', [
-                'job' => $job->getId()->toRfc4122(),
+                'job' => $jobId->toRfc4122(),
                 'created' => $result->getCreatedCount(),
                 'updated' => $result->getUpdatedCount(),
                 'skipped' => $result->getSkippedCount(),
                 'errors' => $result->getErrorCount(),
             ]);
         } catch (\Throwable $e) {
-            $job->setStatus('failed');
-            $job->setErrors([['row' => 0, 'field' => '_general', 'message' => $e->getMessage()]]);
-            $job->setProcessedAt(new \DateTimeImmutable());
-            $this->entityManager->flush();
+            // Update job as failed (raw SQL for safety)
+            try {
+                $this->entityManager->getConnection()->executeStatement(
+                    'UPDATE import_job SET status = :status, errors = :errors, processed_at = :processedAt WHERE id = :id',
+                    [
+                        'status' => 'failed',
+                        'errors' => json_encode([['row' => 0, 'field' => '_general', 'message' => $e->getMessage()]]),
+                        'processedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                        'id' => $jobId->toRfc4122(),
+                    ],
+                );
+            } catch (\Throwable) {
+                // Connection may be broken — just log
+            }
 
             $this->sendProgress($channel, $job, $result, 'failed', $rowNumber);
 

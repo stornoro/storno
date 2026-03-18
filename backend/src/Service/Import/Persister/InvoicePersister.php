@@ -2,6 +2,7 @@
 
 namespace App\Service\Import\Persister;
 
+use App\Entity\Client;
 use App\Entity\Company;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
@@ -9,6 +10,7 @@ use App\Entity\Payment;
 use App\Enum\DocumentStatus;
 use App\Enum\DocumentType;
 use App\Enum\InvoiceDirection;
+use App\Repository\ClientRepository;
 use App\Repository\InvoiceRepository;
 use App\Service\Import\ImportResult;
 use Doctrine\ORM\EntityManagerInterface;
@@ -26,9 +28,13 @@ class InvoicePersister implements EntityPersisterInterface
      */
     private array $pendingCache = [];
 
+    /** @var array<string, Client|null> In-memory client cache to avoid repeated DB lookups */
+    private array $clientCache = [];
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly InvoiceRepository $invoiceRepository,
+        private readonly ClientRepository $clientRepository,
     ) {}
 
     public function supports(string $importType): bool
@@ -94,6 +100,14 @@ class InvoicePersister implements EntityPersisterInterface
 
         // Create the invoice
         $invoice = $this->buildInvoice($mappedData, $company);
+
+        if (isset($mappedData['_importJob'])) {
+            $invoice->setImportJob($mappedData['_importJob']);
+        }
+
+        // Link client entity and populate sender from company
+        $this->linkClientAndSender($invoice, $mappedData, $company);
+
         $this->entityManager->persist($invoice);
 
         // Create line items
@@ -115,6 +129,9 @@ class InvoicePersister implements EntityPersisterInterface
             $payment->setPaymentMethod($invoice->getPaymentMethod() ?? 'bank_transfer');
             $payment->setReference('Import automat');
             $payment->setIsReconciled(true);
+            if (isset($mappedData['_importJob'])) {
+                $payment->setImportJob($mappedData['_importJob']);
+            }
             $this->entityManager->persist($payment);
         }
 
@@ -130,13 +147,131 @@ class InvoicePersister implements EntityPersisterInterface
     public function flush(): void
     {
         $this->entityManager->flush();
+        $this->entityManager->clear();
+        $this->pendingCache = [];
         $this->batchCount = 0;
     }
 
     public function reset(): void
     {
         $this->pendingCache = [];
+        $this->clientCache = [];
         $this->batchCount = 0;
+    }
+
+    /**
+     * Link the invoice to a Client entity and auto-populate sender/receiver fields.
+     *
+     * For issued invoices: sender = company, receiver = client (matched by email → CUI → name).
+     * For received invoices: sender = external, receiver = company.
+     */
+    private function linkClientAndSender(Invoice $invoice, array $data, Company $company): void
+    {
+        $direction = $invoice->getDirection();
+        $isIssued = $direction === InvoiceDirection::OUTGOING;
+
+        // Auto-populate sender from company for issued invoices
+        if ($isIssued) {
+            if (empty($invoice->getSenderName())) {
+                $invoice->setSenderName($company->getName());
+            }
+            if (empty($invoice->getSenderCif())) {
+                $cif = $company->getCif();
+                if ($cif) {
+                    $invoice->setSenderCif((string) $cif);
+                }
+            }
+        }
+
+        // Auto-populate receiver from company for received invoices
+        if ($direction === InvoiceDirection::INCOMING) {
+            if (empty($invoice->getReceiverName())) {
+                $invoice->setReceiverName($company->getName());
+            }
+            if (empty($invoice->getReceiverCif())) {
+                $cif = $company->getCif();
+                if ($cif) {
+                    $invoice->setReceiverCif((string) $cif);
+                }
+            }
+        }
+
+        // Match client: for issued invoices match by receiver info, for received by sender info
+        $clientName = $isIssued ? ($data['receiverName'] ?? null) : ($data['senderName'] ?? null);
+        $clientCif = $isIssued ? ($data['receiverCif'] ?? null) : ($data['senderCif'] ?? null);
+        $clientEmail = $data['clientEmail'] ?? null;
+
+        if (empty($clientName) && empty($clientCif) && empty($clientEmail)) {
+            return;
+        }
+
+        $client = $this->findClient($company, $clientEmail, $clientCif, $clientName);
+        if ($client) {
+            $invoice->setClient($client);
+        }
+    }
+
+    /**
+     * Find a client by email (most reliable for imports without CUI), then CUI, then name.
+     * Results are cached in memory to avoid repeated DB lookups for the same client.
+     */
+    private function findClient(Company $company, ?string $email, ?string $cui, ?string $name): ?Client
+    {
+        $companyId = $company->getId()->toRfc4122();
+
+        // Try email first (most reliable for imports without CUI)
+        if (!empty($email)) {
+            $cacheKey = $companyId . ':email:' . mb_strtolower(trim($email));
+            if (array_key_exists($cacheKey, $this->clientCache)) {
+                return $this->clientCache[$cacheKey];
+            }
+            $client = $this->clientRepository->findOneBy([
+                'company' => $company,
+                'email' => trim($email),
+                'deletedAt' => null,
+            ]);
+            if ($client) {
+                $this->clientCache[$cacheKey] = $client;
+                return $client;
+            }
+        }
+
+        // Try CUI
+        if (!empty($cui)) {
+            $cleanCui = trim($cui);
+            $cacheKey = $companyId . ':cui:' . $cleanCui;
+            if (array_key_exists($cacheKey, $this->clientCache)) {
+                return $this->clientCache[$cacheKey];
+            }
+            $client = $this->clientRepository->findOneBy([
+                'company' => $company,
+                'cui' => $cleanCui,
+                'deletedAt' => null,
+            ]);
+            if ($client) {
+                $this->clientCache[$cacheKey] = $client;
+                return $client;
+            }
+        }
+
+        // Try name
+        if (!empty($name)) {
+            $cacheKey = $companyId . ':name:' . mb_strtolower(trim($name));
+            if (array_key_exists($cacheKey, $this->clientCache)) {
+                return $this->clientCache[$cacheKey];
+            }
+            $client = $this->clientRepository->findOneBy([
+                'company' => $company,
+                'name' => trim($name),
+                'deletedAt' => null,
+            ]);
+            if ($client) {
+                $this->clientCache[$cacheKey] = $client;
+                return $client;
+            }
+        }
+
+        return null;
     }
 
     private function findExistingInvoice(
@@ -213,9 +348,9 @@ class InvoicePersister implements EntityPersisterInterface
         if (empty($direction)) {
             $importType = $data['_importType'] ?? null;
             if ($importType === 'invoices_issued') {
-                $direction = 'issued';
+                $direction = 'outgoing';
             } elseif ($importType === 'invoices_received') {
-                $direction = 'received';
+                $direction = 'incoming';
             }
         }
         if (!empty($direction)) {

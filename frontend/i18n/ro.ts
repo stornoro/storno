@@ -2838,6 +2838,9 @@ export default defineI18nLocale(async () => {
       processing: 'Se proceseaza...',
       completed: 'Import finalizat',
       failed: 'Import esuat',
+      cancelled: 'Import anulat',
+      reverted: 'Import revocat',
+      revert: 'Revoca',
 
       // Results
       created: 'Create',
@@ -2893,6 +2896,8 @@ export default defineI18nLocale(async () => {
       statusProcessing: 'Procesare',
       statusCompleted: 'Finalizat',
       statusFailed: 'Esuat',
+      statusCancelled: 'Anulat',
+      statusReverted: 'Revocat',
 
       // Actions
       next: 'Urmatorul',

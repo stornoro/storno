@@ -186,6 +186,34 @@ export const useImportStore = defineStore('import', () => {
     }
   }
 
+  async function cancelImport(jobId: string): Promise<boolean> {
+    const { post } = useApi()
+    try {
+      const res = await post<{ job: ImportJob }>(`/v1/import/${jobId}/cancel`)
+      currentJob.value = res.job
+      return true
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut anula importul.'
+      return false
+    }
+  }
+
+  async function revertImport(jobId: string): Promise<boolean> {
+    const { post } = useApi()
+    try {
+      const res = await post<{ job: ImportJob }>(`/v1/import/${jobId}/revert`)
+      // Update in history list
+      const idx = history.value.findIndex(j => j.id === jobId)
+      if (idx >= 0) history.value[idx] = res.job
+      return true
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut reveni la starea anterioara.'
+      return false
+    }
+  }
+
   function handleProgress(data: ImportProgress): void {
     progress.value = data
     if (currentJob.value && data.jobId === currentJob.value.id) {
@@ -232,6 +260,8 @@ export const useImportStore = defineStore('import', () => {
     fetchJob,
     fetchHistory,
     downloadTemplate,
+    cancelImport,
+    revertImport,
     handleProgress,
     $reset,
   }

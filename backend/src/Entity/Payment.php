@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\ImportJob;
 use App\Entity\Traits\AuditableTrait;
 use App\Repository\PaymentRepository;
 use Doctrine\DBAL\Types\Types;
@@ -56,6 +57,10 @@ class Payment
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
     private ?Company $company = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?ImportJob $importJob = null;
 
     public function __construct()
     {
@@ -181,5 +186,17 @@ class Payment
     public function getPaymentCreatedAt(): ?\DateTimeImmutable
     {
         return $this->getCreatedAt();
+    }
+
+    public function getImportJob(): ?ImportJob
+    {
+        return $this->importJob;
+    }
+
+    public function setImportJob(?ImportJob $importJob): static
+    {
+        $this->importJob = $importJob;
+
+        return $this;
     }
 }

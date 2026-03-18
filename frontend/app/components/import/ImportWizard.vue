@@ -95,7 +95,7 @@ function startProgressTracking() {
   const sub = subscribe(channel, (data: any) => {
     if (data?.type === 'import_progress' && data.jobId === importStore.currentJob?.id) {
       importStore.handleProgress(data)
-      if (data.status === 'completed' || data.status === 'failed') {
+      if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
         stopProgressTracking()
       }
     }
@@ -106,11 +106,20 @@ function startProgressTracking() {
     pollInterval = setInterval(async () => {
       if (!importStore.currentJob) return
       await importStore.fetchJob(importStore.currentJob.id)
-      if (importStore.currentJob.status === 'completed' || importStore.currentJob.status === 'failed') {
+      if (['completed', 'failed', 'cancelled'].includes(importStore.currentJob.status)) {
         stopProgressTracking()
       }
     }, 3000)
   }
+}
+
+const cancelling = ref(false)
+
+async function handleCancel() {
+  if (!importStore.currentJob) return
+  cancelling.value = true
+  await importStore.cancelImport(importStore.currentJob.id)
+  cancelling.value = false
 }
 
 function stopProgressTracking() {
@@ -251,6 +260,14 @@ onUnmounted(() => {
         <div v-else />
 
         <div class="flex gap-2">
+          <UButton
+            v-if="currentStep === 4 && importStore.currentJob?.status === 'processing'"
+            :label="$t('importExport.cancel')"
+            color="error"
+            variant="outline"
+            :loading="cancelling"
+            @click="handleCancel"
+          />
           <UButton
             v-if="currentStep === 4"
             :label="$t('importExport.close')"
