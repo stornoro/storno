@@ -14,6 +14,7 @@ use App\Repository\ClientRepository;
 use App\Repository\InvoiceRepository;
 use App\Service\Import\ImportResult;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 class InvoicePersister implements EntityPersisterInterface
 {
@@ -28,7 +29,7 @@ class InvoicePersister implements EntityPersisterInterface
      */
     private array $pendingCache = [];
 
-    /** @var array<string, Client|null> In-memory client cache to avoid repeated DB lookups */
+    /** @var array<string, string|null> In-memory client ID cache (stores UUID strings, not entities) */
     private array $clientCache = [];
 
     public function __construct(
@@ -212,18 +213,19 @@ class InvoicePersister implements EntityPersisterInterface
     }
 
     /**
-     * Find a client by email (most reliable for imports without CUI), then CUI, then name.
-     * Results are cached in memory to avoid repeated DB lookups for the same client.
+     * Find a client by email → CUI → name. Caches client IDs (not entities)
+     * so the cache survives entityManager->clear() between batches.
      */
     private function findClient(Company $company, ?string $email, ?string $cui, ?string $name): ?Client
     {
         $companyId = $company->getId()->toRfc4122();
 
-        // Try email first (most reliable for imports without CUI)
+        // Try email first
         if (!empty($email)) {
             $cacheKey = $companyId . ':email:' . mb_strtolower(trim($email));
             if (array_key_exists($cacheKey, $this->clientCache)) {
-                return $this->clientCache[$cacheKey];
+                $id = $this->clientCache[$cacheKey];
+                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
@@ -231,7 +233,7 @@ class InvoicePersister implements EntityPersisterInterface
                 'deletedAt' => null,
             ]);
             if ($client) {
-                $this->clientCache[$cacheKey] = $client;
+                $this->clientCache[$cacheKey] = (string) $client->getId();
                 return $client;
             }
         }
@@ -241,7 +243,8 @@ class InvoicePersister implements EntityPersisterInterface
             $cleanCui = trim($cui);
             $cacheKey = $companyId . ':cui:' . $cleanCui;
             if (array_key_exists($cacheKey, $this->clientCache)) {
-                return $this->clientCache[$cacheKey];
+                $id = $this->clientCache[$cacheKey];
+                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
@@ -249,7 +252,7 @@ class InvoicePersister implements EntityPersisterInterface
                 'deletedAt' => null,
             ]);
             if ($client) {
-                $this->clientCache[$cacheKey] = $client;
+                $this->clientCache[$cacheKey] = (string) $client->getId();
                 return $client;
             }
         }
@@ -258,7 +261,8 @@ class InvoicePersister implements EntityPersisterInterface
         if (!empty($name)) {
             $cacheKey = $companyId . ':name:' . mb_strtolower(trim($name));
             if (array_key_exists($cacheKey, $this->clientCache)) {
-                return $this->clientCache[$cacheKey];
+                $id = $this->clientCache[$cacheKey];
+                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
@@ -266,7 +270,7 @@ class InvoicePersister implements EntityPersisterInterface
                 'deletedAt' => null,
             ]);
             if ($client) {
-                $this->clientCache[$cacheKey] = $client;
+                $this->clientCache[$cacheKey] = (string) $client->getId();
                 return $client;
             }
         }
