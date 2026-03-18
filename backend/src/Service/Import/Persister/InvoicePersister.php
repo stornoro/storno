@@ -225,7 +225,7 @@ class InvoicePersister implements EntityPersisterInterface
             $cacheKey = $companyId . ':email:' . mb_strtolower(trim($email));
             if (array_key_exists($cacheKey, $this->clientCache)) {
                 $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
+                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
@@ -244,7 +244,7 @@ class InvoicePersister implements EntityPersisterInterface
             $cacheKey = $companyId . ':cui:' . $cleanCui;
             if (array_key_exists($cacheKey, $this->clientCache)) {
                 $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
+                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
@@ -262,7 +262,7 @@ class InvoicePersister implements EntityPersisterInterface
             $cacheKey = $companyId . ':name:' . mb_strtolower(trim($name));
             if (array_key_exists($cacheKey, $this->clientCache)) {
                 $id = $this->clientCache[$cacheKey];
-                return $id ? $this->entityManager->getReference(Client::class, Uuid::fromString($id)) : null;
+                return $id ? $this->entityManager->find(Client::class, Uuid::fromString($id)) : null;
             }
             $client = $this->clientRepository->findOneBy([
                 'company' => $company,
