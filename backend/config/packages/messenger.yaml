@@ -32,3 +32,4 @@ when@prod:
                 'App\Message\Anaf\CheckETransportStatusMessage': async
                 'App\Message\ProcessTrialBalanceMessage': async
                 'App\Message\ProcessTelemetryBatchMessage': async
+                'App\Message\ValidateViesMessage': async

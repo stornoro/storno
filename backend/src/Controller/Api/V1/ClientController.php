@@ -16,9 +16,12 @@ use App\Service\Export\SagaXmlExportService;
 use App\Constants\Pagination;
 use App\Services\AnafService;
 use App\Service\Vies\ViesService;
+use App\Message\ValidateViesMessage;
 use App\Util\AddressNormalizer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -46,6 +49,7 @@ class ClientController extends AbstractController
         private readonly SagaXmlExportService $sagaXmlExportService,
         private readonly ViesService $viesService,
         private readonly InvoiceManager $invoiceManager,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -696,14 +700,21 @@ class ClientController extends AbstractController
         }
 
         // Check if CUI starts with a 2-letter EU country code (non-RO)
-        if (preg_match('/^([A-Z]{2})(\d+)$/i', $cui, $matches)) {
+        if (preg_match('/^([A-Z]{2})(.+)$/i', $cui, $matches)) {
             $prefix = strtoupper($matches[1]);
             if ($prefix !== 'RO' && in_array($prefix, self::EU_COUNTRY_CODES, true)) {
                 $client->setVatCode(strtoupper($cui));
-                $client->setCountry($prefix);
-                // Strip the prefix from CUI — CUI should be numeric only
+                $client->setCountry($prefix === 'EL' ? 'GR' : $prefix);
                 $client->setCui($matches[2]);
+                return;
             }
+        }
+
+        // If client has EU country + numeric CUI + isVatPayer, build vatCode from country + CUI
+        $country = $client->getCountry();
+        if ($country && $country !== 'RO' && in_array($country, self::EU_COUNTRY_CODES, true) && $client->isVatPayer()) {
+            $viesCountry = $country === 'GR' ? 'EL' : $country;
+            $client->setVatCode($viesCountry . $cui);
         }
     }
 
@@ -729,12 +740,29 @@ class ClientController extends AbstractController
 
         $result = $this->viesService->validate($parsed['countryCode'], $parsed['vatNumber']);
         if ($result === null) {
-            // API failure — don't change existing VIES status
+            // API failure — dispatch async retry
+            $this->dispatchViesRetry($client);
             return;
         }
 
         $client->setViesValid($result['valid']);
         $client->setViesValidatedAt(new \DateTimeImmutable());
         $client->setViesName($result['name']);
+
+        if ($result['valid']) {
+            $client->setIsVatPayer(true);
+        }
+    }
+
+    private function dispatchViesRetry(Client $client): void
+    {
+        $clientId = $client->getId();
+        if (!$clientId) {
+            return;
+        }
+        $this->messageBus->dispatch(
+            new ValidateViesMessage($clientId->toRfc4122()),
+            [new DelayStamp(30_000)],
+        );
     }
 }
