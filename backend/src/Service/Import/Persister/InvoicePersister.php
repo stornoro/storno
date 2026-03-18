@@ -289,6 +289,15 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->setPaymentMethod($data['paymentMethod']);
         }
 
+        // Created-at override from source data
+        if (!empty($data['createdAt'])) {
+            try {
+                $invoice->setCreatedAt(new \DateTimeImmutable($data['createdAt']));
+            } catch (\Exception) {
+                // Invalid date — let the AuditableListener set it
+            }
+        }
+
         // Build a stable idempotency key for the import source
         $source = $data['_source'] ?? 'generic';
         $idempotencyKey = 'import:' . $source . ':' . $company->getId()->toRfc4122() . ':' . $data['number'];

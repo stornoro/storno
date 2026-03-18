@@ -84,6 +84,14 @@ class ClientPersister implements EntityPersisterInterface
             $this->setClientFields($client, $mappedData);
             $client->setSource('import:' . ($mappedData['_source'] ?? 'generic'));
 
+            if (!empty($mappedData['createdAt'])) {
+                try {
+                    $client->setCreatedAt(new \DateTimeImmutable($mappedData['createdAt']));
+                } catch (\Exception) {
+                    // Invalid date — let the AuditableListener set it
+                }
+            }
+
             $this->entityManager->persist($client);
             $this->findOrCreateBankAccount($company, $mappedData);
 
