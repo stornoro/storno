@@ -37,6 +37,7 @@ abstract class AbstractClientMapper implements ColumnMapperInterface
             'contactPerson'          => 'Persoană contact',
             'clientCode'             => 'Cod client',
             'notes'                  => 'Observații',
+            'createdAt'              => 'Data creare',
         ];
     }
 
