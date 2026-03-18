@@ -28,8 +28,8 @@ class ReverseChargeHelper
             return false;
         }
 
-        // Client must have valid VIES
-        if ($client->isViesValid() !== true) {
+        // Client must be VAT-registered (VIES-validated or explicitly marked as VAT payer)
+        if ($client->isViesValid() !== true && !$client->isVatPayer()) {
             return false;
         }
 
