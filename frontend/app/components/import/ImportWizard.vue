@@ -70,7 +70,7 @@ async function handleNext() {
     const success = await importStore.executeImport(importStore.currentJob!.id, opts)
     if (success) {
       currentStep.value = 4
-      startProgressPolling()
+      startProgressTracking()
     }
   }
   else {
@@ -85,37 +85,48 @@ function handlePrevious() {
 }
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
+let importChannel: string | null = null
 
-function startProgressPolling() {
+function startProgressTracking() {
   const { subscribe } = useCentrifugo()
   const channel = `import:company_${companyStore.currentCompanyId}`
-  subscribe(channel, (data: any) => {
+  importChannel = channel
+
+  const sub = subscribe(channel, (data: any) => {
     if (data?.type === 'import_progress' && data.jobId === importStore.currentJob?.id) {
       importStore.handleProgress(data)
       if (data.status === 'completed' || data.status === 'failed') {
-        stopProgressPolling()
+        stopProgressTracking()
       }
     }
   })
 
-  pollInterval = setInterval(async () => {
-    if (!importStore.currentJob) return
-    await importStore.fetchJob(importStore.currentJob.id)
-    if (importStore.currentJob.status === 'completed' || importStore.currentJob.status === 'failed') {
-      stopProgressPolling()
-    }
-  }, 3000)
+  // Only fall back to polling if WebSocket subscription failed (plan-gated or connection issue)
+  if (!sub) {
+    pollInterval = setInterval(async () => {
+      if (!importStore.currentJob) return
+      await importStore.fetchJob(importStore.currentJob.id)
+      if (importStore.currentJob.status === 'completed' || importStore.currentJob.status === 'failed') {
+        stopProgressTracking()
+      }
+    }, 3000)
+  }
 }
 
-function stopProgressPolling() {
+function stopProgressTracking() {
   if (pollInterval) {
     clearInterval(pollInterval)
     pollInterval = null
   }
+  if (importChannel) {
+    const { unsubscribe } = useCentrifugo()
+    unsubscribe(importChannel)
+    importChannel = null
+  }
 }
 
 function handleClose() {
-  stopProgressPolling()
+  stopProgressTracking()
   if (importStore.currentJob?.status === 'completed') {
     emit('completed')
   }
@@ -137,7 +148,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopProgressPolling()
+  stopProgressTracking()
 })
 </script>
 
