@@ -118,15 +118,18 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->addLine($line);
         }
 
-        // Mark as paid: create a Payment if requested via import options
+        // Mark as paid: create a Payment and update invoice status
         $importOptions = $mappedData['_importOptions'] ?? [];
         if (!empty($importOptions['markAsPaid'])) {
+            $total = $invoice->getTotal() ?? '0.00';
+            $paymentDate = $invoice->getIssueDate() ?? new \DateTime();
+
             $payment = new Payment();
             $payment->setCompany($company);
             $payment->setInvoice($invoice);
-            $payment->setAmount($invoice->getTotal() ?? '0.00');
+            $payment->setAmount($total);
             $payment->setCurrency($invoice->getCurrency() ?? 'RON');
-            $payment->setPaymentDate($invoice->getIssueDate() ?? new \DateTime());
+            $payment->setPaymentDate($paymentDate);
             $payment->setPaymentMethod($invoice->getPaymentMethod() ?? 'bank_transfer');
             $payment->setReference('Import automat');
             $payment->setIsReconciled(true);
@@ -134,6 +137,14 @@ class InvoicePersister implements EntityPersisterInterface
                 $payment->setImportJob($mappedData['_importJob']);
             }
             $this->entityManager->persist($payment);
+
+            // Update invoice paid status
+            $invoice->setAmountPaid($total);
+            $invoice->setStatus(DocumentStatus::PAID);
+            $paidAt = $paymentDate instanceof \DateTime
+                ? \DateTimeImmutable::createFromMutable($paymentDate)
+                : new \DateTimeImmutable();
+            $invoice->setPaidAt($paidAt);
         }
 
         $this->pendingCache[$dedupKey] = $invoice;
