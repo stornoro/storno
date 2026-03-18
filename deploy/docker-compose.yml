@@ -49,6 +49,7 @@ services:
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-1}
       FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-}
       PUSH_RELAY_URL: ${PUSH_RELAY_URL:-https://hub.storno.ro}
+      VIES_PROXY_URL: ${VIES_PROXY_URL:-}
     volumes:
       - jwt_keys:/app/config/jwt
       - backend_var:/app/var

@@ -29,6 +29,7 @@ class ViesService
                     'vatNumber' => $vatNumber,
                 ],
                 'timeout' => self::TIMEOUT,
+                'proxy' => $_ENV['VIES_PROXY_URL'] ?? null,
             ]);
 
             $data = $response->toArray();
