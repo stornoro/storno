@@ -34,8 +34,23 @@ class ViesService
 
             $data = $response->toArray();
 
+            // VIES may return an error (e.g. MS_UNAVAILABLE) — treat as inconclusive
+            if (isset($data['userError']) || isset($data['actionSucceed']) && $data['actionSucceed'] === false) {
+                $this->logger->warning('VIES returned error response', [
+                    'countryCode' => $countryCode,
+                    'vatNumber' => $vatNumber,
+                    'userError' => $data['userError'] ?? null,
+                ]);
+                return null;
+            }
+
+            // Only trust the result if 'valid' key is explicitly present
+            if (!array_key_exists('valid', $data)) {
+                return null;
+            }
+
             return [
-                'valid' => $data['valid'] ?? false,
+                'valid' => $data['valid'],
                 'name' => !empty($data['name']) && $data['name'] !== '---' ? trim($data['name']) : null,
                 'address' => !empty($data['address']) && $data['address'] !== '---' ? trim($data['address']) : null,
             ];
