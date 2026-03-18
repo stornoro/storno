@@ -63,8 +63,9 @@ class ClientController extends AbstractController
         $page = $request->query->getInt('page', 1);
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
         $search = $request->query->get('search');
+        $country = $request->query->get('country') ?: null;
 
-        $result = $this->clientManager->listGrouped($company, $page, $limit, $search);
+        $result = $this->clientManager->listGrouped($company, $page, $limit, $search, $country);
 
         $response = $this->json([
             'data' => $result['data'],
@@ -73,6 +74,7 @@ class ClientController extends AbstractController
             'limit' => $limit,
             'currency' => $company->getDefaultCurrency() ?? 'RON',
             'hasForeignCurrencies' => $result['hasForeignCurrencies'] ?? false,
+            'distinctCountries' => $result['distinctCountries'] ?? [],
         ]);
         $response->setMaxAge(30);
         $response->setPrivate();

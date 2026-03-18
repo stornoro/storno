@@ -16,12 +16,19 @@ const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggl
   { key: 'phone', label: $t('common.phone'), default: false },
   { key: 'vatCode', label: $t('clients.vatCode'), default: false },
   { key: 'county', label: $t('common.county'), default: false },
+  { key: 'country', label: $t('common.country'), default: false },
 ])
 
 const createModalOpen = ref(false)
 const page = ref(1)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
 const search = ref('')
+const countryFilter = ref<string | null>(null)
+
+function countryFlag(code: string): string {
+  if (!code || code.length !== 2) return ''
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65))
+}
 
 // ── Selection ──────────────────────────────────────────────────────
 const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, count: selectionCount } = useTableSelection(
@@ -53,6 +60,10 @@ async function handleBulkDelete() {
 const loading = computed(() => clientsStore.loading)
 const clients = computed(() => clientsStore.items)
 const total = computed(() => clientsStore.total)
+const distinctCountries = computed(() => clientsStore.distinctCountries)
+const countryOptions = computed(() =>
+  distinctCountries.value.map(code => ({ label: `${countryFlag(code)} ${code}`, value: code })),
+)
 
 const EU_COUNTRY_CODES = [
   'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
@@ -71,6 +82,7 @@ const allColumnDefs = [
   { accessorKey: 'invoiceTotal', header: $t('clients.invoiceTotal'), _always: true },
   { accessorKey: 'city', header: $t('common.city'), _always: true },
   { accessorKey: 'county', header: $t('common.county'), _toggle: 'county' },
+  { accessorKey: 'country', header: $t('common.country'), _toggle: 'country' },
 ]
 
 const columns = computed(() => filterColumns(allColumnDefs))
@@ -103,6 +115,7 @@ function onRowClick(_e: Event, row: any) {
 
 async function fetchClients() {
   clientsStore.search = search.value
+  clientsStore.country = countryFilter.value
   clientsStore.page = page.value
   await clientsStore.fetchClients()
 }
@@ -114,9 +127,15 @@ function onClientSaved() {
 
 watch([page], () => fetchClients())
 
+watch(countryFilter, () => {
+  page.value = 1
+  fetchClients()
+})
+
 watch(() => companyStore.currentCompanyId, () => {
   page.value = 1
   search.value = ''
+  countryFilter.value = null
   fetchClients()
 })
 
@@ -164,7 +183,18 @@ onMounted(() => fetchClients())
 
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+        <div class="flex flex-wrap items-center gap-1.5">
+          <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+          <USelectMenu
+            v-if="countryOptions.length > 0"
+            v-model="countryFilter"
+            :options="countryOptions"
+            value-key="value"
+            :placeholder="$t('common.country')"
+            class="w-36"
+            clearable
+          />
+        </div>
       </div>
 
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">
@@ -250,6 +280,10 @@ onMounted(() => fetchClients())
         </template>
         <template #county-cell="{ row }">
           <span class="text-sm">{{ row.original.county || '-' }}</span>
+        </template>
+        <template #country-cell="{ row }">
+          <span v-if="row.original.country" class="text-sm">{{ countryFlag(row.original.country) }} {{ row.original.country }}</span>
+          <span v-else class="text-sm">-</span>
         </template>
       </UTable>
 
