@@ -70,6 +70,7 @@ async function handleNext() {
     const success = await importStore.executeImport(importStore.currentJob!.id, opts)
     if (success) {
       currentStep.value = 4
+      importStore.fetchHistory()
       startProgressTracking()
     }
   }
