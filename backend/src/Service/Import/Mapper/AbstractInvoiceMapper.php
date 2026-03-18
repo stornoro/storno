@@ -39,6 +39,7 @@ abstract class AbstractInvoiceMapper implements ColumnMapperInterface
             'lineVatAmount'      => 'TVA linie',
             'lineTotal'          => 'Total linie',
             'lineProductCode'    => 'Cod produs',
+            'createdAt'          => 'Data creare',
         ];
     }
 
