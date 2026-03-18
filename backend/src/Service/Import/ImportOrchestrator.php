@@ -15,7 +15,7 @@ use Psr\Log\LoggerInterface;
 class ImportOrchestrator
 {
     private const CHANNEL_PREFIX = 'import:company_';
-    private const PROGRESS_INTERVAL = 10; // Send progress every N rows
+    private const PROGRESS_INTERVAL = 100; // Send progress every N rows
 
     /** @var FileParserInterface[] */
     private iterable $parsers;
@@ -100,7 +100,7 @@ class ImportOrchestrator
 
         try {
             // Send initial progress
-            $this->sendProgress($channel, $job, $result, 'processing');
+            $this->sendProgress($channel, $job, $result, 'processing', 0);
 
             foreach ($parser->parse($tempPath) as $rawRow) {
                 $rowNumber++;
@@ -133,7 +133,7 @@ class ImportOrchestrator
 
                 // Send progress periodically
                 if ($rowNumber % self::PROGRESS_INTERVAL === 0) {
-                    $this->sendProgress($channel, $job, $result, 'processing');
+                    $this->sendProgress($channel, $job, $result, 'processing', $rowNumber);
                 }
             }
 
@@ -151,7 +151,7 @@ class ImportOrchestrator
             $this->entityManager->flush();
 
             // Send final progress
-            $this->sendProgress($channel, $job, $result, 'completed');
+            $this->sendProgress($channel, $job, $result, 'completed', $rowNumber);
 
             $this->logger->info('Import completed', [
                 'job' => $job->getId()->toRfc4122(),
@@ -166,7 +166,7 @@ class ImportOrchestrator
             $job->setProcessedAt(new \DateTimeImmutable());
             $this->entityManager->flush();
 
-            $this->sendProgress($channel, $job, $result, 'failed');
+            $this->sendProgress($channel, $job, $result, 'failed', $rowNumber);
 
             $this->logger->error('Import failed', [
                 'job' => $job->getId()->toRfc4122(),
@@ -326,7 +326,7 @@ class ImportOrchestrator
         };
     }
 
-    private function sendProgress(string $channel, ImportJob $job, ImportResult $result, string $status): void
+    private function sendProgress(string $channel, ImportJob $job, ImportResult $result, string $status, int $rowNumber = 0): void
     {
         try {
             $this->centrifugo->publish($channel, [
@@ -334,7 +334,7 @@ class ImportOrchestrator
                 'jobId' => $job->getId()->toRfc4122(),
                 'status' => $status,
                 'totalRows' => $result->getTotalRows(),
-                'processed' => $result->getProcessedCount(),
+                'processed' => $rowNumber,
                 'created' => $result->getCreatedCount(),
                 'updated' => $result->getUpdatedCount(),
                 'skipped' => $result->getSkippedCount(),
