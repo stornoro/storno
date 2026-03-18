@@ -9,6 +9,7 @@ interface ClientPaginatedResponse {
   limit: number
   currency: string
   hasForeignCurrencies: boolean
+  distinctCountries: string[]
 }
 
 interface ClientDetailResponse {
@@ -29,11 +30,13 @@ export const useClientStore = defineStore('clients', () => {
   const error = ref<string | null>(null)
 
   const search = ref('')
+  const country = ref<string | null>(null)
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
   const currency = ref('RON')
   const hasForeignCurrencies = ref(false)
+  const distinctCountries = ref<string[]>([])
 
   // ── Getters ────────────────────────────────────────────────────────
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
@@ -57,6 +60,10 @@ export const useClientStore = defineStore('clients', () => {
         params.search = search.value
       }
 
+      if (country.value) {
+        params.country = country.value
+      }
+
       const response = await get<ClientPaginatedResponse>('/v1/clients', params)
 
       items.value = response.data
@@ -64,6 +71,7 @@ export const useClientStore = defineStore('clients', () => {
       page.value = response.page
       currency.value = response.currency ?? 'RON'
       hasForeignCurrencies.value = response.hasForeignCurrencies ?? false
+      distinctCountries.value = response.distinctCountries ?? []
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca clientii.'
@@ -173,8 +181,10 @@ export const useClientStore = defineStore('clients', () => {
     loading.value = false
     error.value = null
     search.value = ''
+    country.value = null
     page.value = 1
     total.value = 0
+    distinctCountries.value = []
   }
 
   return {
@@ -183,11 +193,13 @@ export const useClientStore = defineStore('clients', () => {
     loading,
     error,
     search,
+    country,
     page,
     limit,
     total,
     currency,
     hasForeignCurrencies,
+    distinctCountries,
 
     // Getters
     totalPages,
