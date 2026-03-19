@@ -410,6 +410,17 @@ export const useInvoiceStore = defineStore('invoices', () => {
     }
   }
 
+  async function bulkFinalize(ids: string[]): Promise<{ issued: number, errors: Array<{ id: string, error: string }> } | null> {
+    const { post } = useApi()
+    try {
+      return await post<{ issued: number, errors: Array<{ id: string, error: string }> }>('/v1/invoices/bulk-finalize', { ids })
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut finaliza facturile in masa.'
+      return null
+    }
+  }
+
   async function bulkMarkPaid(ids: string[], paymentMethod = 'bank_transfer'): Promise<{ marked: number, errors: Array<{ id: string, error: string }> } | null> {
     const { post } = useApi()
     try {
@@ -523,6 +534,7 @@ export const useInvoiceStore = defineStore('invoices', () => {
     submitInvoice,
     cancelInvoice,
     validateInvoice,
+    bulkFinalize,
     bulkMarkPaid,
     bulkMarkUnpaid,
     bulkDelete,
