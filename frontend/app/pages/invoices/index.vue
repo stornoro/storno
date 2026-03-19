@@ -92,7 +92,8 @@ function syncFiltersToUrl() {
     if (v) q[key] = String(v)
   }
 
-  router.replace({ query: q })
+  skipRouteWatch = true
+  router.push({ query: q })
 }
 
 // ── Quick date presets ────────────────────────────────────────────
@@ -672,6 +673,12 @@ function getCounterpartyCountry(inv: any): string {
   return inv.client?.country || ''
 }
 
+const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
+function countryName(code: string): string {
+  if (!code || code.length !== 2) return ''
+  try { return countryNames.of(code) || code } catch { return code }
+}
+
 function formatMoney(amount?: string | number, currency = 'RON') {
   return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(Number(amount || 0))
 }
@@ -787,6 +794,29 @@ watch(() => companyStore.currentCompanyId, () => {
 const invoiceRealtime = useInvoiceRealtime(() => fetchInvoices())
 
 const { can } = usePermissions()
+
+// Restore filters from URL on back/forward navigation
+let skipRouteWatch = false
+watch(() => route.query, (q) => {
+  if (skipRouteWatch) { skipRouteWatch = false; return }
+  search.value = (q.search as string) || ''
+  statusFilter.value = (q.status as string) || 'all'
+  activeDirection.value = (q.direction as string) || 'all'
+  paidFilter.value = (q.paid as string) || 'all'
+  currencyFilter.value = (q.currency as string) || defaultCurrency
+  dateFrom.value = (q.dateFrom as string) || thisMonth.from
+  dateTo.value = (q.dateTo as string) || thisMonth.to
+  activeDatePreset.value = (q.datePreset as string) || 'thisMonth'
+  vatTotalMin.value = (q.vatTotalMin as string) || ''
+  vatTotalMax.value = (q.vatTotalMax as string) || ''
+  totalMin.value = (q.totalMin as string) || ''
+  totalMax.value = (q.totalMax as string) || ''
+  page.value = Number(q.page) || 1
+  if (q.sort) {
+    sorting.value = [{ id: q.sort as string, desc: q.order === 'desc' }]
+  }
+  fetchInvoices()
+})
 
 onMounted(() => {
   fetchInvoices()
@@ -996,7 +1026,7 @@ onUnmounted(() => {
               <div v-if="getCounterpartyCif(row.original) || getCounterpartyCountry(row.original)" class="flex items-center gap-1.5 text-xs text-(--ui-text-muted)">
                 <span v-if="getCounterpartyCif(row.original)">{{ getCounterpartyCif(row.original) }}</span>
                 <span v-if="getCounterpartyCif(row.original) && getCounterpartyCountry(row.original)">·</span>
-                <span v-if="getCounterpartyCountry(row.original)">{{ getCounterpartyCountry(row.original) }}</span>
+                <span v-if="getCounterpartyCountry(row.original)">{{ countryName(getCounterpartyCountry(row.original)) }}</span>
               </div>
             </div>
           </div>
