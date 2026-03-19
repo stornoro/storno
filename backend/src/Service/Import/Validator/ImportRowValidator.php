@@ -31,11 +31,20 @@ class ImportRowValidator
             $errors['email'] = 'Adresa de email nu este validă.';
         }
 
-        // Validate CUI/CIF format if present (digits only, optionally prefixed with RO)
+        // Validate CUI/CIF format: RO = digits only, foreign = alphanumeric with optional country prefix
         if (!empty($mappedData['cui'])) {
-            $cui = preg_replace('/^RO/i', '', trim($mappedData['cui']));
-            if (!preg_match('/^\d{1,13}$/', $cui)) {
-                $errors['cui'] = 'CUI/CIF invalid.';
+            $cui = trim($mappedData['cui']);
+            $country = $mappedData['country'] ?? '';
+            if ($country === 'RO' || stripos($cui, 'RO') === 0) {
+                $numeric = preg_replace('/^RO/i', '', $cui);
+                if (!preg_match('/^\d{1,13}$/', $numeric)) {
+                    $errors['cui'] = 'CUI/CIF invalid.';
+                }
+            } else {
+                // Foreign: allow alphanumeric (e.g. BE1017382520, ESA62148457)
+                if (!preg_match('/^[A-Z0-9]{2,20}$/i', $cui)) {
+                    $errors['cui'] = 'CUI/CIF invalid.';
+                }
             }
         }
 
