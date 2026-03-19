@@ -704,22 +704,28 @@ class ClientController extends AbstractController
             return;
         }
 
-        // Check if CUI starts with a 2-letter EU country code (non-RO)
+        // Check if CUI starts with a 2-letter EU country code
         if (preg_match('/^([A-Z]{2})(.+)$/i', $cui, $matches)) {
             $prefix = strtoupper($matches[1]);
-            if ($prefix !== 'RO' && in_array($prefix, self::EU_COUNTRY_CODES, true)) {
+            if (in_array($prefix, self::EU_COUNTRY_CODES, true)) {
                 $client->setVatCode(strtoupper($cui));
                 $client->setCountry($prefix === 'EL' ? 'GR' : $prefix);
-                $client->setCui($matches[2]);
+                // RO: CUI = digits only; Foreign: CUI = full VAT number
+                if ($prefix === 'RO') {
+                    $client->setCui($matches[2]);
+                }
+                // else keep CUI as-is (already has the full value)
                 return;
             }
         }
 
-        // If client has EU country + numeric CUI + isVatPayer, build vatCode from country + CUI
+        // If client has EU country + CUI + isVatPayer, build vatCode from country + CUI
         $country = $client->getCountry();
         if ($country && $country !== 'RO' && in_array($country, self::EU_COUNTRY_CODES, true) && $client->isVatPayer()) {
             $viesCountry = $country === 'GR' ? 'EL' : $country;
-            $client->setVatCode($viesCountry . $cui);
+            $fullVat = $viesCountry . $cui;
+            $client->setVatCode($fullVat);
+            $client->setCui($fullVat); // Store full VAT number as CUI for foreign
         }
     }
 
