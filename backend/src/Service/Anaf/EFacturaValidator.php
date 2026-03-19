@@ -77,7 +77,7 @@ class EFacturaValidator
 
         // Client/receiver validations
         if ($client !== null) {
-            if ($client->getType() === 'company' && empty($client->getCui())) {
+            if ($client->getType() === 'company' && empty($client->getCui()) && empty($client->getVatCode())) {
                 $errors[] = new ValidationError('Clientul (persoana juridica) nu are CUI completat.', 'business');
             }
             if (empty($client->getName())) {
