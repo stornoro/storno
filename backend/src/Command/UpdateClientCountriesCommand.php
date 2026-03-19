@@ -98,8 +98,8 @@ class UpdateClientCountriesCommand extends Command
         $updated = 0;
 
         foreach ($batch as $row) {
-            // Skip VIES-validated clients
-            $where = 'company_id = ? AND deleted_at IS NULL AND vies_valid IS NULL';
+            // Skip clients confirmed valid by VIES
+            $where = 'company_id = ? AND deleted_at IS NULL AND (vies_valid IS NULL OR vies_valid != 1)';
             $params = [$companyId];
 
             if ($row['email']) {
