@@ -211,6 +211,11 @@ class ClientController extends AbstractController
         $city = trim($data['city'] ?? '');
         $address = trim($data['address'] ?? '');
         $cui = !empty($data['cui']) ? trim($data['cui']) : null;
+        // Treat "-" as no CUI (individual person)
+        if ($cui === '-') {
+            $cui = null;
+            $data['type'] = $data['type'] ?? 'individual';
+        }
 
         // Skip address validations for RO companies with CUI — ANAF will auto-fill
         $canEnrichFromAnaf = $cui && $country === 'RO';

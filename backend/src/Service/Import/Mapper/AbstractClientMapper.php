@@ -76,6 +76,18 @@ abstract class AbstractClientMapper implements ColumnMapperInterface
         // --- CUI / VAT code normalisation ---
         if (isset($result['cui'])) {
             $raw = trim((string) $result['cui']);
+
+            // Treat "-" as no CUI (individual person)
+            if ($raw === '-' || $raw === '') {
+                unset($result['cui']);
+                $result['type'] = 'individual';
+                if (!isset($result['isVatPayer'])) {
+                    $result['isVatPayer'] = false;
+                }
+            }
+        }
+        if (isset($result['cui'])) {
+            $raw = trim((string) $result['cui']);
             $euPrefixes = [
                 'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
                 'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
