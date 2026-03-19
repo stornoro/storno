@@ -380,11 +380,16 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
 
 const bulkLoading = ref(false)
 
+const finalizeConfirmOpen = ref(false)
 const deleteConfirmOpen = ref(false)
 const cancelConfirmOpen = ref(false)
 const stornoConfirmOpen = ref(false)
 const markPaidConfirmOpen = ref(false)
 const markUnpaidConfirmOpen = ref(false)
+
+const eligibleForFinalize = computed(() =>
+  invoicesStore.items.filter(i => selectedIds.value.includes(i.id) && i.status === 'draft' && i.direction === 'outgoing'),
+)
 
 const eligibleForDelete = computed(() =>
   invoicesStore.items.filter(i => selectedIds.value.includes(i.id) && ['draft', 'cancelled'].includes(i.status)),
@@ -420,6 +425,30 @@ const eligibleForMarkUnpaid = computed(() =>
     && Number(i.total) >= 0,
   ),
 )
+
+async function handleBulkFinalize() {
+  finalizeConfirmOpen.value = false
+  if (!eligibleForFinalize.value.length) {
+    toast.add({ title: $t('bulk.noneEligible'), color: 'warning' })
+    return
+  }
+  bulkLoading.value = true
+  const result = await invoicesStore.bulkFinalize(eligibleForFinalize.value.map(i => i.id))
+  bulkLoading.value = false
+  if (result) {
+    if (result.errors.length > 0) {
+      toast.add({ title: $t('bulk.finalizePartial', { issued: result.issued, errors: result.errors.length }), color: 'warning' })
+    }
+    else {
+      toast.add({ title: $t('bulk.finalizeSuccess', { count: result.issued }), color: 'success' })
+    }
+    clearSelection()
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('common.error'), color: 'error' })
+  }
+}
 
 async function handleBulkDelete() {
   deleteConfirmOpen.value = false
@@ -918,6 +947,7 @@ onUnmounted(() => {
     <template #body>
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">
         <template #actions>
+          <UButton v-if="can(P.INVOICE_ISSUE) && eligibleForFinalize.length > 0" :label="`${$t('bulk.finalize')} (${eligibleForFinalize.length})`" icon="i-lucide-file-check" color="primary" variant="soft" size="sm" @click="finalizeConfirmOpen = true" />
           <UButton :label="$t('bulk.export')" icon="i-lucide-archive" variant="soft" size="sm" :loading="bulkLoading" @click="handleBulkExportZip" />
           <UButton v-if="can(P.PAYMENT_CREATE) && eligibleForMarkPaid.length > 0" :label="`${$t('bulk.markPaid')} (${eligibleForMarkPaid.length})`" icon="i-lucide-banknote" color="success" variant="soft" size="sm" @click="markPaidConfirmOpen = true" />
           <UButton v-if="can(P.PAYMENT_CREATE) && eligibleForMarkUnpaid.length > 0" :label="`${$t('bulk.markUnpaid')} (${eligibleForMarkUnpaid.length})`" icon="i-lucide-banknote-x" color="warning" variant="soft" size="sm" @click="markUnpaidConfirmOpen = true" />
@@ -1079,6 +1109,22 @@ onUnmounted(() => {
         </span>
         <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
       </div>
+
+      <!-- Bulk Finalize Confirm -->
+      <UModal v-model:open="finalizeConfirmOpen">
+        <template #header>
+          <h3 class="text-lg font-semibold">{{ $t('bulk.finalizeConfirmTitle') }}</h3>
+        </template>
+        <template #body>
+          <p class="text-sm">{{ $t('bulk.finalizeConfirmDescription', { count: eligibleForFinalize.length }) }}</p>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton :label="$t('common.cancel')" variant="ghost" @click="finalizeConfirmOpen = false" />
+            <UButton :label="$t('bulk.finalize')" color="primary" :loading="bulkLoading" @click="handleBulkFinalize" />
+          </div>
+        </template>
+      </UModal>
 
       <!-- Bulk Delete Confirm -->
       <UModal v-model:open="deleteConfirmOpen">
