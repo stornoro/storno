@@ -96,17 +96,16 @@ abstract class AbstractClientMapper implements ColumnMapperInterface
             $prefix = strtoupper(substr($raw, 0, 2));
 
             if (in_array($prefix, $euPrefixes, true) && strlen($raw) > 2) {
-                // EU VAT number: store full value as vatCode, numeric part as CUI
-                $numeric = trim(substr($raw, 2));
-                $result['vatCode'] = strtoupper($raw);
+                $fullVat = strtoupper($raw);
+                $result['vatCode'] = $fullVat;
                 $result['isVatPayer'] = true;
 
-                // CUI = numeric part only (if it's actually numeric)
-                if (preg_match('/^\d+$/', $numeric)) {
-                    $result['cui'] = $numeric;
+                if ($prefix === 'RO') {
+                    // Romanian: CUI = digits only (strip RO prefix)
+                    $result['cui'] = trim(substr($raw, 2));
                 } else {
-                    // Non-numeric remainder (e.g. ESA62148457) — clear CUI, keep only vatCode
-                    unset($result['cui']);
+                    // Foreign EU: CUI = full VAT number with prefix (e.g. BE1017382520)
+                    $result['cui'] = $fullVat;
                 }
 
                 // Derive country from prefix if not set
