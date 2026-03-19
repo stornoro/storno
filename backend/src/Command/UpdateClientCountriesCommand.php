@@ -53,6 +53,7 @@ class UpdateClientCountriesCommand extends Command
         $nameIdx = array_search('Denumire client', $headers);
         $countryIdx = array_search('Tara', $headers);
         $emailIdx = array_search('Email', $headers);
+        $cifIdx = array_search('CIF', $headers);
 
         if ($nameIdx === false || $countryIdx === false) {
             $output->writeln('<error>CSV must have "Denumire client" and "Tara" columns</error>');
@@ -67,12 +68,13 @@ class UpdateClientCountriesCommand extends Command
             $name = trim($row[$nameIdx] ?? '');
             $country = trim($row[$countryIdx] ?? '');
             $email = $emailIdx !== false ? trim($row[$emailIdx] ?? '') : '';
+            $cif = $cifIdx !== false ? trim($row[$cifIdx] ?? '') : '';
 
             if (!$name || !$country) {
                 continue;
             }
 
-            $batch[] = ['name' => $name, 'country' => $country, 'email' => $email];
+            $batch[] = ['name' => $name, 'country' => $country, 'email' => $email, 'cif' => $cif];
 
             if (count($batch) >= 500) {
                 $updated += $this->processBatch($batch, $companyId, $dryRun);
@@ -96,8 +98,8 @@ class UpdateClientCountriesCommand extends Command
         $updated = 0;
 
         foreach ($batch as $row) {
-            // Try email first, then name
-            $where = 'company_id = ? AND deleted_at IS NULL';
+            // Skip VIES-validated clients
+            $where = 'company_id = ? AND deleted_at IS NULL AND vies_valid IS NULL';
             $params = [$companyId];
 
             if ($row['email']) {
@@ -109,8 +111,13 @@ class UpdateClientCountriesCommand extends Command
             }
 
             if (!$dryRun) {
+                // Set type to individual if no CIF or VAT code provided
+                $cif = $row['cif'] ?? '';
+                $hasNoCif = $cif === '' || $cif === '-';
+                $typeSql = $hasNoCif ? ", type = 'individual'" : '';
+
                 $affected = $this->conn->executeStatement(
-                    "UPDATE client SET country = ? WHERE $where",
+                    "UPDATE client SET country = ?{$typeSql} WHERE $where",
                     array_merge([$row['country']], $params),
                 );
                 $updated += $affected;
