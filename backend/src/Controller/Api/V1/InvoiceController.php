@@ -137,6 +137,59 @@ class InvoiceController extends AbstractController
         return $this->json(['deleted' => $deleted, 'errors' => $errors]);
     }
 
+    #[Route('/invoices/bulk-finalize', methods: ['POST'])]
+    public function bulkFinalize(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $ids = $data['ids'] ?? [];
+
+        if (!is_array($ids) || count($ids) === 0 || count($ids) > 100) {
+            return $this->json(['error' => 'Provide between 1 and 100 IDs.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'Authentication required.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $issued = 0;
+        $errors = [];
+        $companyId = null;
+
+        foreach ($ids as $id) {
+            $invoice = $this->findInvoice($id);
+            if (!$invoice) {
+                $errors[] = ['id' => $id, 'error' => 'Invoice not found.'];
+                continue;
+            }
+            try {
+                $companyId ??= $invoice->getCompany()?->getId()?->toRfc4122();
+                $this->denyAccessUnlessGranted('INVOICE_ISSUE', $invoice);
+
+                $validationResult = $this->ublValidator->validateFull($invoice);
+                if (!$validationResult->isValid) {
+                    $firstError = $validationResult->errors[0]->message ?? 'Validation failed';
+                    $errors[] = ['id' => $id, 'error' => $firstError];
+                    continue;
+                }
+
+                $this->invoiceManager->issue($invoice, $user);
+                $this->generateAndStoreFiles($invoice);
+                $issued++;
+            } catch (\Throwable $e) {
+                $errors[] = ['id' => $id, 'error' => $e->getMessage()];
+            }
+        }
+
+        if ($issued > 0 && $companyId) {
+            $this->centrifugo->queue('invoices:company_' . $companyId, [
+                'type' => 'invoice.bulk_updated',
+            ]);
+        }
+
+        return $this->json(['issued' => $issued, 'errors' => $errors]);
+    }
+
     #[Route('/invoices/bulk-cancel', methods: ['POST'])]
     public function bulkCancel(Request $request): JsonResponse
     {
