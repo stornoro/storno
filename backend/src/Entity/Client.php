@@ -73,7 +73,7 @@ class Client
     private ?string $county = null;
 
     #[ORM\Column(length: 2)]
-    #[Groups(['client:list', 'client:detail', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
+    #[Groups(['client:list', 'client:detail', 'invoice:list', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail', 'delivery_note:detail', 'receipt:detail'])]
     private string $country = 'US';
 
     #[ORM\Column(length: 10, nullable: true)]
