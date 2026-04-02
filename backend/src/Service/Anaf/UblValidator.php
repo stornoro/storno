@@ -61,6 +61,11 @@ class UblValidator
             return $merged;
         }
 
+        // Skip Schematron for XK (Kosovo) — not in ISO 3166-1, ANAF rejects it via BR-CL-14
+        if ($this->invoiceHasNonIsoCountry($invoice)) {
+            return ValidationResult::merge($businessResult, $xsdResult);
+        }
+
         $docType = $this->detectDocType($xml);
         $schematronResult = $this->schematronValidator->validate($xml, $docType);
 
@@ -95,6 +100,33 @@ class UblValidator
             'errors' => $errorMessages,
             'warnings' => $result->warnings,
         ]);
+    }
+
+    private const NON_ISO_COUNTRY_CODES = ['XK'];
+
+    private function invoiceHasNonIsoCountry(Invoice $invoice): bool
+    {
+        $countries = [];
+
+        $company = $invoice->getCompany();
+        if ($company) {
+            $countries[] = $company->getCountry() ?? 'RO';
+        }
+
+        $buyerSnapshot = $invoice->getBuyerSnapshot();
+        if ($buyerSnapshot) {
+            $countries[] = $buyerSnapshot['country'] ?? 'RO';
+        } elseif ($invoice->getClient()) {
+            $countries[] = $invoice->getClient()->getCountry() ?? 'RO';
+        }
+
+        foreach ($countries as $code) {
+            if (\in_array($code, self::NON_ISO_COUNTRY_CODES, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function detectDocType(string $xml): string
