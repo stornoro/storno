@@ -3,7 +3,9 @@
 namespace App\Controller\Webhook;
 
 use App\Message\SendDunningEmailMessage;
+use App\Entity\LicenseKey;
 use App\Repository\InvoiceShareTokenRepository;
+use App\Repository\LicenseKeyRepository;
 use App\Repository\OrganizationRepository;
 use App\Repository\PaymentRepository;
 use App\Repository\ProcessedWebhookEventRepository;
@@ -34,6 +36,7 @@ class StripeWebhookController extends AbstractController
         private readonly ProcessedWebhookEventRepository $processedWebhookEventRepository,
         private readonly MessageBusInterface $bus,
         private readonly CompanyReadOnlyService $companyReadOnlyService,
+        private readonly LicenseKeyRepository $licenseKeyRepository,
         private readonly InvoiceShareTokenRepository $shareTokenRepository,
         private readonly PaymentRepository $paymentRepository,
         private readonly PaymentService $paymentService,
@@ -303,6 +306,32 @@ class StripeWebhookController extends AbstractController
             $interval,
             $stripeInvoice->id,
         );
+
+        // Auto-generate a license key for Business plan if the org doesn't have one yet
+        if ($planName === LicenseManager::PLAN_BUSINESS) {
+            $existingKeys = $this->licenseKeyRepository->findByOrganization($org);
+            $hasActiveKey = false;
+            foreach ($existingKeys as $key) {
+                if ($key->isActive()) {
+                    $hasActiveKey = true;
+                    break;
+                }
+            }
+
+            if (!$hasActiveKey) {
+                $licenseKey = new LicenseKey();
+                $licenseKey->setOrganization($org);
+                $licenseKey->setInstanceName('Auto-generated');
+
+                $this->organizationRepository->getEntityManager()->persist($licenseKey);
+                $this->organizationRepository->getEntityManager()->flush();
+
+                $this->logger->info('Auto-generated license key for Business subscription', [
+                    'organization' => (string) $org->getId(),
+                    'licenseKeyId' => (string) $licenseKey->getId(),
+                ]);
+            }
+        }
     }
 
     private function handleSubscriptionUpdated(object $subscription): void
