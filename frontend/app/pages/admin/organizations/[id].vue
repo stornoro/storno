@@ -180,7 +180,7 @@ const form = reactive({
 })
 
 const planOptions = [
-  { label: 'Free', value: 'free' },
+  { label: 'Free', value: 'freemium' },
   { label: 'Starter', value: 'starter' },
   { label: 'Professional', value: 'professional' },
   { label: 'Business', value: 'business' },
