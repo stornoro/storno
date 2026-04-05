@@ -1,0 +1,60 @@
+{% extends 'emails/notification_base.html.twig' %}
+
+{% block accent_gradient %}
+    {% if isUpgrade %}
+        background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+    {% else %}
+        background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #fcd34d 100%);
+    {% endif %}
+{% endblock %}
+
+{% block icon_emoji %}
+    {% if isUpgrade %}
+        <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba(99,102,241,0.15);">
+            &#128640;
+        </div>
+    {% else %}
+        <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba(245,158,11,0.15);">
+            &#128221;
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block heading %}{{ (isUpgrade ? 'plan_changed.heading_upgrade' : 'plan_changed.heading_downgrade')|trans({}, 'emails', locale) }}{% endblock %}
+
+{% block content %}
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #374151; line-height: 1.6;">
+        {{ 'plan_changed.greeting'|trans({'%firstName%': firstName}, 'emails', locale) }}
+    </p>
+
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #374151; line-height: 1.6;">
+        {{ (isUpgrade ? 'plan_changed.intro_upgrade' : 'plan_changed.intro_downgrade')|trans({'%oldPlan%': oldPlan, '%newPlan%': newPlan}, 'emails', locale) }}
+    </p>
+
+    <!-- Plan change card -->
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+        <tr style="background-color: #f9fafb;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">{{ 'plan_changed.label_previous'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #9ca3af; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6; text-decoration: line-through;">{{ oldPlan }}</td>
+        </tr>
+        <tr style="background-color: #ffffff;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'plan_changed.label_current'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: {% if isUpgrade %}#4f46e5{% else %}#d97706{% endif %}; font-weight: 700; text-align: right;">{{ newPlan }}</td>
+        </tr>
+    </table>
+
+    <p style="margin: 0; font-size: 14px; color: #6b7280; line-height: 1.6;">
+        {{ 'plan_changed.note'|trans({}, 'emails', locale) }}
+    </p>
+{% endblock %}
+
+{% block cta %}
+    <tr>
+        <td style="padding: 0 36px 32px 36px;" align="center">
+            <a href="{{ frontendUrl }}/settings/billing" target="_blank"
+               style="display: inline-block; background: linear-gradient(135deg, {% if isUpgrade %}#4f46e5 0%, #6366f1{% else %}#d97706 0%, #f59e0b{% endif %} 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                {{ 'plan_changed.cta'|trans({}, 'emails', locale) }}
+            </a>
+        </td>
+    </tr>
+{% endblock %}
