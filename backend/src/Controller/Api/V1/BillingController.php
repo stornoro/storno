@@ -159,6 +159,7 @@ class BillingController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
         $priceId = $data['priceId'] ?? null;
+        $companyId = $data['companyId'] ?? null;
 
         if (!$priceId) {
             return $this->json(['error' => 'priceId is required'], Response::HTTP_BAD_REQUEST);
@@ -172,7 +173,7 @@ class BillingController extends AbstractController
                 return $this->json(['status' => 'plan_changed']);
             }
 
-            $url = $this->stripeService->createCheckoutSession($org, $priceId);
+            $url = $this->stripeService->createCheckoutSession($org, $priceId, $companyId);
 
             return $this->json(['url' => $url]);
         } catch (\RuntimeException $e) {
