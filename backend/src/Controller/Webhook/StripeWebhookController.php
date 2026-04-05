@@ -3,7 +3,10 @@
 namespace App\Controller\Webhook;
 
 use App\Message\SendDunningEmailMessage;
+use App\Message\SendPlanChangedMessage;
+use App\Message\SendSubscriptionCancelledMessage;
 use App\Message\SendSubscriptionConfirmationMessage;
+use App\Message\SendSubscriptionRenewalMessage;
 use App\Entity\LicenseKey;
 use App\Repository\InvoiceShareTokenRepository;
 use App\Repository\LicenseKeyRepository;
@@ -338,16 +341,29 @@ class StripeWebhookController extends AbstractController
             }
         }
 
-        // Send subscription confirmation email to all org members
-        $generatedLicenseKey = isset($licenseKey) ? $licenseKey->getLicenseKey() : null;
-        $this->bus->dispatch(new SendSubscriptionConfirmationMessage(
-            (string) $org->getId(),
-            $planName,
-            $amount,
-            $currency,
-            $interval,
-            $generatedLicenseKey,
-        ));
+        // Send email: full confirmation for first payment, lighter receipt for renewals
+        $billingReason = $stripeInvoice->billing_reason ?? '';
+        $isFirstPayment = \in_array($billingReason, ['subscription_create', 'subscription_threshold'], true);
+
+        if ($isFirstPayment) {
+            $generatedLicenseKey = isset($licenseKey) ? $licenseKey->getLicenseKey() : null;
+            $this->bus->dispatch(new SendSubscriptionConfirmationMessage(
+                (string) $org->getId(),
+                $planName,
+                $amount,
+                $currency,
+                $interval,
+                $generatedLicenseKey,
+            ));
+        } else {
+            $this->bus->dispatch(new SendSubscriptionRenewalMessage(
+                (string) $org->getId(),
+                $planName,
+                $amount,
+                $currency,
+                $interval,
+            ));
+        }
     }
 
     private function handleSubscriptionUpdated(object $subscription): void
@@ -357,12 +373,24 @@ class StripeWebhookController extends AbstractController
             return;
         }
 
+        $oldPlan = $org->getPlan();
+
         // Re-retrieve as a proper Subscription object
         $stripeSubscription = Subscription::retrieve($subscription->id);
         $this->stripeService->syncSubscriptionStatus($org, $stripeSubscription);
 
         // Enforce company read-only limits after plan change
         $this->companyReadOnlyService->enforceCompanyLimits($org);
+
+        // Notify if the plan actually changed (not just status updates like cancel_at_period_end)
+        $newPlan = $org->getPlan();
+        if ($oldPlan !== $newPlan && $newPlan !== LicenseManager::PLAN_FREEMIUM) {
+            $this->bus->dispatch(new SendPlanChangedMessage(
+                (string) $org->getId(),
+                $oldPlan,
+                $newPlan,
+            ));
+        }
     }
 
     private function handleSubscriptionDeleted(object $subscription): void
@@ -371,6 +399,8 @@ class StripeWebhookController extends AbstractController
         if (!$org) {
             return;
         }
+
+        $previousPlan = $org->getPlan();
 
         $org->setSubscriptionStatus('canceled');
         $org->setPlan(LicenseManager::PLAN_FREEMIUM);
@@ -387,6 +417,12 @@ class StripeWebhookController extends AbstractController
 
         // Enforce company read-only limits after downgrade
         $this->companyReadOnlyService->enforceCompanyLimits($org);
+
+        // Notify org members
+        $this->bus->dispatch(new SendSubscriptionCancelledMessage(
+            (string) $org->getId(),
+            $previousPlan,
+        ));
     }
 
     private function handlePaymentFailed(object $invoice): void
