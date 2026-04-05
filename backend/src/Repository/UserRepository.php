@@ -61,7 +61,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             return [true, $unconfirmedAccounts];
         }
 
-        return [false, []];
+        return [true, []];
     }
 
 
