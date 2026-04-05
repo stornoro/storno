@@ -59,9 +59,16 @@ class StripeService
     /**
      * Create a Stripe Checkout Session for subscription upgrade.
      */
-    public function createCheckoutSession(Organization $org, string $priceId): string
+    public function createCheckoutSession(Organization $org, string $priceId, ?string $companyId = null): string
     {
         $customer = $this->createCustomer($org);
+
+        $metadata = [
+            'organization_id' => (string) $org->getId(),
+        ];
+        if ($companyId) {
+            $metadata['company_id'] = $companyId;
+        }
 
         $params = [
             'customer' => $customer->id,
@@ -72,13 +79,9 @@ class StripeService
             ]],
             'success_url' => $this->frontendUrl . '/settings/billing?session_id={CHECKOUT_SESSION_ID}&status=success',
             'cancel_url' => $this->frontendUrl . '/settings/billing?status=canceled',
-            'metadata' => [
-                'organization_id' => (string) $org->getId(),
-            ],
+            'metadata' => $metadata,
             'subscription_data' => [
-                'metadata' => [
-                    'organization_id' => (string) $org->getId(),
-                ],
+                'metadata' => $metadata,
             ],
         ];
 
@@ -252,6 +255,11 @@ class StripeService
 
         $org->setStripeSubscriptionId($stripeSubscription->id);
         $org->setStripePriceId($stripeSubscription->items->data[0]->price->id ?? null);
+
+        // Clear trial when subscription is active (paid)
+        if ($stripeSubscription->status === 'active' && $org->getTrialEndsAt() !== null) {
+            $org->setTrialEndsAt(null);
+        }
 
         // Map Stripe price to plan name
         $plan = $this->resolvePlanFromPriceId($stripeSubscription->items->data[0]->price->id ?? '');
