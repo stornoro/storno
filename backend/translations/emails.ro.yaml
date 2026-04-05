@@ -35,6 +35,20 @@ trial_expiration:
   urgency_3days: 'in 3 zile'
   urgency_7days: 'in 7 zile'
 
+subscription:
+  subject: 'Abonamentul tau este activ — Storno.ro'
+  heading: 'Abonamentul tau este activ!'
+  greeting: 'Salut %firstName%,'
+  intro: 'Multumim pentru achizitie! Planul tau <strong>%planLabel%</strong> este acum activ.'
+  label_plan: 'Plan'
+  label_amount: 'Suma'
+  label_interval: 'Interval'
+  interval_month: 'Lunar'
+  interval_year: 'Anual'
+  license_key_label: 'Cheie de licenta (self-hosting)'
+  invoice_note: 'Factura a fost generata automat si este disponibila in contul tau.'
+  cta: 'Vezi abonamentul'
+
 re_engagement:
   subject: 'Ne este dor de tine — ce e nou pe Storno.ro'
   body: "Buna%firstName%,\n\nNu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam despre ce am adaugat recent:\n\n- Sincronizare imbunatatita cu e-Factura ANAF\n- Export avansat CSV si PDF\n- Statistici si rapoarte detaliate\n- Notificari pentru facturi scadente\n\nRevino si verifica toate noutatile:\n%baseUrl%\n\nDaca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"
