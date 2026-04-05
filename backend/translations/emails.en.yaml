@@ -35,6 +35,20 @@ trial_expiration:
   urgency_3days: 'in 3 days'
   urgency_7days: 'in 7 days'
 
+subscription:
+  subject: 'Your subscription is active — Storno.ro'
+  heading: 'Your subscription is active!'
+  greeting: 'Hi %firstName%,'
+  intro: 'Thank you for your purchase! Your <strong>%planLabel%</strong> plan is now active.'
+  label_plan: 'Plan'
+  label_amount: 'Amount'
+  label_interval: 'Billing'
+  interval_month: 'Monthly'
+  interval_year: 'Yearly'
+  license_key_label: 'License key (self-hosting)'
+  invoice_note: 'Your invoice has been generated automatically and is available in your account.'
+  cta: 'View subscription'
+
 re_engagement:
   subject: "We miss you — what's new on Storno.ro"
   body: "Hi%firstName%,\n\nWe have not seen you on Storno.ro for a while and wanted to let you know about what we have added recently:\n\n- Improved e-Invoice ANAF synchronization\n- Advanced CSV and PDF export\n- Detailed statistics and reports\n- Notifications for overdue invoices\n\nCome back and check out all the updates:\n%baseUrl%\n\nIf you have questions or suggestions, write to us at contact@storno.ro.\n\nThe Storno.ro Team"

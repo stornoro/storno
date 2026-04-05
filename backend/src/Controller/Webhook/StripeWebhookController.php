@@ -3,6 +3,7 @@
 namespace App\Controller\Webhook;
 
 use App\Message\SendDunningEmailMessage;
+use App\Message\SendSubscriptionConfirmationMessage;
 use App\Entity\LicenseKey;
 use App\Repository\InvoiceShareTokenRepository;
 use App\Repository\LicenseKeyRepository;
@@ -336,6 +337,17 @@ class StripeWebhookController extends AbstractController
                 ]);
             }
         }
+
+        // Send subscription confirmation email to all org members
+        $generatedLicenseKey = isset($licenseKey) ? $licenseKey->getLicenseKey() : null;
+        $this->bus->dispatch(new SendSubscriptionConfirmationMessage(
+            (string) $org->getId(),
+            $planName,
+            $amount,
+            $currency,
+            $interval,
+            $generatedLicenseKey,
+        ));
     }
 
     private function handleSubscriptionUpdated(object $subscription): void
