@@ -2,10 +2,12 @@
 
 namespace App\Service;
 
+use App\Entity\Client;
 use App\Entity\Company;
 use App\Entity\DocumentEvent;
 use App\Entity\Organization;
 use App\Manager\InvoiceManager;
+use App\Repository\ClientRepository;
 use App\Repository\CompanyRepository;
 use App\Repository\DocumentSeriesRepository;
 use App\Repository\VatRateRepository;
@@ -35,6 +37,7 @@ class BillingInvoiceService
     public function __construct(
         private readonly InvoiceManager $invoiceManager,
         private readonly CompanyRepository $companyRepository,
+        private readonly ClientRepository $clientRepository,
         private readonly DocumentSeriesRepository $documentSeriesRepository,
         private readonly VatRateRepository $vatRateRepository,
         private readonly EuVatRateService $euVatRateService,
@@ -102,8 +105,12 @@ class BillingInvoiceService
             $orgCompanies = $org->getCompanies();
             $buyerCompany = $orgCompanies->count() > 0 ? $orgCompanies->first() : null;
         }
-        $receiverName = $buyerCompany ? $buyerCompany->getName() : $org->getName();
-        $receiverCif = $buyerCompany ? (string) $buyerCompany->getCif() : null;
+        // Find or create a Client entity in the billing company for the buyer
+        $clientId = null;
+        if ($buyerCompany) {
+            $client = $this->findOrCreateBillingClient($company, $buyerCompany);
+            $clientId = (string) $client->getId();
+        }
 
         // Determine VAT based on buyer's country and billing company settings
         [$vatRate, $vatCategoryCode] = $this->resolveVatForBuyer($company, $org, $buyerCompany);
@@ -112,8 +119,7 @@ class BillingInvoiceService
             'issueDate' => (new \DateTime())->format('Y-m-d'),
             'dueDate' => (new \DateTime())->format('Y-m-d'), // Already paid
             'currency' => strtoupper($currency),
-            'receiverName' => $receiverName,
-            'receiverCif' => $receiverCif,
+            'clientId' => $clientId,
             'notes' => sprintf('Plata procesata prin Stripe. Referinta: %s', $stripeInvoiceId),
             'paymentTerms' => 'Platit',
             'idempotencyKey' => $idempotencyKey,
@@ -255,6 +261,37 @@ class BillingInvoiceService
 
         // 4. EU + not VAT payer + no OSS → domestic VAT
         return [$domesticRate, $domesticCode];
+    }
+
+    /**
+     * Find or create a Client in the billing company matching the buyer's company details.
+     */
+    private function findOrCreateBillingClient(Company $billingCompany, Company $buyerCompany): Client
+    {
+        $cui = (string) $buyerCompany->getCif();
+
+        // Look for existing client by CUI
+        if ($cui) {
+            $existing = $this->clientRepository->findByCui($billingCompany, $cui);
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        $client = new Client();
+        $client->setCompany($billingCompany);
+        $client->setType('company');
+        $client->setName($buyerCompany->getName());
+        $client->setCui($cui);
+        $client->setCountry($buyerCompany->getCountry() ?? 'RO');
+        $client->setAddress($buyerCompany->getAddress());
+        $client->setCity($buyerCompany->getCity());
+        $client->setIsVatPayer($buyerCompany->isVatPayer());
+
+        $this->em->persist($client);
+        $this->em->flush();
+
+        return $client;
     }
 
     private function getBillingCompany(): ?Company
