@@ -274,9 +274,10 @@ class StripeWebhookController extends AbstractController
             return; // Skip zero-amount invoices (e.g. trial start)
         }
 
-        // Resolve plan name and interval from subscription items
-        $planName = 'starter'; // fallback
+        // Resolve plan name, interval, and buyer company from subscription
+        $planName = $org->getPlan() ?: 'starter'; // use org's synced plan as primary source
         $interval = 'month'; // fallback
+        $buyerCompanyId = null;
         $subscriptionId = $stripeInvoice->subscription ?? null;
 
         if ($subscriptionId) {
@@ -290,6 +291,8 @@ class StripeWebhookController extends AbstractController
                     }
                     $interval = $subscription->items->data[0]->price->recurring->interval ?? 'month';
                 }
+                // Extract buyer company ID from subscription metadata
+                $buyerCompanyId = $subscription->metadata->company_id ?? null;
             } catch (\Exception $e) {
                 $this->logger->warning('Could not resolve plan from subscription', [
                     'subscription_id' => $subscriptionId,
@@ -305,6 +308,7 @@ class StripeWebhookController extends AbstractController
             $currency,
             $interval,
             $stripeInvoice->id,
+            $buyerCompanyId,
         );
 
         // Auto-generate a license key for Business plan if the org doesn't have one yet
