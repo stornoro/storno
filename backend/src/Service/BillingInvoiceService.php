@@ -60,6 +60,7 @@ class BillingInvoiceService
         string $currency,
         string $interval,
         string $stripeInvoiceId,
+        ?string $buyerCompanyId = null,
     ): void {
         $company = $this->getBillingCompany();
         if (!$company) {
@@ -88,17 +89,24 @@ class BillingInvoiceService
         $planLabel = ucfirst($planName);
         $unitPrice = number_format($amount / 100, 2, '.', '');
 
-        // Determine VAT based on buyer's country and billing company settings
-        [$vatRate, $vatCategoryCode] = $this->resolveVatForBuyer($company, $org);
-
-        // Build receiver info from the organization
-        $receiverName = $org->getName();
-        // Try to find the org's first company for CIF
-        $orgCompanies = $org->getCompanies();
-        $receiverCif = null;
-        if ($orgCompanies->count() > 0) {
-            $receiverCif = (string) $orgCompanies->first()->getCif();
+        // Resolve buyer company: use the company selected at checkout, fallback to org's first company
+        $buyerCompany = null;
+        if ($buyerCompanyId) {
+            try {
+                $buyerCompany = $this->companyRepository->find(Uuid::fromString($buyerCompanyId));
+            } catch (\Exception $e) {
+                // Invalid UUID, ignore
+            }
         }
+        if (!$buyerCompany) {
+            $orgCompanies = $org->getCompanies();
+            $buyerCompany = $orgCompanies->count() > 0 ? $orgCompanies->first() : null;
+        }
+        $receiverName = $buyerCompany ? $buyerCompany->getName() : $org->getName();
+        $receiverCif = $buyerCompany ? (string) $buyerCompany->getCif() : null;
+
+        // Determine VAT based on buyer's country and billing company settings
+        [$vatRate, $vatCategoryCode] = $this->resolveVatForBuyer($company, $org, $buyerCompany);
 
         $data = [
             'issueDate' => (new \DateTime())->format('Y-m-d'),
@@ -117,6 +125,7 @@ class BillingInvoiceService
                     'unitPrice' => $unitPrice,
                     'vatRate' => $vatRate,
                     'vatCategoryCode' => $vatCategoryCode,
+                    'vatIncluded' => true,
                     'discount' => '0.00',
                     'discountPercent' => '0.00',
                 ],
@@ -193,7 +202,7 @@ class BillingInvoiceService
      *
      * @return array{string, string} [vatRate, vatCategoryCode]
      */
-    private function resolveVatForBuyer(Company $billingCompany, Organization $org): array
+    private function resolveVatForBuyer(Company $billingCompany, Organization $org, ?Company $buyerCompany = null): array
     {
         // Billing company's default VAT rate (fallback for domestic sales)
         $defaultVat = $this->vatRateRepository->findDefaultByCompany($billingCompany);
@@ -202,12 +211,14 @@ class BillingInvoiceService
 
         $billingCountry = $billingCompany->getCountry() ?? 'RO';
 
-        // Resolve buyer's country from their first company
+        // Resolve buyer's country from the provided company or fallback to org's first
         $buyerCountry = null;
         $buyerIsVatPayer = false;
-        $orgCompanies = $org->getCompanies();
-        if ($orgCompanies->count() > 0) {
-            $buyerCompany = $orgCompanies->first();
+        if (!$buyerCompany) {
+            $orgCompanies = $org->getCompanies();
+            $buyerCompany = $orgCompanies->count() > 0 ? $orgCompanies->first() : null;
+        }
+        if ($buyerCompany) {
             $buyerCountry = $buyerCompany->getCountry();
             $buyerIsVatPayer = $buyerCompany->isVatPayer();
         }
