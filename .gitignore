@@ -1,13 +1,12 @@
 # Separate repos
 docs/
+integrations/
 landing/
 mobile/
 push-relay/
 status/
 storno-cli/
-stripe-app/
 webhook-relay/
-zapier-app/
 
 # OS / IDE
 .DS_Store
