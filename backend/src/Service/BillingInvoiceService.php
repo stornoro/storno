@@ -120,6 +120,7 @@ class BillingInvoiceService
             'dueDate' => (new \DateTime())->format('Y-m-d'), // Already paid
             'currency' => strtoupper($currency),
             'clientId' => $clientId,
+            'receiverName' => $clientId ? null : $org->getName(),
             'notes' => sprintf('Plata procesata prin Stripe. Referinta: %s', $stripeInvoiceId),
             'paymentTerms' => 'Platit',
             'idempotencyKey' => $idempotencyKey,
@@ -269,6 +270,8 @@ class BillingInvoiceService
     private function findOrCreateBillingClient(Company $billingCompany, Company $buyerCompany): Client
     {
         $cui = (string) $buyerCompany->getCif();
+        $country = $buyerCompany->getCountry() ?? 'RO';
+        $isVatPayer = $buyerCompany->isVatPayer();
 
         // Look for existing client by CUI
         if ($cui) {
@@ -283,10 +286,10 @@ class BillingInvoiceService
         $client->setType('company');
         $client->setName($buyerCompany->getName());
         $client->setCui($cui);
-        $client->setCountry($buyerCompany->getCountry() ?? 'RO');
+        $client->setCountry($country);
         $client->setAddress($buyerCompany->getAddress());
         $client->setCity($buyerCompany->getCity());
-        $client->setIsVatPayer($buyerCompany->isVatPayer());
+        $client->setIsVatPayer($isVatPayer);
 
         $this->em->persist($client);
         $this->em->flush();
