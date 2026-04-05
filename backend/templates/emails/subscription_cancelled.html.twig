@@ -1,0 +1,52 @@
+{% extends 'emails/notification_base.html.twig' %}
+
+{% block accent_gradient %}background: linear-gradient(90deg, #ef4444 0%, #f87171 50%, #fca5a5 100%);{% endblock %}
+
+{% block icon_emoji %}
+    <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba(239,68,68,0.15);">
+        &#128532;
+    </div>
+{% endblock %}
+
+{% block heading %}{{ 'cancelled.heading'|trans({}, 'emails', locale) }}{% endblock %}
+
+{% block content %}
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #374151; line-height: 1.6;">
+        {{ 'cancelled.greeting'|trans({'%firstName%': firstName}, 'emails', locale) }}
+    </p>
+
+    <p style="margin: 0 0 20px 0; font-size: 15px; color: #374151; line-height: 1.6;">
+        {{ 'cancelled.intro'|trans({'%previousPlan%': previousPlan}, 'emails', locale) }}
+    </p>
+
+    <!-- Warning box -->
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: 20px;">
+        <tr>
+            <td style="padding: 18px 20px;">
+                <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #991b1b;">{{ 'cancelled.lost_access_title'|trans({}, 'emails', locale) }}</p>
+                <ul style="margin: 0; padding: 0 0 0 20px; font-size: 14px; color: #7f1d1d; line-height: 1.8;">
+                    <li>{{ 'cancelled.feature_sync'|trans({}, 'emails', locale) }}</li>
+                    <li>{{ 'cancelled.feature_pdf'|trans({}, 'emails', locale) }}</li>
+                    <li>{{ 'cancelled.feature_email'|trans({}, 'emails', locale) }}</li>
+                    <li>{{ 'cancelled.feature_reports'|trans({}, 'emails', locale) }}</li>
+                    <li>{{ 'cancelled.feature_mobile'|trans({}, 'emails', locale) }}</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <p style="margin: 0; font-size: 14px; color: #6b7280; line-height: 1.6;">
+        {{ 'cancelled.resubscribe_note'|trans({}, 'emails', locale) }}
+    </p>
+{% endblock %}
+
+{% block cta %}
+    <tr>
+        <td style="padding: 0 36px 32px 36px;" align="center">
+            <a href="{{ frontendUrl }}/settings/billing" target="_blank"
+               style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(79,70,229,0.3);">
+                {{ 'cancelled.cta'|trans({}, 'emails', locale) }}
+            </a>
+        </td>
+    </tr>
+{% endblock %}

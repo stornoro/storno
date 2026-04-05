@@ -49,6 +49,46 @@ subscription:
   invoice_note: 'Factura a fost generata automat si este disponibila in contul tau.'
   cta: 'Vezi abonamentul'
 
+renewal:
+  subject: 'Abonamentul a fost reinnoit — Storno.ro'
+  heading: 'Plata procesata cu succes'
+  greeting: 'Salut %firstName%,'
+  intro: 'Abonamentul tau <strong>%planLabel%</strong> a fost reinnoit cu succes.'
+  label_plan: 'Plan'
+  label_amount: 'Suma'
+  label_interval: 'Interval'
+  interval_month: 'Lunar'
+  interval_year: 'Anual'
+  invoice_note: 'Factura a fost generata automat si este disponibila in contul tau.'
+  cta: 'Vezi factura'
+
+cancelled:
+  subject: 'Abonamentul tau a fost anulat — Storno.ro'
+  heading: 'Abonamentul a fost anulat'
+  greeting: 'Salut %firstName%,'
+  intro: 'Abonamentul tau <strong>%previousPlan%</strong> a fost anulat. Contul tau a fost retrogradat la planul gratuit.'
+  lost_access_title: 'Nu mai ai acces la:'
+  feature_sync: 'Sincronizare automata e-Factura'
+  feature_pdf: 'Generare PDF facturi'
+  feature_email: 'Trimitere facturi pe email'
+  feature_reports: 'Rapoarte si statistici'
+  feature_mobile: 'Aplicatie mobila'
+  resubscribe_note: 'Poti reactiva abonamentul oricand pentru a redobandi accesul la toate functiile.'
+  cta: 'Reaboneaza-te'
+
+plan_changed:
+  subject_upgrade: 'Planul tau a fost actualizat la %newPlan% — Storno.ro'
+  subject_downgrade: 'Planul tau a fost schimbat la %newPlan% — Storno.ro'
+  heading_upgrade: 'Planul a fost actualizat!'
+  heading_downgrade: 'Planul a fost schimbat'
+  greeting: 'Salut %firstName%,'
+  intro_upgrade: 'Felicitari! Planul tau a fost actualizat de la <strong>%oldPlan%</strong> la <strong>%newPlan%</strong>.'
+  intro_downgrade: 'Planul tau a fost schimbat de la <strong>%oldPlan%</strong> la <strong>%newPlan%</strong>.'
+  label_previous: 'Plan anterior'
+  label_current: 'Plan curent'
+  note: 'Noile functii sunt disponibile imediat in contul tau.'
+  cta: 'Vezi planul'
+
 re_engagement:
   subject: 'Ne este dor de tine — ce e nou pe Storno.ro'
   body: "Buna%firstName%,\n\nNu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam despre ce am adaugat recent:\n\n- Sincronizare imbunatatita cu e-Factura ANAF\n- Export avansat CSV si PDF\n- Statistici si rapoarte detaliate\n- Notificari pentru facturi scadente\n\nRevino si verifica toate noutatile:\n%baseUrl%\n\nDaca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"

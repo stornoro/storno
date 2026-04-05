@@ -49,6 +49,46 @@ subscription:
   invoice_note: 'Your invoice has been generated automatically and is available in your account.'
   cta: 'View subscription'
 
+renewal:
+  subject: 'Your subscription has been renewed — Storno.ro'
+  heading: 'Payment processed successfully'
+  greeting: 'Hi %firstName%,'
+  intro: 'Your <strong>%planLabel%</strong> subscription has been renewed successfully.'
+  label_plan: 'Plan'
+  label_amount: 'Amount'
+  label_interval: 'Billing'
+  interval_month: 'Monthly'
+  interval_year: 'Yearly'
+  invoice_note: 'Your invoice has been generated automatically and is available in your account.'
+  cta: 'View invoice'
+
+cancelled:
+  subject: 'Your subscription has been cancelled — Storno.ro'
+  heading: 'Subscription cancelled'
+  greeting: 'Hi %firstName%,'
+  intro: 'Your <strong>%previousPlan%</strong> subscription has been cancelled. Your account has been downgraded to the free plan.'
+  lost_access_title: 'You no longer have access to:'
+  feature_sync: 'Automatic e-Invoice sync'
+  feature_pdf: 'PDF invoice generation'
+  feature_email: 'Send invoices by email'
+  feature_reports: 'Reports and statistics'
+  feature_mobile: 'Mobile app'
+  resubscribe_note: 'You can reactivate your subscription at any time to regain access to all features.'
+  cta: 'Resubscribe'
+
+plan_changed:
+  subject_upgrade: 'Your plan has been upgraded to %newPlan% — Storno.ro'
+  subject_downgrade: 'Your plan has been changed to %newPlan% — Storno.ro'
+  heading_upgrade: 'Plan upgraded!'
+  heading_downgrade: 'Plan changed'
+  greeting: 'Hi %firstName%,'
+  intro_upgrade: 'Congratulations! Your plan has been upgraded from <strong>%oldPlan%</strong> to <strong>%newPlan%</strong>.'
+  intro_downgrade: 'Your plan has been changed from <strong>%oldPlan%</strong> to <strong>%newPlan%</strong>.'
+  label_previous: 'Previous plan'
+  label_current: 'Current plan'
+  note: 'The new features are available immediately in your account.'
+  cta: 'View plan'
+
 re_engagement:
   subject: "We miss you — what's new on Storno.ro"
   body: "Hi%firstName%,\n\nWe have not seen you on Storno.ro for a while and wanted to let you know about what we have added recently:\n\n- Improved e-Invoice ANAF synchronization\n- Advanced CSV and PDF export\n- Detailed statistics and reports\n- Notifications for overdue invoices\n\nCome back and check out all the updates:\n%baseUrl%\n\nIf you have questions or suggestions, write to us at contact@storno.ro.\n\nThe Storno.ro Team"
