@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\StripeAppLinkingCode;
+use App\Enum\MessageKey;
 use App\Entity\StripeAppToken;
 use App\Enum\DocumentStatus;
 use App\Manager\InvoiceManager;
@@ -75,7 +76,7 @@ class StripeAppOAuthController extends AbstractController
         $user = $this->getUser();
 
         if (!$user) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         $linkingCode = new StripeAppLinkingCode();
@@ -98,7 +99,7 @@ class StripeAppOAuthController extends AbstractController
         $appToken = $this->resolveAppToken($request);
 
         if (!$appToken) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         $user = $appToken->getUser();
@@ -121,7 +122,7 @@ class StripeAppOAuthController extends AbstractController
         $appToken = $this->resolveAppToken($request);
 
         if (!$appToken) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         $data = json_decode($request->getContent(), true);
@@ -152,7 +153,7 @@ class StripeAppOAuthController extends AbstractController
         $appToken = $this->resolveAppToken($request);
 
         if (!$appToken) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         $company = $appToken->getCompany();
@@ -226,7 +227,7 @@ class StripeAppOAuthController extends AbstractController
         $appToken = $this->resolveAppToken($request);
 
         if (!$appToken) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         if (!$appToken->getCompany()) {
@@ -267,17 +268,17 @@ class StripeAppOAuthController extends AbstractController
         $appToken = $this->resolveAppToken($request);
 
         if (!$appToken) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te din Setari.'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
         $invoice = $this->invoiceRepository->find(Uuid::fromString($uuid));
 
         if (!$invoice) {
-            return $this->json(['error' => 'not_found', 'message' => 'Factura nu a fost gasita.'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'not_found', 'message' => 'Invoice not found.', 'messageKey' => MessageKey::ERR_INVOICE_NOT_FOUND], Response::HTTP_NOT_FOUND);
         }
 
         if ($invoice->getCompany() !== $appToken->getCompany()) {
-            return $this->json(['error' => 'forbidden', 'message' => 'Nu ai permisiunea pentru aceasta factura.'], Response::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'forbidden', 'message' => 'You do not have permission for this invoice.', 'messageKey' => MessageKey::ERR_NO_PERMISSION], Response::HTTP_FORBIDDEN);
         }
 
         try {

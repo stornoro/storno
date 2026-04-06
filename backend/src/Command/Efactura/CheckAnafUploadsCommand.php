@@ -7,6 +7,7 @@ use App\Enum\DocumentStatus;
 use App\Event\Invoice\InvoiceRejectedEvent;
 use App\Event\Invoice\InvoiceValidatedEvent;
 use App\Exception\AnafRateLimitException;
+use App\Enum\MessageKey;
 use App\Repository\InvoiceRepository;
 use App\Repository\OrganizationMembershipRepository;
 use App\Service\Anaf\AnafTokenResolver;
@@ -111,8 +112,9 @@ class CheckAnafUploadsCommand extends Command
                         'invoice.validated',
                         'Invoice validated by ANAF',
                         sprintf('Invoice %s has been validated by ANAF', $invoice->getNumber()),
-                        'notification.invoice.validated',
+                        MessageKey::MSG_INVOICE_VALIDATED,
                         ['number' => $invoice->getNumber()],
+                        MessageKey::TITLE_INVOICE_VALIDATED,
                     );
                 } elseif ($statusResponse->isError()) {
                     $previousStatus = $invoice->getStatus();
@@ -142,8 +144,9 @@ class CheckAnafUploadsCommand extends Command
                         'invoice.rejected',
                         'Invoice rejected by ANAF',
                         sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $rejError),
-                        'notification.invoice.rejected',
+                        MessageKey::MSG_INVOICE_REJECTED,
                         ['number' => $invoice->getNumber(), 'error' => $rejError],
+                        MessageKey::TITLE_INVOICE_REJECTED,
                     );
                 }
                 // isPending → do nothing, check again later
@@ -173,7 +176,7 @@ class CheckAnafUploadsCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = []): void
+    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = [], string $titleKey = ''): void
     {
         try {
             $company = $invoice->getCompany();
@@ -187,6 +190,9 @@ class CheckAnafUploadsCommand extends Command
             if ($messageKey) {
                 $data['messageKey'] = $messageKey;
                 $data['messageParams'] = $messageParams;
+            }
+            if ($titleKey) {
+                $data['titleKey'] = $titleKey;
             }
 
             foreach ($users as $user) {

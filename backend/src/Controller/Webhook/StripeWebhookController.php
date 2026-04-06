@@ -2,6 +2,7 @@
 
 namespace App\Controller\Webhook;
 
+use App\Enum\MessageKey;
 use App\Message\SendDunningEmailMessage;
 use App\Message\SendPlanChangedMessage;
 use App\Message\SendSubscriptionCancelledMessage;
@@ -224,12 +225,21 @@ class StripeWebhookController extends AbstractController
                     // In-app + email notification to organization members
                     $org = $company->getOrganization();
                     if ($org) {
-                        $title = sprintf('Plata primita: %s %s', $payment->getAmount(), $invoice->getCurrency());
-                        $message = sprintf('Factura %s a primit o plata de %s %s prin Stripe.', $invoice->getNumber(), $payment->getAmount(), $invoice->getCurrency());
+                        $title = sprintf('Payment received: %s %s', $payment->getAmount(), $invoice->getCurrency());
+                        $message = sprintf('Invoice %s received a payment of %s %s via Stripe.', $invoice->getNumber(), $payment->getAmount(), $invoice->getCurrency());
                         foreach ($org->getMemberships() as $membership) {
                             $user = $membership->getUser();
                             if ($user) {
-                                $this->notificationService->createNotification($user, 'payment.received', $title, $message, $notifData);
+                                $notifDataWithKeys = array_merge($notifData, [
+                                    'titleKey' => MessageKey::TITLE_PAYMENT_RECEIVED,
+                                    'messageKey' => MessageKey::MSG_PAYMENT_RECEIVED,
+                                    'messageParams' => [
+                                        'number' => $invoice->getNumber(),
+                                        'amount' => $payment->getAmount(),
+                                        'currency' => $invoice->getCurrency(),
+                                    ],
+                                ]);
+                                $this->notificationService->createNotification($user, 'payment.received', $title, $message, $notifDataWithKeys);
                             }
                         }
                     }

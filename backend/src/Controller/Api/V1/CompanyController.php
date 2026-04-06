@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\Company;
+use App\Enum\MessageKey;
 use App\Manager\CompanyManager;
 use App\Message\DeleteCompanyDataMessage;
 use App\Message\ResetCompanyDataMessage;
@@ -97,7 +98,8 @@ class CompanyController extends AbstractController
         $existing = $this->companyRepository->findByOrganizationAndCif($org, (int) $cif);
         if ($existing) {
             return $this->json([
-                'error' => 'Aceasta companie este deja adaugata in organizatia dvs.',
+                'error' => 'This company is already added to your organization.',
+                'messageKey' => MessageKey::ERR_COMPANY_ALREADY_ADDED,
                 'code' => 'DUPLICATE_CIF',
             ], Response::HTTP_CONFLICT);
         }
@@ -397,7 +399,8 @@ class CompanyController extends AbstractController
             $token = $this->tokenResolver->resolve($company);
             if (!$token) {
                 return $this->json([
-                    'error' => 'Nu puteti activa sincronizarea fara un token ANAF valid. Conectati-va mai intai la ANAF.',
+                    'error' => 'Cannot enable sync without a valid ANAF token. Please connect to ANAF first.',
+                    'messageKey' => MessageKey::ERR_SYNC_ENABLE_NO_TOKEN,
                 ], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
         }
