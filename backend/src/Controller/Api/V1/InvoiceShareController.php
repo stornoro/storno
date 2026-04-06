@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Enum\MessageKey;
 use App\Repository\InvoiceShareTokenRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Service\DocumentPdfService;
@@ -39,7 +40,8 @@ class InvoiceShareController extends AbstractController
 
         if (!$shareToken) {
             return $this->json([
-                'error' => 'Link invalid sau expirat.',
+                'error' => 'Invalid or expired link.',
+                'messageKey' => MessageKey::ERR_LINK_EXPIRED,
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -99,7 +101,8 @@ class InvoiceShareController extends AbstractController
 
         if (!$shareToken) {
             return $this->json([
-                'error' => 'Link invalid sau expirat.',
+                'error' => 'Invalid or expired link.',
+                'messageKey' => MessageKey::ERR_LINK_EXPIRED,
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -128,7 +131,8 @@ class InvoiceShareController extends AbstractController
 
         if (!$shareToken) {
             return $this->json([
-                'error' => 'Link invalid sau expirat.',
+                'error' => 'Invalid or expired link.',
+                'messageKey' => MessageKey::ERR_LINK_EXPIRED,
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -183,7 +187,8 @@ class InvoiceShareController extends AbstractController
 
         if (!$shareToken) {
             return $this->json([
-                'error' => 'Link invalid sau expirat.',
+                'error' => 'Invalid or expired link.',
+                'messageKey' => MessageKey::ERR_LINK_EXPIRED,
             ], Response::HTTP_NOT_FOUND);
         }
 

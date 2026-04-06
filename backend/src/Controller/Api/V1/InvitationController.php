@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\OrganizationInvitation;
+use App\Enum\MessageKey;
 use App\Entity\OrganizationMembership;
 use App\Entity\User;
 use App\Enum\OrganizationRole;
@@ -210,7 +211,7 @@ class InvitationController extends AbstractController
     {
         $invitation = $this->invitationRepository->findValidByToken($token);
         if (!$invitation) {
-            return $this->json(['error' => 'Invitatia este invalida sau a expirat.'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'The invitation is invalid or has expired.', 'messageKey' => MessageKey::ERR_INVITATION_EXPIRED], Response::HTTP_NOT_FOUND);
         }
 
         $existingUser = $this->userRepository->findOneBy(['email' => $invitation->getEmail()]);
@@ -229,7 +230,7 @@ class InvitationController extends AbstractController
     {
         $invitation = $this->invitationRepository->findValidByToken($token);
         if (!$invitation) {
-            return $this->json(['error' => 'Invitatia este invalida sau a expirat.'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'The invitation is invalid or has expired.', 'messageKey' => MessageKey::ERR_INVITATION_EXPIRED], Response::HTTP_NOT_FOUND);
         }
 
         $user = $this->getUser();

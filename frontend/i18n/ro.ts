@@ -3775,5 +3775,76 @@ export default defineI18nLocale(async () => {
       error: 'Eroare',
     },
   },
+
+  backendMessages: {
+    // Notification titles
+    'notification.invoice_validated.title': 'Factură validată ANAF',
+    'notification.invoice_rejected.title': 'Factură respinsă ANAF',
+    'notification.sync_error.title': 'Eroare sincronizare e-Factura',
+    'notification.new_documents.title': 'Documente noi e-Factura',
+    'notification.token_expiring.title': 'Token ANAF expiră curând',
+    'notification.token_refresh_failed.title': 'Eroare reînnoire token ANAF',
+    'notification.export_ready.title': 'Export ZIP disponibil',
+    'notification.backup_ready.title': 'Backup disponibil',
+    'notification.restore_completed.title': 'Restaurare finalizată',
+    'notification.anaf_deadline.title': 'Termen ANAF expiră mâine',
+    'notification.payment_received.title': 'Plată primită: {{amount}} {{currency}}',
+
+    // Notification messages
+    'notification.invoice_validated.message': 'Factura {{number}} a fost validată de ANAF',
+    'notification.invoice_rejected.message': 'Factura {{number}} a fost respinsă de ANAF: {{error}}',
+    'notification.sync_error.single': '{{company}} — {{error}}',
+    'notification.sync_error.multiple': '{{company}} — {{count}} erori la sincronizare. Prima: {{first_error}}',
+    'notification.new_documents.message': '{{count}} document(e) noi primite în e-Factura',
+    'notification.token_expiring.message': 'Token-ul ANAF expiră în {{days}} zi(le)',
+    'notification.token_refresh_failed.message': 'Reînnoirea automată a token-ului ANAF a eșuat. Vă rugăm să vă re-autorizați.',
+    'notification.export_ready.message': 'Exportul cu {{count}} facturi este gata.',
+    'notification.backup_ready.message': 'Backup-ul companiei {{name}} este gata de descărcare.',
+    'notification.restore_completed.message': 'Datele companiei {{name}} au fost restaurate cu succes.',
+    'notification.anaf_deadline.message': 'Factura {{number}} trebuie sincronizată cu ANAF. Emitere: {{date}}',
+    'notification.payment_received.message': 'Factura {{number}} a primit o plată de {{amount}} {{currency}} prin Stripe.',
+
+    // Sync errors
+    'error.sync.internal_save': 'Eroare internă la salvarea datelor. Sincronizarea va fi reîncercată automat.',
+    'error.sync.database': 'Eroare temporară de bază de date. Sincronizarea va fi reîncercată automat.',
+    'error.sync.internal_processing': 'Eroare internă la procesarea datelor. Sincronizarea va fi reîncercată automat.',
+    'error.sync.anaf_timeout': 'Serverele ANAF nu răspund momentan. Sincronizarea va fi reîncercată automat.',
+    'error.sync.anaf_connection': 'Eroare de conexiune la serverele ANAF. Sincronizarea va fi reîncercată automat.',
+    'error.sync.anaf_unavailable': 'Serverele ANAF nu sunt disponibile momentan. Sincronizarea va fi reîncercată automat.',
+    'error.sync.message_processing': 'Eroare la procesarea unui mesaj ANAF. Sincronizarea va fi reîncercată automat.',
+    'error.sync.details_unavailable': 'Eroare ANAF (detalii indisponibile)',
+
+    // API errors
+    'error.anaf.no_token': 'Nu există un token ANAF valid. Conectați-vă mai întâi la ANAF.',
+    'error.anaf.no_token_detail': 'Nu există un token ANAF valid pentru această companie. Adăugați un token din Setări → ANAF.',
+    'error.anaf.rate_limit': 'Limita de apeluri ANAF a fost atinsă. Încercați din nou mai târziu.',
+    'error.sync.cooldown': 'Planul {{plan}} permite sincronizare la fiecare {{interval}}. Următoarea sincronizare disponibilă în {{wait}}.',
+    'error.sync.no_token': 'Nu există un token ANAF valid. Conectați-vă mai întâi la ANAF.',
+    'error.sync.enable_no_token': 'Nu puteți activa sincronizarea fără un token ANAF valid. Conectați-vă mai întâi la ANAF.',
+    'error.auth.password_incorrect': 'Parola este incorectă.',
+    'error.invoice.no_invoices_for_period': 'Nu există facturi pentru perioada selectată.',
+    'error.company.already_added': 'Această companie este deja adăugată în organizația dvs.',
+    'error.link.expired': 'Link invalid sau expirat.',
+    'error.link.already_used': 'Link-ul a expirat sau a fost deja utilizat.',
+    'error.invitation.expired': 'Invitația este invalidă sau a expirat.',
+    'error.session.expired': 'Sesiunea a expirat. Reconectați-vă din Setări.',
+    'error.invoice.not_found': 'Factura nu a fost găsită.',
+    'error.permission.denied': 'Nu aveți permisiunea pentru această factură.',
+
+    // Member errors
+    'error.member.cannot_modify_superadmin': 'Nu puteți modifica un super administrator.',
+    'error.member.cannot_change_own_role': 'Nu vă puteți schimba propriul rol.',
+    'error.member.only_owner_can_promote': 'Doar un proprietar poate promova la rol de proprietar.',
+    'error.member.cannot_modify_owner': 'Nu puteți modifica rolul unui proprietar.',
+    'error.member.must_have_owner': 'Trebuie să existe cel puțin un proprietar.',
+    'error.member.cannot_deactivate_self': 'Nu vă puteți dezactiva propriul cont.',
+    'error.member.cannot_grant_permission': 'Nu puteți acorda permisiunea: {{permission}}',
+    'error.member.cannot_deactivate_superadmin': 'Nu puteți dezactiva un super administrator.',
+    'error.member.cannot_deactivate_owner': 'Nu puteți dezactiva un proprietar.',
+
+    // ANAF OAuth
+    'anaf.connect_success': 'Conectare reușită',
+    'anaf.connect_error': 'Eroare',
+  },
   }
 })

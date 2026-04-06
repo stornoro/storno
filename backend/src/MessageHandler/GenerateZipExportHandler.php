@@ -2,6 +2,7 @@
 
 namespace App\MessageHandler;
 
+use App\Enum\MessageKey;
 use App\Message\GenerateZipExportMessage;
 use App\Repository\InvoiceRepository;
 use App\Repository\UserRepository;
@@ -71,13 +72,16 @@ class GenerateZipExportHandler
             $notification = $this->notificationService->createNotification(
                 $user,
                 'export_ready',
-                'Export ZIP disponibil',
-                sprintf('Exportul cu %d facturi este gata.', count($invoices)),
+                'ZIP export ready',
+                sprintf('Export with %d invoices is ready.', count($invoices)),
                 [
                     'downloadUrl' => $downloadUrl,
                     'filename' => $filename,
                     'storagePath' => $storagePath,
                     'companyId' => $companyId,
+                    'titleKey' => MessageKey::TITLE_EXPORT_READY,
+                    'messageKey' => MessageKey::MSG_EXPORT_READY,
+                    'messageParams' => ['count' => count($invoices)],
                 ],
             );
             $notification->setLink($downloadUrl);

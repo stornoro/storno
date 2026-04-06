@@ -3,6 +3,7 @@
 namespace App\Controller\Frontend;
 
 use App\Entity\AnafToken;
+use App\Enum\MessageKey;
 use App\Events\Anaf\TokenCreatedEvent;
 use App\Repository\AnafTokenLinkRepository;
 use App\Service\Anaf\EFacturaClient;
@@ -45,7 +46,7 @@ class AnafOAuthCallbackController extends AbstractController
 
         if (!$code) {
             if ($linkToken) {
-                return $this->renderResultPage(false, 'Autorizarea a esuat. Va rugam incercati din nou.');
+                return $this->renderResultPage(false, 'Authorization failed. Please try again.');
             }
 
             $frontendUrl = $this->getParameter('redirect_after_oauth2');
@@ -71,7 +72,7 @@ class AnafOAuthCallbackController extends AbstractController
     {
         $link = $this->linkRepository->findValidByToken($linkToken);
         if (!$link) {
-            return $this->renderResultPage(false, 'Link-ul a expirat sau a fost deja utilizat.');
+            return $this->renderResultPage(false, 'This link has expired or has already been used.');
         }
 
         $clientId = $this->getParameter('app.anaf_oauth2_client_id');
@@ -80,7 +81,7 @@ class AnafOAuthCallbackController extends AbstractController
 
         $content = $this->exchangeCodeForToken($code, $clientId, $clientSecret, $callbackUrl);
         if ($content === null) {
-            return $this->renderResultPage(false, 'Nu s-a obtinut token-ul de la ANAF. Va rugam incercati din nou.');
+            return $this->renderResultPage(false, 'Could not obtain the ANAF token. Please try again.');
         }
 
         $user = $link->getUser();
@@ -145,7 +146,7 @@ class AnafOAuthCallbackController extends AbstractController
             ],
         );
 
-        return $this->renderResultPage(true, 'Token-ul ANAF a fost salvat cu succes. Puteti inchide aceasta fereastra.');
+        return $this->renderResultPage(true, 'The ANAF token has been saved successfully. You may close this window.');
     }
 
     private function exchangeCodeForToken(string $code, string $clientId, string $clientSecret, string $callbackUrl): ?array
@@ -182,7 +183,7 @@ class AnafOAuthCallbackController extends AbstractController
             ? '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
             : '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
 
-        $title = $success ? 'Conectare reusita' : 'Eroare';
+        $title = $success ? 'Connection successful' : 'Error';
         $textColor = $success ? '#16a34a' : '#dc2626';
         $escapedMessage = htmlspecialchars($message);
 

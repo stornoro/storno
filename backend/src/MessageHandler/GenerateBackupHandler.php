@@ -2,6 +2,7 @@
 
 namespace App\MessageHandler;
 
+use App\Enum\MessageKey;
 use App\Message\GenerateBackupMessage;
 use App\Repository\BackupJobRepository;
 use App\Repository\CompanyRepository;
@@ -104,12 +105,15 @@ class GenerateBackupHandler
                 $notification = $this->notificationService->createNotification(
                     $user,
                     'backup_ready',
-                    'Backup disponibil',
-                    sprintf('Backup-ul companiei %s este gata de descarcare.', $company->getName()),
+                    'Backup ready',
+                    sprintf('Company %s backup is ready for download.', $company->getName()),
                     [
                         'downloadUrl' => $downloadUrl,
                         'filename' => $filename,
                         'fileSize' => strlen($zipContent),
+                        'titleKey' => MessageKey::TITLE_BACKUP_READY,
+                        'messageKey' => MessageKey::MSG_BACKUP_READY,
+                        'messageParams' => ['name' => $company->getName()],
                     ],
                 );
                 $notification->setLink($downloadUrl);
