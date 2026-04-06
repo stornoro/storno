@@ -3,6 +3,7 @@
 namespace App\Controller\Frontend;
 
 use App\Entity\AnafToken;
+use App\Enum\MessageKey;
 use App\Entity\User;
 use App\Events\Anaf\TokenCreatedEvent;
 use App\Manager\UserManager;
@@ -117,7 +118,8 @@ class ANAFController extends AbstractController
         if (!$linkToken || !$code) {
             return $this->json([
                 'status' => 'fail',
-                'message' => 'Link invalid sau expirat.',
+                'message' => 'Invalid or expired link.',
+                'messageKey' => MessageKey::ERR_LINK_EXPIRED,
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -125,7 +127,8 @@ class ANAFController extends AbstractController
         if (!$link) {
             return $this->json([
                 'status' => 'fail',
-                'message' => 'Link-ul a expirat sau a fost deja utilizat.',
+                'message' => 'This link has expired or has already been used.',
+                'messageKey' => MessageKey::ERR_LINK_USED,
             ], Response::HTTP_BAD_REQUEST);
         }
 

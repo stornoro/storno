@@ -2,6 +2,7 @@
 
 namespace App\Command\Efactura;
 
+use App\Enum\MessageKey;
 use App\Repository\AnafTokenRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\NotificationService;
@@ -59,9 +60,13 @@ class RefreshAnafTokensCommand extends Command
                         $this->notificationService->createNotification(
                             $token->getUser(),
                             'token.refresh_failed',
-                            'Eroare reînnoire token ANAF',
-                            'Reînnoirea automată a token-ului ANAF a eșuat. Vă rugăm să vă re-autorizați.',
-                            ['tokenId' => $token->getId()->toRfc4122()],
+                            'ANAF token refresh failed',
+                            'Automatic ANAF token renewal failed. Please re-authorize.',
+                            [
+                                'tokenId' => $token->getId()->toRfc4122(),
+                                'titleKey' => MessageKey::TITLE_TOKEN_REFRESH_FAILED,
+                                'messageKey' => MessageKey::MSG_TOKEN_REFRESH_FAILED,
+                            ],
                         );
                     } catch (\Throwable) {
                         // Don't let notification failures break the command

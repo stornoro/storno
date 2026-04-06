@@ -3,6 +3,7 @@
 namespace App\Command\Notification;
 
 use App\Entity\Invoice;
+use App\Enum\MessageKey;
 use App\Repository\InvoiceRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\OrganizationMembershipRepository;
@@ -70,15 +71,10 @@ class AnafDeadlineWarningCommand extends Command
                 }
 
                 $message = sprintf(
-                    'Factura %s din %s nu a fost trimisă la ANAF. Termenul de 5 zile expiră mâine.',
+                    'Invoice %s must be synced with ANAF. Issue date: %s',
                     $invoice->getNumber(),
                     $invoice->getIssueDate()->format('d.m.Y'),
                 );
-
-                $clientName = $invoice->getClient()?->getName() ?? $invoice->getReceiverName() ?? '';
-                if ($clientName) {
-                    $message .= ' Client: ' . $clientName;
-                }
 
                 if ($dryRun) {
                     $io->text(sprintf('  [DRY RUN] → %s: %s', $user->getEmail(), $message));
@@ -86,12 +82,18 @@ class AnafDeadlineWarningCommand extends Command
                     $this->notificationService->createNotification(
                         $user,
                         'invoice.anaf_deadline',
-                        'Termen ANAF expiră mâine',
+                        'ANAF deadline expires tomorrow',
                         $message,
                         [
                             'invoiceId' => $invoice->getId()->toRfc4122(),
                             'invoiceNumber' => $invoice->getNumber(),
                             'companyId' => $company->getId()->toRfc4122(),
+                            'titleKey' => MessageKey::TITLE_ANAF_DEADLINE,
+                            'messageKey' => MessageKey::MSG_ANAF_DEADLINE,
+                            'messageParams' => [
+                                'number' => $invoice->getNumber(),
+                                'date' => $invoice->getIssueDate()->format('d.m.Y'),
+                            ],
                         ],
                     );
                 }

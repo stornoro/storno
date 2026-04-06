@@ -2,6 +2,7 @@
 
 namespace App\Command\Notification;
 
+use App\Enum\MessageKey;
 use App\Repository\AnafTokenRepository;
 use App\Repository\NotificationRepository;
 use App\Service\NotificationService;
@@ -81,7 +82,7 @@ class SendTokenExpiryRemindersCommand extends Command
                 continue;
             }
 
-            $message = sprintf('Token-ul ANAF expiră în %d %s', $daysUntilExpiry, $daysUntilExpiry === 1 ? 'zi' : 'zile');
+            $message = sprintf('ANAF token expires in %d day(s)', $daysUntilExpiry);
 
             if ($dryRun) {
                 $io->text(sprintf('  [DRY RUN] token.expiring_soon → %s: %s', $user->getEmail(), $message));
@@ -89,9 +90,14 @@ class SendTokenExpiryRemindersCommand extends Command
                 $this->notificationService->createNotification(
                     $user,
                     'token.expiring_soon',
-                    'Token ANAF expiră curând',
+                    'ANAF token expiring soon',
                     $message,
-                    ['tokenId' => $token->getId()->toRfc4122()],
+                    [
+                        'tokenId' => $token->getId()->toRfc4122(),
+                        'titleKey' => MessageKey::TITLE_TOKEN_EXPIRING,
+                        'messageKey' => MessageKey::MSG_TOKEN_EXPIRING,
+                        'messageParams' => ['days' => $daysUntilExpiry],
+                    ],
                 );
             }
 

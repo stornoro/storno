@@ -3776,5 +3776,76 @@ export default defineI18nLocale(async () => {
       error: 'Error',
     },
   },
+
+  backendMessages: {
+    // Notification titles
+    'notification.invoice_validated.title': 'Invoice validated by ANAF',
+    'notification.invoice_rejected.title': 'Invoice rejected by ANAF',
+    'notification.sync_error.title': 'e-Factura sync error',
+    'notification.new_documents.title': 'New e-Factura documents',
+    'notification.token_expiring.title': 'ANAF token expiring soon',
+    'notification.token_refresh_failed.title': 'ANAF token refresh failed',
+    'notification.export_ready.title': 'ZIP export ready',
+    'notification.backup_ready.title': 'Backup ready',
+    'notification.restore_completed.title': 'Restore completed',
+    'notification.anaf_deadline.title': 'ANAF deadline expires tomorrow',
+    'notification.payment_received.title': 'Payment received: {{amount}} {{currency}}',
+
+    // Notification messages
+    'notification.invoice_validated.message': 'Invoice {{number}} has been validated by ANAF',
+    'notification.invoice_rejected.message': 'Invoice {{number}} was rejected by ANAF: {{error}}',
+    'notification.sync_error.single': '{{company}} — {{error}}',
+    'notification.sync_error.multiple': '{{company}} — {{count}} sync errors. First: {{first_error}}',
+    'notification.new_documents.message': '{{count}} new document(s) received in e-Factura',
+    'notification.token_expiring.message': 'ANAF token expires in {{days}} day(s)',
+    'notification.token_refresh_failed.message': 'Automatic ANAF token renewal failed. Please re-authorize.',
+    'notification.export_ready.message': 'Export with {{count}} invoices is ready.',
+    'notification.backup_ready.message': 'Company {{name}} backup is ready for download.',
+    'notification.restore_completed.message': 'Company {{name}} data has been restored successfully.',
+    'notification.anaf_deadline.message': 'Invoice {{number}} must be synced with ANAF. Issue date: {{date}}',
+    'notification.payment_received.message': 'Invoice {{number}} received a payment of {{amount}} {{currency}} via Stripe.',
+
+    // Sync errors
+    'error.sync.internal_save': 'Internal error saving data. Sync will be retried automatically.',
+    'error.sync.database': 'Temporary database error. Sync will be retried automatically.',
+    'error.sync.internal_processing': 'Internal error processing data. Sync will be retried automatically.',
+    'error.sync.anaf_timeout': 'ANAF servers are not responding. Sync will be retried automatically.',
+    'error.sync.anaf_connection': 'Connection error to ANAF servers. Sync will be retried automatically.',
+    'error.sync.anaf_unavailable': 'ANAF servers are currently unavailable. Sync will be retried automatically.',
+    'error.sync.message_processing': 'Error processing an ANAF message. Sync will be retried automatically.',
+    'error.sync.details_unavailable': 'ANAF error (details unavailable)',
+
+    // API errors
+    'error.anaf.no_token': 'No valid ANAF token found. Please connect to ANAF first.',
+    'error.anaf.no_token_detail': 'No valid ANAF token found for this company. Add a token from Settings → ANAF.',
+    'error.anaf.rate_limit': 'ANAF rate limit reached. Please try again later.',
+    'error.sync.cooldown': 'The {{plan}} plan allows sync every {{interval}}. Next sync available in {{wait}}.',
+    'error.sync.no_token': 'No valid ANAF token. Please connect to ANAF first.',
+    'error.sync.enable_no_token': 'Cannot enable sync without a valid ANAF token. Please connect to ANAF first.',
+    'error.auth.password_incorrect': 'Password is incorrect.',
+    'error.invoice.no_invoices_for_period': 'No invoices found for the selected period.',
+    'error.company.already_added': 'This company is already added to your organization.',
+    'error.link.expired': 'Invalid or expired link.',
+    'error.link.already_used': 'This link has expired or has already been used.',
+    'error.invitation.expired': 'The invitation is invalid or has expired.',
+    'error.session.expired': 'Session expired. Please reconnect from Settings.',
+    'error.invoice.not_found': 'Invoice not found.',
+    'error.permission.denied': 'You do not have permission for this invoice.',
+
+    // Member errors
+    'error.member.cannot_modify_superadmin': 'Cannot modify a super administrator.',
+    'error.member.cannot_change_own_role': 'You cannot change your own role.',
+    'error.member.only_owner_can_promote': 'Only an owner can promote to owner role.',
+    'error.member.cannot_modify_owner': "Cannot modify an owner's role.",
+    'error.member.must_have_owner': 'There must be at least one owner.',
+    'error.member.cannot_deactivate_self': 'You cannot deactivate your own account.',
+    'error.member.cannot_grant_permission': 'You cannot grant the permission: {{permission}}',
+    'error.member.cannot_deactivate_superadmin': 'Cannot deactivate a super administrator.',
+    'error.member.cannot_deactivate_owner': 'Cannot deactivate an owner.',
+
+    // ANAF OAuth
+    'anaf.connect_success': 'Connection successful',
+    'anaf.connect_error': 'Error',
+  },
 }
 })

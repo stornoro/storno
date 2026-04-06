@@ -18,6 +18,7 @@ use App\Entity\InvoiceLine;
 use App\Entity\Product;
 use App\Entity\Supplier;
 use App\Enum\DocumentStatus;
+use App\Enum\MessageKey;
 use App\Enum\InvoiceDirection;
 use App\Repository\BankAccountRepository;
 use App\Repository\ClientRepository;
@@ -1054,17 +1055,20 @@ class EFacturaSyncService
     {
         try {
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
-            $message = sprintf('%d %s primite în e-Factura', $count, $count === 1 ? 'document nou' : 'documente noi');
+            $message = sprintf('%d new document(s) received in e-Factura', $count);
 
             foreach ($users as $user) {
                 $this->notificationService->createNotification(
                     $user,
                     'efactura.new_documents',
-                    'Documente noi e-Factura',
+                    'New e-Factura documents',
                     $message,
                     [
                         'companyId' => $company->getId()->toRfc4122(),
                         'count' => $count,
+                        'titleKey' => MessageKey::TITLE_NEW_DOCUMENTS,
+                        'messageKey' => MessageKey::MSG_NEW_DOCUMENTS,
+                        'messageParams' => ['count' => $count],
                     ],
                 );
             }
@@ -1094,7 +1098,7 @@ class EFacturaSyncService
             if ($errorText) {
                 $spvMessage->setErrorMessage($errorText);
             } else {
-                $spvMessage->setErrorMessage('Eroare ANAF (detalii indisponibile)');
+                $spvMessage->setErrorMessage('ANAF error (details unavailable)');
             }
             $spvMessage->setStatus('error');
 
@@ -1119,7 +1123,7 @@ class EFacturaSyncService
                 'error' => $e->getMessage(),
             ]);
             $spvMessage->setStatus('error');
-            $spvMessage->setErrorMessage('Eroare la descărcarea detaliilor: ' . $e->getMessage());
+            $spvMessage->setErrorMessage('Error downloading details: ' . $e->getMessage());
         }
     }
 

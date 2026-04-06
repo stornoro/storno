@@ -675,7 +675,7 @@ class InvoiceManager
         // Check for valid ANAF token before proceeding
         $company = $invoice->getCompany();
         if ($company && $this->anafTokenResolver->resolve($company) === null) {
-            throw new \DomainException('Nu exista un token ANAF valid pentru aceasta companie. Adaugati un token din Setari → ANAF.');
+            throw new \DomainException('No valid ANAF token found for this company. Add a token from Settings → ANAF.');
         }
 
         // Reset upload ID for rejected invoices being resubmitted
