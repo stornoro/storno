@@ -1203,25 +1203,63 @@ class EFacturaSyncService
         $this->pendingSuppliers = [];
     }
 
-    private function sanitizeErrorForUser(string $error): string
+    private function sanitizeErrorForUser(string $error): ?string
     {
+        // Internal persistence errors — don't expose ORM details
         if (str_contains($error, 'cascade persist') || str_contains($error, 'EntityManager')) {
             return 'Eroare internă la salvarea datelor. Reîncercați sincronizarea.';
         }
 
+        // Database errors — transient, don't expose SQL
         if (str_contains($error, 'SQLSTATE') || str_contains($error, 'deadlock')) {
             return 'Eroare temporară de bază de date. Reîncercați sincronizarea.';
         }
 
+        // Batch/flush errors — internal processing
         if (preg_match('/^(Batch flush|Final flush|Default series) error: /', $error)) {
             return 'Eroare internă la procesarea datelor. Reîncercați sincronizarea.';
         }
 
+        // Rate limits — transient, will resolve on next sync
         if (str_contains($error, 'rate limit') || str_contains($error, 'Rate limit')) {
-            return null; // Transient — will resolve on next sync, don't notify user
+            return null;
         }
 
-        return $error;
+        // Network timeouts — don't expose URLs
+        if (str_contains($error, 'Idle timeout') || str_contains($error, 'Connection timed out')) {
+            return 'Serverele ANAF nu răspund momentan. Sincronizarea va fi reîncercată automat.';
+        }
+
+        // cURL / connection errors — don't expose technical details
+        if (preg_match('/cURL error|Connection refused|Could not resolve host|SSL/', $error)) {
+            return 'Eroare de conexiune la serverele ANAF. Sincronizarea va fi reîncercată automat.';
+        }
+
+        // HTTP errors with URLs — strip the URL, keep the context
+        if (str_contains($error, 'Failed to list messages from ANAF')) {
+            return 'Serverele ANAF nu sunt disponibile momentan. Sincronizarea va fi reîncercată automat.';
+        }
+
+        // Generic "Error processing message" — strip message ID and technical details
+        if (preg_match('/^Error processing message \d+: (.+)$/', $error, $m)) {
+            $inner = $m[1];
+            // If the inner error also contains URLs/technical info, simplify
+            if (preg_match('/https?:\/\/|cURL|timeout|Idle/i', $inner)) {
+                return 'Eroare la procesarea unui mesaj ANAF. Sincronizarea va fi reîncercată automat.';
+            }
+            return 'Eroare la procesarea unui mesaj ANAF: ' . $this->stripUrls($inner);
+        }
+
+        // Strip any remaining URLs from error messages
+        return $this->stripUrls($error);
+    }
+
+    /**
+     * Remove URLs from error messages to avoid exposing internal endpoints.
+     */
+    private function stripUrls(string $text): string
+    {
+        return trim(preg_replace('/https?:\/\/[^\s"<>\)]+/', '', $text));
     }
 
     private function notifySyncErrors(Company $company, array $errors): void
