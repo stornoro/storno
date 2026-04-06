@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}Plata inregistrata{% endblock %}
+{% block heading %}{{ locale == 'en' ? 'Payment recorded' : 'Plata inregistrata' }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; margin-bottom: 20px;">
@@ -31,13 +31,13 @@
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         {% if data.amount is defined %}
         <tr style="background-color: #f9fafb;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">Suma</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">{{ locale == 'en' ? 'Amount' : 'Suma' }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">{{ data.amount }} {{ data.currency|default('RON') }}</td>
         </tr>
         {% endif %}
         {% if data.invoice_number is defined %}
         <tr style="background-color: #ffffff;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">Numar factura</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ locale == 'en' ? 'Invoice number' : 'Numar factura' }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.invoice_number }}</td>
         </tr>
         {% endif %}
@@ -49,7 +49,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/collections" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(22,163,74,0.3);">
-                Vezi incasarile
+                {{ locale == 'en' ? 'View collections' : 'Vezi incasarile' }}
             </a>
         </td>
     </tr>
