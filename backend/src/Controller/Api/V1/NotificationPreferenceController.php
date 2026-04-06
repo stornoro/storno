@@ -20,6 +20,8 @@ class NotificationPreferenceController extends AbstractController
         'invoice.due_soon',
         'invoice.due_today',
         'invoice.overdue',
+        'proforma.expiring_soon',
+        'proforma.expired',
         'sync.completed',
         'sync.error',
         'efactura.new_documents',
@@ -27,6 +29,8 @@ class NotificationPreferenceController extends AbstractController
         'token.refresh_failed',
         'export_ready',
         'report.monthly_summary',
+        'backup_ready',
+        'restore_completed',
     ];
 
     public function __construct(
@@ -48,7 +52,9 @@ class NotificationPreferenceController extends AbstractController
                 'emailEnabled' => $pref->isEmailEnabled(),
                 'inAppEnabled' => $pref->isInAppEnabled(),
                 'pushEnabled' => $pref->isPushEnabled(),
+                'telegramEnabled' => $pref->isTelegramEnabled(),
                 'whatsappEnabled' => $pref->isWhatsappEnabled(),
+                'smsEnabled' => $pref->isSmsEnabled(),
             ];
         }
 
@@ -85,8 +91,14 @@ class NotificationPreferenceController extends AbstractController
             if (isset($item['pushEnabled'])) {
                 $pref->setPushEnabled((bool) $item['pushEnabled']);
             }
+            if (isset($item['telegramEnabled'])) {
+                $pref->setTelegramEnabled((bool) $item['telegramEnabled']);
+            }
             if (isset($item['whatsappEnabled'])) {
                 $pref->setWhatsappEnabled((bool) $item['whatsappEnabled']);
+            }
+            if (isset($item['smsEnabled'])) {
+                $pref->setSmsEnabled((bool) $item['smsEnabled']);
             }
         }
 
@@ -101,7 +113,9 @@ class NotificationPreferenceController extends AbstractController
                 'emailEnabled' => $pref->isEmailEnabled(),
                 'inAppEnabled' => $pref->isInAppEnabled(),
                 'pushEnabled' => $pref->isPushEnabled(),
+                'telegramEnabled' => $pref->isTelegramEnabled(),
                 'whatsappEnabled' => $pref->isWhatsappEnabled(),
+                'smsEnabled' => $pref->isSmsEnabled(),
             ];
         }
 

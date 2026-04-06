@@ -36,6 +36,9 @@ class NotificationPreference
     #[ORM\Column]
     private bool $whatsappEnabled = false;
 
+    #[ORM\Column]
+    private bool $smsEnabled = false;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -126,6 +129,18 @@ class NotificationPreference
     public function setWhatsappEnabled(bool $whatsappEnabled): static
     {
         $this->whatsappEnabled = $whatsappEnabled;
+
+        return $this;
+    }
+
+    public function isSmsEnabled(): bool
+    {
+        return $this->smsEnabled;
+    }
+
+    public function setSmsEnabled(bool $smsEnabled): static
+    {
+        $this->smsEnabled = $smsEnabled;
 
         return $this;
     }
