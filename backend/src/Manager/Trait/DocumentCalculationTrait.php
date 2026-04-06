@@ -22,15 +22,24 @@ trait DocumentCalculationTrait
         $line->setQuantity($data['quantity'] ?? '1.0000');
         $line->setUnitOfMeasure($data['unitOfMeasure'] ?? 'buc');
         $line->setUnitPrice($data['unitPrice'] ?? '0.00');
-        $line->setVatRate($data['vatRate'] ?? '21.00');
         $categoryCode = $data['vatCategoryCode'] ?? 'S';
+        $zeroRateCodes = ['Z', 'E', 'AE', 'K', 'G', 'O'];
+        $hasExplicitRate = array_key_exists('vatRate', $data);
+
+        // If a zero-rate category is specified without an explicit rate, default to 0%
+        if (in_array($categoryCode, $zeroRateCodes, true) && !$hasExplicitRate) {
+            $data['vatRate'] = '0.00';
+        }
+
         $rate = (float) ($data['vatRate'] ?? '21.00');
+        $line->setVatRate($data['vatRate'] ?? '21.00');
+
         // [BR-S-05] Standard rate must have rate > 0; auto-correct to Z (zero rate) if 0%
         if ($categoryCode === 'S' && $rate === 0.0) {
             $categoryCode = 'Z';
         }
-        // [BR-Z/E/AE/K/G-05] These codes require rate = 0; if rate > 0, must be S
-        if (in_array($categoryCode, ['Z', 'E', 'AE', 'K', 'G'], true) && $rate > 0.0) {
+        // [BR-Z/E/AE/K/G/O-05] These codes require rate = 0; if rate > 0, must be S
+        if (in_array($categoryCode, $zeroRateCodes, true) && $rate > 0.0) {
             $categoryCode = 'S';
         }
         $line->setVatCategoryCode($categoryCode);
