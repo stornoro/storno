@@ -42,6 +42,10 @@ class SendExternalNotificationHandler
         'invoice.anaf_deadline' => 'emails/notification_anaf_deadline.html.twig',
         'export_ready' => 'emails/notification_export_ready.html.twig',
         'payment.received' => 'emails/notification_payment_received.html.twig',
+        'proforma.expiring_soon' => 'emails/notification_proforma_expiring_soon.html.twig',
+        'proforma.expired' => 'emails/notification_proforma_expired.html.twig',
+        'backup_ready' => 'emails/notification_backup_ready.html.twig',
+        'restore_completed' => 'emails/notification_restore_completed.html.twig',
     ];
 
     public function __construct(
@@ -86,6 +90,11 @@ class SendExternalNotificationHandler
         if ($preference?->isWhatsappEnabled() && $user->getPhone() && $this->texter) {
             $whatsappText = $this->formatWhatsappMessage($message->getEventType(), $message->getTitle(), $message->getMessage(), $message->getData());
             $this->sendWhatsapp($user->getPhone(), $whatsappText);
+        }
+
+        if ($preference?->isSmsEnabled() && $user->getPhone() && $this->texter) {
+            $smsText = $this->formatSmsMessage($message->getEventType(), $message->getTitle(), $message->getMessage(), $message->getData());
+            $this->sendSms($user->getPhone(), $smsText);
         }
 
         if ($preference?->isPushEnabled()) {
@@ -318,7 +327,104 @@ class SendExternalNotificationHandler
                 "\n\u{1F517} {$frontendUrl}/collections",
             ])),
 
+            'proforma.expiring_soon' => implode("\n", array_filter([
+                "\u{23F3} *Proforma expira curand*",
+                !empty($data['proformaNumber']) ? "\u{1F4C4} Proforma: *{$data['proformaNumber']}*" : null,
+                '',
+                $message,
+                isset($data['proformaId'], $data['companyId'])
+                    ? "\n\u{1F517} {$frontendUrl}/proformas/{$data['proformaId']}?company={$data['companyId']}"
+                    : null,
+            ])),
+
+            'proforma.expired' => implode("\n", array_filter([
+                "\u{274C} *Proforma expirata*",
+                !empty($data['proformaNumber']) ? "\u{1F4C4} Proforma: *{$data['proformaNumber']}*" : null,
+                '',
+                $message,
+                isset($data['proformaId'], $data['companyId'])
+                    ? "\n\u{1F517} {$frontendUrl}/proformas/{$data['proformaId']}?company={$data['companyId']}"
+                    : null,
+            ])),
+
+            'backup_ready' => implode("\n", array_filter([
+                "\u{2705} *Backup disponibil*",
+                !empty($data['filename']) ? "\u{1F4BE} Fisier: _{$data['filename']}_" : null,
+                '',
+                $message,
+                !empty($data['downloadUrl']) ? "\n\u{1F4E5} {$frontendUrl}{$data['downloadUrl']}" : null,
+            ])),
+
+            'restore_completed' => implode("\n", [
+                "\u{2705} *Restaurare finalizata*",
+                '',
+                $message,
+            ]),
+
             default => sprintf("*%s*\n%s", $title, $message),
+        };
+    }
+
+    private function formatSmsMessage(string $eventType, string $title, string $message, array $data): string
+    {
+        $invoiceNumber = $data['invoiceNumber'] ?? $data['invoice_number'] ?? null;
+
+        return match ($eventType) {
+            'invoice.validated' => trim(implode(' | ', array_filter([
+                'Factura validata ANAF',
+                $invoiceNumber ? "Nr: {$invoiceNumber}" : null,
+                $message,
+            ]))),
+
+            'invoice.rejected' => trim(implode(' | ', array_filter([
+                'Factura respinsa ANAF',
+                $invoiceNumber ? "Nr: {$invoiceNumber}" : null,
+                $message,
+            ]))),
+
+            'invoice.due_soon' => trim(implode(' | ', array_filter([
+                'Factura aproape de scadenta',
+                $invoiceNumber ? "Nr: {$invoiceNumber}" : null,
+                $message,
+            ]))),
+
+            'invoice.due_today' => trim(implode(' | ', array_filter([
+                'Factura scadenta azi',
+                $invoiceNumber ? "Nr: {$invoiceNumber}" : null,
+                $message,
+            ]))),
+
+            'invoice.overdue' => trim(implode(' | ', array_filter([
+                'Factura restanta',
+                $invoiceNumber ? "Nr: {$invoiceNumber}" : null,
+                $message,
+            ]))),
+
+            'proforma.expiring_soon' => trim(implode(' | ', array_filter([
+                'Proforma expira curand',
+                !empty($data['proformaNumber']) ? "Nr: {$data['proformaNumber']}" : null,
+                $message,
+            ]))),
+
+            'proforma.expired' => trim(implode(' | ', array_filter([
+                'Proforma expirata',
+                !empty($data['proformaNumber']) ? "Nr: {$data['proformaNumber']}" : null,
+                $message,
+            ]))),
+
+            'token.expiring_soon' => "Token ANAF expira curand. {$message}",
+
+            'token.refresh_failed' => "Eroare reinnoire token ANAF. {$message}",
+
+            'backup_ready' => trim(implode(' | ', array_filter([
+                'Backup disponibil',
+                !empty($data['filename']) ? $data['filename'] : null,
+                $message,
+            ]))),
+
+            'restore_completed' => "Restaurare finalizata. {$message}",
+
+            default => sprintf('%s: %s', $title, $message),
         };
     }
 
@@ -331,6 +437,21 @@ class SendExternalNotificationHandler
             $this->texter->send($smsMessage);
         } catch (\Throwable $e) {
             $this->logger->error('Failed to send WhatsApp notification.', [
+                'phone' => $phone,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function sendSms(string $phone, string $text): void
+    {
+        try {
+            $smsMessage = new SmsMessage($phone, $text);
+            $smsMessage->transport('twilio');
+
+            $this->texter->send($smsMessage);
+        } catch (\Throwable $e) {
+            $this->logger->error('Failed to send SMS notification.', [
                 'phone' => $phone,
                 'error' => $e->getMessage(),
             ]);

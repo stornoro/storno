@@ -10,7 +10,9 @@ interface Preference {
   emailEnabled: boolean
   inAppEnabled: boolean
   pushEnabled: boolean
+  telegramEnabled: boolean
   whatsappEnabled: boolean
+  smsEnabled: boolean
 }
 
 const loading = ref(true)
@@ -47,6 +49,11 @@ const categories = [
     key: 'reports',
     label: $t('notificationPreferences.categories.reports'),
     events: ['report.monthly_summary'],
+  },
+  {
+    key: 'system',
+    label: $t('notificationPreferences.categories.system'),
+    events: ['backup_ready', 'restore_completed'],
   },
 ]
 
@@ -163,11 +170,27 @@ onMounted(() => {
               </label>
               <label class="flex items-center gap-2">
                 <USwitch
+                  :model-value="getPreference(eventType, 'telegramEnabled')"
+                  size="sm"
+                  @update:model-value="setPreference(eventType, 'telegramEnabled', $event)"
+                />
+                <span class="text-xs text-muted">{{ $t('notificationPreferences.telegram') }}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <USwitch
                   :model-value="getPreference(eventType, 'whatsappEnabled')"
                   size="sm"
                   @update:model-value="setPreference(eventType, 'whatsappEnabled', $event)"
                 />
                 <span class="text-xs text-muted">{{ $t('notificationPreferences.whatsapp') }}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <USwitch
+                  :model-value="getPreference(eventType, 'smsEnabled')"
+                  size="sm"
+                  @update:model-value="setPreference(eventType, 'smsEnabled', $event)"
+                />
+                <span class="text-xs text-muted">{{ $t('notificationPreferences.sms') }}</span>
               </label>
             </div>
           </div>
