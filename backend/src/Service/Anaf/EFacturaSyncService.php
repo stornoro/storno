@@ -1207,17 +1207,17 @@ class EFacturaSyncService
     {
         // Internal persistence errors — don't expose ORM details
         if (str_contains($error, 'cascade persist') || str_contains($error, 'EntityManager')) {
-            return 'Eroare internă la salvarea datelor. Reîncercați sincronizarea.';
+            return 'Internal error saving data. Sync will be retried automatically.';
         }
 
         // Database errors — transient, don't expose SQL
         if (str_contains($error, 'SQLSTATE') || str_contains($error, 'deadlock')) {
-            return 'Eroare temporară de bază de date. Reîncercați sincronizarea.';
+            return 'Temporary database error. Sync will be retried automatically.';
         }
 
         // Batch/flush errors — internal processing
         if (preg_match('/^(Batch flush|Final flush|Default series) error: /', $error)) {
-            return 'Eroare internă la procesarea datelor. Reîncercați sincronizarea.';
+            return 'Internal error processing data. Sync will be retried automatically.';
         }
 
         // Rate limits — transient, will resolve on next sync
@@ -1227,27 +1227,26 @@ class EFacturaSyncService
 
         // Network timeouts — don't expose URLs
         if (str_contains($error, 'Idle timeout') || str_contains($error, 'Connection timed out')) {
-            return 'Serverele ANAF nu răspund momentan. Sincronizarea va fi reîncercată automat.';
+            return 'ANAF servers are not responding. Sync will be retried automatically.';
         }
 
         // cURL / connection errors — don't expose technical details
         if (preg_match('/cURL error|Connection refused|Could not resolve host|SSL/', $error)) {
-            return 'Eroare de conexiune la serverele ANAF. Sincronizarea va fi reîncercată automat.';
+            return 'Connection error to ANAF servers. Sync will be retried automatically.';
         }
 
         // HTTP errors with URLs — strip the URL, keep the context
         if (str_contains($error, 'Failed to list messages from ANAF')) {
-            return 'Serverele ANAF nu sunt disponibile momentan. Sincronizarea va fi reîncercată automat.';
+            return 'ANAF servers are currently unavailable. Sync will be retried automatically.';
         }
 
         // Generic "Error processing message" — strip message ID and technical details
         if (preg_match('/^Error processing message \d+: (.+)$/', $error, $m)) {
             $inner = $m[1];
-            // If the inner error also contains URLs/technical info, simplify
             if (preg_match('/https?:\/\/|cURL|timeout|Idle/i', $inner)) {
-                return 'Eroare la procesarea unui mesaj ANAF. Sincronizarea va fi reîncercată automat.';
+                return 'Error processing an ANAF message. Sync will be retried automatically.';
             }
-            return 'Eroare la procesarea unui mesaj ANAF: ' . $this->stripUrls($inner);
+            return 'Error processing an ANAF message: ' . $this->stripUrls($inner);
         }
 
         // Strip any remaining URLs from error messages
@@ -1284,20 +1283,30 @@ class EFacturaSyncService
 
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
             $errorCount = count($userErrors);
-            $firstError = $userErrors[0] ?? 'Eroare necunoscută';
+            $firstError = $userErrors[0] ?? 'Unknown error';
             $message = $errorCount === 1
                 ? sprintf('%s — %s', $company->getName(), $firstError)
-                : sprintf('%s — %d erori la sincronizare. Prima: %s', $company->getName(), $errorCount, $firstError);
+                : sprintf('%s — %d sync errors. First: %s', $company->getName(), $errorCount, $firstError);
+
+            $messageKey = $errorCount === 1 ? 'notification.sync.error.single' : 'notification.sync.error.multiple';
+            $messageParams = [
+                'company' => $company->getName(),
+                'error' => $firstError,
+                'count' => $errorCount,
+                'first_error' => $firstError,
+            ];
 
             foreach ($users as $user) {
                 $this->notificationService->createNotification(
                     $user,
                     'sync.error',
-                    'Eroare sincronizare e-Factura',
+                    'e-Factura sync error',
                     $message,
                     [
                         'companyId' => $company->getId()->toRfc4122(),
                         'errors' => array_slice($userErrors, 0, 5),
+                        'messageKey' => $messageKey,
+                        'messageParams' => $messageParams,
                     ],
                 );
             }
