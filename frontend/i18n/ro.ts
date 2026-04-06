@@ -2668,7 +2668,9 @@ export default defineI18nLocale(async () => {
       email: 'Email',
       inApp: 'In aplicatie',
       push: 'Push',
+      telegram: 'Telegram',
       whatsapp: 'WhatsApp',
+      sms: 'SMS',
       categories: {
         invoices: 'Facturi',
         proformas: 'Proforme',
@@ -2676,6 +2678,7 @@ export default defineI18nLocale(async () => {
         tokens: 'Token ANAF',
         exports: 'Export',
         reports: 'Rapoarte',
+        system: 'Sistem',
       },
       events: {
         invoice: {
@@ -2704,6 +2707,8 @@ export default defineI18nLocale(async () => {
         report: {
           monthly_summary: 'Raport lunar pe email',
         },
+        backup_ready: 'Backup disponibil',
+        restore_completed: 'Restaurare finalizata',
       },
       saveSuccess: 'Preferinte salvate',
       saveError: 'Eroare la salvarea preferintelor',

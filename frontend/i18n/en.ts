@@ -2669,7 +2669,9 @@ export default defineI18nLocale(async () => {
     email: 'Email',
     inApp: 'In-app',
     push: 'Push',
+    telegram: 'Telegram',
     whatsapp: 'WhatsApp',
+    sms: 'SMS',
     categories: {
       invoices: 'Invoices',
       proformas: 'Proformas',
@@ -2677,6 +2679,7 @@ export default defineI18nLocale(async () => {
       tokens: 'ANAF Token',
       exports: 'Export',
       reports: 'Reports',
+      system: 'System',
     },
     events: {
       invoice: {
@@ -2705,6 +2708,8 @@ export default defineI18nLocale(async () => {
       report: {
         monthly_summary: 'Monthly report by email',
       },
+      backup_ready: 'Backup ready',
+      restore_completed: 'Restore completed',
     },
     saveSuccess: 'Preferences saved',
     saveError: 'Error saving preferences',
