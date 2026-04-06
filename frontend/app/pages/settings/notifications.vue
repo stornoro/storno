@@ -3,7 +3,7 @@ definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
 useHead({ title: $t('notificationPreferences.title') })
-const { get, put } = useApi()
+const { get, put, post } = useApi()
 
 interface Preference {
   eventType: string
@@ -15,9 +15,17 @@ interface Preference {
   smsEnabled: boolean
 }
 
+interface TelegramStatus {
+  linked: boolean
+  configured: boolean
+}
+
 const loading = ref(true)
 const saving = ref(false)
 const preferences = ref<Preference[]>([])
+const telegramStatus = ref<TelegramStatus | null>(null)
+const telegramLinking = ref(false)
+const telegramUnlinking = ref(false)
 
 const categories = [
   {
@@ -100,8 +108,49 @@ async function savePreferences() {
   }
 }
 
+async function fetchTelegramStatus() {
+  try {
+    telegramStatus.value = await get<TelegramStatus>('/v1/telegram/status')
+  }
+  catch {
+    telegramStatus.value = null
+  }
+}
+
+async function linkTelegram() {
+  telegramLinking.value = true
+  try {
+    const res = await post<{ url: string }>('/v1/telegram/link', {})
+    window.open(res.url, '_blank')
+  }
+  catch {
+    useToast().add({ title: $t('error.generic'), color: 'error' })
+  }
+  finally {
+    telegramLinking.value = false
+  }
+}
+
+async function unlinkTelegram() {
+  telegramUnlinking.value = true
+  try {
+    await post('/v1/telegram/unlink', {})
+    if (telegramStatus.value) {
+      telegramStatus.value.linked = false
+    }
+    useToast().add({ title: $t('notificationPreferences.unlinkTelegram'), color: 'success' })
+  }
+  catch {
+    useToast().add({ title: $t('error.generic'), color: 'error' })
+  }
+  finally {
+    telegramUnlinking.value = false
+  }
+}
+
 onMounted(() => {
   fetchPreferences()
+  fetchTelegramStatus()
 })
 </script>
 
@@ -123,6 +172,50 @@ onMounted(() => {
         @click="savePreferences"
       />
     </UPageCard>
+
+    <!-- Telegram linking -->
+    <div v-if="telegramStatus !== null" class="mb-8">
+      <UPageCard
+        :title="'Telegram'"
+        :description="$t('notificationPreferences.telegramDescription')"
+        variant="naked"
+        class="mb-4"
+      />
+      <UPageCard variant="subtle">
+        <div v-if="!telegramStatus.configured" class="text-sm text-muted">
+          {{ $t('notificationPreferences.telegramNotConfigured') }}
+        </div>
+        <div v-else class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-2">
+            <UBadge
+              :color="telegramStatus.linked ? 'success' : 'neutral'"
+              variant="subtle"
+            >
+              {{ telegramStatus.linked ? $t('notificationPreferences.telegramLinked') : $t('notificationPreferences.telegramNotLinked') }}
+            </UBadge>
+          </div>
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="!telegramStatus.linked"
+              :label="$t('notificationPreferences.linkTelegram')"
+              color="neutral"
+              icon="i-lucide-send"
+              :loading="telegramLinking"
+              @click="linkTelegram"
+            />
+            <UButton
+              v-else
+              :label="$t('notificationPreferences.unlinkTelegram')"
+              color="error"
+              variant="soft"
+              icon="i-lucide-unlink"
+              :loading="telegramUnlinking"
+              @click="unlinkTelegram"
+            />
+          </div>
+        </div>
+      </UPageCard>
+    </div>
 
     <div v-if="loading" class="flex justify-center py-12">
       <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
