@@ -226,7 +226,7 @@ class SyncController extends AbstractController
                 $this->notificationService->createNotification(
                     $user,
                     'sync.error',
-                    'Eroare sincronizare e-Factura',
+                    'e-Factura sync error',
                     sprintf('%s — %s', $company->getName(), $errorMsg),
                     [
                         'companyId' => $company->getId()->toRfc4122(),

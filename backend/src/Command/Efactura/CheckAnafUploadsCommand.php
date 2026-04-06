@@ -106,10 +106,14 @@ class CheckAnafUploadsCommand extends Command
                     $batchCount++;
 
                     $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice), InvoiceValidatedEvent::NAME);
-                    $this->notifyOrgMembers($invoice, 'invoice.validated', 'Factură validată ANAF', sprintf(
-                        'Factura %s a fost validată de ANAF',
-                        $invoice->getNumber(),
-                    ));
+                    $this->notifyOrgMembers(
+                        $invoice,
+                        'invoice.validated',
+                        'Invoice validated by ANAF',
+                        sprintf('Invoice %s has been validated by ANAF', $invoice->getNumber()),
+                        'notification.invoice.validated',
+                        ['number' => $invoice->getNumber()],
+                    );
                 } elseif ($statusResponse->isError()) {
                     $previousStatus = $invoice->getStatus();
                     $invoice->setStatus(DocumentStatus::REJECTED);
@@ -132,11 +136,15 @@ class CheckAnafUploadsCommand extends Command
                     $batchCount++;
 
                     $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice), InvoiceRejectedEvent::NAME);
-                    $this->notifyOrgMembers($invoice, 'invoice.rejected', 'Factură respinsă ANAF', sprintf(
-                        'Factura %s a fost respinsă de ANAF: %s',
-                        $invoice->getNumber(),
-                        $statusResponse->errorMessage ?? 'Eroare necunoscută',
-                    ));
+                    $rejError = $statusResponse->errorMessage ?? 'Unknown error';
+                    $this->notifyOrgMembers(
+                        $invoice,
+                        'invoice.rejected',
+                        'Invoice rejected by ANAF',
+                        sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $rejError),
+                        'notification.invoice.rejected',
+                        ['number' => $invoice->getNumber(), 'error' => $rejError],
+                    );
                 }
                 // isPending → do nothing, check again later
 
@@ -165,18 +173,24 @@ class CheckAnafUploadsCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message): void
+    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = []): void
     {
         try {
             $company = $invoice->getCompany();
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
 
+            $data = [
+                'invoiceId' => $invoice->getId()->toRfc4122(),
+                'invoiceNumber' => $invoice->getNumber(),
+                'companyId' => $company->getId()->toRfc4122(),
+            ];
+            if ($messageKey) {
+                $data['messageKey'] = $messageKey;
+                $data['messageParams'] = $messageParams;
+            }
+
             foreach ($users as $user) {
-                $this->notificationService->createNotification($user, $type, $title, $message, [
-                    'invoiceId' => $invoice->getId()->toRfc4122(),
-                    'invoiceNumber' => $invoice->getNumber(),
-                    'companyId' => $company->getId()->toRfc4122(),
-                ]);
+                $this->notificationService->createNotification($user, $type, $title, $message, $data);
             }
         } catch (\Throwable $e) {
             $this->logger->error('Failed to send notification for invoice status change', [
