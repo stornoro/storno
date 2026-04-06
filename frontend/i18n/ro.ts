@@ -1748,6 +1748,18 @@ export default defineI18nLocale(async () => {
       deleteSuccess: 'Cota TVA stearsa',
     },
 
+    // ── VAT Category Codes ───────────────────────────────────────
+    vatCategoryCodes: {
+      S: { label: 'Cota standard', description: 'TVA normal la cota standard locala' },
+      Z: { label: 'Cota zero', description: 'Taxabil, dar se aplica 0% (ex: exporturi, bunuri specifice)' },
+      E: { label: 'Scutit de TVA', description: 'Bunuri scutite legal de TVA' },
+      AE: { label: 'Taxare inversa', description: 'Cumparatorul declara TVA (ex: B2B transfrontalier UE)' },
+      K: { label: 'Scutit pentru export', description: 'Bunuri/servicii vandute in afara jurisdictiei fiscale' },
+      L: { label: 'Livrare intracomunitara', description: 'Livrare transfrontaliera UE de bunuri/servicii' },
+      O: { label: 'In afara sferei TVA', description: 'Tranzactie nesupusa TVA' },
+      M: { label: 'Regimul marjei', description: 'Regimuri speciale de TVA (ex: bunuri second-hand, turism)' },
+    },
+
     // ── Document Series ─────────────────────────────────────────
     documentSeries: {
       title: 'Serii de documente',
