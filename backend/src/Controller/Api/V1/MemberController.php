@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\OrganizationMembership;
+use App\Enum\MessageKey;
 use App\Entity\User;
 use App\Enum\OrganizationRole;
 use App\Enum\UserRoles;
@@ -112,12 +113,12 @@ class MemberController extends AbstractController
 
         // Super admin members cannot be modified by non-super-admins
         if (in_array(UserRoles::ROLE_SUPER_ADMIN, $membership->getUser()->getRoles(), true) && !in_array(UserRoles::ROLE_SUPER_ADMIN, $currentUser->getRoles(), true)) {
-            return $this->json(['error' => 'Nu puteti modifica un super administrator.'], Response::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'Cannot modify a super administrator.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_MODIFY_SUPERADMIN], Response::HTTP_FORBIDDEN);
         }
 
         // Cannot change own role
         if (isset($data['role']) && $membership->getUser() === $currentUser) {
-            return $this->json(['error' => 'Nu va puteti schimba propriul rol.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return $this->json(['error' => 'You cannot change your own role.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_CHANGE_OWN_ROLE], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         // Role change validation
@@ -131,12 +132,12 @@ class MemberController extends AbstractController
 
             // Cannot promote to OWNER unless you are OWNER
             if ($newRole === OrganizationRole::OWNER && $currentMembership->getRole() !== OrganizationRole::OWNER) {
-                return $this->json(['error' => 'Doar un proprietar poate promova la rol de proprietar.'], Response::HTTP_FORBIDDEN);
+                return $this->json(['error' => 'Only an owner can promote to owner role.', 'messageKey' => MessageKey::ERR_MEMBER_ONLY_OWNER_CAN_PROMOTE], Response::HTTP_FORBIDDEN);
             }
 
             // Cannot change OWNER role unless you are OWNER
             if ($membership->getRole() === OrganizationRole::OWNER && $currentMembership->getRole() !== OrganizationRole::OWNER) {
-                return $this->json(['error' => 'Nu puteti modifica rolul unui proprietar.'], Response::HTTP_FORBIDDEN);
+                return $this->json(['error' => "Cannot modify an owner's role.", 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_MODIFY_OWNER], Response::HTTP_FORBIDDEN);
             }
 
             // At least one OWNER must remain
@@ -147,7 +148,7 @@ class MemberController extends AbstractController
                     'isActive' => true,
                 ]);
                 if ($ownerCount <= 1) {
-                    return $this->json(['error' => 'Trebuie sa existe cel putin un proprietar.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                    return $this->json(['error' => 'There must be at least one owner.', 'messageKey' => MessageKey::ERR_MEMBER_MUST_HAVE_OWNER], Response::HTTP_UNPROCESSABLE_ENTITY);
                 }
             }
 
@@ -157,7 +158,7 @@ class MemberController extends AbstractController
         if (array_key_exists('isActive', $data)) {
             // Cannot deactivate yourself
             if ($membership->getUser() === $currentUser) {
-                return $this->json(['error' => 'Nu va puteti dezactiva propriul cont.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                return $this->json(['error' => 'You cannot deactivate your own account.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_DEACTIVATE_SELF], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
             $membership->setIsActive((bool) $data['isActive']);
         }
@@ -189,10 +190,10 @@ class MemberController extends AbstractController
                 $validated = [];
                 foreach ($perms as $p) {
                     if (!in_array($p, $allValid, true)) {
-                        return $this->json(['error' => "Permisiune invalida: $p"], Response::HTTP_BAD_REQUEST);
+                        return $this->json(['error' => "Invalid permission: $p"], Response::HTTP_BAD_REQUEST);
                     }
                     if (!in_array($p, $currentUserPerms, true)) {
-                        return $this->json(['error' => "Nu puteti acorda permisiunea: $p"], Response::HTTP_FORBIDDEN);
+                        return $this->json(['error' => "Cannot grant the permission: $p", 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_GRANT_PERMISSION, 'messageParams' => ['permission' => $p]], Response::HTTP_FORBIDDEN);
                     }
                     $validated[] = $p;
                 }
@@ -226,19 +227,19 @@ class MemberController extends AbstractController
 
         // Super admin members cannot be deactivated by non-super-admins
         if (in_array(UserRoles::ROLE_SUPER_ADMIN, $membership->getUser()->getRoles(), true) && !in_array(UserRoles::ROLE_SUPER_ADMIN, $currentUser->getRoles(), true)) {
-            return $this->json(['error' => 'Nu puteti dezactiva un super administrator.'], Response::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'Cannot deactivate a super administrator.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_DEACTIVATE_SUPERADMIN], Response::HTTP_FORBIDDEN);
         }
 
         // Cannot deactivate yourself
         if ($membership->getUser() === $currentUser) {
-            return $this->json(['error' => 'Nu va puteti dezactiva propriul cont.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return $this->json(['error' => 'You cannot deactivate your own account.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_DEACTIVATE_SELF], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         // Cannot deactivate OWNER unless you are OWNER
         if ($membership->getRole() === OrganizationRole::OWNER) {
             $currentMembership = $this->organizationContext->getMembership();
             if ($currentMembership->getRole() !== OrganizationRole::OWNER) {
-                return $this->json(['error' => 'Nu puteti dezactiva un proprietar.'], Response::HTTP_FORBIDDEN);
+                return $this->json(['error' => 'Cannot deactivate an owner.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_DEACTIVATE_OWNER], Response::HTTP_FORBIDDEN);
             }
         }
 

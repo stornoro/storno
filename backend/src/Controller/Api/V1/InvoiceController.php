@@ -6,6 +6,7 @@ use App\Entity\DocumentEvent;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
 use App\Enum\DocumentStatus;
+use App\Enum\MessageKey;
 use App\Manager\InvoiceManager;
 use App\Message\GeneratePdfMessage;
 use App\Message\GenerateZipExportMessage;
@@ -1385,7 +1386,7 @@ class InvoiceController extends AbstractController
         $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
 
         if (empty($invoices)) {
-            return $this->json(['error' => 'Nu exista facturi pentru perioada selectata.'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'No invoices found for the selected period.', 'messageKey' => MessageKey::ERR_NO_INVOICES_FOR_PERIOD], Response::HTTP_NOT_FOUND);
         }
 
         // For large batches, dispatch async

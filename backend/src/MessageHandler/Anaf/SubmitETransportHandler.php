@@ -138,7 +138,7 @@ final class SubmitETransportHandler
             ]);
 
             $note->setEtransportStatus('upload_failed');
-            $note->setEtransportErrorMessage('Nu exista un token ANAF valid pentru aceasta companie.');
+            $note->setEtransportErrorMessage('No valid ANAF token found for this company.');
             $this->entityManager->flush();
             return;
         }

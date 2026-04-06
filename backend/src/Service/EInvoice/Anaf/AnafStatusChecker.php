@@ -8,6 +8,7 @@ use App\Enum\DocumentStatus;
 use App\Enum\EInvoiceSubmissionStatus;
 use App\Event\Invoice\InvoiceRejectedEvent;
 use App\Event\Invoice\InvoiceValidatedEvent;
+use App\Enum\MessageKey;
 use App\Message\EInvoice\CheckEInvoiceStatusMessage;
 use App\Repository\OrganizationMembershipRepository;
 use App\Service\Anaf\AnafTokenResolver;
@@ -130,8 +131,9 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
                 'invoice.validated',
                 'Invoice validated by ANAF',
                 sprintf('Invoice %s has been validated by ANAF', $invoice->getNumber()),
-                'notification.invoice.validated',
+                MessageKey::MSG_INVOICE_VALIDATED,
                 ['number' => $invoice->getNumber()],
+                MessageKey::TITLE_INVOICE_VALIDATED,
             );
 
             return;
@@ -166,8 +168,9 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
                 'invoice.rejected',
                 'Invoice rejected by ANAF',
                 sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $errorMsg),
-                'notification.invoice.rejected',
+                MessageKey::MSG_INVOICE_REJECTED,
                 ['number' => $invoice->getNumber(), 'error' => $errorMsg],
+                MessageKey::TITLE_INVOICE_REJECTED,
             );
 
             return;
@@ -197,7 +200,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
         ]);
     }
 
-    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = []): void
+    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = [], string $titleKey = ''): void
     {
         try {
             $company = $invoice->getCompany();
@@ -211,6 +214,9 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             if ($messageKey) {
                 $data['messageKey'] = $messageKey;
                 $data['messageParams'] = $messageParams;
+            }
+            if ($titleKey) {
+                $data['titleKey'] = $titleKey;
             }
 
             foreach ($users as $user) {

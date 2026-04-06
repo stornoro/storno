@@ -85,11 +85,11 @@ final class AnafSubmissionHandler implements EInvoiceSubmissionHandlerInterface
         $token = $this->tokenResolver->resolve($company);
         if ($token === null) {
             $submission->setStatus(EInvoiceSubmissionStatus::ERROR);
-            $submission->setErrorMessage('Nu exista un token ANAF valid pentru aceasta companie.');
+            $submission->setErrorMessage('No valid ANAF token found for this company.');
 
             $invoice->setStatus(DocumentStatus::REJECTED);
             $invoice->setAnafStatus('no_token');
-            $invoice->setAnafErrorMessage('Nu exista un token ANAF valid pentru aceasta companie.');
+            $invoice->setAnafErrorMessage('No valid ANAF token found for this company.');
             $this->entityManager->flush();
             $this->publishInvoiceChange($invoice, 'invoice.submission_failed');
             return;

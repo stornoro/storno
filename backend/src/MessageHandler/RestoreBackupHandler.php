@@ -2,6 +2,7 @@
 
 namespace App\MessageHandler;
 
+use App\Enum\MessageKey;
 use App\Message\RestoreBackupMessage;
 use App\Repository\BackupJobRepository;
 use App\Repository\CompanyRepository;
@@ -121,9 +122,14 @@ class RestoreBackupHandler
                 $this->notificationService->createNotification(
                     $user,
                     'restore_completed',
-                    'Restaurare finalizata',
-                    sprintf('Datele companiei %s au fost restaurate cu succes.', $company->getName()),
-                    ['entityCounts' => $entityCounts],
+                    'Restore completed',
+                    sprintf('Company %s data has been restored successfully.', $company->getName()),
+                    [
+                        'entityCounts' => $entityCounts,
+                        'titleKey' => MessageKey::TITLE_RESTORE_COMPLETED,
+                        'messageKey' => MessageKey::MSG_RESTORE_COMPLETED,
+                        'messageParams' => ['name' => $company->getName()],
+                    ],
                 );
                 $this->entityManager->flush();
             }

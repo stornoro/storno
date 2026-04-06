@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Enum\MessageKey;
 use App\Exception\AnafRateLimitException;
 use App\Repository\CompanyRepository;
 use App\Repository\InvoiceRepository;
@@ -63,7 +64,13 @@ class SyncController extends AbstractController
                     }
                     $plan = $this->licenseManager->getEffectivePlan($org);
                     return $this->json([
-                        'error' => "Planul {$plan} permite sincronizare la fiecare " . $this->formatSyncInterval($syncInterval) . ". Urmatoarea sincronizare disponibila in {$waitLabel}.",
+                        'error' => "The {$plan} plan allows sync every " . $this->formatSyncInterval($syncInterval) . ". Next sync available in {$waitLabel}.",
+                        'messageKey' => MessageKey::ERR_SYNC_COOLDOWN,
+                        'messageParams' => [
+                            'plan' => $plan,
+                            'interval' => $this->formatSyncInterval($syncInterval),
+                            'wait' => $waitLabel,
+                        ],
                         'code' => 'SYNC_RATE_LIMITED',
                         'retryAfter' => $waitSeconds,
                     ], Response::HTTP_TOO_MANY_REQUESTS, [
@@ -76,11 +83,12 @@ class SyncController extends AbstractController
         // Pre-validate: resolve token and verify it works for this company's CIF
         $token = $this->tokenResolver->resolve($company);
         if (!$token) {
-            $errorMsg = 'Nu exista un token ANAF valid. Conectati-va mai intai la ANAF.';
+            $errorMsg = 'No valid ANAF token. Please connect to ANAF first.';
             $this->notifySyncError($company, $errorMsg, 'NO_TOKEN');
 
             return $this->json([
                 'error' => $errorMsg,
+                'messageKey' => MessageKey::ERR_SYNC_NO_TOKEN,
                 'code' => 'NO_TOKEN',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -102,7 +110,8 @@ class SyncController extends AbstractController
             }
         } catch (AnafRateLimitException $e) {
             return $this->json([
-                'error' => 'Limita de apeluri ANAF a fost atinsa. Incercati din nou mai tarziu.',
+                'error' => 'ANAF rate limit reached. Please try again later.',
+                'messageKey' => MessageKey::ERR_ANAF_RATE_LIMIT,
                 'retryAfter' => $e->retryAfter,
             ], Response::HTTP_TOO_MANY_REQUESTS, [
                 'Retry-After' => $e->retryAfter,

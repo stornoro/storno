@@ -3,6 +3,7 @@
 namespace App\Controller\Api\Auth;
 
 use App\Entity\User;
+use App\Enum\MessageKey;
 use App\Message\SendMfaEmailOtpMessage;
 use App\Service\MfaService;
 use App\Service\WebAuthnService;
@@ -287,7 +288,7 @@ class MfaController extends AbstractController
         $password = $data['password'] ?? null;
 
         if (!$password || !$this->passwordHasher->isPasswordValid($user, $password)) {
-            return $this->json(['error' => 'Parola este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return $this->json(['error' => 'Password is incorrect.', 'messageKey' => MessageKey::ERR_PASSWORD_INCORRECT], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $this->mfaService->disableTotp($user);

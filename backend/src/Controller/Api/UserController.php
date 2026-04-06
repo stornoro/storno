@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Entity\User;
+use App\Enum\MessageKey;
 use App\Message\DeleteUserAccountMessage;
 use App\Repository\OrganizationMembershipRepository;
 use App\Repository\UserRepository;
@@ -186,7 +187,7 @@ class UserController extends AbstractController
         if ($hasPassword) {
             // Users with a password must confirm with their password
             if (!$password || !$this->passwordHasher->isPasswordValid($user, $password)) {
-                return $this->json(['error' => 'Parola este incorecta.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                return $this->json(['error' => 'Password is incorrect.', 'messageKey' => MessageKey::ERR_PASSWORD_INCORRECT], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
         } else {
             // Social-only users must confirm via step-up MFA verification token
