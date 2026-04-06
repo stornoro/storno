@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\VatRate;
+use App\Invoice\Codes\VatCategoryCode;
 use App\Repository\VatRateRepository;
 use App\Security\OrganizationContext;
 use Doctrine\ORM\EntityManagerInterface;
@@ -20,6 +21,12 @@ class VatRateController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
     ) {}
+
+    #[Route('/vat-category-codes', methods: ['GET'])]
+    public function categoryCodes(): JsonResponse
+    {
+        return $this->json(['data' => VatCategoryCode::allWithMessageKeys()]);
+    }
 
     #[Route('/vat-rates', methods: ['GET'])]
     public function index(Request $request): JsonResponse

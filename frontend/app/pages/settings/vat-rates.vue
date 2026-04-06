@@ -28,12 +28,25 @@ const form = ref({
   position: 0,
 })
 
-const categoryCodeOptions = [
-  { label: 'S - Standard', value: 'S' },
-  { label: 'Z - Zero', value: 'Z' },
-  { label: 'E - Exempt', value: 'E' },
-  { label: 'AE - Taxare inversa', value: 'AE' },
-]
+const categoryCodeOptions = ref<{ label: string; value: string }[]>([])
+
+async function fetchCategoryCodes() {
+  const { get } = useApi()
+  try {
+    const result = await get<{ data: { code: string; labelKey: string }[] }>('/v1/vat-category-codes')
+    categoryCodeOptions.value = result.data.map(c => ({
+      label: `${c.code} - ${$t(c.labelKey)}`,
+      value: c.code,
+    }))
+  }
+  catch {
+    const codes = ['S', 'Z', 'E', 'AE', 'K', 'L', 'O', 'M']
+    categoryCodeOptions.value = codes.map(c => ({
+      label: `${c} - ${$t(`vatCategoryCodes.${c}.label`)}`,
+      value: c,
+    }))
+  }
+}
 
 const columns = [
   {
@@ -116,6 +129,7 @@ watch(() => companyStore.currentCompanyId, () => store.fetchVatRates())
 
 onMounted(() => {
   store.fetchVatRates()
+  fetchCategoryCodes()
 })
 </script>
 

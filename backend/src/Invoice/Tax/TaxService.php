@@ -14,11 +14,11 @@ class TaxService
  
         if ($this->getPercent() !== null) {
             if ($this->getPercent() >= 21) {
-                return VatCategoryCode::STANDART_RATE;
+                return VatCategoryCode::STANDARD_RATE;
             } elseif ($this->getPercent() <= 21 && $this->getPercent() >= 6) {
-                return VatCategoryCode::VAT_REVERSE_CHANGE;
+                return VatCategoryCode::REVERSE_CHARGE;
             } else {
-                return VatCategoryCode::ZERO_RATE_GOODS;
+                return VatCategoryCode::ZERO_RATED;
             }
         }
  

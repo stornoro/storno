@@ -1749,6 +1749,18 @@ export default defineI18nLocale(async () => {
     deleteSuccess: 'VAT rate deleted',
   },
 
+  // ── VAT Category Codes ───────────────────────────────────────
+  vatCategoryCodes: {
+    S: { label: 'Standard rate', description: 'Normal VAT/GST at the local standard rate' },
+    Z: { label: 'Zero-rated', description: 'Taxable, but 0% applies (e.g., exports, specific goods)' },
+    E: { label: 'Exempt from tax', description: 'Items legally exempt from VAT/GST' },
+    AE: { label: 'Reverse charge', description: 'Buyer self-accounts for VAT (e.g., EU cross-border B2B)' },
+    K: { label: 'Exempt for export', description: 'Goods/services sold outside the tax jurisdiction' },
+    L: { label: 'Intra-community supply', description: 'EU cross-border supply of goods/services' },
+    O: { label: 'Outside scope', description: 'Transaction not subject to VAT' },
+    M: { label: 'Margin scheme', description: 'Special VAT regimes (e.g., used goods, travel)' },
+  },
+
   // ── Document Series ─────────────────────────────────────────
   documentSeries: {
     title: 'Document series',
