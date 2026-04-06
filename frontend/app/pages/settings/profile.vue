@@ -54,6 +54,7 @@ const mfaRegenerating = ref(false)
 const schema = z.object({
   firstName: z.string().min(2, $t('validation.nameMin')),
   lastName: z.string().min(2, $t('validation.nameMin')),
+  phone: z.string().optional().or(z.literal('')),
   email: z.string().email($t('validation.emailInvalid')),
   currentPassword: z.string().optional(),
   newPassword: z.string().min(8, $t('validation.passwordMin')).optional().or(z.literal('')),
@@ -62,6 +63,7 @@ const schema = z.object({
 const formState = reactive({
   firstName: authStore.user?.firstName || '',
   lastName: authStore.user?.lastName || '',
+  phone: authStore.user?.phone || '',
   email: authStore.user?.email || '',
   currentPassword: '',
   newPassword: '',
@@ -133,6 +135,7 @@ async function onSubmit() {
     const payload: any = {
       firstName: formState.firstName,
       lastName: formState.lastName,
+      phone: formState.phone || null,
     }
 
     if (userHasPassword.value && formState.currentPassword && formState.newPassword) {
@@ -148,6 +151,7 @@ async function onSubmit() {
     if (authStore.user) {
       authStore.user.firstName = formState.firstName
       authStore.user.lastName = formState.lastName
+      authStore.user.phone = formState.phone || null
       if (payload.newPassword) {
         authStore.user.hasPassword = true
       }
@@ -270,6 +274,7 @@ onMounted(() => {
   if (authStore.user) {
     formState.firstName = authStore.user.firstName || ''
     formState.lastName = authStore.user.lastName || ''
+    formState.phone = authStore.user.phone || ''
     formState.email = authStore.user.email
   }
   if (passkeySupported.value) {
@@ -320,6 +325,15 @@ onMounted(() => {
         class="flex max-sm:flex-col justify-between items-start gap-4"
       >
         <UInput v-model="formState.lastName" autocomplete="family-name" />
+      </UFormField>
+      <USeparator />
+      <UFormField
+        name="phone"
+        :label="$t('settings.profile.phone')"
+        :description="$t('settings.profile.phoneDescription')"
+        class="flex max-sm:flex-col justify-between items-start gap-4"
+      >
+        <UInput v-model="formState.phone" type="tel" placeholder="+40 712 345 678" autocomplete="tel" />
       </UFormField>
       <USeparator />
       <UFormField

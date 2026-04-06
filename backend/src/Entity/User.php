@@ -104,6 +104,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $telegramChatId = null;
 
+    #[ORM\Column(length: 64, nullable: true, unique: true)]
+    private ?string $telegramLinkToken = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $telegramLinkTokenExpiresAt = null;
+
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $preferences = null;
 
@@ -563,6 +569,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setTelegramChatId(?string $telegramChatId): static
     {
         $this->telegramChatId = $telegramChatId;
+
+        return $this;
+    }
+
+    public function getTelegramLinkToken(): ?string
+    {
+        return $this->telegramLinkToken;
+    }
+
+    public function setTelegramLinkToken(?string $telegramLinkToken): static
+    {
+        $this->telegramLinkToken = $telegramLinkToken;
+
+        return $this;
+    }
+
+    public function getTelegramLinkTokenExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->telegramLinkTokenExpiresAt;
+    }
+
+    public function setTelegramLinkTokenExpiresAt(?\DateTimeImmutable $telegramLinkTokenExpiresAt): static
+    {
+        $this->telegramLinkTokenExpiresAt = $telegramLinkTokenExpiresAt;
 
         return $this;
     }
