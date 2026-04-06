@@ -213,7 +213,7 @@ class UblXmlGenerator
         // === Parties ===
 
         // AccountingSupplierParty (Company)
-        $this->addSupplierParty($dom, $root, $company);
+        $this->addSupplierParty($dom, $root, $company, $invoice);
 
         // AccountingCustomerParty (Client)
         // Use buyerSnapshot when available (preserves original buyer identity for storno/credit notes)
@@ -290,7 +290,7 @@ class UblXmlGenerator
         return '380';
     }
 
-    private function addSupplierParty(\DOMDocument $dom, \DOMElement $root, $company): void
+    private function addSupplierParty(\DOMDocument $dom, \DOMElement $root, $company, Invoice $invoice): void
     {
         $supplierParty = $dom->createElement('cac:AccountingSupplierParty');
         $root->appendChild($supplierParty);
@@ -334,15 +334,30 @@ class UblXmlGenerator
 
         $party->appendChild($postalAddress);
 
-        // [BR-RO-065] PartyTaxScheme — CompanyID required
-        // [BR-CO-09] VAT identifier must always have ISO 3166-1 alpha-2 country prefix
-        $partyTaxScheme = $dom->createElement('cac:PartyTaxScheme');
-        $companyId = ($company->getCountry() ?? 'RO') . $company->getCif();
-        $this->addElement($dom, $partyTaxScheme, 'cbc:CompanyID', $companyId);
-        $taxScheme = $dom->createElement('cac:TaxScheme');
-        $this->addElement($dom, $taxScheme, 'cbc:ID', 'VAT');
-        $partyTaxScheme->appendChild($taxScheme);
-        $party->appendChild($partyTaxScheme);
+        // [BR-RO-065] PartyTaxScheme — BT-31 and/or BT-32 required
+        $isVatPayer = $company->isVatPayer() || $invoice->isPlatitorTva();
+        $countryCode = $company->getCountry() ?? 'RO';
+        $cif = (string) $company->getCif();
+
+        if ($isVatPayer) {
+            // BT-31: Seller VAT identifier (TaxScheme/ID = VAT)
+            // [BR-CO-09] Must have ISO 3166-1 alpha-2 country prefix
+            $partyTaxScheme = $dom->createElement('cac:PartyTaxScheme');
+            $this->addElement($dom, $partyTaxScheme, 'cbc:CompanyID', $countryCode . $cif);
+            $taxScheme = $dom->createElement('cac:TaxScheme');
+            $this->addElement($dom, $taxScheme, 'cbc:ID', 'VAT');
+            $partyTaxScheme->appendChild($taxScheme);
+            $party->appendChild($partyTaxScheme);
+        } else {
+            // BT-32: Seller tax registration identifier (TaxScheme/ID != VAT)
+            // Non-VAT payers must NOT declare a VAT identifier
+            $partyTaxScheme = $dom->createElement('cac:PartyTaxScheme');
+            $this->addElement($dom, $partyTaxScheme, 'cbc:CompanyID', $cif);
+            $taxScheme = $dom->createElement('cac:TaxScheme');
+            $this->addElement($dom, $taxScheme, 'cbc:ID', 'NOT_VAT');
+            $partyTaxScheme->appendChild($taxScheme);
+            $party->appendChild($partyTaxScheme);
+        }
 
         // Legal entity (BT-27) [BR-RO-L201 max 200 chars]
         $legalEntity = $dom->createElement('cac:PartyLegalEntity');
