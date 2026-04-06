@@ -8,6 +8,16 @@ help: ## Show this help
 	@grep -E '(^[a-zA-Z_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
 ##
+## Update
+##---------------------------------------------------------------------------
+
+update: ## Pull latest images, restart, run migrations, clear cache
+	$(DOCKER_COMPOSE) pull
+	$(DOCKER_COMPOSE) up -d
+	$(CONSOLE) doctrine:migrations:migrate --no-interaction
+	$(CONSOLE) cache:clear
+
+##
 ## Logs
 ##---------------------------------------------------------------------------
 
