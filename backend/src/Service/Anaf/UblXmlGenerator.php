@@ -1112,7 +1112,7 @@ class UblXmlGenerator
         }
 
         // These codes require Percent = 0; if rate > 0, they're likely meant to be S
-        if (in_array($categoryCode, ['Z', 'E', 'AE', 'K', 'G'], true) && $rate > 0.0) {
+        if (in_array($categoryCode, ['Z', 'E', 'AE', 'K', 'G', 'O'], true) && $rate > 0.0) {
             return 'S';
         }
 
