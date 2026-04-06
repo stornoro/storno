@@ -79,7 +79,7 @@ class SendExternalNotificationHandler
         ]);
 
         if ($preference?->isEmailEnabled() && $user->getEmail() && $this->mailer) {
-            $this->sendEmail($user->getEmail(), $message->getTitle(), $message->getMessage(), $message->getEventType(), $message->getData(), (string) $user->getId());
+            $this->sendEmail($user->getEmail(), $message->getTitle(), $message->getMessage(), $message->getEventType(), $message->getData(), (string) $user->getId(), $user->getLocale() ?? 'ro');
         }
 
         if ($preference?->isTelegramEnabled() && $user->getTelegramChatId() && $this->chatter) {
@@ -110,7 +110,7 @@ class SendExternalNotificationHandler
         }
     }
 
-    private function sendEmail(string $to, string $title, string $body, string $eventType, array $data, string $userId): void
+    private function sendEmail(string $to, string $title, string $body, string $eventType, array $data, string $userId, string $locale = 'ro'): void
     {
         try {
             $unsubscribeUrl = $this->emailUnsubscribeService->generateUrl($to, $eventType, $userId);
@@ -129,6 +129,7 @@ class SendExternalNotificationHandler
                     'data' => $data,
                     'frontendUrl' => rtrim($this->frontendUrl, '/'),
                     'unsubscribeUrl' => $unsubscribeUrl,
+                    'locale' => $locale,
                 ]);
                 $email->html($html);
             } else {
