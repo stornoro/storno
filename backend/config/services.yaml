@@ -293,6 +293,10 @@ services:
         arguments:
             $platformStorage: '@App\Service\Storage\OrganizationAwareFilesystem.inner'
 
+    App\Controller\Api\V1\TelegramController:
+        arguments:
+            $telegramBotUsername: '%env(default::TELEGRAM_BOT_USERNAME)%'
+
     # ---------------------------------------------------------------------------
     # Contact form — Cloudflare Turnstile
     # ---------------------------------------------------------------------------

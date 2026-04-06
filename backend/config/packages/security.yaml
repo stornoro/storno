@@ -114,6 +114,7 @@ security:
         - { path: ^/api/v1/unsubscribe$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/token$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/revoke$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/telegram/webhook$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1, roles: ROLE_API }
         - { path: ^/api, roles: PUBLIC_ACCESS }
         - { path: ^/api/*, roles: IS_AUTHENTICATED_FULLY }
