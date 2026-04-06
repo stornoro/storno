@@ -141,7 +141,7 @@ class UblXmlGenerator
 
         // BillingReference — required for credit notes referencing the original
         $parentDoc = $invoice->getParentDocument();
-        if ($parentDoc !== null) {
+        if ($parentDoc !== null && $parentDoc->getNumber()) {
             $billingRef = $dom->createElement('cac:BillingReference');
             $invoiceDocRef = $dom->createElement('cac:InvoiceDocumentReference');
             $this->addElement($dom, $invoiceDocRef, 'cbc:ID', $parentDoc->getNumber() ?? '');
@@ -217,7 +217,7 @@ class UblXmlGenerator
 
         // AccountingCustomerParty (Client)
         // Use buyerSnapshot when available (preserves original buyer identity for storno/credit notes)
-        $this->addCustomerParty($dom, $root, $client, $invoice->getBuyerSnapshot());
+        $this->addCustomerParty($dom, $root, $client, $invoice->getBuyerSnapshot(), $invoice);
 
         // Delivery from ublExtensions (after AccountingCustomerParty, before PayeeParty per XSD)
         if (!empty($extensions['delivery'])) {
@@ -336,10 +336,13 @@ class UblXmlGenerator
 
         // [BR-RO-065] PartyTaxScheme — BT-31 and/or BT-32 required
         $isVatPayer = $company->isVatPayer() || $invoice->isPlatitorTva();
+        $allO = $this->allLinesAreCategoryO($invoice);
         $countryCode = $company->getCountry() ?? 'RO';
         $cif = (string) $company->getCif();
 
-        if ($isVatPayer) {
+        // BR-O-02: When all lines are category O, BT-31 (Seller VAT ID) shall NOT be present.
+        // Fall back to BT-32 (tax registration without VAT scheme) in that case.
+        if ($isVatPayer && !$allO) {
             // BT-31: Seller VAT identifier (TaxScheme/ID = VAT)
             // [BR-CO-09] Must have ISO 3166-1 alpha-2 country prefix
             $partyTaxScheme = $dom->createElement('cac:PartyTaxScheme');
@@ -350,7 +353,7 @@ class UblXmlGenerator
             $party->appendChild($partyTaxScheme);
         } else {
             // BT-32: Seller tax registration identifier (TaxScheme/ID != VAT)
-            // Non-VAT payers must NOT declare a VAT identifier
+            // Non-VAT payers and all-O invoices must NOT declare a VAT identifier
             $partyTaxScheme = $dom->createElement('cac:PartyTaxScheme');
             $this->addElement($dom, $partyTaxScheme, 'cbc:CompanyID', $cif);
             $taxScheme = $dom->createElement('cac:TaxScheme');
@@ -382,7 +385,7 @@ class UblXmlGenerator
         }
     }
 
-    private function addCustomerParty(\DOMDocument $dom, \DOMElement $root, $client, ?array $buyerSnapshot = null): void
+    private function addCustomerParty(\DOMDocument $dom, \DOMElement $root, $client, ?array $buyerSnapshot = null, ?Invoice $invoice = null): void
     {
         $customerParty = $dom->createElement('cac:AccountingCustomerParty');
         $root->appendChild($customerParty);
@@ -406,6 +409,10 @@ class UblXmlGenerator
             $bPostalCode = $buyerSnapshot['postalCode'] ?? null;
             $bEmail = $buyerSnapshot['email'] ?? null;
             $bPhone = $buyerSnapshot['phone'] ?? null;
+            // Snapshot stores isVatPayer; fall back to true when CUI present (legacy snapshots)
+            $bIsVatPayer = isset($buyerSnapshot['isVatPayer'])
+                ? (bool) $buyerSnapshot['isVatPayer']
+                : ($bCui !== null && $bCui !== '');
         } else {
             $bName = $client?->getName() ?? '';
             $bCui = $client?->getCui();
@@ -417,6 +424,7 @@ class UblXmlGenerator
             $bPostalCode = $client?->getPostalCode();
             $bEmail = $client?->getEmail();
             $bPhone = $client?->getPhone();
+            $bIsVatPayer = (bool) $client?->isVatPayer();
         }
 
         // Party name (BT-45) [BR-RO-L204 max 200 chars]
@@ -467,7 +475,10 @@ class UblXmlGenerator
 
         // [BR-RO-120] Tax scheme (CUI/PartyTaxScheme CompanyID)
         // [BR-CO-09] VAT identifier must always have ISO 3166-1 alpha-2 country prefix
-        if ($bCui) {
+        // BT-48 (TaxScheme/ID=VAT) only when buyer is VAT payer AND invoice is not all-O.
+        // BR-O-03: When all lines are category O, BT-48 shall NOT be present.
+        $allO = $invoice !== null && $this->allLinesAreCategoryO($invoice);
+        if ($bCui && $bIsVatPayer && !$allO) {
             $clientTaxScheme = $dom->createElement('cac:PartyTaxScheme');
             $clientCountryPrefix = $clientCountryCode ?: 'RO';
             $clientCompanyId = $clientCountryPrefix . $bCui;
@@ -1007,6 +1018,11 @@ class UblXmlGenerator
             if (!empty($ac['reason'])) {
                 $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReason', $ac['reason']);
             }
+            // BR-31/BR-36: At least one of AllowanceChargeReason or AllowanceChargeReasonCode is required
+            if (empty($ac['reasonCode']) && empty($ac['reason'])) {
+                $this->addElement($dom, $acEl, 'cbc:AllowanceChargeReason',
+                    $ac['chargeIndicator'] ? 'Charge' : 'Discount');
+            }
             if (!empty($ac['multiplierFactorNumeric'])) {
                 $this->addElement($dom, $acEl, 'cbc:MultiplierFactorNumeric', $ac['multiplierFactorNumeric']);
             }
@@ -1027,6 +1043,11 @@ class UblXmlGenerator
             $this->addElement($dom, $taxCat, 'cbc:ID', $catCode);
             if (!$this->shouldOmitPercent($catCode)) {
                 $this->addElement($dom, $taxCat, 'cbc:Percent', $ac['taxRate'] ?? '0.00');
+            }
+            // [BR-E-10, BR-AE-10, BR-O-10, BR-IC-10, BR-G-10] TaxExemptionReason in BG-20/BG-21 TaxCategory
+            $exemptionReason = $this->getVatExemptionReason($catCode);
+            if ($exemptionReason !== null) {
+                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReason', $exemptionReason);
             }
             $taxScheme = $dom->createElement('cac:TaxScheme');
             $this->addElement($dom, $taxScheme, 'cbc:ID', 'VAT');
@@ -1140,6 +1161,25 @@ class UblXmlGenerator
     private function shouldOmitPercent(string $categoryCode): bool
     {
         return $categoryCode === 'O';
+    }
+
+    /**
+     * [BR-O-02, BR-O-03] Returns true when every invoice line normalizes to VAT category O.
+     * When this is the case, BT-31 (seller VAT ID) and BT-48 (buyer VAT ID) must be omitted.
+     */
+    private function allLinesAreCategoryO(Invoice $invoice): bool
+    {
+        $lines = $invoice->getLines();
+        if ($lines->count() === 0) {
+            return false;
+        }
+        foreach ($lines as $line) {
+            $code = $this->normalizeVatCategoryCode($line->getVatCategoryCode(), $line->getVatRate());
+            if ($code !== 'O') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
