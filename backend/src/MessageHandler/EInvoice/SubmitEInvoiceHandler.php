@@ -42,20 +42,20 @@ final class SubmitEInvoiceHandler
 
         $provider = EInvoiceProvider::from($message->provider);
 
-        // Guard: skip if there is already an active submission for this invoice
-        $activeStatuses = [EInvoiceSubmissionStatus::PENDING, EInvoiceSubmissionStatus::SUBMITTED, EInvoiceSubmissionStatus::ACCEPTED];
+        // Guard: skip if there is already an in-progress submission for this invoice
+        $inProgressStatuses = [EInvoiceSubmissionStatus::PENDING, EInvoiceSubmissionStatus::SUBMITTED];
         $existingSubmission = $this->entityManager->createQueryBuilder()
             ->select('s')
             ->from(EInvoiceSubmission::class, 's')
             ->where('s.invoice = :invoice')
             ->andWhere('s.status IN (:statuses)')
             ->setParameter('invoice', $invoice)
-            ->setParameter('statuses', $activeStatuses)
+            ->setParameter('statuses', $inProgressStatuses)
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
         if ($existingSubmission !== null) {
-            $this->logger->info('SubmitEInvoiceHandler: Invoice already has an active submission, skipping.', [
+            $this->logger->info('SubmitEInvoiceHandler: Invoice already has an in-progress submission, skipping.', [
                 'invoiceId' => $message->invoiceId,
                 'existingSubmissionId' => (string) $existingSubmission->getId(),
                 'existingStatus' => $existingSubmission->getStatus()->value,
