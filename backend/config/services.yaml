@@ -286,7 +286,7 @@ services:
         arguments:
             $awsStorage: '@aws.storage'
             $localStorage: '@local.storage'
-            $awsAccessKeyId: '%env(default::AWS_ACCESS_KEY_ID)%'
+            $awsAccessKeyId: '%env(AWS_ACCESS_KEY_ID)%'
 
     default.storage:
         class: League\Flysystem\Filesystem
