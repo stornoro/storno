@@ -1,8 +1,18 @@
 flysystem:
     storages:
-        default.storage:
+        aws.storage:
             adapter: 'aws'
             options:
                 client: 'Aws\S3\S3Client'
-                bucket: '%env(AWS_S3_BUCKET)%'
+                bucket: '%env(default::AWS_S3_BUCKET)%'
                 prefix: 'documents'
+
+        local.storage:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/var/storage'
+
+        default.storage:
+            adapter: 'lazy'
+            options:
+                source: '%env(default:storage_source_default:STORAGE_DRIVER)%'
