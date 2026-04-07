@@ -680,6 +680,7 @@ class UblXmlGenerator
             // [BR-S-10, BR-Z-10] Must NOT have exemption reason for S and Z categories
             $exemptionReason = $this->getVatExemptionReason($group['categoryCode']);
             if ($exemptionReason !== null) {
+                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($group['categoryCode']));
                 $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReason', $exemptionReason);
             }
 
@@ -1047,6 +1048,7 @@ class UblXmlGenerator
             // [BR-E-10, BR-AE-10, BR-O-10, BR-IC-10, BR-G-10] TaxExemptionReason in BG-20/BG-21 TaxCategory
             $exemptionReason = $this->getVatExemptionReason($catCode);
             if ($exemptionReason !== null) {
+                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($catCode));
                 $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReason', $exemptionReason);
             }
             $taxScheme = $dom->createElement('cac:TaxScheme');
@@ -1180,6 +1182,21 @@ class UblXmlGenerator
             }
         }
         return true;
+    }
+
+    /**
+     * BT-121 TaxExemptionReasonCode — VATEX code per ANAF e-Factura guide v2.9.
+     */
+    private function getVatexCode(string $categoryCode): ?string
+    {
+        return match ($categoryCode) {
+            'E' => 'VATEX-EU-132',
+            'AE' => 'VATEX-EU-AE',
+            'K' => 'VATEX-EU-IC',
+            'G' => 'VATEX-EU-G',
+            'O' => 'VATEX-EU-O',
+            default => null,
+        };
     }
 
     /**
