@@ -11,8 +11,3 @@ flysystem:
             adapter: 'local'
             options:
                 directory: '%kernel.project_dir%/var/storage'
-
-        default.storage:
-            adapter: 'lazy'
-            options:
-                source: '%env(default:storage_source_default:STORAGE_DRIVER)%'
