@@ -9,12 +9,12 @@ class DefaultStorageFactory
     public function __construct(
         private readonly FilesystemOperator $awsStorage,
         private readonly FilesystemOperator $localStorage,
-        private readonly string $awsAccessKeyId,
+        private readonly ?string $awsAccessKeyId,
     ) {}
 
     public function create(): FilesystemOperator
     {
-        if ($this->awsAccessKeyId !== '') {
+        if ($this->awsAccessKeyId !== null && $this->awsAccessKeyId !== '') {
             return $this->awsStorage;
         }
 
