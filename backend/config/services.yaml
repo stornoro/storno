@@ -4,7 +4,8 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    storage_source_default: 'local.storage'
+    env(AWS_ACCESS_KEY_ID): ''
+    env(AWS_S3_BUCKET): ''
     app.jwt_refresh_token_cookie_name: "%env(JWT_REFRESH_COOKIE_NAME)%"
     redirect_after_oauth2: '%env(REDIRECT_AFTER_OAUTH)%'
     app.anaf_oauth2_client_id: "%env(OAUTH_ANAF_CLIENT_ID)%"
@@ -280,6 +281,16 @@ services:
     App\Service\Storage\CredentialEncryptor:
         arguments:
             $storageEncryptionKey: '%env(STORAGE_ENCRYPTION_KEY)%'
+
+    App\Service\Storage\DefaultStorageFactory:
+        arguments:
+            $awsStorage: '@aws.storage'
+            $localStorage: '@local.storage'
+            $awsAccessKeyId: '%env(default::AWS_ACCESS_KEY_ID)%'
+
+    default.storage:
+        class: League\Flysystem\FilesystemOperator
+        factory: ['@App\Service\Storage\DefaultStorageFactory', 'create']
 
     App\Service\Storage\OrganizationAwareFilesystem:
         decorates: 'default.storage'
