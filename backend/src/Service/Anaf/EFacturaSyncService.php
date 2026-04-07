@@ -657,34 +657,36 @@ class EFacturaSyncService
         $invoice->setAnafDownloadId($messageId);
         $invoice->setSyncedAt(new \DateTimeImmutable());
 
-        // Only transition to SYNCED if still in ISSUED state (submitted outside the app).
-        // SENT_TO_PROVIDER invoices must keep their status so the status checker
-        // (AnafStatusChecker / CheckAnafUploadsCommand) can properly validate or reject them.
-        $syncableStatuses = [DocumentStatus::ISSUED];
-        if (in_array($invoice->getStatus(), $syncableStatuses, true)) {
-            // Check if a synced event already exists to prevent duplicates
-            $alreadySynced = false;
+        // FACTURA TRIMISA appearing in the ANAF message list means the invoice
+        // has been validated by ANAF. Transition accordingly:
+        // - ISSUED → VALIDATED (manually uploaded to SPV outside the app)
+        // - SENT_TO_PROVIDER → VALIDATED (submitted via Storno but status check hadn't run yet,
+        //   or manually uploaded to SPV after marking as sent)
+        $validatableStatuses = [DocumentStatus::ISSUED, DocumentStatus::SENT_TO_PROVIDER];
+        if (in_array($invoice->getStatus(), $validatableStatuses, true)) {
+            // Check if already transitioned to prevent duplicates
+            $alreadyProcessed = false;
             foreach ($invoice->getEvents() as $existingEvent) {
-                if (
-                    $existingEvent->getNewStatus() === DocumentStatus::SYNCED
-                    && ($existingEvent->getMetadata()['action'] ?? '') === 'synced_from_anaf'
-                ) {
-                    $alreadySynced = true;
+                $action = $existingEvent->getMetadata()['action'] ?? '';
+                if (in_array($action, ['synced_from_anaf', 'anaf_validated'], true)) {
+                    $alreadyProcessed = true;
                     break;
                 }
             }
 
-            if (!$alreadySynced) {
+            if (!$alreadyProcessed) {
                 $previousStatus = $invoice->getStatus();
-                $invoice->setStatus(DocumentStatus::SYNCED);
+                $invoice->setStatus(DocumentStatus::VALIDATED);
+                $invoice->setAnafStatus('validated');
 
                 $event = new DocumentEvent();
                 $event->setPreviousStatus($previousStatus);
-                $event->setNewStatus(DocumentStatus::SYNCED);
+                $event->setNewStatus(DocumentStatus::VALIDATED);
                 $event->setMetadata([
-                    'action' => 'synced_from_anaf',
+                    'action' => 'anaf_validated',
                     'anafMessageId' => $messageId,
                     'matchedExisting' => true,
+                    'source' => 'sync',
                 ]);
                 $invoice->addEvent($event);
             }
