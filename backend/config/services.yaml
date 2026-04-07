@@ -289,8 +289,10 @@ services:
             $awsAccessKeyId: '%env(default::AWS_ACCESS_KEY_ID)%'
 
     default.storage:
-        class: League\Flysystem\FilesystemOperator
+        class: League\Flysystem\Filesystem
         factory: ['@App\Service\Storage\DefaultStorageFactory', 'create']
+
+    League\Flysystem\FilesystemOperator $defaultStorage: '@default.storage'
 
     App\Service\Storage\OrganizationAwareFilesystem:
         decorates: 'default.storage'
