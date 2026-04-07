@@ -4,6 +4,7 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    storage_source_default: 'aws.storage'
     app.jwt_refresh_token_cookie_name: "%env(JWT_REFRESH_COOKIE_NAME)%"
     redirect_after_oauth2: '%env(REDIRECT_AFTER_OAUTH)%'
     app.anaf_oauth2_client_id: "%env(OAUTH_ANAF_CLIENT_ID)%"
