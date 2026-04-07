@@ -12,7 +12,7 @@ help: ## Show this help
 ##---------------------------------------------------------------------------
 
 update: ## Pull latest images, restart, run migrations, clear cache
-	$(DOCKER_COMPOSE) pull
+	$(DOCKER_COMPOSE) pull --ignore-pull-failures
 	$(DOCKER_COMPOSE) up -d
 	$(CONSOLE) doctrine:migrations:migrate --no-interaction
 	$(CONSOLE) cache:clear
