@@ -14,8 +14,8 @@ final class Version20260407150000 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql('CREATE TABLE IF NOT EXISTS e_invoice_submission (
-            id BINARY(16) NOT NULL COMMENT \'(DC2Type:app_uuid)\',
-            invoice_id BINARY(16) NOT NULL COMMENT \'(DC2Type:app_uuid)\',
+            id CHAR(36) NOT NULL COMMENT \'(DC2Type:app_uuid)\',
+            invoice_id CHAR(36) NOT NULL COMMENT \'(DC2Type:app_uuid)\',
             provider VARCHAR(20) NOT NULL,
             external_id VARCHAR(255) DEFAULT NULL,
             status VARCHAR(30) NOT NULL,
