@@ -141,11 +141,19 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
 
         if ($statusResponse->isError()) {
             $submission->setStatus(EInvoiceSubmissionStatus::REJECTED);
-            $submission->setErrorMessage($statusResponse->errorMessage);
+
+            // Try to get the actual error: from the response first, then by downloading the error ZIP
+            $errorMsg = $statusResponse->errorMessage;
+            if (!$errorMsg && $statusResponse->downloadId && $token) {
+                $errorMsg = $this->downloadErrorDetails($statusResponse->downloadId, $token);
+            }
+            $errorMsg = $errorMsg ?: null;
+
+            $submission->setErrorMessage($errorMsg);
 
             $previousStatus = $invoice->getStatus();
             $invoice->setAnafStatus('nok');
-            $invoice->setAnafErrorMessage($statusResponse->errorMessage);
+            $invoice->setAnafErrorMessage($errorMsg);
             if ($statusResponse->downloadId) {
                 $invoice->setAnafDownloadId($statusResponse->downloadId);
             }
@@ -154,7 +162,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $event = new DocumentEvent();
             $event->setPreviousStatus($previousStatus);
             $event->setNewStatus(DocumentStatus::REJECTED);
-            $event->setMetadata(['action' => 'anaf_rejected', 'error' => $statusResponse->errorMessage]);
+            $event->setMetadata(['action' => 'anaf_rejected', 'error' => $errorMsg]);
             $invoice->addEvent($event);
 
             $this->entityManager->flush();
@@ -162,14 +170,14 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice), InvoiceRejectedEvent::NAME);
             $this->publishInvoiceChange($invoice, 'invoice.rejected');
 
-            $errorMsg = $statusResponse->errorMessage ?? 'Unknown error';
+            $notifyError = $errorMsg ?? 'Unknown error';
             $this->notifyOrgMembers(
                 $invoice,
                 'invoice.rejected',
                 'Invoice rejected by ANAF',
-                sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $errorMsg),
+                sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $notifyError),
                 MessageKey::MSG_INVOICE_REJECTED,
-                ['number' => $invoice->getNumber(), 'error' => $errorMsg],
+                ['number' => $invoice->getNumber(), 'error' => $notifyError],
                 MessageKey::TITLE_INVOICE_REJECTED,
             );
 
@@ -228,6 +236,79 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
                 'type' => $type,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Download and parse the ANAF error ZIP to extract the actual error message.
+     */
+    private function downloadErrorDetails(string $downloadId, string $token): ?string
+    {
+        try {
+            $zipData = $this->client->download($downloadId, $token);
+
+            $tempFile = tempnam(sys_get_temp_dir(), 'anaf-err');
+            file_put_contents($tempFile, $zipData);
+
+            $zip = new \ZipArchive();
+            if ($zip->open($tempFile) !== true) {
+                unlink($tempFile);
+                return null;
+            }
+
+            $errors = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $content = $zip->getFromIndex($i);
+                if ($content === false) {
+                    continue;
+                }
+
+                $xml = @simplexml_load_string($content);
+                if ($xml === false) {
+                    $trimmed = trim($content);
+                    if ($trimmed !== '') {
+                        $errors[] = $trimmed;
+                    }
+                    continue;
+                }
+
+                $this->extractErrorsFromXml($xml, $errors);
+            }
+
+            $zip->close();
+            unlink($tempFile);
+
+            return empty($errors) ? null : implode("\n", array_unique($errors));
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to download ANAF error details', [
+                'downloadId' => $downloadId,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function extractErrorsFromXml(\SimpleXMLElement $xml, array &$errors): void
+    {
+        foreach ($xml->attributes() as $name => $value) {
+            if (strtolower((string) $name) === 'errormessage' && (string) $value !== '') {
+                $errors[] = (string) $value;
+            }
+        }
+
+        $nodeName = strtolower($xml->getName());
+        if (str_contains($nodeName, 'error') && trim((string) $xml) !== '' && count($xml->children()) === 0) {
+            $errors[] = trim((string) $xml);
+        }
+
+        foreach ($xml->children() as $child) {
+            $this->extractErrorsFromXml($child, $errors);
+        }
+
+        foreach ($xml->getNamespaces(true) as $ns) {
+            foreach ($xml->children($ns) as $child) {
+                $this->extractErrorsFromXml($child, $errors);
+            }
         }
     }
 }

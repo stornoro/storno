@@ -21,7 +21,14 @@
                         </td>
                         <td style="padding-left: 12px;">
                             <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #991b1b;">{{ locale == 'en' ? 'ANAF error' : 'Eroare ANAF' }}</p>
-                            <p style="margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">{{ message }}</p>
+                            <p style="margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">
+                                {{ locale == 'en'
+                                    ? 'Invoice ' ~ data.invoiceNumber|default('') ~ ' was rejected by ANAF:'
+                                    : 'Factura ' ~ data.invoiceNumber|default('') ~ ' a fost respinsa de ANAF:' }}
+                            </p>
+                            {% if data.error is defined and data.error %}
+                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #991b1b; line-height: 1.5; font-family: monospace; background: #fff5f5; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca;">{{ data.error }}</p>
+                            {% endif %}
                         </td>
                     </tr>
                 </table>
