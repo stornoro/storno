@@ -117,10 +117,17 @@ class CheckAnafUploadsCommand extends Command
                         MessageKey::TITLE_INVOICE_VALIDATED,
                     );
                 } elseif ($statusResponse->isError()) {
+                    // Try to get actual error: from response first, then by downloading ANAF error ZIP
+                    $errorMsg = $statusResponse->errorMessage;
+                    if (!$errorMsg && $statusResponse->downloadId && $token) {
+                        $errorMsg = $this->downloadErrorDetails($statusResponse->downloadId, $token);
+                    }
+                    $errorMsg = $errorMsg ?: null;
+
                     $previousStatus = $invoice->getStatus();
                     $invoice->setStatus(DocumentStatus::REJECTED);
                     $invoice->setAnafStatus('rejected');
-                    $invoice->setAnafErrorMessage($statusResponse->errorMessage);
+                    $invoice->setAnafErrorMessage($errorMsg);
                     if ($statusResponse->downloadId) {
                         $invoice->setAnafDownloadId($statusResponse->downloadId);
                     }
@@ -131,14 +138,14 @@ class CheckAnafUploadsCommand extends Command
                     $event->setMetadata([
                         'action' => 'anaf_rejected',
                         'uploadId' => $uploadId,
-                        'error' => $statusResponse->errorMessage,
+                        'error' => $errorMsg,
                     ]);
                     $invoice->addEvent($event);
                     $updated++;
                     $batchCount++;
 
                     $this->eventDispatcher->dispatch(new InvoiceRejectedEvent($invoice), InvoiceRejectedEvent::NAME);
-                    $rejError = $statusResponse->errorMessage ?? 'Unknown error';
+                    $rejError = $errorMsg ?? 'Unknown error';
                     $this->notifyOrgMembers(
                         $invoice,
                         'invoice.rejected',
@@ -204,6 +211,71 @@ class CheckAnafUploadsCommand extends Command
                 'type' => $type,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    private function downloadErrorDetails(string $downloadId, string $token): ?string
+    {
+        try {
+            $zipData = $this->eFacturaClient->download($downloadId, $token);
+
+            $tempFile = tempnam(sys_get_temp_dir(), 'anaf-err');
+            file_put_contents($tempFile, $zipData);
+
+            $zip = new \ZipArchive();
+            if ($zip->open($tempFile) !== true) {
+                unlink($tempFile);
+                return null;
+            }
+
+            $errors = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $content = $zip->getFromIndex($i);
+                if ($content === false) {
+                    continue;
+                }
+                $xml = @simplexml_load_string($content);
+                if ($xml === false) {
+                    $trimmed = trim($content);
+                    if ($trimmed !== '') {
+                        $errors[] = $trimmed;
+                    }
+                    continue;
+                }
+                $this->extractErrorsFromXml($xml, $errors);
+            }
+
+            $zip->close();
+            unlink($tempFile);
+
+            return empty($errors) ? null : implode("\n", array_unique($errors));
+        } catch (\Throwable $e) {
+            $this->logger->warning('Failed to download ANAF error details', [
+                'downloadId' => $downloadId,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function extractErrorsFromXml(\SimpleXMLElement $xml, array &$errors): void
+    {
+        foreach ($xml->attributes() as $name => $value) {
+            if (strtolower((string) $name) === 'errormessage' && (string) $value !== '') {
+                $errors[] = (string) $value;
+            }
+        }
+        $nodeName = strtolower($xml->getName());
+        if (str_contains($nodeName, 'error') && trim((string) $xml) !== '' && count($xml->children()) === 0) {
+            $errors[] = trim((string) $xml);
+        }
+        foreach ($xml->children() as $child) {
+            $this->extractErrorsFromXml($child, $errors);
+        }
+        foreach ($xml->getNamespaces(true) as $ns) {
+            foreach ($xml->children($ns) as $child) {
+                $this->extractErrorsFromXml($child, $errors);
+            }
         }
     }
 }
