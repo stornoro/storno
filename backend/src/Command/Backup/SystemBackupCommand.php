@@ -112,17 +112,15 @@ class SystemBackupCommand extends Command
         }
 
         try {
-            // ── Database dump ────────────────────────────────────────
+            // ── Database dump (native — optional, may not be available) ──
+            $dumpFile = null;
             if (!$skipDb) {
                 $io->text('Dumping database...');
                 $dumpFile = $this->dumpDatabase($dbInfo, $io);
-                if ($dumpFile === null) {
-                    $zip->close();
-                    @unlink($tmpFile);
-                    return Command::FAILURE;
+                if ($dumpFile !== null) {
+                    $zip->addFile($dumpFile, 'database.sql');
+                    $io->text(sprintf('  Database dump: %s', $this->formatBytes(filesize($dumpFile))));
                 }
-                $zip->addFile($dumpFile, 'database.sql');
-                $io->text(sprintf('  Database dump: %s', $this->formatBytes(filesize($dumpFile))));
             }
 
             // ── Export all table data as JSON (portable fallback) ────
@@ -160,7 +158,8 @@ class SystemBackupCommand extends Command
                     'tableCounts' => $tableStats,
                 ],
                 'includesFiles' => !$skipFiles,
-                'includesDbDump' => !$skipDb,
+                'includesDbDump' => !$skipDb && $dumpFile !== null,
+                'includesJsonExport' => !$skipDb,
             ];
             $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
