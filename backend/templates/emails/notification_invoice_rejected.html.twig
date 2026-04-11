@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'Invoice rejected' : 'Factura respinsa' }}{% endblock %}
+{% block heading %}{{ 'notifications.invoice_rejected.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: 20px;">
@@ -20,11 +20,9 @@
                             <div style="width: 20px; height: 20px; border-radius: 50%; background: #ef4444; text-align: center; line-height: 20px; font-size: 12px; color: #fff;">!</div>
                         </td>
                         <td style="padding-left: 12px;">
-                            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #991b1b;">{{ locale == 'en' ? 'ANAF error' : 'Eroare ANAF' }}</p>
+                            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #991b1b;">{{ 'notifications.invoice_rejected.anaf_error'|trans({}, 'emails', locale) }}</p>
                             <p style="margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">
-                                {{ locale == 'en'
-                                    ? 'Invoice ' ~ data.invoiceNumber|default('') ~ ' was rejected by ANAF:'
-                                    : 'Factura ' ~ data.invoiceNumber|default('') ~ ' a fost respinsa de ANAF:' }}
+                                {{ 'notifications.invoice_rejected.rejected_message'|trans({'%number%': data.invoiceNumber|default('')}, 'emails', locale) }}
                             </p>
                             {% if data.error is defined and data.error %}
                             <p style="margin: 8px 0 0 0; font-size: 13px; color: #991b1b; line-height: 1.5; font-family: monospace; background: #fff5f5; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca;">{{ data.error }}</p>
@@ -38,12 +36,12 @@
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         <tr style="background-color: #f9fafb;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">{{ locale == 'en' ? 'Invoice number' : 'Numar factura' }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-bottom: 1px solid #f3f4f6;">{{ 'notifications.invoice_number'|trans({}, 'emails', locale) }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-bottom: 1px solid #f3f4f6;">{{ data.invoiceNumber|default('—') }}</td>
         </tr>
         {% if data.companyName is defined %}
         <tr style="background-color: #ffffff;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ locale == 'en' ? 'Company' : 'Companie' }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'notifications.company'|trans({}, 'emails', locale) }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; text-align: right;">{{ data.companyName }}</td>
         </tr>
         {% endif %}
@@ -56,7 +54,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/invoices/{{ data.invoiceId }}?company={{ data.companyId }}" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(220,38,38,0.3);">
-                {{ locale == 'en' ? 'View invoice' : 'Vizualizeaza factura' }}
+                {{ 'notifications.view_invoice'|trans({}, 'emails', locale) }}
             </a>
         </td>
     </tr>

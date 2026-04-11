@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'Restore completed' : 'Restaurare finalizata' }}{% endblock %}
+{% block heading %}{{ 'notifications.restore_completed.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; margin-bottom: 20px;">
