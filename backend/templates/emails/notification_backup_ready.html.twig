@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'Backup ready' : 'Backup disponibil' }}{% endblock %}
+{% block heading %}{{ 'notifications.backup_ready.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; margin-bottom: 20px;">
@@ -31,7 +31,7 @@
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         {% if data.filename is defined %}
         <tr style="background-color: #f9fafb;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ locale == 'en' ? 'File' : 'Fisier' }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'notifications.file'|trans({}, 'emails', locale) }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.filename }}</td>
         </tr>
         {% endif %}
@@ -44,7 +44,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}{{ data.downloadUrl }}" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(5,150,105,0.3);">
-                {{ locale == 'en' ? 'Download backup' : 'Descarca backup' }}
+                {{ 'notifications.backup_ready.download'|trans({}, 'emails', locale) }}
             </a>
         </td>
     </tr>

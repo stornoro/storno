@@ -92,3 +92,85 @@ plan_changed:
 re_engagement:
   subject: 'Ne este dor de tine — ce e nou pe Storno.ro'
   body: "Buna%firstName%,\n\nNu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam despre ce am adaugat recent:\n\n- Sincronizare imbunatatita cu e-Factura ANAF\n- Export avansat CSV si PDF\n- Statistici si rapoarte detaliate\n- Notificari pentru facturi scadente\n\nRevino si verifica toate noutatile:\n%baseUrl%\n\nDaca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"
+
+notifications:
+  sent_via: 'Trimis prin'
+  unsubscribe: 'Dezaboneaza-te'
+
+  invoice_number: 'Numar factura'
+  proforma_number: 'Numar proforma'
+  company: 'Companie'
+  file: 'Fisier'
+  amount: 'Suma'
+  new_documents: 'Documente noi'
+  view_invoice: 'Vizualizeaza factura'
+  view_proforma: 'Vizualizeaza proforma'
+  view_documents: 'Vezi documentele'
+  view_collections: 'Vezi incasarile'
+
+  invoice_validated:
+    heading: 'Factura validata ANAF'
+
+  invoice_rejected:
+    heading: 'Factura respinsa'
+    anaf_error: 'Eroare ANAF'
+    rejected_message: 'Factura %number% a fost respinsa de ANAF:'
+
+  invoice_due_soon:
+    heading: 'Factura scadenta in curand'
+
+  invoice_due_today:
+    heading: 'Factura scadenta astazi'
+
+  invoice_overdue:
+    heading: 'Factura restanta'
+
+  invoice_issued:
+    heading: 'Factura emisa'
+
+  invoice_paid:
+    heading: 'Factura platita integral'
+
+  payment_received:
+    heading: 'Plata inregistrata'
+
+  sync_error:
+    heading: 'Eroare sincronizare'
+    subtitle: 'Eroare sincronizare e-Factura'
+    error_details: 'Detalii erori'
+    check_settings: 'Verifica setarile ANAF'
+
+  token_expiring:
+    heading: 'Token ANAF expira'
+    body: 'Reautorizeaza token-ul ANAF pentru a continua sa trimiti facturi electronice fara intreruperi.'
+    manage_tokens: 'Gestioneaza token-uri'
+
+  token_refresh_failed:
+    heading: 'Eroare reinnoire token ANAF'
+    body: 'Va rugam sa va re-autorizati token-ul ANAF pentru a continua trimiterea facturilor electronice.'
+    reauthorize: 'Re-autorizeaza token'
+
+  efactura_new_documents:
+    heading: 'Documente noi e-Factura'
+
+  export_ready:
+    heading: 'Export finalizat'
+    download: 'Descarca exportul'
+
+  anaf_deadline:
+    heading: 'Termen ANAF expira maine'
+    approaching: 'Termen depasit in curand'
+    submit: 'Trimite la ANAF'
+
+  backup_ready:
+    heading: 'Backup disponibil'
+    download: 'Descarca backup'
+
+  restore_completed:
+    heading: 'Restaurare finalizata'
+
+  proforma_expiring_soon:
+    heading: 'Proforma expira curand'
+
+  proforma_expired:
+    heading: 'Proforma expirata'

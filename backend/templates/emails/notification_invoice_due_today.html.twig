@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'Invoice due today' : 'Factura scadenta astazi' }}{% endblock %}
+{% block heading %}{{ 'notifications.invoice_due_today.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; margin-bottom: 20px;">
@@ -30,7 +30,7 @@
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         <tr style="background-color: #f9fafb;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ locale == 'en' ? 'Invoice number' : 'Numar factura' }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'notifications.invoice_number'|trans({}, 'emails', locale) }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.invoiceNumber|default('—') }}</td>
         </tr>
     </table>
@@ -42,7 +42,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/invoices/{{ data.invoiceId }}?company={{ data.companyId }}" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #f97316 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(234,88,12,0.3);">
-                {{ locale == 'en' ? 'View invoice' : 'Vizualizeaza factura' }}
+                {{ 'notifications.view_invoice'|trans({}, 'emails', locale) }}
             </a>
         </td>
     </tr>

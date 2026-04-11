@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'New e-Factura documents' : 'Documente noi e-Factura' }}{% endblock %}
+{% block heading %}{{ 'notifications.efactura_new_documents.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; margin-bottom: 20px;">
@@ -31,7 +31,7 @@
     {% if data.count is defined %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
         <tr style="background-color: #f9fafb;">
-            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ locale == 'en' ? 'New documents' : 'Documente noi' }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'notifications.new_documents'|trans({}, 'emails', locale) }}</td>
             <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.count }}</td>
         </tr>
     </table>
@@ -44,7 +44,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/invoices?company={{ data.companyId }}&direction=received" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(37,99,235,0.3);">
-                {{ locale == 'en' ? 'View documents' : 'Vezi documentele' }}
+                {{ 'notifications.view_documents'|trans({}, 'emails', locale) }}
             </a>
         </td>
     </tr>
