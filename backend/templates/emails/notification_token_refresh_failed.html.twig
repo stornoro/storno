@@ -8,7 +8,7 @@
     </div>
 {% endblock %}
 
-{% block heading %}{{ locale == 'en' ? 'ANAF token renewal failed' : 'Eroare reinnoire token ANAF' }}{% endblock %}
+{% block heading %}{{ 'notifications.token_refresh_failed.heading'|trans({}, 'emails', locale) }}{% endblock %}
 
 {% block content %}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: 20px;">
@@ -29,7 +29,7 @@
     </table>
 
     <p style="margin: 0; font-size: 14px; color: #6b7280; line-height: 1.6;">
-        {{ locale == 'en' ? 'Please re-authorize your ANAF token to continue sending electronic invoices.' : 'Va rugam sa va re-autorizati token-ul ANAF pentru a continua trimiterea facturilor electronice.' }}
+        {{ 'notifications.token_refresh_failed.body'|trans({}, 'emails', locale) }}
     </p>
 {% endblock %}
 
@@ -38,7 +38,7 @@
         <td style="padding: 0 36px 32px 36px;" align="center">
             <a href="{{ frontendUrl }}/efactura" target="_blank"
                style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(220,38,38,0.3);">
-                {{ locale == 'en' ? 'Re-authorize token' : 'Re-autorizeaza token' }}
+                {{ 'notifications.token_refresh_failed.reauthorize'|trans({}, 'emails', locale) }}
             </a>
         </td>
     </tr>

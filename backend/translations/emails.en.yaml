@@ -92,3 +92,105 @@ plan_changed:
 re_engagement:
   subject: "We miss you — what's new on Storno.ro"
   body: "Hi%firstName%,\n\nWe have not seen you on Storno.ro for a while and wanted to let you know about what we have added recently:\n\n- Improved e-Invoice ANAF synchronization\n- Advanced CSV and PDF export\n- Detailed statistics and reports\n- Notifications for overdue invoices\n\nCome back and check out all the updates:\n%baseUrl%\n\nIf you have questions or suggestions, write to us at contact@storno.ro.\n\nThe Storno.ro Team"
+
+notifications:
+  # Base template
+  sent_via: 'Sent via'
+  unsubscribe: 'Unsubscribe'
+
+  # Common labels
+  invoice_number: 'Invoice number'
+  proforma_number: 'Proforma number'
+  company: 'Company'
+  file: 'File'
+  amount: 'Amount'
+  new_documents: 'New documents'
+  view_invoice: 'View invoice'
+  view_proforma: 'View proforma'
+  view_documents: 'View documents'
+  view_collections: 'View collections'
+
+  # Invoice validated
+  invoice_validated:
+    heading: 'Invoice validated by ANAF'
+
+  # Invoice rejected
+  invoice_rejected:
+    heading: 'Invoice rejected'
+    anaf_error: 'ANAF error'
+    rejected_message: 'Invoice %number% was rejected by ANAF:'
+
+  # Invoice due soon
+  invoice_due_soon:
+    heading: 'Invoice due soon'
+
+  # Invoice due today
+  invoice_due_today:
+    heading: 'Invoice due today'
+
+  # Invoice overdue
+  invoice_overdue:
+    heading: 'Invoice overdue'
+
+  # Invoice issued
+  invoice_issued:
+    heading: 'Invoice issued'
+
+  # Invoice paid
+  invoice_paid:
+    heading: 'Invoice fully paid'
+
+  # Payment received
+  payment_received:
+    heading: 'Payment recorded'
+
+  # Sync error
+  sync_error:
+    heading: 'Sync error'
+    subtitle: 'e-Factura sync error'
+    error_details: 'Error details'
+    check_settings: 'Check ANAF settings'
+
+  # Token expiring
+  token_expiring:
+    heading: 'ANAF token expiring'
+    body: 'Re-authorize the ANAF token to continue sending e-invoices without interruption.'
+    manage_tokens: 'Manage tokens'
+
+  # Token refresh failed
+  token_refresh_failed:
+    heading: 'ANAF token renewal failed'
+    body: 'Please re-authorize your ANAF token to continue sending electronic invoices.'
+    reauthorize: 'Re-authorize token'
+
+  # e-Factura new documents
+  efactura_new_documents:
+    heading: 'New e-Factura documents'
+
+  # Export ready
+  export_ready:
+    heading: 'Export ready'
+    download: 'Download export'
+
+  # ANAF deadline
+  anaf_deadline:
+    heading: 'ANAF deadline expires tomorrow'
+    approaching: 'Deadline approaching'
+    submit: 'Submit to ANAF'
+
+  # Backup ready
+  backup_ready:
+    heading: 'Backup ready'
+    download: 'Download backup'
+
+  # Restore completed
+  restore_completed:
+    heading: 'Restore completed'
+
+  # Proforma expiring soon
+  proforma_expiring_soon:
+    heading: 'Proforma expiring soon'
+
+  # Proforma expired
+  proforma_expired:
+    heading: 'Proforma expired'
