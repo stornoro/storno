@@ -252,6 +252,15 @@
                 :placeholder="$t('deliveryNotes.tariffCodePlaceholder')"
                 @update:search-term="onNcSearchUpdate(index, $event)"
               />
+              <div v-if="line.tariffCode" class="mt-1">
+                <UButton
+                  variant="link"
+                  size="xs"
+                  color="neutral"
+                  :label="$t('common.clear')"
+                  @click="line.tariffCode = ''; ncSearchResults[index] = []"
+                />
+              </div>
             </UFormField>
             <UFormField :label="$t('deliveryNotes.purposeCode')">
               <USelectMenu v-model="line.purposeCode" :items="purposeCodeOptions" value-key="value" />
