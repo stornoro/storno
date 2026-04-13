@@ -462,7 +462,7 @@
 
           <!-- Skip eTransport -->
           <div class="flex items-start gap-3 p-3 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)">
-            <UToggle v-model="form.skipEtransport" class="mt-0.5 shrink-0" />
+            <USwitch v-model="form.skipEtransport" class="mt-0.5 shrink-0" />
             <div>
               <div class="text-sm font-medium">{{ $t('deliveryNotes.skipEtransport') }}</div>
               <div class="text-xs text-(--ui-text-muted) mt-0.5">{{ $t('deliveryNotes.skipEtransportDescription') }}</div>
