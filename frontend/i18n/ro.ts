@@ -90,6 +90,7 @@ export default defineI18nLocale(async () => {
       saved: 'Salvat cu succes',
       error: 'A aparut o eroare',
       cancel: 'Anuleaza',
+      clear: 'Sterge',
       continue: 'Continua',
       delete: 'Sterge',
       edit: 'Editeaza',

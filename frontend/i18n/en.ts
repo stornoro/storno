@@ -90,6 +90,7 @@ export default defineI18nLocale(async () => {
       saved: 'Saved successfully',
       error: 'An error occurred',
       cancel: 'Cancel',
+      clear: 'Clear',
       continue: 'Continue',
       delete: 'Delete',
       edit: 'Edit',
