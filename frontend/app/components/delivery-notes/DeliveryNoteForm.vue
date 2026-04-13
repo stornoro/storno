@@ -241,7 +241,17 @@
           <!-- e-Transport line fields -->
           <div v-if="showETransport" class="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-(--ui-border)">
             <UFormField :label="$t('deliveryNotes.tariffCode')" :required="etransportLineFieldsRequired">
-              <UInput v-model="line.tariffCode" placeholder="08031010" maxlength="8" />
+              <USelectMenu
+                v-model="line.tariffCode"
+                :search-term="ncSearchTerms[index] || ''"
+                :items="ncSearchResults[index] || []"
+                value-key="value"
+                class="w-full"
+                :ignore-filter="true"
+                :loading="ncSearchLoading[index] || false"
+                :placeholder="$t('deliveryNotes.tariffCodePlaceholder')"
+                @update:search-term="onNcSearchUpdate(index, $event)"
+              />
             </UFormField>
             <UFormField :label="$t('deliveryNotes.purposeCode')">
               <USelectMenu v-model="line.purposeCode" :items="purposeCodeOptions" value-key="value" />
@@ -561,6 +571,42 @@ const {
   defaultUnitOfMeasure,
 } = useInvoiceDefaults()
 const { formatMoney, formatLineTotal, computeSimpleTotals, normalizeVatRate, normalizeVatCategoryCode } = useLineCalc()
+const { get } = useApi()
+
+// ── NC Code (tariff code) search per line ──────────────────────────────
+const ncSearchTerms = reactive<Record<number, string>>({})
+const ncSearchResults = reactive<Record<number, { label: string, value: string }[]>>({})
+const ncSearchLoading = reactive<Record<number, boolean>>({})
+
+const _doNcSearch = useDebounceFn(async (lineIndex: number, term: string) => {
+  if (!term || term.length < 2) {
+    ncSearchResults[lineIndex] = []
+    ncSearchLoading[lineIndex] = false
+    return
+  }
+  ncSearchLoading[lineIndex] = true
+  try {
+    const results = await get<{ cod: string, denumire: string }[]>('/v1/nc-codes', { search: term, limit: 30 })
+    ncSearchResults[lineIndex] = results.map(nc => ({
+      label: `${nc.cod} — ${nc.denumire}`,
+      value: nc.cod,
+    }))
+  } catch {
+    ncSearchResults[lineIndex] = []
+  } finally {
+    ncSearchLoading[lineIndex] = false
+  }
+}, 300)
+
+function onNcSearchUpdate(lineIndex: number, term: string) {
+  ncSearchTerms[lineIndex] = term
+  if (!term || term.length < 2) {
+    ncSearchResults[lineIndex] = []
+    return
+  }
+  ncSearchLoading[lineIndex] = true
+  _doNcSearch(lineIndex, term)
+}
 const { loadSeries, autoSelectFirst } = useSeriesSelection('delivery_note')
 const seriesStore = useDocumentSeriesStore()
 const seriesOptions = computed(() =>
