@@ -980,6 +980,8 @@ export default defineI18nLocale(async () => {
       validationFixHint: 'Exista erori de validare e-Transport. Verificati detaliile.',
       saveAndRevalidate: 'Salveaza si revalideaza',
       closeWithErrors: 'Inchide cu erori',
+      skipEtransport: 'Nu transmite in eTransport',
+      skipEtransportDescription: 'Nu trimite acest aviz in eTransport (ex: pentru valori sub 10.000 RON).',
     },
 
     deliveryNoteStatus: {

@@ -383,7 +383,7 @@
           <div>
             <h4 class="text-sm font-semibold text-(--ui-text-muted) mb-3">{{ $t('deliveryNotes.routeStart') }}</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <UFormField :label="$t('deliveryNotes.county')">
+              <UFormField :label="$t('deliveryNotes.county')" :required="isTTN">
                 <USelectMenu
                   v-model="form.etransportStartCounty"
                   :items="countyOptions"
@@ -392,10 +392,10 @@
                   :placeholder="$t('deliveryNotes.county')"
                 />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.locality')">
+              <UFormField :label="$t('deliveryNotes.locality')" :required="isTTN">
                 <UInput v-model="form.etransportStartLocality" />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.street')">
+              <UFormField :label="$t('deliveryNotes.street')" :required="isTTN">
                 <UInput v-model="form.etransportStartStreet" />
               </UFormField>
               <UFormField :label="$t('deliveryNotes.streetNumber')">
@@ -414,7 +414,7 @@
           <div>
             <h4 class="text-sm font-semibold text-(--ui-text-muted) mb-3">{{ $t('deliveryNotes.routeEnd') }}</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <UFormField :label="$t('deliveryNotes.county')">
+              <UFormField :label="$t('deliveryNotes.county')" :required="isTTN">
                 <USelectMenu
                   v-model="form.etransportEndCounty"
                   :items="countyOptions"
@@ -423,10 +423,10 @@
                   :placeholder="$t('deliveryNotes.county')"
                 />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.locality')">
+              <UFormField :label="$t('deliveryNotes.locality')" :required="isTTN">
                 <UInput v-model="form.etransportEndLocality" />
               </UFormField>
-              <UFormField :label="$t('deliveryNotes.street')">
+              <UFormField :label="$t('deliveryNotes.street')" :required="isTTN">
                 <UInput v-model="form.etransportEndStreet" />
               </UFormField>
               <UFormField :label="$t('deliveryNotes.streetNumber')">
@@ -438,6 +438,15 @@
               <UFormField :label="$t('deliveryNotes.otherInfo')">
                 <UInput v-model="form.etransportEndOtherInfo" />
               </UFormField>
+            </div>
+          </div>
+
+          <!-- Skip eTransport -->
+          <div class="flex items-start gap-3 p-3 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated)">
+            <UToggle v-model="form.skipEtransport" class="mt-0.5 shrink-0" />
+            <div>
+              <div class="text-sm font-medium">{{ $t('deliveryNotes.skipEtransport') }}</div>
+              <div class="text-xs text-(--ui-text-muted) mt-0.5">{{ $t('deliveryNotes.skipEtransportDescription') }}</div>
             </div>
           </div>
         </div>
@@ -647,6 +656,7 @@ const etransportLineFieldsRequired = computed(() => {
   return op !== undefined && op !== 60 && op !== 70
 })
 const etransportGrossWeightRequired = computed(() => form.etransportOperationType !== undefined)
+const isTTN = computed(() => form.etransportOperationType === 30)
 
 function localizeValidationMessage(message: string): string {
   const hashIndex = message.indexOf('#')
@@ -710,6 +720,7 @@ const form = reactive({
   deputyIdentityCard: '',
   deputyAuto: '',
   // e-Transport
+  skipEtransport: false,
   etransportOperationType: 30 as ETransportOperationType | undefined,
   etransportVehicleNumber: '',
   etransportTrailer1: '',
@@ -751,6 +762,7 @@ if (props.deliveryNote) {
   form.deputyName = props.deliveryNote.deputyName || ''
   form.deputyIdentityCard = props.deliveryNote.deputyIdentityCard || ''
   form.deputyAuto = props.deliveryNote.deputyAuto || ''
+  form.skipEtransport = props.deliveryNote.skipEtransport ?? false
   form.etransportOperationType = (props.deliveryNote.etransportOperationType ?? 30) as ETransportOperationType
   form.etransportVehicleNumber = props.deliveryNote.etransportVehicleNumber || ''
   form.etransportTrailer1 = props.deliveryNote.etransportTrailer1 || ''
@@ -891,6 +903,7 @@ async function onSave() {
       deputyName: form.deputyName || null,
       deputyIdentityCard: form.deputyIdentityCard || null,
       deputyAuto: form.deputyAuto || null,
+      skipEtransport: form.skipEtransport,
       etransportOperationType: form.etransportOperationType,
       etransportVehicleNumber: form.etransportVehicleNumber || null,
       etransportTrailer1: form.etransportTrailer1 || null,
@@ -932,6 +945,7 @@ async function onSave() {
       deputyName: form.deputyName || undefined,
       deputyIdentityCard: form.deputyIdentityCard || undefined,
       deputyAuto: form.deputyAuto || undefined,
+      skipEtransport: form.skipEtransport || undefined,
       etransportOperationType: form.etransportOperationType,
       etransportVehicleNumber: form.etransportVehicleNumber || null,
       etransportTrailer1: form.etransportTrailer1 || null,

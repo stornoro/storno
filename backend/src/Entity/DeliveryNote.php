@@ -225,6 +225,10 @@ class DeliveryNote
     #[Groups(['delivery_note:detail'])]
     private ?string $etransportEndPostalCode = null;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['delivery_note:list', 'delivery_note:detail'])]
+    private bool $skipEtransport = false;
+
     // ANAF tracking
     #[ORM\Column(length: 16, nullable: true)]
     #[Groups(['delivery_note:list', 'delivery_note:detail'])]
@@ -937,6 +941,17 @@ class DeliveryNote
     public function setEtransportSubmittedAt(?\DateTimeImmutable $etransportSubmittedAt): static
     {
         $this->etransportSubmittedAt = $etransportSubmittedAt;
+        return $this;
+    }
+
+    public function isSkipEtransport(): bool
+    {
+        return $this->skipEtransport;
+    }
+
+    public function setSkipEtransport(bool $skipEtransport): static
+    {
+        $this->skipEtransport = $skipEtransport;
         return $this;
     }
 }

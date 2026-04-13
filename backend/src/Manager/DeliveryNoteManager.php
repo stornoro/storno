@@ -180,7 +180,7 @@ class DeliveryNoteManager
     public function update(DeliveryNote $deliveryNote, array $data, User $user): DeliveryNote
     {
         if (!$deliveryNote->isEditable()) {
-            throw new \DomainException('Avizul de insotire nu poate fi editat.');
+            throw new \DomainException('This delivery note cannot be edited.');
         }
 
         // Update scalar fields
@@ -271,7 +271,7 @@ class DeliveryNoteManager
     public function delete(DeliveryNote $deliveryNote): void
     {
         if (!$deliveryNote->isDeletable()) {
-            throw new \DomainException('Avizul de insotire nu poate fi sters.');
+            throw new \DomainException('This delivery note cannot be deleted.');
         }
 
         $deliveryNote->setDeletedAt(new \DateTimeImmutable());
@@ -281,7 +281,7 @@ class DeliveryNoteManager
     public function issue(DeliveryNote $deliveryNote, User $user): void
     {
         if ($deliveryNote->getStatus() !== DeliveryNoteStatus::DRAFT) {
-            throw new \DomainException('Doar avizele ciorna pot fi emise.');
+            throw new \DomainException('Only draft delivery notes can be issued.');
         }
 
         // Auto-assign default series if none set
@@ -315,16 +315,16 @@ class DeliveryNoteManager
     public function cancel(DeliveryNote $deliveryNote): void
     {
         if ($deliveryNote->getStatus() === DeliveryNoteStatus::CONVERTED) {
-            throw new \DomainException('Avizul convertit nu poate fi anulat.');
+            throw new \DomainException('A converted delivery note cannot be cancelled.');
         }
 
         if ($deliveryNote->getStatus() === DeliveryNoteStatus::CANCELLED) {
-            throw new \DomainException('Avizul este deja anulat.');
+            throw new \DomainException('This delivery note is already cancelled.');
         }
 
         $etransportStatus = $deliveryNote->getEtransportStatus();
         if (in_array($etransportStatus, ['uploaded', 'ok'], true)) {
-            throw new \DomainException('Avizul a fost trimis la e-Transport si nu mai poate fi anulat.');
+            throw new \DomainException('This delivery note has been submitted to e-Transport and cannot be cancelled.');
         }
 
         $deliveryNote->setStatus(DeliveryNoteStatus::CANCELLED);
@@ -335,7 +335,7 @@ class DeliveryNoteManager
     public function restore(DeliveryNote $deliveryNote): void
     {
         if ($deliveryNote->getStatus() !== DeliveryNoteStatus::CANCELLED) {
-            throw new \DomainException('Doar avizele anulate pot fi restaurate.');
+            throw new \DomainException('Only cancelled delivery notes can be restored.');
         }
 
         $deliveryNote->setStatus(DeliveryNoteStatus::DRAFT);
@@ -346,7 +346,7 @@ class DeliveryNoteManager
     public function convertToInvoice(DeliveryNote $deliveryNote, Company $company, User $user): Invoice
     {
         if (!in_array($deliveryNote->getStatus(), [DeliveryNoteStatus::ISSUED], true)) {
-            throw new \DomainException('Doar avizele emise pot fi convertite.');
+            throw new \DomainException('Only issued delivery notes can be converted.');
         }
 
         // Build invoice data from delivery note
@@ -404,14 +404,14 @@ class DeliveryNoteManager
     public function bulkConvertToInvoice(array $deliveryNotes, Company $company, User $user): Invoice
     {
         if (empty($deliveryNotes)) {
-            throw new \DomainException('Nu au fost selectate avize pentru conversie.');
+            throw new \DomainException('No delivery notes were selected for conversion.');
         }
 
         // Validate all are ISSUED
         foreach ($deliveryNotes as $dn) {
             if ($dn->getStatus() !== DeliveryNoteStatus::ISSUED) {
                 throw new \DomainException(sprintf(
-                    'Avizul %s nu este emis. Doar avizele emise pot fi convertite.',
+                    'Delivery note %s is not issued. Only issued delivery notes can be converted.',
                     $dn->getNumber()
                 ));
             }
@@ -420,7 +420,7 @@ class DeliveryNoteManager
         // Validate all have the same currency
         $currencies = array_unique(array_map(fn(DeliveryNote $dn) => $dn->getCurrency(), $deliveryNotes));
         if (count($currencies) > 1) {
-            throw new \DomainException('Toate avizele selectate trebuie sa aiba aceeasi moneda.');
+            throw new \DomainException('All selected delivery notes must have the same currency.');
         }
 
         // Validate all have the same client
@@ -429,7 +429,7 @@ class DeliveryNoteManager
             $deliveryNotes
         ));
         if (count($clientIds) > 1) {
-            throw new \DomainException('Toate avizele selectate trebuie sa aiba acelasi client.');
+            throw new \DomainException('All selected delivery notes must have the same client.');
         }
 
         // Merge lines from all delivery notes
@@ -544,12 +544,16 @@ class DeliveryNoteManager
     public function submitToETransport(DeliveryNote $note, User $user): void
     {
         if ($note->getStatus() !== DeliveryNoteStatus::ISSUED) {
-            throw new \DomainException('Doar avizele emise pot fi trimise la e-Transport.');
+            throw new \DomainException('Only issued delivery notes can be submitted to e-Transport.');
+        }
+
+        if ($note->isSkipEtransport()) {
+            throw new \DomainException('This delivery note is marked to skip e-Transport submission.');
         }
 
         $allowedStatuses = [null, 'validation_failed', 'upload_failed', 'nok', 'pending_timeout'];
         if (!in_array($note->getEtransportStatus(), $allowedStatuses, true)) {
-            throw new \DomainException('Avizul a fost deja trimis la e-Transport.');
+            throw new \DomainException('This delivery note has already been submitted to e-Transport.');
         }
 
         $note->setEtransportStatus('pending');
@@ -564,6 +568,9 @@ class DeliveryNoteManager
 
     private function setETransportFields(DeliveryNote $note, array $data): void
     {
+        if (array_key_exists('skipEtransport', $data)) {
+            $note->setSkipEtransport((bool) $data['skipEtransport']);
+        }
         if (array_key_exists('etransportOperationType', $data)) {
             $note->setEtransportOperationType($data['etransportOperationType']);
         }

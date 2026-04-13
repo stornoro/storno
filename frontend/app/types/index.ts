@@ -949,6 +949,7 @@ export interface DeliveryNote {
   deputyIdentityCard: string | null
   deputyAuto: string | null
   exchangeRate: string | null
+  skipEtransport?: boolean
   // e-Transport fields
   etransportOperationType?: number | null
   etransportVehicleNumber?: string | null
@@ -1011,6 +1012,7 @@ export interface CreateDeliveryNotePayload {
   deputyName?: string
   deputyIdentityCard?: string
   deputyAuto?: string
+  skipEtransport?: boolean
   etransportOperationType?: number | null
   etransportVehicleNumber?: string | null
   etransportTrailer1?: string | null
@@ -1050,6 +1052,7 @@ export interface UpdateDeliveryNotePayload {
   deputyName?: string | null
   deputyIdentityCard?: string | null
   deputyAuto?: string | null
+  skipEtransport?: boolean
   etransportOperationType?: number | null
   etransportVehicleNumber?: string | null
   etransportTrailer1?: string | null
