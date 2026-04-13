@@ -981,6 +981,8 @@ export default defineI18nLocale(async () => {
     validationFixHint: 'There are e-Transport validation errors. Check the details.',
     saveAndRevalidate: 'Save and revalidate',
     closeWithErrors: 'Close with errors',
+    skipEtransport: 'Do not submit to eTransport',
+    skipEtransportDescription: 'Skip eTransport submission for this delivery note (e.g. for values under 10,000 RON).',
   },
 
   deliveryNoteStatus: {

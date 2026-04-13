@@ -731,12 +731,14 @@ function countyName(code: number | null | undefined): string {
 
 const canSubmitETransport = computed(() => {
   if (!deliveryNote.value) return false
+  if (deliveryNote.value.skipEtransport) return false
   return deliveryNote.value.status === 'issued'
     && (!deliveryNote.value.etransportStatus || ['validation_failed', 'upload_failed', 'nok', 'pending_timeout'].includes(deliveryNote.value.etransportStatus))
 })
 
 const canRetryETransport = computed(() => {
   if (!deliveryNote.value) return false
+  if (deliveryNote.value.skipEtransport) return false
   return deliveryNote.value.status === 'issued'
     && !!deliveryNote.value.etransportStatus
     && ['validation_failed', 'upload_failed', 'nok', 'pending_timeout'].includes(deliveryNote.value.etransportStatus)

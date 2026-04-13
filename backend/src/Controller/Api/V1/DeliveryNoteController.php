@@ -244,6 +244,11 @@ class DeliveryNoteController extends AbstractController
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        $company = $this->organizationContext->resolveCompany();
+        if ($company && $deliveryNote->getCompany() !== $company) {
+            return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
+        }
+
         if (!$this->organizationContext->hasPermission(Permission::INVOICE_DELETE)) {
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
