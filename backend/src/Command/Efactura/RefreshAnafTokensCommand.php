@@ -14,7 +14,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:anaf:refresh-tokens',
-    description: 'Refresh ANAF OAuth tokens that are expiring soon',
+    description: 'Refresh ANAF OAuth tokens expiring within 5 days',
 )]
 class RefreshAnafTokensCommand extends Command
 {
@@ -30,7 +30,7 @@ class RefreshAnafTokensCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $threshold = new \DateTimeImmutable('+4 hours');
+        $threshold = new \DateTimeImmutable('+5 days');
         $tokens = $this->tokenRepository->findExpiringWithin($threshold);
 
         if (empty($tokens)) {
