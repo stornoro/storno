@@ -157,7 +157,7 @@ class AnafTokenResolver
             return true;
         }
 
-        // Consider expired if less than 5 minutes remaining
-        return $expireAt < new \DateTimeImmutable('+5 minutes');
+        // Consider expired if less than 1 hour remaining (safety buffer for long operations)
+        return $expireAt < new \DateTimeImmutable('+1 hour');
     }
 }
