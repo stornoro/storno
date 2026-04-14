@@ -85,6 +85,14 @@ class GoogleAuthController extends AbstractController
                     $user->setEmailVerified(true);
                 }
             } else {
+                // iOS App Store: block new account creation (guideline 3.1.1)
+                if ($request->headers->get('X-Platform') === 'ios') {
+                    return $this->json([
+                        'error' => 'Account not found. Please register at storno.ro first.',
+                        'code' => 'registration_required',
+                    ], Response::HTTP_FORBIDDEN);
+                }
+
                 // Self-hosted: block creating additional organizations
                 if ($this->licenseValidationService->isSelfHosted()) {
                     $existingOrgCount = (int) $this->em->getConnection()
