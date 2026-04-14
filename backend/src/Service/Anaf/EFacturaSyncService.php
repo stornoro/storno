@@ -1057,7 +1057,9 @@ class EFacturaSyncService
     {
         try {
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
-            $message = sprintf('%d new document(s) received in e-Factura', $count);
+            $message = $count === 1
+                ? '1 new document received in e-Factura'
+                : sprintf('%d new documents received in e-Factura', $count);
 
             foreach ($users as $user) {
                 $this->notificationService->createNotification(
