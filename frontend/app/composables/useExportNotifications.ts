@@ -23,17 +23,28 @@ const _useNotifications = () => {
   const { subscribe, unsubscribe } = useCentrifugo()
   const authStore = useAuthStore()
   const toast = useToast()
-  const { t: $t } = useI18n()
 
   const notifications = ref<BackendNotification[]>([])
   const loading = ref(false)
   const seenIds = new Set<string>()
 
+  function getTranslator(): ((key: string, params?: Record<string, any>) => string) | null {
+    try {
+      const { t } = useI18n()
+      return t
+    } catch {
+      return null
+    }
+  }
+
   function resolveTitle(n: BackendNotification): string {
     const key = n.data?.titleKey as string | undefined
     if (key) {
-      const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
-      if (translated !== `backendMessages.${key}`) return translated
+      const t = getTranslator()
+      if (t) {
+        const translated = t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+        if (translated !== `backendMessages.${key}`) return translated
+      }
     }
     return n.title
   }
@@ -41,8 +52,11 @@ const _useNotifications = () => {
   function resolveMessage(n: BackendNotification): string {
     const key = n.data?.messageKey as string | undefined
     if (key) {
-      const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
-      if (translated !== `backendMessages.${key}`) return translated
+      const t = getTranslator()
+      if (t) {
+        const translated = t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+        if (translated !== `backendMessages.${key}`) return translated
+      }
     }
     return n.message
   }
