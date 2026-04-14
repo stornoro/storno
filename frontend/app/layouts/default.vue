@@ -366,7 +366,7 @@ const searchGroups = computed(() => [{
       </template>
 
       <template #footer="{ collapsed }">
-        <div class="flex items-center" :class="collapsed ? 'justify-center' : 'gap-1'">
+        <div class="flex items-center min-w-0" :class="collapsed ? 'justify-center' : 'gap-1'">
           <UTooltip :text="$t('shortcuts.title')" :kbds="['?']">
             <UButton
               icon="i-lucide-keyboard"
@@ -378,7 +378,7 @@ const searchGroups = computed(() => [{
           </UTooltip>
           <AppNotificationBell />
           <ClientOnly>
-            <AppUserMenu :collapsed="collapsed" class="flex-1" />
+            <AppUserMenu :collapsed="collapsed" class="flex-1 min-w-0" />
           </ClientOnly>
         </div>
       </template>
