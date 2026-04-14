@@ -101,7 +101,7 @@ security:
     access_control:
         - { path: ^/health, roles: PUBLIC_ACCESS }
         - { path: ^/webhook/, roles: PUBLIC_ACCESS }
-        - { path: ^/api/auth/(register|forgot-password|reset-password|google|passkey|confirm-email|resend-confirmation|mfa), roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/(register|forgot-password|reset-password|google|apple|passkey|confirm-email|resend-confirmation|mfa), roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/invitations/accept/.+, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/licensing/validate, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/version$, roles: PUBLIC_ACCESS }
