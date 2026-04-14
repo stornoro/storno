@@ -112,6 +112,7 @@ const items = computed<DropdownMenuItem[][]>(() => [[{
       class="data-[state=open]:bg-elevated"
       :ui="{
         trailingIcon: 'text-dimmed',
+        label: 'truncate',
       }"
     >
       <template #leading>
