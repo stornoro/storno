@@ -63,6 +63,24 @@ function formatDate(dateStr: string): string {
   return formatRelative(dateStr)
 }
 
+function resolvedTitle(n: BackendNotification): string {
+  const key = n.data?.titleKey as string | undefined
+  if (key) {
+    const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+    if (translated !== `backendMessages.${key}`) return translated
+  }
+  return n.title
+}
+
+function resolvedMessage(n: BackendNotification): string {
+  const key = n.data?.messageKey as string | undefined
+  if (key) {
+    const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+    if (translated !== `backendMessages.${key}`) return translated
+  }
+  return n.message
+}
+
 function notificationLink(n: BackendNotification): string | null {
   const invoiceId = n.data?.invoiceId as string | undefined
   if (invoiceId && n.type.startsWith('invoice.')) return `/invoices/${invoiceId}`
@@ -116,13 +134,13 @@ function onDownload(notification: BackendNotification) {
         <div class="text-sm flex-1 min-w-0">
           <p class="flex items-center justify-between gap-2">
             <span class="font-medium truncate" :class="n.isRead ? 'text-(--ui-text-muted)' : 'text-(--ui-text-highlighted)'">
-              {{ n.title }}
+              {{ resolvedTitle(n) }}
             </span>
             <time :datetime="n.sentAt" class="text-(--ui-text-dimmed) text-xs shrink-0">
               {{ formatDate(n.sentAt) }}
             </time>
           </p>
-          <p class="text-(--ui-text-dimmed) mt-0.5">{{ n.message }}</p>
+          <p class="text-(--ui-text-dimmed) mt-0.5">{{ resolvedMessage(n) }}</p>
           <div class="flex items-center gap-2 mt-1.5">
             <UButton
               v-if="n.type === 'export_ready' && n.data?.downloadUrl"

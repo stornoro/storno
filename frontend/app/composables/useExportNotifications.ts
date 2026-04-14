@@ -29,6 +29,24 @@ const _useNotifications = () => {
   const loading = ref(false)
   const seenIds = new Set<string>()
 
+  function resolveTitle(n: BackendNotification): string {
+    const key = n.data?.titleKey as string | undefined
+    if (key) {
+      const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+      if (translated !== `backendMessages.${key}`) return translated
+    }
+    return n.title
+  }
+
+  function resolveMessage(n: BackendNotification): string {
+    const key = n.data?.messageKey as string | undefined
+    if (key) {
+      const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+      if (translated !== `backendMessages.${key}`) return translated
+    }
+    return n.message
+  }
+
   const unreadCount = computed(() =>
     notifications.value.filter(n => !n.isRead).length,
   )
@@ -81,7 +99,7 @@ const _useNotifications = () => {
       const filename = n.data.filename || 'export.zip'
       toast.add({
         title: $t('invoices.exportZipReady'),
-        description: n.message,
+        description: resolveMessage(n),
         icon: 'i-lucide-archive',
         color: 'success',
         actions: [
@@ -126,8 +144,8 @@ const _useNotifications = () => {
     }
 
     toast.add({
-      title: n.title,
-      description: n.message,
+      title: resolveTitle(n),
+      description: resolveMessage(n),
       icon: iconMap[n.type] || 'i-lucide-bell',
       color: (colorMap[n.type] || 'info') as any,
     })
