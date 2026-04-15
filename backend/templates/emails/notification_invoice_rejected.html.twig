@@ -24,9 +24,7 @@
                             <p style="margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">
                                 {{ 'notifications.invoice_rejected.rejected_message'|trans({'%number%': data.invoiceNumber|default('')}, 'emails', locale) }}
                             </p>
-                            {% if data.error is defined and data.error %}
-                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #991b1b; line-height: 1.5; font-family: monospace; background: #fff5f5; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca;">{{ data.error }}</p>
-                            {% endif %}
+                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #991b1b; line-height: 1.5; font-family: monospace; background: #fff5f5; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca;">{{ data.error|default('notifications.invoice_rejected.error_pending'|trans({}, 'emails', locale)) }}</p>
                         </td>
                     </tr>
                 </table>
