@@ -3827,6 +3827,8 @@ export default defineI18nLocale(async () => {
     'notification.sync_error.multiple': '{{company}} — {{count}} sync errors. First: {{first_error}}',
     'notification.new_documents.message': '{count} new document received in e-Factura | {count} new documents received in e-Factura',
     'notification.token_expiring.message': 'ANAF token expires in {days} day | ANAF token expires in {days} days',
+    'notification.token_expiring_no_refresh.title': 'ANAF token expiring — manual renewal required',
+    'notification.token_expiring_no_refresh.message': 'ANAF token expires in {days} day and cannot be renewed automatically. Please re-authorize manually. | ANAF token expires in {days} days and cannot be renewed automatically. Please re-authorize manually.',
     'notification.token_refresh_failed.message': 'Automatic ANAF token renewal failed. Please re-authorize.',
     'notification.export_ready.message': 'Export with {{count}} invoices is ready.',
     'notification.backup_ready.message': 'Company {{name}} backup is ready for download.',

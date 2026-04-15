@@ -39,17 +39,22 @@ class SendTokenExpiryRemindersCommand extends Command
 
         $threshold = new \DateTimeImmutable('+7 days');
         $now = new \DateTimeImmutable();
-        $tokens = $this->tokenRepository->findExpiringWithin($threshold);
+        $today = new \DateTimeImmutable('today');
+        $sent = 0;
 
-        if (empty($tokens)) {
+        // Tokens with refresh token — will be auto-renewed
+        $refreshableTokens = $this->tokenRepository->findExpiringWithin($threshold);
+        // Tokens WITHOUT refresh token — must be manually renewed
+        $nonRefreshableTokens = $this->tokenRepository->findExpiringWithoutRefreshToken($threshold);
+
+        $allTokens = array_merge($refreshableTokens, $nonRefreshableTokens);
+
+        if (empty($allTokens)) {
             $io->info('No tokens expiring soon.');
             return Command::SUCCESS;
         }
 
-        $sent = 0;
-        $today = new \DateTimeImmutable('today');
-
-        foreach ($tokens as $token) {
+        foreach ($allTokens as $token) {
             $user = $token->getUser();
             if (!$user) {
                 continue;
@@ -61,6 +66,7 @@ class SendTokenExpiryRemindersCommand extends Command
             }
 
             $daysUntilExpiry = (int) $now->diff($token->getExpireAt())->days;
+            $hasRefreshToken = $token->getRefreshToken() !== null;
 
             // Dedup: check if we already sent this notification today for this token
             $existing = (int) $this->notificationRepository->createQueryBuilder('n')
@@ -82,20 +88,34 @@ class SendTokenExpiryRemindersCommand extends Command
                 continue;
             }
 
-            $message = sprintf('ANAF token expires in %d day(s)', $daysUntilExpiry);
+            if ($hasRefreshToken) {
+                $message = $daysUntilExpiry === 1
+                    ? 'ANAF token expires in 1 day'
+                    : sprintf('ANAF token expires in %d days', $daysUntilExpiry);
+                $titleKey = MessageKey::TITLE_TOKEN_EXPIRING;
+                $messageKey = MessageKey::MSG_TOKEN_EXPIRING;
+            } else {
+                $message = $daysUntilExpiry === 1
+                    ? 'ANAF token expires in 1 day and cannot be renewed automatically. Please re-authorize manually.'
+                    : sprintf('ANAF token expires in %d days and cannot be renewed automatically. Please re-authorize manually.', $daysUntilExpiry);
+                $titleKey = MessageKey::TITLE_TOKEN_EXPIRING_NO_REFRESH;
+                $messageKey = MessageKey::MSG_TOKEN_EXPIRING_NO_REFRESH;
+            }
 
             if ($dryRun) {
-                $io->text(sprintf('  [DRY RUN] token.expiring_soon → %s: %s', $user->getEmail(), $message));
+                $suffix = $hasRefreshToken ? '' : ' [NO REFRESH TOKEN]';
+                $io->text(sprintf('  [DRY RUN] token.expiring_soon → %s: %s%s', $user->getEmail(), $message, $suffix));
             } else {
                 $this->notificationService->createNotification(
                     $user,
                     'token.expiring_soon',
-                    'ANAF token expiring soon',
+                    $hasRefreshToken ? 'ANAF token expiring soon' : 'ANAF token expiring — manual renewal required',
                     $message,
                     [
                         'tokenId' => $token->getId()->toRfc4122(),
-                        'titleKey' => MessageKey::TITLE_TOKEN_EXPIRING,
-                        'messageKey' => MessageKey::MSG_TOKEN_EXPIRING,
+                        'hasRefreshToken' => $hasRefreshToken,
+                        'titleKey' => $titleKey,
+                        'messageKey' => $messageKey,
                         'messageParams' => ['days' => $daysUntilExpiry],
                     ],
                 );
