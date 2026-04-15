@@ -153,7 +153,7 @@ notifications:
     check_settings: 'Check ANAF settings'
 
   # Token expiring
-  token_expiring:
+  token_expiring_soon:
     heading: 'ANAF token expiring'
     body: 'Re-authorize the ANAF token to continue sending e-invoices without interruption.'
     manage_tokens: 'Manage tokens'
@@ -174,7 +174,7 @@ notifications:
     download: 'Download export'
 
   # ANAF deadline
-  anaf_deadline:
+  invoice_anaf_deadline:
     heading: 'ANAF deadline expires tomorrow'
     approaching: 'Deadline approaching'
     submit: 'Submit to ANAF'
