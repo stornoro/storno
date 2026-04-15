@@ -115,6 +115,7 @@ notifications:
     heading: 'Factura respinsa'
     anaf_error: 'Eroare ANAF'
     rejected_message: 'Factura %number% a fost respinsa de ANAF:'
+    error_pending: 'Detaliile erorii vor aparea pe pagina facturii dupa finalizarea procesarii ANAF.'
 
   invoice_due_soon:
     heading: 'Factura scadenta in curand'

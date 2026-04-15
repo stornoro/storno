@@ -119,6 +119,7 @@ notifications:
     heading: 'Invoice rejected'
     anaf_error: 'ANAF error'
     rejected_message: 'Invoice %number% was rejected by ANAF:'
+    error_pending: 'Error details will appear on the invoice page once ANAF processing is complete.'
 
   # Invoice due soon
   invoice_due_soon:
