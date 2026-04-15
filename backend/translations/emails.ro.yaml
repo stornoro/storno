@@ -141,7 +141,7 @@ notifications:
     error_details: 'Detalii erori'
     check_settings: 'Verifica setarile ANAF'
 
-  token_expiring:
+  token_expiring_soon:
     heading: 'Token ANAF expira'
     body: 'Reautorizeaza token-ul ANAF pentru a continua sa trimiti facturi electronice fara intreruperi.'
     manage_tokens: 'Gestioneaza token-uri'
@@ -158,7 +158,7 @@ notifications:
     heading: 'Export finalizat'
     download: 'Descarca exportul'
 
-  anaf_deadline:
+  invoice_anaf_deadline:
     heading: 'Termen ANAF expira maine'
     approaching: 'Termen depasit in curand'
     submit: 'Trimite la ANAF'
