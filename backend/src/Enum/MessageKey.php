@@ -10,6 +10,7 @@ final class MessageKey
     const TITLE_SYNC_ERROR = 'notification.sync_error.title';
     const TITLE_NEW_DOCUMENTS = 'notification.new_documents.title';
     const TITLE_TOKEN_EXPIRING = 'notification.token_expiring.title';
+    const TITLE_TOKEN_EXPIRING_NO_REFRESH = 'notification.token_expiring_no_refresh.title';
     const TITLE_TOKEN_REFRESH_FAILED = 'notification.token_refresh_failed.title';
     const TITLE_EXPORT_READY = 'notification.export_ready.title';
     const TITLE_BACKUP_READY = 'notification.backup_ready.title';
@@ -24,6 +25,7 @@ final class MessageKey
     const MSG_SYNC_ERROR_MULTIPLE = 'notification.sync_error.multiple';
     const MSG_NEW_DOCUMENTS = 'notification.new_documents.message';
     const MSG_TOKEN_EXPIRING = 'notification.token_expiring.message';
+    const MSG_TOKEN_EXPIRING_NO_REFRESH = 'notification.token_expiring_no_refresh.message';
     const MSG_TOKEN_REFRESH_FAILED = 'notification.token_refresh_failed.message';
     const MSG_EXPORT_READY = 'notification.export_ready.message';
     const MSG_BACKUP_READY = 'notification.backup_ready.message';

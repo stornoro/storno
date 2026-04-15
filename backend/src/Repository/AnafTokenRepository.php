@@ -59,4 +59,19 @@ class AnafTokenRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Find tokens expiring within threshold that have NO refresh token
+     * and therefore cannot be renewed automatically.
+     * @return AnafToken[]
+     */
+    public function findExpiringWithoutRefreshToken(\DateTimeImmutable $threshold): array
+    {
+        return $this->createQueryBuilder('t')
+            ->where('t.expireAt <= :threshold')
+            ->andWhere('t.refreshToken IS NULL')
+            ->setParameter('threshold', $threshold)
+            ->getQuery()
+            ->getResult();
+    }
 }
