@@ -75,6 +75,17 @@ export function useApi() {
       })
     }
     catch (error: any) {
+      // Account deactivated — force logout with message
+      if (error?.response?.status === 403 && error?.response?._data?.code === 'account_inactive') {
+        useToast().add({
+          title: error.response._data?.error || 'Your account has been deactivated.',
+          color: 'error',
+        })
+        authStore.logout()
+        navigateTo('/login')
+        throw error
+      }
+
       if (error?.response?.status === 401 && !skipAuthRedirect && authStore.token) {
         // During impersonation, stop impersonation instead of refresh (no refresh token exists)
         if (authStore.isImpersonating) {
