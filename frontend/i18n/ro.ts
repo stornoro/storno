@@ -3826,6 +3826,8 @@ export default defineI18nLocale(async () => {
     'notification.sync_error.multiple': '{{company}} — {{count}} erori la sincronizare. Prima: {{first_error}}',
     'notification.new_documents.message': '{count} document nou primit în e-Factura | {count} documente noi primite în e-Factura',
     'notification.token_expiring.message': 'Token-ul ANAF expiră într-o zi | Token-ul ANAF expiră în {days} zile',
+    'notification.token_expiring_no_refresh.title': 'Token ANAF expiră — reînnoire manuală necesară',
+    'notification.token_expiring_no_refresh.message': 'Token-ul ANAF expiră într-o zi și nu poate fi reînnoit automat. Re-autorizați manual. | Token-ul ANAF expiră în {days} zile și nu poate fi reînnoit automat. Re-autorizați manual.',
     'notification.token_refresh_failed.message': 'Reînnoirea automată a token-ului ANAF a eșuat. Vă rugăm să vă re-autorizați.',
     'notification.export_ready.message': 'Exportul cu {{count}} facturi este gata.',
     'notification.backup_ready.message': 'Backup-ul companiei {{name}} este gata de descărcare.',
