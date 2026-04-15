@@ -22,6 +22,7 @@ use Symfony\Component\Notifier\ChatterInterface;
 use Symfony\Component\Notifier\Message\ChatMessage;
 use Symfony\Component\Notifier\TexterInterface;
 use Symfony\Component\Notifier\Message\SmsMessage;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
 #[AsMessageHandler]
@@ -59,6 +60,7 @@ class SendExternalNotificationHandler
         private readonly EmailUnsubscribeService $emailUnsubscribeService,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
+        private readonly TranslatorInterface $translator,
         private readonly ?MailerInterface $mailer = null,
         private readonly ?ChatterInterface $chatter = null,
         private readonly ?TexterInterface $texter = null,
@@ -110,6 +112,21 @@ class SendExternalNotificationHandler
         }
     }
 
+    /**
+     * Translate the email subject using the notification event type.
+     *
+     * Looks up "notifications.{normalizedType}.heading" in the emails domain,
+     * e.g. event "invoice.rejected" → key "notifications.invoice_rejected.heading".
+     * Falls back to the English title when no translation exists.
+     */
+    private function translateSubject(string $eventType, string $fallback, string $locale): string
+    {
+        $key = 'notifications.' . str_replace('.', '_', $eventType) . '.heading';
+        $translated = $this->translator->trans($key, [], 'emails', $locale);
+
+        return $translated !== $key ? $translated : $fallback;
+    }
+
     private function sendEmail(string $to, string $title, string $body, string $eventType, array $data, string $userId, string $locale = 'ro'): void
     {
         try {
@@ -118,7 +135,7 @@ class SendExternalNotificationHandler
             $email = (new Email())
                 ->from($this->mailFrom)
                 ->to($to)
-                ->subject($title);
+                ->subject($this->translateSubject($eventType, $title, $locale));
 
             $template = self::EMAIL_TEMPLATES[$eventType] ?? null;
 
