@@ -50,6 +50,10 @@ services:
       FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-}
       PUSH_RELAY_URL: ${PUSH_RELAY_URL:-https://hub.storno.ro}
       VIES_PROXY_URL: ${VIES_PROXY_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_DSN: ${TELEGRAM_DSN:-null://null}
+      TWILIO_DSN: ${TWILIO_DSN:-null://null}
     volumes:
       - jwt_keys:/app/config/jwt
       - backend_var:/app/var
