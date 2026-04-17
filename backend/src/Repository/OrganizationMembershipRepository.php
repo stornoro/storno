@@ -6,6 +6,7 @@ use App\Entity\Company;
 use App\Entity\Organization;
 use App\Entity\OrganizationMembership;
 use App\Entity\User;
+use App\Enum\OrganizationRole;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -51,9 +52,18 @@ class OrganizationMembershipRepository extends ServiceEntityRepository
             ->createQuery(
                 'SELECT DISTINCT u FROM App\Entity\User u
                  JOIN u.organizationMemberships om
-                 WHERE om.organization = :org AND om.isActive = true AND u.active = true'
+                 WHERE om.organization = :org
+                   AND om.isActive = true
+                   AND u.active = true
+                   AND (
+                       om.role IN (:unrestrictedRoles)
+                       OR SIZE(om.allowedCompanies) = 0
+                       OR :company MEMBER OF om.allowedCompanies
+                   )'
             )
             ->setParameter('org', $company->getOrganization())
+            ->setParameter('company', $company)
+            ->setParameter('unrestrictedRoles', [OrganizationRole::OWNER, OrganizationRole::ADMIN])
             ->getResult();
     }
 }
