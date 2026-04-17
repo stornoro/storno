@@ -14,6 +14,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsCommand(
     name: 'app:notifications:anaf-deadline',
@@ -26,6 +27,7 @@ class AnafDeadlineWarningCommand extends Command
         private readonly NotificationRepository $notificationRepository,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
+        private readonly TranslatorInterface $translator,
     ) {
         parent::__construct();
     }
@@ -42,7 +44,6 @@ class AnafDeadlineWarningCommand extends Command
         $today = new \DateTime('today');
         $sent = 0;
 
-        // Invoices issued 4 days ago, not yet submitted — deadline is tomorrow
         $invoices = $this->invoiceRepository->findApproachingAnafDeadline(4);
 
         foreach ($invoices as $invoice) {
@@ -50,7 +51,6 @@ class AnafDeadlineWarningCommand extends Command
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
 
             foreach ($users as $user) {
-                // Dedup: don't send same warning twice on the same day for same invoice
                 $existing = $this->notificationRepository->createQueryBuilder('n')
                     ->select('COUNT(n.id)')
                     ->where('n.user = :user')
@@ -70,19 +70,22 @@ class AnafDeadlineWarningCommand extends Command
                     continue;
                 }
 
-                $message = sprintf(
-                    'Invoice %s must be synced with ANAF. Issue date: %s',
-                    $invoice->getNumber(),
-                    $invoice->getIssueDate()->format('d.m.Y'),
-                );
+                $locale = $user->getLocale() ?? 'ro';
+                $params = [
+                    '%number%' => $invoice->getNumber(),
+                    '%date%' => $invoice->getIssueDate()->format('d.m.Y'),
+                ];
+
+                $title = $this->translator->trans('notification.anaf_deadline.title', [], 'notifications', $locale);
+                $message = $this->translator->trans('notification.anaf_deadline.message', $params, 'notifications', $locale);
 
                 if ($dryRun) {
-                    $io->text(sprintf('  [DRY RUN] → %s: %s', $user->getEmail(), $message));
+                    $io->text(sprintf('  [DRY RUN] → %s [%s]: %s', $user->getEmail(), $locale, $message));
                 } else {
                     $this->notificationService->createNotification(
                         $user,
                         'invoice.anaf_deadline',
-                        'ANAF deadline expires tomorrow',
+                        $title,
                         $message,
                         [
                             'invoiceId' => $invoice->getId()->toRfc4122(),

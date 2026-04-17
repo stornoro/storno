@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsCommand(
     name: 'app:notifications:due-invoices',
@@ -25,6 +26,7 @@ class SendDueInvoiceRemindersCommand extends Command
         private readonly NotificationRepository $notificationRepository,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
+        private readonly TranslatorInterface $translator,
     ) {
         parent::__construct();
     }
@@ -43,29 +45,15 @@ class SendDueInvoiceRemindersCommand extends Command
 
         // Due in 3 days
         $dueSoon = $this->invoiceRepository->findDueInDays(3);
-        $sent += $this->processInvoices($io, $dueSoon, 'invoice.due_soon', function (Invoice $inv) {
-            return sprintf(
-                'Factura %s scade în 3 zile (%s)',
-                $inv->getNumber(),
-                $inv->getDueDate()->format('d.m.Y'),
-            );
-        }, 'Factură scadentă în curând', $dryRun, $today);
+        $sent += $this->processInvoices($io, $dueSoon, 'invoice.due_soon', 'notification.invoice_due_soon', $dryRun, $today);
 
         // Due today
         $dueToday = $this->invoiceRepository->findDueInDays(0);
-        $sent += $this->processInvoices($io, $dueToday, 'invoice.due_today', function (Invoice $inv) {
-            return sprintf('Factura %s scade astăzi', $inv->getNumber());
-        }, 'Factură scadentă astăzi', $dryRun, $today);
+        $sent += $this->processInvoices($io, $dueToday, 'invoice.due_today', 'notification.invoice_due_today', $dryRun, $today);
 
         // Overdue by 1 day
         $overdue = $this->invoiceRepository->findOverdueByDays(1);
-        $sent += $this->processInvoices($io, $overdue, 'invoice.overdue', function (Invoice $inv) {
-            return sprintf(
-                'Factura %s este scadentă din %s',
-                $inv->getNumber(),
-                $inv->getDueDate()->format('d.m.Y'),
-            );
-        }, 'Factură restantă', $dryRun, $today);
+        $sent += $this->processInvoices($io, $overdue, 'invoice.overdue', 'notification.invoice_overdue', $dryRun, $today);
 
         if ($dryRun) {
             $io->note(sprintf('Dry run: %d notifications would be sent.', $sent));
@@ -83,8 +71,7 @@ class SendDueInvoiceRemindersCommand extends Command
         SymfonyStyle $io,
         array $invoices,
         string $type,
-        callable $messageBuilder,
-        string $title,
+        string $translationKey,
         bool $dryRun,
         \DateTime $today,
     ): int {
@@ -115,14 +102,22 @@ class SendDueInvoiceRemindersCommand extends Command
                     continue;
                 }
 
-                $message = $messageBuilder($invoice);
+                $locale = $user->getLocale() ?? 'ro';
+                $params = [
+                    '%number%' => $invoice->getNumber(),
+                    '%date%' => $invoice->getDueDate()->format('d.m.Y'),
+                ];
+
+                $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+                $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
+
                 $clientName = $invoice->getClient()?->getName() ?? $invoice->getReceiverName() ?? '';
                 if ($clientName) {
                     $message .= ' - ' . $clientName;
                 }
 
                 if ($dryRun) {
-                    $io->text(sprintf('  [DRY RUN] %s → %s: %s', $type, $user->getEmail(), $message));
+                    $io->text(sprintf('  [DRY RUN] %s → %s [%s]: %s', $type, $user->getEmail(), $locale, $message));
                 } else {
                     $this->notificationService->createNotification(
                         $user,
