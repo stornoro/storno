@@ -51,7 +51,7 @@ class OrganizationMembershipRepository extends ServiceEntityRepository
             ->createQuery(
                 'SELECT DISTINCT u FROM App\Entity\User u
                  JOIN u.organizationMemberships om
-                 WHERE om.organization = :org AND om.isActive = true'
+                 WHERE om.organization = :org AND om.isActive = true AND u.active = true'
             )
             ->setParameter('org', $company->getOrganization())
             ->getResult();
