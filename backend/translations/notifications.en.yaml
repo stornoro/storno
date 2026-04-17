@@ -28,6 +28,9 @@ notification:
   anaf_deadline:
     title: 'ANAF deadline expires tomorrow'
     message: 'Invoice %number% must be submitted to ANAF by tomorrow (%date%)'
+  anaf_missing_token:
+    title: 'Connect SPV to submit to ANAF'
+    message: 'Invoice %number% issued on %date% cannot be submitted to ANAF — no SPV token is configured. Connect SPV by %deadline% to avoid penalties.'
   export_ready:
     title: 'Export ready'
     message: 'Your export is ready for download.'

@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\AnafToken;
 use App\Entity\Company;
 use App\Entity\EInvoiceSubmission;
 use App\Entity\Invoice;
@@ -657,6 +658,48 @@ class InvoiceRepository extends ServiceEntityRepository
             ->andWhere('i.status IN (:statuses)')
             ->andWhere('c.syncEnabled = true')
             ->andWhere('cl.country = :ro OR cl.country IS NULL')
+            ->setParameter('start', $targetDate->format('Y-m-d') . ' 00:00:00')
+            ->setParameter('end', $targetDate->format('Y-m-d') . ' 23:59:59')
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('statuses', [DocumentStatus::ISSUED, DocumentStatus::REJECTED])
+            ->setParameter('ro', 'RO')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Find outgoing RO-targeted invoices whose ANAF submission deadline is approaching,
+     * but whose company has NO ANAF token configured (no user in the organization
+     * has authorized SPV access). These invoices cannot be auto-submitted.
+     *
+     * @return Invoice[]
+     */
+    public function findApproachingDeadlineWithoutToken(int $days): array
+    {
+        $targetDate = new \DateTime(sprintf('-%d days', $days));
+
+        $tokenSubQuery = $this->getEntityManager()->createQueryBuilder()
+            ->select('1')
+            ->from(AnafToken::class, 't')
+            ->innerJoin('t.user', 'tu')
+            ->innerJoin('tu.organizationMemberships', 'tom')
+            ->where('tom.organization = c.organization')
+            ->andWhere('t.token IS NOT NULL')
+            ->getDQL();
+
+        return $this->createQueryBuilder('i')
+            ->innerJoin('i.company', 'c')->addSelect('c')
+            ->leftJoin('i.client', 'cl')->addSelect('cl')
+            ->where('i.issueDate >= :start')
+            ->andWhere('i.issueDate < :end')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.status IN (:statuses)')
+            ->andWhere('i.anafUploadId IS NULL')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('c.deletedAt IS NULL')
+            ->andWhere('c.country = :ro')
+            ->andWhere('cl.country = :ro OR cl.country IS NULL')
+            ->andWhere(sprintf('NOT EXISTS (%s)', $tokenSubQuery))
             ->setParameter('start', $targetDate->format('Y-m-d') . ' 00:00:00')
             ->setParameter('end', $targetDate->format('Y-m-d') . ' 23:59:59')
             ->setParameter('direction', InvoiceDirection::OUTGOING)
