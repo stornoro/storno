@@ -14,6 +14,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsCommand(
     name: 'app:proforma:process-expiry',
@@ -27,6 +28,7 @@ class ProcessProformaExpiryCommand extends Command
         private readonly NotificationRepository $notificationRepository,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
+        private readonly TranslatorInterface $translator,
     ) {
         parent::__construct();
     }
@@ -46,13 +48,7 @@ class ProcessProformaExpiryCommand extends Command
 
         // 1. Notify expiring soon (3 days before)
         $expiringSoon = $this->proformaRepository->findExpiringSoon(3);
-        $notified += $this->processProformas($io, $expiringSoon, 'proforma.expiring_soon', function (ProformaInvoice $p) {
-            return sprintf(
-                'Proforma %s expira in 3 zile (%s)',
-                $p->getNumber(),
-                $p->getValidUntil()->format('d.m.Y'),
-            );
-        }, 'Proforma expiră în curând', $dryRun, $today);
+        $notified += $this->processProformas($io, $expiringSoon, 'proforma.expiring_soon', 'notification.proforma_expiring_soon', $dryRun, $today);
 
         // 2. Auto-expire proformas past validUntil
         $expiredProformas = $this->proformaRepository->findExpired();
@@ -69,13 +65,7 @@ class ProcessProformaExpiryCommand extends Command
         }
 
         // 3. Notify expired (on expiry day)
-        $notified += $this->processProformas($io, $expiredProformas, 'proforma.expired', function (ProformaInvoice $p) {
-            return sprintf(
-                'Proforma %s a expirat (%s)',
-                $p->getNumber(),
-                $p->getValidUntil()->format('d.m.Y'),
-            );
-        }, 'Proforma expirată', $dryRun, $today);
+        $notified += $this->processProformas($io, $expiredProformas, 'proforma.expired', 'notification.proforma_expired', $dryRun, $today);
 
         if ($dryRun) {
             $io->note(sprintf('Dry run: %d proformas would be expired, %d notifications would be sent.', $expired, $notified));
@@ -93,8 +83,7 @@ class ProcessProformaExpiryCommand extends Command
         SymfonyStyle $io,
         array $proformas,
         string $type,
-        callable $messageBuilder,
-        string $title,
+        string $translationKey,
         bool $dryRun,
         \DateTime $today,
     ): int {
@@ -105,7 +94,6 @@ class ProcessProformaExpiryCommand extends Command
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
 
             foreach ($users as $user) {
-                // Dedup: check if we already sent this notification type for this proforma today
                 $existing = $this->notificationRepository->createQueryBuilder('n')
                     ->select('COUNT(n.id)')
                     ->where('n.user = :user')
@@ -125,14 +113,22 @@ class ProcessProformaExpiryCommand extends Command
                     continue;
                 }
 
-                $message = $messageBuilder($proforma);
+                $locale = $user->getLocale() ?? 'ro';
+                $params = [
+                    '%number%' => $proforma->getNumber(),
+                    '%date%' => $proforma->getValidUntil()->format('d.m.Y'),
+                ];
+
+                $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+                $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
+
                 $clientName = $proforma->getClient()?->getName() ?? '';
                 if ($clientName) {
                     $message .= ' - ' . $clientName;
                 }
 
                 if ($dryRun) {
-                    $io->text(sprintf('  [DRY RUN] %s → %s: %s', $type, $user->getEmail(), $message));
+                    $io->text(sprintf('  [DRY RUN] %s → %s [%s]: %s', $type, $user->getEmail(), $locale, $message));
                 } else {
                     $this->notificationService->createNotification(
                         $user,

@@ -12,6 +12,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsCommand(
     name: 'app:notifications:token-expiry',
@@ -23,6 +24,7 @@ class SendTokenExpiryRemindersCommand extends Command
         private readonly AnafTokenRepository $tokenRepository,
         private readonly NotificationRepository $notificationRepository,
         private readonly NotificationService $notificationService,
+        private readonly TranslatorInterface $translator,
     ) {
         parent::__construct();
     }
@@ -42,11 +44,8 @@ class SendTokenExpiryRemindersCommand extends Command
         $today = new \DateTimeImmutable('today');
         $sent = 0;
 
-        // Tokens with refresh token — will be auto-renewed
         $refreshableTokens = $this->tokenRepository->findExpiringWithin($threshold);
-        // Tokens WITHOUT refresh token — must be manually renewed
         $nonRefreshableTokens = $this->tokenRepository->findExpiringWithoutRefreshToken($threshold);
-
         $allTokens = array_merge($refreshableTokens, $nonRefreshableTokens);
 
         if (empty($allTokens)) {
@@ -60,7 +59,6 @@ class SendTokenExpiryRemindersCommand extends Command
                 continue;
             }
 
-            // Already expired tokens are not reminders
             if ($token->getExpireAt() < $now) {
                 continue;
             }
@@ -68,7 +66,6 @@ class SendTokenExpiryRemindersCommand extends Command
             $daysUntilExpiry = (int) $now->diff($token->getExpireAt())->days;
             $hasRefreshToken = $token->getRefreshToken() !== null;
 
-            // Dedup: check if we already sent this notification today for this token
             $existing = (int) $this->notificationRepository->createQueryBuilder('n')
                 ->select('COUNT(n.id)')
                 ->where('n.user = :user')
@@ -88,28 +85,30 @@ class SendTokenExpiryRemindersCommand extends Command
                 continue;
             }
 
+            $locale = $user->getLocale() ?? 'ro';
+            $params = ['%days%' => $daysUntilExpiry];
+
             if ($hasRefreshToken) {
-                $message = $daysUntilExpiry === 1
-                    ? 'ANAF token expires in 1 day'
-                    : sprintf('ANAF token expires in %d days', $daysUntilExpiry);
+                $translationKey = 'notification.token_expiring';
                 $titleKey = MessageKey::TITLE_TOKEN_EXPIRING;
                 $messageKey = MessageKey::MSG_TOKEN_EXPIRING;
             } else {
-                $message = $daysUntilExpiry === 1
-                    ? 'ANAF token expires in 1 day and cannot be renewed automatically. Please re-authorize manually.'
-                    : sprintf('ANAF token expires in %d days and cannot be renewed automatically. Please re-authorize manually.', $daysUntilExpiry);
+                $translationKey = 'notification.token_expiring_no_refresh';
                 $titleKey = MessageKey::TITLE_TOKEN_EXPIRING_NO_REFRESH;
                 $messageKey = MessageKey::MSG_TOKEN_EXPIRING_NO_REFRESH;
             }
 
+            $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+            $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
+
             if ($dryRun) {
                 $suffix = $hasRefreshToken ? '' : ' [NO REFRESH TOKEN]';
-                $io->text(sprintf('  [DRY RUN] token.expiring_soon → %s: %s%s', $user->getEmail(), $message, $suffix));
+                $io->text(sprintf('  [DRY RUN] token.expiring_soon → %s [%s]: %s%s', $user->getEmail(), $locale, $message, $suffix));
             } else {
                 $this->notificationService->createNotification(
                     $user,
                     'token.expiring_soon',
-                    $hasRefreshToken ? 'ANAF token expiring soon' : 'ANAF token expiring — manual renewal required',
+                    $title,
                     $message,
                     [
                         'tokenId' => $token->getId()->toRfc4122(),

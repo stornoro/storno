@@ -1,0 +1,42 @@
+# In-app notification translations — English
+
+notification:
+  invoice_due_soon:
+    title: 'Invoice due soon'
+    message: 'Invoice %number% is due in 3 days (%date%)'
+  invoice_due_today:
+    title: 'Invoice due today'
+    message: 'Invoice %number% is due today'
+  invoice_overdue:
+    title: 'Invoice overdue'
+    message: 'Invoice %number% has been overdue since %date%'
+  proforma_expiring_soon:
+    title: 'Proforma expiring soon'
+    message: 'Proforma %number% expires in 3 days (%date%)'
+  proforma_expired:
+    title: 'Proforma expired'
+    message: 'Proforma %number% has expired on %date%'
+  token_expiring:
+    title: 'ANAF token expiring'
+    message: 'ANAF token expires in %days% day(s)'
+  token_expiring_no_refresh:
+    title: 'ANAF token expiring — manual renewal required'
+    message: 'ANAF token expires in %days% day(s) and cannot be renewed automatically. Please re-authorize manually.'
+  token_refresh_failed:
+    title: 'ANAF token renewal failed'
+    message: 'The ANAF token could not be renewed automatically. Please re-authorize manually.'
+  anaf_deadline:
+    title: 'ANAF deadline expires tomorrow'
+    message: 'Invoice %number% must be submitted to ANAF by tomorrow (%date%)'
+  export_ready:
+    title: 'Export ready'
+    message: 'Your export is ready for download.'
+  backup_ready:
+    title: 'Backup ready'
+    message: 'Your backup is ready for download.'
+  restore_completed:
+    title: 'Restore completed'
+    message: 'Your backup has been restored successfully.'
+  payment_received:
+    title: 'Payment received'
+    message: 'Payment of %amount% %currency% received for invoice %number%'

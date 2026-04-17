@@ -1,0 +1,42 @@
+# In-app notification translations — Romanian
+
+notification:
+  invoice_due_soon:
+    title: 'Factura scadenta in curand'
+    message: 'Factura %number% scade in 3 zile (%date%)'
+  invoice_due_today:
+    title: 'Factura scadenta astazi'
+    message: 'Factura %number% scade astazi'
+  invoice_overdue:
+    title: 'Factura restanta'
+    message: 'Factura %number% este scadenta din %date%'
+  proforma_expiring_soon:
+    title: 'Proforma expira in curand'
+    message: 'Proforma %number% expira in 3 zile (%date%)'
+  proforma_expired:
+    title: 'Proforma expirata'
+    message: 'Proforma %number% a expirat pe %date%'
+  token_expiring:
+    title: 'Token ANAF expira'
+    message: 'Tokenul ANAF expira in %days% zi(le)'
+  token_expiring_no_refresh:
+    title: 'Token ANAF expira — reinnoire manuala necesara'
+    message: 'Tokenul ANAF expira in %days% zi(le) si nu poate fi reinnoit automat. Re-autorizeaza manual.'
+  token_refresh_failed:
+    title: 'Eroare reinnoire token ANAF'
+    message: 'Tokenul ANAF nu a putut fi reinnoit automat. Re-autorizeaza manual.'
+  anaf_deadline:
+    title: 'Termen ANAF expira maine'
+    message: 'Factura %number% trebuie trimisa la ANAF pana maine (%date%)'
+  export_ready:
+    title: 'Export finalizat'
+    message: 'Exportul tau este gata pentru descarcare.'
+  backup_ready:
+    title: 'Backup finalizat'
+    message: 'Backupul tau este gata pentru descarcare.'
+  restore_completed:
+    title: 'Restaurare finalizata'
+    message: 'Backupul a fost restaurat cu succes.'
+  payment_received:
+    title: 'Plata inregistrata'
+    message: 'Plata de %amount% %currency% inregistrata pentru factura %number%'
