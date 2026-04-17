@@ -75,6 +75,11 @@ class SendExternalNotificationHandler
             return;
         }
 
+        if (!$user->isActive()) {
+            $this->logger->info('Skipping external notification for inactive user.', ['userId' => $message->getUserId()]);
+            return;
+        }
+
         $preference = $this->entityManager->getRepository(NotificationPreference::class)->findOneBy([
             'user' => $user,
             'eventType' => $message->getEventType(),
