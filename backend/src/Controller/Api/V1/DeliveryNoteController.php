@@ -601,6 +601,10 @@ class DeliveryNoteController extends AbstractController
      */
     private function runETransportValidation(DeliveryNote $deliveryNote): ?array
     {
+        if ($deliveryNote->isSkipEtransport()) {
+            return null;
+        }
+
         if ($deliveryNote->getEtransportOperationType() === null) {
             return null;
         }
