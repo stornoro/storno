@@ -389,6 +389,7 @@ class ClientController extends AbstractController
         $client->setCompany($company);
         $client->setCui($cuiClean);
         $client->setSource('manual');
+        $client->setCountry('RO');
 
         if ($anafInfo) {
             $client->setName($anafInfo->getName());
