@@ -28,6 +28,9 @@ notification:
   anaf_deadline:
     title: 'Termen ANAF expira maine'
     message: 'Factura %number% trebuie trimisa la ANAF pana maine (%date%)'
+  anaf_missing_token:
+    title: 'Conecteaza SPV pentru a trimite la ANAF'
+    message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza SPV pana pe %deadline% pentru a evita amenzile.'
   export_ready:
     title: 'Export finalizat'
     message: 'Exportul tau este gata pentru descarcare.'

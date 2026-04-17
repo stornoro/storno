@@ -16,6 +16,7 @@ final class MessageKey
     const TITLE_BACKUP_READY = 'notification.backup_ready.title';
     const TITLE_RESTORE_COMPLETED = 'notification.restore_completed.title';
     const TITLE_ANAF_DEADLINE = 'notification.anaf_deadline.title';
+    const TITLE_ANAF_MISSING_TOKEN = 'notification.anaf_missing_token.title';
     const TITLE_PAYMENT_RECEIVED = 'notification.payment_received.title';
 
     // Notification messages
@@ -31,6 +32,7 @@ final class MessageKey
     const MSG_BACKUP_READY = 'notification.backup_ready.message';
     const MSG_RESTORE_COMPLETED = 'notification.restore_completed.message';
     const MSG_ANAF_DEADLINE = 'notification.anaf_deadline.message';
+    const MSG_ANAF_MISSING_TOKEN = 'notification.anaf_missing_token.message';
     const MSG_PAYMENT_RECEIVED_TITLE = 'notification.payment_received.title_format';
     const MSG_PAYMENT_RECEIVED = 'notification.payment_received.message';
 
