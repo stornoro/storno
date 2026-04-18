@@ -18,13 +18,18 @@ class PushRelayService
         return $this->pushRelayUrl !== '';
     }
 
-    public function send(string $token, string $title, string $body, array $data = []): void
+    public function send(string $token, string $title, string $body, array $data = [], ?int $badge = null): void
     {
         if (!$this->isEnabled()) {
             return;
         }
 
         try {
+            $aps = ['sound' => 'default'];
+            if ($badge !== null) {
+                $aps['badge'] = $badge;
+            }
+
             $payload = [
                 'token' => $token,
                 'notification' => [
@@ -37,9 +42,7 @@ class PushRelayService
                 ],
                 'apns' => [
                     'payload' => [
-                        'aps' => [
-                            'sound' => 'default',
-                        ],
+                        'aps' => $aps,
                     ],
                 ],
             ];

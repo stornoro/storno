@@ -9,6 +9,7 @@ class SendPushNotificationMessage
         private readonly string $title,
         private readonly string $body,
         private readonly array $data = [],
+        private readonly ?int $badge = null,
     ) {}
 
     public function getDeviceToken(): string
@@ -29,5 +30,10 @@ class SendPushNotificationMessage
     public function getData(): array
     {
         return $this->data;
+    }
+
+    public function getBadge(): ?int
+    {
+        return $this->badge;
     }
 }

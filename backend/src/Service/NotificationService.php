@@ -42,6 +42,10 @@ class NotificationService
         $this->entityManager->persist($notification);
         $this->entityManager->flush();
 
+        // Tie external channels back to this in-app row so a push tap can
+        // mark the corresponding feed entry as read on the device.
+        $externalData = $data + ['notificationId' => (string) $notification->getId()];
+
         // Queue real-time socket push (batched via CentrifugoFlushSubscriber)
         $this->centrifugo->queue(
             'notifications:user_' . $user->getId(),
@@ -63,7 +67,7 @@ class NotificationService
             title: $title,
             message: $message,
             eventType: $type,
-            data: $data,
+            data: $externalData,
         ));
 
         return $notification;
