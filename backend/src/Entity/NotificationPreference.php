@@ -28,7 +28,7 @@ class NotificationPreference
     private bool $inAppEnabled = true;
 
     #[ORM\Column]
-    private bool $pushEnabled = false;
+    private bool $pushEnabled = true;
 
     #[ORM\Column]
     private bool $telegramEnabled = false;
