@@ -8,6 +8,7 @@ use App\Entity\NotificationPreference;
 use App\Entity\User;
 use App\Message\SendExternalNotificationMessage;
 use App\Message\SendPushNotificationMessage;
+use App\Repository\NotificationRepository;
 use App\Repository\UserDeviceRepository;
 use App\Service\EmailUnsubscribeService;
 use App\Service\Storage\OrganizationStorageResolver;
@@ -54,6 +55,7 @@ class SendExternalNotificationHandler
         private readonly LoggerInterface $logger,
         private readonly MessageBusInterface $messageBus,
         private readonly UserDeviceRepository $userDeviceRepository,
+        private readonly NotificationRepository $notificationRepository,
         private readonly Environment $twig,
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
@@ -106,12 +108,17 @@ class SendExternalNotificationHandler
 
         if ($preference?->isPushEnabled()) {
             $devices = $this->userDeviceRepository->findBy(['user' => $user]);
+            // Snapshot of unread count for the iOS app icon badge. Includes
+            // the notification we just created (createNotification flushed
+            // before dispatching this message).
+            $badge = $this->notificationRepository->countUnread($user);
             foreach ($devices as $device) {
                 $this->messageBus->dispatch(new SendPushNotificationMessage(
                     deviceToken: $device->getToken(),
                     title: $message->getTitle(),
                     body: $message->getMessage(),
                     data: $message->getData(),
+                    badge: $badge,
                 ));
             }
         }

@@ -38,6 +38,7 @@ class SendPushNotificationHandler
                 $message->getTitle(),
                 $message->getBody(),
                 $message->getData(),
+                $message->getBadge(),
             );
             return;
         }
@@ -54,6 +55,12 @@ class SendPushNotificationHandler
 
             if (!empty($message->getData())) {
                 $cloudMessage = $cloudMessage->withData(array_map('strval', $message->getData()));
+            }
+
+            if ($message->getBadge() !== null) {
+                $cloudMessage = $cloudMessage->withApnsConfig([
+                    'payload' => ['aps' => ['badge' => $message->getBadge(), 'sound' => 'default']],
+                ]);
             }
 
             $this->messaging->send($cloudMessage);
