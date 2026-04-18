@@ -45,6 +45,10 @@ export const useClientStore = defineStore('clients', () => {
   const isEmpty = computed(() => !loading.value && items.value.length === 0)
 
   // ── Actions ────────────────────────────────────────────────────────
+  function tt(key: string): string {
+    return useNuxtApp().$i18n.t(key) as string
+  }
+
   async function fetchClients(): Promise<void> {
     const { get } = useApi()
     loading.value = true
@@ -74,7 +78,7 @@ export const useClientStore = defineStore('clients', () => {
       distinctCountries.value = response.distinctCountries ?? []
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca clientii.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.loadList')
       items.value = []
     }
     finally {
@@ -89,7 +93,7 @@ export const useClientStore = defineStore('clients', () => {
       return await get<ClientDetailResponse>(`/v1/clients/${uuid}`)
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut incarca clientul.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.loadOne')
       return null
     }
   }
@@ -115,14 +119,26 @@ export const useClientStore = defineStore('clients', () => {
     }
   }
 
+  function upsertItem(client: Client) {
+    const idx = items.value.findIndex(c => c.id === client.id)
+    if (idx >= 0) {
+      items.value[idx] = client
+    }
+    else {
+      items.value = [client, ...items.value]
+      total.value++
+    }
+  }
+
   async function createClient(payload: Record<string, any>): Promise<Client | null> {
     const { post } = useApi()
     try {
       const res = await post<{ client: Client }>('/v1/clients', payload)
+      upsertItem(res.client)
       return res.client
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut crea clientul.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.create')
       return null
     }
   }
@@ -131,10 +147,11 @@ export const useClientStore = defineStore('clients', () => {
     const { patch } = useApi()
     try {
       const res = await patch<{ client: Client }>(`/v1/clients/${uuid}`, payload)
+      upsertItem(res.client)
       return res.client
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut actualiza clientul.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.update')
       return null
     }
   }
@@ -148,7 +165,7 @@ export const useClientStore = defineStore('clients', () => {
       return true
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut sterge clientul.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.delete')
       return false
     }
   }
@@ -157,10 +174,11 @@ export const useClientStore = defineStore('clients', () => {
     const { post } = useApi()
     try {
       const res = await post<{ client: Client, existing?: boolean, anafValidated?: boolean }>('/v1/clients/from-registry', { cui, name })
+      upsertItem(res.client)
       return res.client
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut crea clientul din registru.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.createFromRegistry')
       return null
     }
   }
@@ -168,10 +186,15 @@ export const useClientStore = defineStore('clients', () => {
   async function bulkDelete(ids: string[]): Promise<{ deleted: number, errors: Array<{ id: string, error: string }> } | null> {
     const { post } = useApi()
     try {
-      return await post<{ deleted: number, errors: Array<{ id: string, error: string }> }>('/v1/clients/bulk-delete', { ids })
+      const res = await post<{ deleted: number, errors: Array<{ id: string, error: string }> }>('/v1/clients/bulk-delete', { ids })
+      const failedIds = new Set(res.errors.map(e => e.id))
+      const removedIds = new Set(ids.filter(id => !failedIds.has(id)))
+      items.value = items.value.filter(i => !removedIds.has(i.id))
+      total.value = Math.max(0, total.value - removedIds.size)
+      return res
     }
     catch (err: any) {
-      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut sterge clientii in masa.'
+      error.value = err?.data?.error ? translateApiError(err.data.error) : tt('clients.errors.bulkDelete')
       return null
     }
   }
