@@ -23,4 +23,5 @@
 *.pem
 *.p12
 firebase-service-account.json
+AuthKey_*.p8
 *.class
