@@ -131,8 +131,10 @@ class EFacturaValidator
                     if (bccomp($line->getUnitPrice(), '0', 2) <= 0) {
                         $errors[] = new ValidationError(sprintf('Linia %d are pretul unitar zero sau negativ.', $lineNumber), 'business');
                     }
-                    if (bccomp($line->getQuantity(), '0', 4) <= 0) {
-                        $errors[] = new ValidationError(sprintf('Linia %d are cantitatea zero sau negativa.', $lineNumber), 'business');
+                    // Negative quantity is allowed for discount lines; the invoice total is still
+                    // required to be positive below.
+                    if (bccomp($line->getQuantity(), '0', 4) === 0) {
+                        $errors[] = new ValidationError(sprintf('Linia %d are cantitatea zero.', $lineNumber), 'business');
                     }
                 }
 
