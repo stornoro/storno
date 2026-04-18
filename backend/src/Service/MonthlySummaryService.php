@@ -175,25 +175,44 @@ class MonthlySummaryService
             ]),
         );
 
-        // Top 5 clients by invoiced amount
+        // Top 5 clients by invoiced amount.
+        // The "collected" sum is computed in a separate aggregation joined by
+        // receiver_name so the main GROUP BY only references grouped/aggregated
+        // columns — required for MySQL's strict ONLY_FULL_GROUP_BY mode, and
+        // it also fixes a latent bug where the correlated subquery on i.id
+        // previously only counted payments for one arbitrary invoice per receiver.
         $topClients = $conn->fetchAllAssociative(
-            "SELECT i.receiver_name AS name,
-                    SUM($convertTotal) AS invoiced,
-                    COALESCE((
-                        SELECT SUM($convertPayment) FROM payment p
-                        WHERE p.invoice_id = i.id
-                          AND p.payment_date >= :monthStart
-                          AND p.payment_date <= :monthEnd
-                    ), 0) AS collected
-             FROM invoice i
-             WHERE i.company_id = :companyId
-               AND i.direction = :direction
-               AND i.status NOT IN (:draft, :cancelled)
-               AND i.issue_date >= :monthStart
-               AND i.issue_date <= :monthEnd
-               AND i.deleted_at IS NULL
-             GROUP BY i.receiver_name
-             ORDER BY invoiced DESC
+            "SELECT invoiced.name AS name,
+                    invoiced.invoiced AS invoiced,
+                    COALESCE(paid.collected, 0) AS collected
+             FROM (
+                 SELECT i.receiver_name AS name,
+                        SUM($convertTotal) AS invoiced
+                 FROM invoice i
+                 WHERE i.company_id = :companyId
+                   AND i.direction = :direction
+                   AND i.status NOT IN (:draft, :cancelled)
+                   AND i.issue_date >= :monthStart
+                   AND i.issue_date <= :monthEnd
+                   AND i.deleted_at IS NULL
+                 GROUP BY i.receiver_name
+             ) invoiced
+             LEFT JOIN (
+                 SELECT i.receiver_name AS name,
+                        SUM($convertPayment) AS collected
+                 FROM payment p
+                 INNER JOIN invoice i ON i.id = p.invoice_id
+                 WHERE i.company_id = :companyId
+                   AND i.direction = :direction
+                   AND i.status NOT IN (:draft, :cancelled)
+                   AND i.issue_date >= :monthStart
+                   AND i.issue_date <= :monthEnd
+                   AND i.deleted_at IS NULL
+                   AND p.payment_date >= :monthStart
+                   AND p.payment_date <= :monthEnd
+                 GROUP BY i.receiver_name
+             ) paid ON paid.name = invoiced.name
+             ORDER BY invoiced.invoiced DESC
              LIMIT 5",
             array_merge($amountBase, [
                 'companyId' => $companyId,
