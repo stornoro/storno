@@ -393,6 +393,18 @@ else
   fi
 fi
 
+# ── Company registry (~1 GB Romanian ONRC SQLite) ────────────────
+# Optional: enables search-by-name when adding new clients. Without
+# it, users can still add clients manually or via CUI/ANAF lookup.
+# Re-run any time with: docker compose exec backend php bin/console app:download-company-registry
+info "Downloading Romanian company registry (~1 GB) — required for client name search..."
+if ${DC} exec -T backend php bin/console app:download-company-registry --no-interaction 2>&1 | sed 's/^/    /'; then
+  ok "Company registry downloaded"
+else
+  warn "Company registry download failed — client search will be limited to manual entry / CUI lookup."
+  warn "You can retry later: docker compose -f ${STORNO_DIR}/docker-compose.yml exec backend php bin/console app:download-company-registry"
+fi
+
 # ══════════════════════════════════════════════════════════════════
 # SUCCESS
 # ══════════════════════════════════════════════════════════════════
