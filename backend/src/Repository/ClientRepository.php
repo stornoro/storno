@@ -84,33 +84,42 @@ class ClientRepository extends ServiceEntityRepository
             [$companyId],
         );
 
-        // Main query: group clients by identifier, join outgoing invoice stats with currency conversion
+        // Main query: pick one representative client per identifier group in a derived
+        // table, then join it back to the client row for details and to the invoice stats.
+        // The derived-table approach is required to stay compatible with MySQL's strict
+        // ONLY_FULL_GROUP_BY mode (a flat GROUP BY on the client table would select
+        // non-aggregated columns and raise SQLSTATE 42000 / error 1055).
         $sql = "
             SELECT
                 c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
                 c.address, c.city, c.email, c.country, c.vies_valid AS viesValid,
                 COALESCE(s.invoice_count, 0) AS invoiceCount,
                 COALESCE(s.invoice_total, 0) AS invoiceTotal
-            FROM client c
+            FROM (
+                SELECT MIN(c.id) AS id, MAX(c.created_at) AS group_created_at
+                FROM client c
+                WHERE c.company_id = ? AND c.deleted_at IS NULL
+                $searchClause
+                $countryClause
+                GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
+                ORDER BY MAX(c.created_at) DESC
+                LIMIT ? OFFSET ?
+            ) dedup
+            INNER JOIN client c ON c.id = dedup.id
             LEFT JOIN (
                 SELECT receiver_cif AS cif, COUNT(*) AS invoice_count, SUM($convertTotalSql) AS invoice_total
                 FROM invoice
                 WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing'
                 GROUP BY receiver_cif
             ) s ON s.cif = COALESCE(c.cui, c.cnp)
-            WHERE c.company_id = ? AND c.deleted_at IS NULL
-            $searchClause
-            $countryClause
-            GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
-            ORDER BY c.created_at DESC
-            LIMIT ? OFFSET ?
+            ORDER BY dedup.group_created_at DESC
         ";
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([$companyId, $companyId], $searchParams, $countryParams, [$limit, $offset]);
+        $params = array_merge([$companyId], $searchParams, $countryParams, [$limit, $offset, $companyId]);
         $types = array_merge(
-            array_fill(0, 2 + count($searchParams) + count($countryParams), ParameterType::STRING),
-            [ParameterType::INTEGER, ParameterType::INTEGER],
+            array_fill(0, 1 + count($searchParams) + count($countryParams), ParameterType::STRING),
+            [ParameterType::INTEGER, ParameterType::INTEGER, ParameterType::STRING],
         );
 
         $rows = $conn->fetchAllAssociative($sql, $params, $types);
