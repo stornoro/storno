@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Entity\WebhookDelivery;
 use App\Entity\WebhookEndpoint;
 use App\Enum\WebhookDeliveryStatus;
+use App\Message\DispatchWebhookMessage;
 use App\Repository\WebhookDeliveryRepository;
 use App\Repository\WebhookEndpointRepository;
 use App\Security\OrganizationContext;
@@ -15,6 +16,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Uuid;
@@ -31,6 +33,7 @@ class WebhookController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly HttpClientInterface $httpClient,
         private readonly LicenseManager $licenseManager,
+        private readonly MessageBusInterface $messageBus,
     ) {}
 
     #[Route('/events', methods: ['GET'])]
@@ -320,6 +323,38 @@ class WebhookController extends AbstractController
         return $this->json([
             'data' => $this->serializeDeliveryDetail($delivery),
         ]);
+    }
+
+    /**
+     * Manually redeliver a past webhook payload. Queues a fresh
+     * DispatchWebhookMessage reusing the stored event type + payload, which
+     * creates a new WebhookDelivery record (attempt=1) — the original
+     * delivery is left untouched for audit history.
+     */
+    #[Route('/{uuid}/deliveries/{deliveryUuid}/retry', methods: ['POST'])]
+    public function retryDelivery(string $uuid, string $deliveryUuid): JsonResponse
+    {
+        $endpoint = $this->resolveEndpoint($uuid, requireManage: true);
+        if ($endpoint instanceof JsonResponse) {
+            return $endpoint;
+        }
+
+        $delivery = $this->deliveryRepository->find(Uuid::fromString($deliveryUuid));
+        if (!$delivery || $delivery->getEndpoint()->getId()->toRfc4122() !== $endpoint->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Delivery not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$endpoint->isActive()) {
+            return $this->json(['error' => 'Cannot retry — webhook endpoint is disabled.'], Response::HTTP_CONFLICT);
+        }
+
+        $this->messageBus->dispatch(new DispatchWebhookMessage(
+            endpointId: $endpoint->getId()->toRfc4122(),
+            eventType: $delivery->getEventType(),
+            payload: $delivery->getPayload(),
+        ));
+
+        return $this->json(['status' => 'queued'], Response::HTTP_ACCEPTED);
     }
 
     // --- Private helpers ---
