@@ -645,6 +645,40 @@ class InvoiceRepository extends ServiceEntityRepository
         ];
     }
 
+    /**
+     * Find the most recent live DRAFT for the given fingerprint, created in
+     * the last $withinSeconds seconds. Used by InvoiceManager::create() to
+     * fold retry storms from API clients that don't send an idempotency key.
+     */
+    public function findRecentDraftFingerprint(
+        Company $company,
+        string $clientId,
+        string $currency,
+        string $total,
+        int $withinSeconds,
+    ): ?Invoice {
+        $threshold = (new \DateTimeImmutable())->modify(sprintf('-%d seconds', $withinSeconds));
+
+        return $this->createQueryBuilder('i')
+            ->where('i.company = :company')
+            ->andWhere('IDENTITY(i.client) = :client')
+            ->andWhere('i.currency = :currency')
+            ->andWhere('i.total = :total')
+            ->andWhere('i.status = :draft')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.createdAt >= :threshold')
+            ->setParameter('company', $company)
+            ->setParameter('client', $clientId)
+            ->setParameter('currency', $currency)
+            ->setParameter('total', $total)
+            ->setParameter('draft', DocumentStatus::DRAFT)
+            ->setParameter('threshold', $threshold)
+            ->orderBy('i.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     public function findApproachingAnafDeadline(int $days): array
     {
         $targetDate = new \DateTime(sprintf('-%d days', $days));
