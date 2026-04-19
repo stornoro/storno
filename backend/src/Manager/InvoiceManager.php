@@ -69,6 +69,33 @@ class InvoiceManager
 
     public function create(Company $company, array $data, User $user): Invoice
     {
+        // Dedup #1 — explicit idempotency key (preferred path for API clients).
+        if (!empty($data['idempotencyKey'])) {
+            $existing = $this->invoiceRepository->findOneBy(['idempotencyKey' => $data['idempotencyKey']]);
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        // Dedup #2 — fuzzy match for clients that DON'T send an idempotency key.
+        // Catches retry storms (e.g. external billing service that re-POSTs on
+        // a 5xx without a key) by returning the most recent matching draft
+        // created in the last hour. Signature: same company + client + currency
+        // + total. Production has previously accumulated dozens of duplicates
+        // when the API caller retried on a transient failure (BR-RO-030 etc).
+        if (!empty($data['clientId']) && isset($data['currency']) && isset($data['total'])) {
+            $existing = $this->invoiceRepository->findRecentDraftFingerprint(
+                $company,
+                $data['clientId'],
+                $data['currency'],
+                (string) $data['total'],
+                3600,
+            );
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $invoice = new Invoice();
         $invoice->setCompany($company);
         $invoice->setStatus(DocumentStatus::DRAFT);
