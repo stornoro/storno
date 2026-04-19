@@ -124,7 +124,7 @@ class AccountingExportController extends AbstractController
         $products = $this->productRepository->findAllByCompany($company);
 
         // Time-series — filtered by date range
-        $invoiceFilters = ['direction' => 'outgoing'];
+        $invoiceFilters = ['direction' => 'outgoing', 'excludeCancelled' => true];
         if ($dateFrom) {
             $invoiceFilters['dateFrom'] = $dateFrom;
         }

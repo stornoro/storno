@@ -2,6 +2,7 @@
 
 namespace App\MessageHandler;
 
+use App\Enum\DocumentStatus;
 use App\Enum\MessageKey;
 use App\Message\GenerateZipExportMessage;
 use App\Repository\InvoiceRepository;
@@ -39,11 +40,14 @@ class GenerateZipExportHandler
 
         $invoices = $this->invoiceRepository->findByIds($message->invoiceIds);
 
-        // Filter to only invoices belonging to the requested company
+        // Filter to only invoices belonging to the requested company and exclude cancelled
         $companyId = $message->companyId;
         $invoices = array_filter($invoices, function ($invoice) use ($companyId) {
             $invoiceCompanyId = $invoice->getCompany()?->getId();
-            return $invoiceCompanyId && (string) $invoiceCompanyId === $companyId;
+            if (!$invoiceCompanyId || (string) $invoiceCompanyId !== $companyId) {
+                return false;
+            }
+            return $invoice->getStatus() !== DocumentStatus::CANCELLED;
         });
 
         if (empty($invoices)) {
