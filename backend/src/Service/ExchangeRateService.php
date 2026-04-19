@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use Doctrine\DBAL\Connection;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -11,17 +12,26 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class ExchangeRateService
 {
     private const BNR_URL = 'https://www.bnr.ro/nbrfxrates.xml';
+    private const LAST_GOOD_KEY = 'bnr_exchange_rates_last_good';
+    private const LAST_GOOD_TTL = 86400 * 365; // ~1 year — effectively persistent
+    private const FAILURE_NOTIFICATION_TTL = 86400; // dedupe critical warning to once per day
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly CacheInterface $cache,
+        private readonly CacheItemPoolInterface $cachePool,
         private readonly LoggerInterface $logger,
     ) {}
 
     /**
-     * Get all BNR exchange rates for today (cached daily).
+     * Get all BNR exchange rates for today.
      *
-     * @return array{date: string, rates: array<string, array{value: float, multiplier: int}>}
+     * Tries today's cache first (24h TTL). On a fresh fetch failure, falls back
+     * to the last successful response (cached separately with a year-long TTL).
+     * Only returns an empty result if BNR has been broken AND we have no prior
+     * cached rates at all (e.g. brand-new install during an outage).
+     *
+     * @return array{date: string, rates: array<string, array{value: float, multiplier: int}>, stale?: bool}
      */
     public function getRates(): array
     {
@@ -30,7 +40,26 @@ class ExchangeRateService
         return $this->cache->get($cacheKey, function (ItemInterface $item) {
             $item->expiresAfter(86400);
 
-            return $this->fetchFromBnr();
+            $fresh = $this->fetchFromBnr();
+            if ($fresh !== null) {
+                $this->storeLastGood($fresh);
+                return $fresh;
+            }
+
+            // Fresh fetch failed — try the last known good rates.
+            $stale = $this->loadLastGood();
+            if ($stale !== null) {
+                $this->logger->warning('[BNR] Using stale rates from {date}', [
+                    'date' => $stale['date'],
+                ]);
+                $this->logFailureOnce('BNR upstream unreachable; serving cached rates from ' . $stale['date']);
+                return $stale + ['stale' => true];
+            }
+
+            // No fresh, no stale — degrade gracefully so callers don't 500.
+            $this->logger->critical('[BNR] No exchange rates available (fresh + last-good both missing)');
+            $this->logFailureOnce('BNR upstream unreachable AND no cached rates available — currency conversions disabled');
+            return ['date' => date('Y-m-d'), 'rates' => [], 'stale' => true];
         });
     }
 
@@ -155,14 +184,17 @@ class ExchangeRateService
         return $fallbackRateSql;
     }
 
-    private function fetchFromBnr(): array
+    /**
+     * @return array{date: string, rates: array<string, array{value: float, multiplier: int}>}|null
+     */
+    private function fetchFromBnr(): ?array
     {
         try {
-            $response = $this->httpClient->request('GET', self::BNR_URL);
+            $response = $this->httpClient->request('GET', self::BNR_URL, ['timeout' => 10]);
             $xml = new \SimpleXMLElement($response->getContent());
         } catch (\Throwable $e) {
             $this->logger->error('[BNR] Failed to load exchange rates', ['error' => $e->getMessage()]);
-            throw new \RuntimeException('Unable to fetch BNR rates: ' . $e->getMessage());
+            return null;
         }
 
         $date = (string) $xml->Body->Cube->attributes()['date'];
@@ -185,5 +217,39 @@ class ExchangeRateService
             'date' => $date,
             'rates' => $rates,
         ];
+    }
+
+    private function storeLastGood(array $rates): void
+    {
+        $item = $this->cachePool->getItem(self::LAST_GOOD_KEY);
+        $item->set($rates);
+        $item->expiresAfter(self::LAST_GOOD_TTL);
+        $this->cachePool->save($item);
+    }
+
+    /**
+     * @return array{date: string, rates: array<string, array{value: float, multiplier: int}>}|null
+     */
+    private function loadLastGood(): ?array
+    {
+        $item = $this->cachePool->getItem(self::LAST_GOOD_KEY);
+        return $item->isHit() ? $item->get() : null;
+    }
+
+    /**
+     * Log a CRITICAL line once per day so monitoring (Sentry, log aggregation)
+     * can alert without being spammed every time someone hits an invoice page.
+     */
+    private function logFailureOnce(string $message): void
+    {
+        $key = 'bnr_failure_critical_' . date('Y-m-d');
+        $sentinel = $this->cachePool->getItem($key);
+        if ($sentinel->isHit()) {
+            return;
+        }
+        $sentinel->set(true);
+        $sentinel->expiresAfter(self::FAILURE_NOTIFICATION_TTL);
+        $this->cachePool->save($sentinel);
+        $this->logger->critical('[BNR] ' . $message);
     }
 }
