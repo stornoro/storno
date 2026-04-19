@@ -2,6 +2,7 @@
 
 namespace App\Service\Anaf;
 
+use App\DTO\Anaf\ValidationError;
 use App\DTO\Anaf\ValidationResult;
 use App\Entity\Invoice;
 use Psr\Log\LoggerInterface;
@@ -28,7 +29,15 @@ class UblValidator
             return $businessResult;
         }
 
-        $xml = $this->xmlGenerator->generate($invoice);
+        try {
+            $xml = $this->xmlGenerator->generate($invoice);
+        } catch (\DomainException $e) {
+            $merged = ValidationResult::merge($businessResult, ValidationResult::invalid([
+                new ValidationError($e->getMessage(), 'xml_generation'),
+            ]));
+            $this->logValidationFailure($invoice, $merged, 'quick');
+            return $merged;
+        }
         $xsdResult = $this->xsdValidator->validate($xml);
 
         $merged = ValidationResult::merge($businessResult, $xsdResult);
@@ -51,7 +60,15 @@ class UblValidator
             return $businessResult;
         }
 
-        $xml = $this->xmlGenerator->generate($invoice);
+        try {
+            $xml = $this->xmlGenerator->generate($invoice);
+        } catch (\DomainException $e) {
+            $merged = ValidationResult::merge($businessResult, ValidationResult::invalid([
+                new ValidationError($e->getMessage(), 'xml_generation'),
+            ]));
+            $this->logValidationFailure($invoice, $merged, 'full');
+            return $merged;
+        }
         $xsdResult = $this->xsdValidator->validate($xml);
 
         // Skip Schematron if XSD fails (invalid structure causes noise)

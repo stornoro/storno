@@ -706,9 +706,14 @@ class UblXmlGenerator
             : $this->exchangeRateService->getRate($invoice->getCurrency());
 
         if ($rate === null) {
-            throw new \RuntimeException(
-                sprintf('Exchange rate for %s is not available. Required by BR-RO-030 for non-RON invoices.', $invoice->getCurrency())
-            );
+            // Bubble as DomainException so the controller returns 422 instead
+            // of 500 — this is a user-fixable condition (set the rate manually
+            // on the invoice) not a server bug. Caused by upstream BNR being
+            // unreachable for a currency we have no cached rate for.
+            throw new \DomainException(sprintf(
+                'Cannot generate ANAF XML: exchange rate for %s is not set on the invoice and the BNR upstream is unavailable. Please open the invoice and enter an exchange rate manually, then retry. (BR-RO-030)',
+                $invoice->getCurrency(),
+            ));
         }
 
         // Compute adjusted VAT total (same logic as addTaxTotal)
