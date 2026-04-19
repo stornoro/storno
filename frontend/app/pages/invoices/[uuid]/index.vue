@@ -598,6 +598,75 @@
             </UCard>
           </template>
 
+          <template #webhooks>
+            <UCard class="mt-4">
+              <div v-if="loadingWebhooks" class="text-center py-8">
+                <UIcon name="i-lucide-loader-2" class="animate-spin h-6 w-6 mx-auto text-(--ui-text-muted)" />
+              </div>
+              <div v-else-if="webhookDeliveries.length" class="space-y-2">
+                <div
+                  v-for="d in webhookDeliveries"
+                  :key="d.id"
+                  class="flex items-start gap-3 rounded-lg border border-(--ui-border) px-3 py-2.5"
+                >
+                  <div class="shrink-0 mt-1">
+                    <UIcon
+                      :name="d.status === 'success' ? 'i-lucide-check-circle' : d.status === 'failed' ? 'i-lucide-x-circle' : d.status === 'retrying' ? 'i-lucide-rotate-cw' : 'i-lucide-clock'"
+                      class="size-4"
+                      :class="{
+                        'text-green-500': d.status === 'success',
+                        'text-red-500': d.status === 'failed',
+                        'text-amber-500': d.status === 'retrying',
+                        'text-(--ui-text-muted)': d.status === 'pending',
+                      }"
+                    />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-sm font-medium">{{ d.eventType }}</span>
+                      <UBadge
+                        :color="d.status === 'success' ? 'success' : d.status === 'failed' ? 'error' : d.status === 'retrying' ? 'warning' : 'neutral'"
+                        variant="subtle"
+                        size="xs"
+                      >
+                        {{ d.status }}
+                      </UBadge>
+                      <span v-if="d.responseStatusCode" class="text-xs text-(--ui-text-muted) font-mono">
+                        HTTP {{ d.responseStatusCode }}
+                      </span>
+                      <span v-if="d.durationMs != null" class="text-xs text-(--ui-text-muted)">
+                        {{ d.durationMs }}ms
+                      </span>
+                      <span v-if="d.attempt > 1" class="text-xs text-(--ui-text-muted)">
+                        · {{ $t('invoices.webhookAttempt', { n: d.attempt }) }}
+                      </span>
+                    </div>
+                    <p v-if="d.endpoint?.url" class="text-xs text-(--ui-text-muted) mt-0.5 truncate" :title="d.endpoint.url">
+                      {{ d.endpoint.description || d.endpoint.url }}
+                    </p>
+                    <p class="text-xs text-(--ui-text-muted) mt-0.5">{{ formatDateTime(d.triggeredAt) }}</p>
+                    <p v-if="d.errorMessage" class="text-xs text-red-600 dark:text-red-400 mt-1 break-words">
+                      {{ d.errorMessage }}
+                    </p>
+                  </div>
+                  <UButton
+                    v-if="d.endpoint?.id"
+                    icon="i-lucide-rotate-cw"
+                    size="xs"
+                    variant="ghost"
+                    :loading="retryingDeliveryId === d.id"
+                    :disabled="retryingDeliveryId !== null"
+                    :title="$t('invoices.webhookRetry')"
+                    @click="retryWebhookDelivery(d)"
+                  >
+                    {{ $t('invoices.webhookRetry') }}
+                  </UButton>
+                </div>
+              </div>
+              <UEmpty v-else icon="i-lucide-webhook" :title="$t('invoices.noWebhooks')" class="py-8" />
+            </UCard>
+          </template>
+
           <template #payments>
             <UCard class="mt-4">
               <InvoicesPaymentHistory
@@ -1008,6 +1077,10 @@ const invoice = ref<any>(null)
 
 useHead({ title: computed(() => invoice.value ? `${$t('invoices.title')} ${invoice.value.number}` : $t('invoices.title')) })
 const events = ref<any[]>([])
+const webhookDeliveries = ref<any[]>([])
+const loadingWebhooks = ref(false)
+const retryingDeliveryId = ref<string | null>(null)
+const webhooksLoaded = ref(false)
 const xmlContent = ref<string | null>(null)
 const loadingXml = ref(false)
 const activeTab = ref('0')
@@ -1225,6 +1298,12 @@ const tabs = computed(() => {
     { label: `${$t('invoices.emails')} (${emailLogs.value.length})`, slot: 'emails' },
     { label: 'XML', slot: 'xml' },
     { label: $t('invoices.events'), slot: 'events' },
+    {
+      label: webhooksLoaded.value
+        ? `${$t('invoices.webhooks')} (${webhookDeliveries.value.length})`
+        : $t('invoices.webhooks'),
+      slot: 'webhooks',
+    },
   ]
   if (invoice.value?.attachments?.length) {
     t.push({ label: `${$t('invoices.attachments')} (${invoice.value.attachments.length})`, slot: 'attachments' })
@@ -1750,10 +1829,52 @@ async function fetchXmlContent() {
   }
 }
 
-// Fetch XML when switching to the XML tab (index 3 now, after payments and emails)
+async function fetchWebhookDeliveries() {
+  loadingWebhooks.value = true
+  try {
+    const { get } = useApi()
+    const res = await get<{ data: any[], meta: { total: number } }>(
+      `/v1/invoices/${route.params.uuid}/webhook-deliveries?limit=50`,
+    )
+    webhookDeliveries.value = res?.data ?? []
+    webhooksLoaded.value = true
+  } catch {
+    webhookDeliveries.value = []
+    webhooksLoaded.value = true
+  } finally {
+    loadingWebhooks.value = false
+  }
+}
+
+async function retryWebhookDelivery(delivery: any) {
+  if (!delivery?.endpoint?.id) return
+  retryingDeliveryId.value = delivery.id
+  try {
+    const { post } = useApi()
+    await post(`/v1/webhooks/${delivery.endpoint.id}/deliveries/${delivery.id}/retry`)
+    useToast().add({ title: $t('invoices.webhookRetryQueued'), color: 'success' })
+    // Give the worker a moment to pick it up, then refresh.
+    setTimeout(() => { fetchWebhookDeliveries() }, 800)
+  } catch (err: any) {
+    useToast().add({
+      title: $t('invoices.webhookRetryFailed'),
+      description: err?.data?.error ?? err?.message ?? '',
+      color: 'error',
+    })
+  } finally {
+    retryingDeliveryId.value = null
+  }
+}
+
+// Lazy-load on tab switch. The XML tab was the only lazy tab; add the
+// webhooks tab (slot index 5) to that list so we only hit the backend when
+// the user actually opens it.
 watch(activeTab, (newTab) => {
   if (newTab === '3' && xmlContent.value === null && !loadingXml.value) {
     fetchXmlContent()
+  }
+  if (newTab === '5' && !webhooksLoaded.value && !loadingWebhooks.value) {
+    fetchWebhookDeliveries()
   }
 })
 
@@ -1774,6 +1895,15 @@ async function refreshInvoiceData() {
   xmlContent.value = null
   if (activeTab.value === '3') {
     fetchXmlContent()
+  }
+
+  // If the user is sitting on the webhooks tab when realtime pushes an
+  // update, re-fetch the deliveries so retried rows show up. Otherwise
+  // just invalidate the cache; the tab watcher will refetch on next open.
+  webhooksLoaded.value = false
+  webhookDeliveries.value = []
+  if (activeTab.value === '5') {
+    fetchWebhookDeliveries()
   }
 }
 

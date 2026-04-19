@@ -16,6 +16,7 @@ use App\Repository\EmailLogRepository;
 use App\Repository\EmailTemplateRepository;
 use App\Repository\InvoiceRepository;
 use App\Repository\PaymentRepository;
+use App\Repository\WebhookDeliveryRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Export\CsvExportService;
@@ -76,6 +77,7 @@ class InvoiceController extends AbstractController
         private readonly PaymentRepository $paymentRepository,
         private readonly LoggerInterface $logger,
         private readonly EFacturaXmlParser $xmlParser,
+        private readonly WebhookDeliveryRepository $webhookDeliveryRepository,
     ) {}
 
     #[Route('/invoices', methods: ['GET'])]
@@ -1186,6 +1188,51 @@ class InvoiceController extends AbstractController
         ])->toArray();
 
         return $this->json(array_values($events));
+    }
+
+    #[Route('/invoices/{uuid}/webhook-deliveries', methods: ['GET'])]
+    public function webhookDeliveries(string $uuid, Request $request): JsonResponse
+    {
+        $invoice = $this->findInvoice($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('INVOICE_VIEW', $invoice);
+
+        $page = max(1, (int) $request->query->get('page', 1));
+        $limit = min(100, max(1, (int) $request->query->get('limit', 20)));
+
+        $deliveries = $this->webhookDeliveryRepository->findByInvoicePaginated($invoice, $page, $limit);
+        $total = $this->webhookDeliveryRepository->countByInvoice($invoice);
+
+        return $this->json([
+            'data' => array_map(function ($d) {
+                $endpoint = $d->getEndpoint();
+                return [
+                    'id' => $d->getId()->toRfc4122(),
+                    'endpoint' => $endpoint ? [
+                        'id' => $endpoint->getId()->toRfc4122(),
+                        'url' => $endpoint->getUrl(),
+                        'description' => $endpoint->getDescription(),
+                    ] : null,
+                    'eventType' => $d->getEventType(),
+                    'status' => $d->getStatus()->value,
+                    'responseStatusCode' => $d->getResponseStatusCode(),
+                    'durationMs' => $d->getDurationMs(),
+                    'attempt' => $d->getAttempt(),
+                    'errorMessage' => $d->getErrorMessage(),
+                    'triggeredAt' => $d->getTriggeredAt()?->format('c'),
+                    'completedAt' => $d->getCompletedAt()?->format('c'),
+                    'nextRetryAt' => $d->getNextRetryAt()?->format('c'),
+                ];
+            }, $deliveries),
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+            ],
+        ]);
     }
 
     #[Route('/invoices/{uuid}/verify-signature', methods: ['POST'])]
