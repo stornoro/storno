@@ -25,13 +25,11 @@ class SendPushNotificationHandler
     {
         $token = $message->getDeviceToken();
 
-        // Path 1: Direct FCM via kreait (FIREBASE_CREDENTIALS is set)
-        if ($this->messaging) {
-            $this->sendViaFcm($message, $token);
-            return;
-        }
-
-        // Path 2: Push relay (PUSH_RELAY_URL is set)
+        // Path 1: Push relay (PUSH_RELAY_URL is set). Preferred — the relay
+        // owns the Firebase service account key, so app instances don't need
+        // FIREBASE_CREDENTIALS configured. Tried first so a half-configured
+        // kreait Messaging service (autowired but missing creds) doesn't
+        // intercept and throw 'Unable to determine the Firebase Project ID'.
         if ($this->pushRelayService->isEnabled()) {
             $this->pushRelayService->send(
                 $token,
@@ -40,6 +38,13 @@ class SendPushNotificationHandler
                 $message->getData(),
                 $message->getBadge(),
             );
+            return;
+        }
+
+        // Path 2: Direct FCM via kreait (only used when no relay is configured
+        // — typical for self-hosted instances that have their own Firebase key)
+        if ($this->messaging) {
+            $this->sendViaFcm($message, $token);
             return;
         }
 
