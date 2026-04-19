@@ -281,6 +281,7 @@ class BorderouController extends AbstractController
         $invoiceFilters = [
             'direction' => 'outgoing',
             'isPaid' => 'false',
+            'excludeCancelled' => true,
         ];
 
         // If search provided, search across all clients; otherwise scope to matched client

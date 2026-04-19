@@ -1240,6 +1240,8 @@ class InvoiceController extends AbstractController
         }
 
         $filters = $request->query->all();
+        unset($filters['status']);
+        $filters['excludeCancelled'] = true;
         $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
 
         $csv = $this->csvExportService->generate($invoices);
@@ -1263,6 +1265,8 @@ class InvoiceController extends AbstractController
         }
 
         $filters = $request->query->all();
+        unset($filters['status']);
+        $filters['excludeCancelled'] = true;
         $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
 
         $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
@@ -1375,7 +1379,7 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Field "direction" must be "outgoing" or "incoming".'], Response::HTTP_BAD_REQUEST);
         }
 
-        $filters = ['direction' => $direction];
+        $filters = ['direction' => $direction, 'excludeCancelled' => true];
         if ($dateFrom) {
             $filters['dateFrom'] = $dateFrom;
         }

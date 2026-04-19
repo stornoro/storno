@@ -36,6 +36,7 @@ class D392Populator implements DeclarationDataPopulatorInterface
         $invoices = $this->invoiceRepository->findByCompanyFiltered($company, [
             'dateFrom' => $dateFrom->format('Y-m-d'),
             'dateTo' => $dateTo->format('Y-m-d'),
+            'excludeCancelled' => true,
         ], 10000);
 
         $operations = [];

@@ -264,6 +264,11 @@ class InvoiceRepository extends ServiceEntityRepository
                 ->setParameter('status', DocumentStatus::from($filters['status']));
         }
 
+        if (isset($filters['excludeCancelled']) && filter_var($filters['excludeCancelled'], FILTER_VALIDATE_BOOLEAN)) {
+            $qb->andWhere('i.status != :cancelledStatus')
+                ->setParameter('cancelledStatus', DocumentStatus::CANCELLED);
+        }
+
         if (isset($filters['direction'])) {
             $qb->andWhere('i.direction = :direction')
                 ->setParameter('direction', InvoiceDirection::from($filters['direction']));

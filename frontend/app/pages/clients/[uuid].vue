@@ -184,12 +184,12 @@
               <span class="font-medium">{{ formatMoney(row.original.total, row.original.currency) }}</span>
             </template>
             <template #status-cell="{ row }">
-              <div class="flex gap-1">
-                <UBadge v-if="row.original.paidAt" color="success" variant="subtle" size="sm">
-                  {{ $t('documentStatus.paid') }}
-                </UBadge>
-                <UBadge v-else :color="statusColor(row.original.status)" variant="subtle" size="sm">
+              <div class="flex items-center gap-1">
+                <UBadge :color="statusColor(row.original.status)" variant="subtle" size="sm">
                   {{ $t(`documentStatus.${row.original.status}`) }}
+                </UBadge>
+                <UBadge v-if="row.original.status !== 'cancelled' && row.original.paidAt" color="success" variant="subtle" size="sm">
+                  {{ $t('documentStatus.paid') }}
                 </UBadge>
               </div>
             </template>
