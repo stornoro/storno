@@ -14,6 +14,8 @@ class ExchangeRateService
     private const BNR_URL = 'https://www.bnr.ro/nbrfxrates.xml';
     private const LAST_GOOD_KEY = 'bnr_exchange_rates_last_good';
     private const LAST_GOOD_TTL = 86400 * 365; // ~1 year — effectively persistent
+    private const FRESH_TTL = 86400; // 24h cache for successful fetches
+    private const STALE_RETRY_TTL = 600; // 10min retry window when serving fallback / empty
     private const FAILURE_NOTIFICATION_TTL = 86400; // dedupe critical warning to once per day
 
     public function __construct(
@@ -38,13 +40,18 @@ class ExchangeRateService
         $cacheKey = 'bnr_exchange_rates_' . date('Y-m-d');
 
         return $this->cache->get($cacheKey, function (ItemInterface $item) {
-            $item->expiresAfter(86400);
-
             $fresh = $this->fetchFromBnr();
             if ($fresh !== null) {
+                // Successful fetch — cache for 24h (BNR publishes daily).
+                $item->expiresAfter(self::FRESH_TTL);
                 $this->storeLastGood($fresh);
                 return $fresh;
             }
+
+            // Anything below is a degraded result. Use a short TTL so the
+            // next request retries the upstream — otherwise an empty / stale
+            // result locks in for 24h and persists past the underlying outage.
+            $item->expiresAfter(self::STALE_RETRY_TTL);
 
             // Fresh fetch failed — try the last known good rates.
             $stale = $this->loadLastGood();
