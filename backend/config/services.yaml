@@ -370,6 +370,10 @@ services:
         arguments:
             $pushRelayUrl: '%env(default::PUSH_RELAY_URL)%'
 
+    App\MessageHandler\SendPushNotificationHandler:
+        arguments:
+            $firebaseCredentials: '%env(default::FIREBASE_CREDENTIALS)%'
+
     App\MessageHandler\DispatchWebhookHandler:
         arguments:
             $webhookRelayUrl: '%env(default::WEBHOOK_RELAY_URL)%'
