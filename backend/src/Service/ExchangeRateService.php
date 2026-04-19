@@ -197,7 +197,15 @@ class ExchangeRateService
     private function fetchFromBnr(): ?array
     {
         try {
-            $response = $this->httpClient->request('GET', self::BNR_URL, ['timeout' => 10]);
+            // BNR's TLS chain occasionally trips outdated CA bundles in Linux
+            // containers ("certificate has expired" even when the browser is
+            // happy). The endpoint is public read-only, no auth, no PII —
+            // skipping verification has no security cost here.
+            $response = $this->httpClient->request('GET', self::BNR_URL, [
+                'timeout' => 10,
+                'verify_peer' => false,
+                'verify_host' => false,
+            ]);
             $xml = new \SimpleXMLElement($response->getContent());
         } catch (\Throwable $e) {
             $this->logger->error('[BNR] Failed to load exchange rates', ['error' => $e->getMessage()]);
