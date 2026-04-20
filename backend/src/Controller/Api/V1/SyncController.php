@@ -14,6 +14,7 @@ use App\Service\Anaf\EFacturaClient;
 use App\Service\Centrifugo\CentrifugoService;
 use App\Service\LicenseManager;
 use App\Service\NotificationService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,6 +36,7 @@ class SyncController extends AbstractController
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly CentrifugoService $centrifugo,
         private readonly MessageBusInterface $messageBus,
+        private readonly EntityManagerInterface $entityManager,
         private readonly string $env,
     ) {}
 
@@ -120,6 +122,13 @@ class SyncController extends AbstractController
 
         $data = json_decode($request->getContent(), true) ?? [];
         $days = isset($data['days']) ? (int) $data['days'] : null;
+
+        // Clear any previous SPV-access-denied flag — the user is explicitly
+        // retrying, so give the sync a chance to discover the new state.
+        if ($company->getSpvAccessError() !== null) {
+            $company->clearSpvAccessError();
+            $this->entityManager->flush();
+        }
 
         $this->messageBus->dispatch(new SyncCompanyMessage(
             companyId: $company->getId()->toRfc4122(),

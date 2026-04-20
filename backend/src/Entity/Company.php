@@ -158,6 +158,20 @@ class Company
     #[Groups(['company'])]
     private int $syncDaysBack = 60;
 
+    /**
+     * Set when ANAF permanently denies SPV access for this company's CIF
+     * (e.g. "Nu aveti drept in SPV pentru CIF=..."). Sync is skipped while
+     * this is set. Cleared by manual sync trigger or when a new ANAF token
+     * is linked.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['company'])]
+    private ?string $spvAccessError = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['company'])]
+    private ?\DateTimeImmutable $spvAccessErrorAt = null;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['company'])]
     private ?int $efacturaDelayHours = null;
@@ -609,6 +623,32 @@ class Company
     public function setSyncDaysBack(int $syncDaysBack): static
     {
         $this->syncDaysBack = $syncDaysBack;
+
+        return $this;
+    }
+
+    public function getSpvAccessError(): ?string
+    {
+        return $this->spvAccessError;
+    }
+
+    public function getSpvAccessErrorAt(): ?\DateTimeImmutable
+    {
+        return $this->spvAccessErrorAt;
+    }
+
+    public function markSpvAccessDenied(string $error): static
+    {
+        $this->spvAccessError = $error;
+        $this->spvAccessErrorAt = new \DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function clearSpvAccessError(): static
+    {
+        $this->spvAccessError = null;
+        $this->spvAccessErrorAt = null;
 
         return $this;
     }
