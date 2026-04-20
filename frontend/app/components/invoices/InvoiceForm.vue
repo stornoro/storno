@@ -57,7 +57,7 @@
       <div class="grid gap-x-2 gap-y-0.5" style="grid-template-columns: 1fr 1fr;">
         <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.issueDate') }}</span>
         <span class="text-[10px] text-(--ui-text-dimmed)">{{ $t('invoices.dueDate') }}</span>
-        <UInput v-model="form.issueDate" type="date" size="sm" />
+        <UInput v-model="form.issueDate" type="date" size="sm" :max="today" />
         <UInput v-model="form.dueDate" type="date" size="sm" />
       </div>
 

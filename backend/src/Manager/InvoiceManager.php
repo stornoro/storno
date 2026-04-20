@@ -129,8 +129,19 @@ class InvoiceManager
         $invoice->setSenderName($company->getName());
         $invoice->setSenderCif((string) $company->getCif());
 
-        // Issue date is always today — cannot be in the past or future
-        $invoice->setIssueDate(new \DateTime('today'));
+        // Issue date defaults to today; a past date may be supplied (e.g. backdating
+        // a draft for last month's billing), but never a future date — that would
+        // be fiscally invalid and ANAF will reject it.
+        $issueDate = new \DateTime('today');
+        if (isset($data['issueDate']) && $data['issueDate'] !== '') {
+            $provided = new \DateTime($data['issueDate']);
+            $provided->setTime(0, 0, 0);
+            if ($provided > $issueDate) {
+                throw new \InvalidArgumentException('issueDate cannot be in the future.');
+            }
+            $issueDate = $provided;
+        }
+        $invoice->setIssueDate($issueDate);
         if (isset($data['dueDate'])) {
             $invoice->setDueDate(new \DateTime($data['dueDate']));
         }
