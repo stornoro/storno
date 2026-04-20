@@ -126,6 +126,11 @@ class AnafController extends AbstractController
 
         if ($company) {
             $anafToken->addValidatedCif((int) $company->getCif());
+            // Fresh token may have access ANAF previously denied — reset the flag
+            // so the next sync run can re-evaluate instead of being short-circuited.
+            if ($company->getSpvAccessError() !== null) {
+                $company->clearSpvAccessError();
+            }
         }
 
         $user->addAnafToken($anafToken);
@@ -282,6 +287,11 @@ class AnafController extends AbstractController
             }
 
             $anafToken->addValidatedCif((int) $cif);
+            // Successful revalidation clears a previously persisted denial so
+            // the next scheduled sync actually runs instead of being skipped.
+            if ($existingCompany->getSpvAccessError() !== null) {
+                $existingCompany->clearSpvAccessError();
+            }
             $this->entityManager->flush();
 
             return $this->json([

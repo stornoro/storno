@@ -83,6 +83,22 @@ class EFacturaSyncService
 
         $channel = self::CHANNEL_PREFIX . $company->getId()->toRfc4122();
 
+        // Short-circuit if we already know ANAF denies SPV access for this CIF.
+        // Avoids daily retries and duplicate notifications until the user
+        // re-links an ANAF token or manually triggers sync.
+        if ($company->getSpvAccessError() !== null) {
+            $this->logger->info('Skipping sync — SPV access previously denied', [
+                'cif' => $cif,
+                'deniedAt' => $company->getSpvAccessErrorAt()?->format('c'),
+            ]);
+            $this->centrifugo->publish($channel, [
+                'type' => 'sync.skipped',
+                'reason' => 'spv_access_denied',
+                'error' => $company->getSpvAccessError(),
+            ]);
+            return $result;
+        }
+
         $token = $this->tokenResolver->resolve($company);
         if (!$token) {
             $result->addError('No valid ANAF token found for company ' . $company->getName());
@@ -126,6 +142,26 @@ class EFacturaSyncService
             $this->centrifugo->publish($channel, [
                 'type' => 'sync.error',
                 'errors' => $result->getErrors(),
+            ]);
+            return $result;
+        }
+
+        // ANAF signals authorization problems via an `eroare` field in the
+        // otherwise-successful JSON body. Persist the denial so subsequent
+        // daily sync runs skip this company until the user fixes it.
+        $anafError = $messagesData['eroare'] ?? null;
+        if ($anafError !== null && $this->isSpvAccessDenied($anafError)) {
+            $company->markSpvAccessDenied($anafError);
+            $this->entityManager->flush();
+            $result->addError($anafError);
+            $this->notifySyncErrors($company, $result->getErrors());
+            $this->centrifugo->publish($channel, [
+                'type' => 'sync.error',
+                'errors' => $result->getErrors(),
+            ]);
+            $this->logger->warning('ANAF denied SPV access — sync will be paused until re-authorized', [
+                'cif' => $cif,
+                'error' => $anafError,
             ]);
             return $result;
         }
@@ -1209,6 +1245,17 @@ class EFacturaSyncService
         $this->documentSeriesManager->clearCache();
         $this->pendingClients = [];
         $this->pendingSuppliers = [];
+    }
+
+    /**
+     * Detect ANAF "no SPV access for this CIF" error. Matches the known
+     * Romanian phrasing regardless of exact casing or CIF suffix.
+     */
+    private function isSpvAccessDenied(string $error): bool
+    {
+        $lower = mb_strtolower($error);
+        return str_contains($lower, 'aveti drept in spv')
+            || str_contains($lower, 'spv pentru cif');
     }
 
     private function sanitizeErrorForUser(string $error): ?string
