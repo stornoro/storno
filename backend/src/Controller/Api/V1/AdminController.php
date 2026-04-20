@@ -584,37 +584,48 @@ class AdminController extends AbstractController
         $params = [];
 
         if ($event) {
-            $where[] = 'event = :event';
+            $where[] = 't.event = :event';
             $params['event'] = $event;
         }
         if ($platform) {
-            $where[] = 'platform = :platform';
+            $where[] = 't.platform = :platform';
             $params['platform'] = $platform;
         }
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $total = (int) $connection->fetchOne(
-            "SELECT COUNT(*) FROM telemetry_event {$whereClause}",
+            "SELECT COUNT(*) FROM telemetry_event t {$whereClause}",
             $params
         );
 
         $offset = ($page - 1) * $limit;
         $rows = $connection->fetchAllAssociative(
-            "SELECT id, user_id, company_id, event, properties, platform, app_version, created_at FROM telemetry_event {$whereClause} ORDER BY created_at DESC LIMIT {$limit} OFFSET {$offset}",
+            "SELECT t.id, t.user_id, t.company_id, t.event, t.properties, t.platform, t.app_version, t.created_at,
+                    u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name
+             FROM telemetry_event t
+             LEFT JOIN \"user\" u ON u.id = t.user_id
+             {$whereClause}
+             ORDER BY t.created_at DESC
+             LIMIT {$limit} OFFSET {$offset}",
             $params
         );
 
-        $items = array_map(fn (array $row) => [
-            'id' => $row['id'],
-            'userId' => $row['user_id'],
-            'companyId' => $row['company_id'],
-            'event' => $row['event'],
-            'properties' => json_decode($row['properties'], true),
-            'platform' => $row['platform'],
-            'appVersion' => $row['app_version'],
-            'createdAt' => $row['created_at'],
-        ], $rows);
+        $items = array_map(function (array $row): array {
+            $fullName = trim(($row['user_first_name'] ?? '') . ' ' . ($row['user_last_name'] ?? ''));
+            return [
+                'id' => $row['id'],
+                'userId' => $row['user_id'],
+                'userEmail' => $row['user_email'],
+                'userName' => $fullName !== '' ? $fullName : null,
+                'companyId' => $row['company_id'],
+                'event' => $row['event'],
+                'properties' => json_decode($row['properties'], true),
+                'platform' => $row['platform'],
+                'appVersion' => $row['app_version'],
+                'createdAt' => $row['created_at'],
+            ];
+        }, $rows);
 
         return $this->json([
             'items' => $items,

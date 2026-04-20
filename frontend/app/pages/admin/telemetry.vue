@@ -120,6 +120,15 @@
           </div>
         </template>
         <UTable :data="events.items" :columns="eventColumns">
+          <template #userId-cell="{ row }">
+            <span v-if="row.original.userEmail" class="text-sm" :title="row.original.userId">
+              {{ row.original.userEmail }}<span v-if="row.original.userName" class="text-muted"> · {{ row.original.userName }}</span>
+            </span>
+            <span v-else-if="row.original.userId" class="text-xs text-muted font-mono" :title="row.original.userId">
+              {{ row.original.userId.slice(0, 8) }}…
+            </span>
+            <span v-else class="text-muted">-</span>
+          </template>
           <template #properties-cell="{ row }">
             <span class="text-xs text-muted truncate max-w-48 block">
               {{ row.original.properties ? JSON.stringify(row.original.properties) : '-' }}
