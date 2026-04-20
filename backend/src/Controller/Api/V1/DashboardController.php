@@ -73,9 +73,14 @@ class DashboardController extends AbstractController
         // Build fallback BNR rate lookup for currencies with NULL exchange_rate
         $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
 
+        // Cancelled invoices are fiscally void — exclude them from all aggregate
+        // counts/totals. The byStatus breakdown below keeps them so the UI can
+        // still show "X cancelled" as its own bucket.
+        $activeFilter = " AND status != 'cancelled'";
+
         // Counts by direction
         $directionCounts = $conn->fetchAllAssociative(
-            'SELECT direction, COUNT(*) as cnt FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $dateFilter . ' GROUP BY direction',
+            'SELECT direction, COUNT(*) as cnt FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $activeFilter . $dateFilter . ' GROUP BY direction',
             $baseParams
         );
 
@@ -103,7 +108,7 @@ class DashboardController extends AbstractController
 
         // Total amounts (converted to default currency)
         $totals = $conn->fetchAssociative(
-            "SELECT COALESCE(SUM($convertTotal), 0) as total_amount, COALESCE(SUM($convertVat), 0) as total_vat FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $dateFilter,
+            "SELECT COALESCE(SUM($convertTotal), 0) as total_amount, COALESCE(SUM($convertVat), 0) as total_vat FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . $dateFilter,
             $amountParams
         );
 
@@ -123,7 +128,7 @@ class DashboardController extends AbstractController
         $monthlyRows = $conn->fetchAllAssociative(
             "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month, direction, COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
-             WHERE company_id = :companyId AND deleted_at IS NULL AND issue_date >= (CURRENT_DATE - INTERVAL 12 MONTH)" . $dateFilter . "
+             WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . " AND issue_date >= (CURRENT_DATE - INTERVAL 12 MONTH)" . $dateFilter . "
              GROUP BY month, direction
              ORDER BY month",
             $amountParams
@@ -145,7 +150,7 @@ class DashboardController extends AbstractController
 
         // Amounts by direction (converted to default currency)
         $directionAmounts = $conn->fetchAllAssociative(
-            "SELECT direction, COALESCE(SUM($convertTotal), 0) AS amount FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $dateFilter . ' GROUP BY direction',
+            "SELECT direction, COALESCE(SUM($convertTotal), 0) AS amount FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . $dateFilter . ' GROUP BY direction',
             $amountParams
         );
         $amountsByDirection = ['incoming' => '0.00', 'outgoing' => '0.00'];

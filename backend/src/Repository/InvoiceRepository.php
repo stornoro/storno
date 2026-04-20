@@ -107,7 +107,9 @@ class InvoiceRepository extends ServiceEntityRepository
 
         $paginator = new Paginator($qb);
 
-        // Aggregated totals across all filtered results (same currency, no conversion)
+        // Aggregated totals across all filtered results (same currency, no conversion).
+        // Exclude cancelled invoices — they're fiscally void and must not appear in
+        // receivable/payable summaries or the subtotal/VAT/total ribbon above the list.
         $totalsQb = $this->createQueryBuilder('t')
             ->select(
                 'COALESCE(SUM(t.subtotal), 0) AS totalExcluding',
@@ -118,7 +120,9 @@ class InvoiceRepository extends ServiceEntityRepository
             )
             ->leftJoin('t.client', 'c')
             ->where('t.company = :company')
-            ->setParameter('company', $company);
+            ->andWhere('t.status != :cancelledStatus')
+            ->setParameter('company', $company)
+            ->setParameter('cancelledStatus', DocumentStatus::CANCELLED);
 
         $this->applyFilters($totalsQb, $filters);
 
@@ -357,6 +361,8 @@ class InvoiceRepository extends ServiceEntityRepository
 
     /**
      * Count invoices where senderCif or receiverCif matches the given CIF.
+     * Cancelled invoices are excluded — they don't count toward a client's
+     * transactional activity.
      */
     public function countByCif(Company $company, string $cif): int
     {
@@ -364,8 +370,10 @@ class InvoiceRepository extends ServiceEntityRepository
             ->select('COUNT(i.id)')
             ->where('i.company = :company')
             ->andWhere('i.senderCif = :cif OR i.receiverCif = :cif')
+            ->andWhere('i.status != :cancelledStatus')
             ->setParameter('company', $company)
             ->setParameter('cif', $cif)
+            ->setParameter('cancelledStatus', DocumentStatus::CANCELLED)
             ->getQuery()
             ->getSingleScalarResult();
     }
@@ -386,14 +394,16 @@ class InvoiceRepository extends ServiceEntityRepository
         $placeholders = implode(',', array_fill(0, count($cifs), '?'));
         $companyId = $company->getId()->toRfc4122();
 
+        // Cancelled invoices are fiscally void — exclude them from per-CIF counts
+        // and totals shown on client/supplier list pages.
         $sql = "
             SELECT cif, COUNT(*) AS invoiceCount, COALESCE(SUM(total), 0) AS invoiceTotal
             FROM (
                 SELECT sender_cif AS cif, total FROM invoice
-                WHERE company_id = ? AND sender_cif IN ($placeholders)
+                WHERE company_id = ? AND status != 'cancelled' AND sender_cif IN ($placeholders)
                 UNION ALL
                 SELECT receiver_cif AS cif, total FROM invoice
-                WHERE company_id = ? AND receiver_cif IN ($placeholders)
+                WHERE company_id = ? AND status != 'cancelled' AND receiver_cif IN ($placeholders)
             ) AS combined
             GROUP BY cif
         ";
