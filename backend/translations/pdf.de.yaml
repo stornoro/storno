@@ -88,3 +88,6 @@ client_signature: 'Unterschrift Kunde'
 receipt_title: 'KASSENBON'
 fiscal_number: 'Fiskalnr.'
 cash_register: 'Kasse'
+
+# Status watermarks
+cancelled_watermark: 'STORNIERT'

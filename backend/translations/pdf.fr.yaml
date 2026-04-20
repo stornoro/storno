@@ -88,3 +88,6 @@ client_signature: 'Signature client'
 receipt_title: 'TICKET DE CAISSE'
 fiscal_number: 'N° fiscal'
 cash_register: 'Caisse'
+
+# Status watermarks
+cancelled_watermark: 'ANNULEE'

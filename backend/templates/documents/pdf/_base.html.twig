@@ -36,6 +36,22 @@
         .header-bar .header-logo { margin-bottom: 10px; }
         .header-bar .header-logo img { background: #fff; padding: 4px 8px; border-radius: 4px; }
 
+        .cancelled-watermark {
+            position: fixed;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 140px;
+            font-weight: bold;
+            color: rgba(220, 38, 38, 0.18);
+            border: 10px solid rgba(220, 38, 38, 0.18);
+            padding: 20px 60px;
+            letter-spacing: 8px;
+            z-index: 1000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
         {% block styles %}{% endblock %}
 
         {% if customCss %}
@@ -44,6 +60,9 @@
     </style>
 </head>
 <body>
+    {% if invoice is defined and invoice.status is defined and invoice.status.value == 'cancelled' %}
+        <div class="cancelled-watermark">{{ 'cancelled_watermark'|trans({}, 'pdf', locale|default('ro')) }}</div>
+    {% endif %}
     <div class="page">
         {% block content %}{% endblock %}
     </div>
