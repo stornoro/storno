@@ -19,7 +19,7 @@ class SendPushNotificationHandler
         private readonly LoggerInterface $logger,
         private readonly PushRelayService $pushRelayService,
         private readonly ?Messaging $messaging = null,
-        private readonly string $firebaseCredentials = '',
+        private readonly ?string $firebaseCredentials = '',
     ) {}
 
     public function __invoke(SendPushNotificationMessage $message): void
@@ -48,7 +48,7 @@ class SendPushNotificationHandler
         // are empty, and the service then throws "Unable to determine the
         // Firebase Project ID" on the first send. So also gate on the creds
         // env var and skip cleanly when it's unset.
-        if ($this->messaging && $this->firebaseCredentials !== '') {
+        if ($this->messaging && !empty($this->firebaseCredentials)) {
             $this->sendViaFcm($message, $token);
             return;
         }
