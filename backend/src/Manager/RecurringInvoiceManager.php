@@ -162,7 +162,25 @@ class RecurringInvoiceManager
             $ri->setFrequencyMonth($data['frequencyMonth'] !== null ? (int) $data['frequencyMonth'] : null);
         }
         if (isset($data['nextIssuanceDate'])) {
-            $ri->setNextIssuanceDate(new \DateTime($data['nextIssuanceDate']));
+            $nextDate = new \DateTime($data['nextIssuanceDate']);
+            $ri->setNextIssuanceDate($nextDate);
+
+            // Auto-derive frequencyDay from the next issuance date when not explicitly provided.
+            // This keeps the monthly anchor aligned with the chosen next date so the scheduler
+            // doesn't snap subsequent issuances to an unrelated day.
+            if (!isset($data['frequencyDay'])
+                && in_array($ri->getFrequency(), ['monthly', 'bimonthly', 'quarterly', 'semi_annually', 'yearly'], true)
+            ) {
+                $ri->setFrequencyDay(min((int) $nextDate->format('j'), 28));
+            }
+
+            // Same idea for yearly: align frequencyMonth with the next date if unspecified.
+            if (!array_key_exists('frequencyMonth', $data)
+                && $ri->getFrequency() === 'yearly'
+                && $ri->getFrequencyMonth() === null
+            ) {
+                $ri->setFrequencyMonth((int) $nextDate->format('n'));
+            }
         }
         if (array_key_exists('stopDate', $data)) {
             $ri->setStopDate($data['stopDate'] ? new \DateTime($data['stopDate']) : null);
