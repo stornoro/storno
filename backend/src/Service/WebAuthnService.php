@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Entity\UserPasskey;
 use App\Repository\UserPasskeyRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Webauthn\AttestationStatement\AttestationStatementSupportManager;
@@ -25,6 +26,7 @@ class WebAuthnService
         private readonly UserPasskeyRepository $passkeyRepository,
         private readonly EntityManagerInterface $em,
         private readonly ParameterBagInterface $params,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function getSerializer(): \Symfony\Component\Serializer\SerializerInterface
@@ -58,6 +60,11 @@ class WebAuthnService
         if ($androidOrigin) {
             $origins[] = $androidOrigin;
         }
+
+        // iOS native passkeys set clientDataJSON.origin to "https://<rpId>"
+        // (the Associated Domain), not the frontend web origin. Whitelist it
+        // so assertions from the iOS app pass origin validation.
+        $origins[] = 'https://' . $this->getRpId($request);
 
         $origin = $request->headers->get('Origin');
         if ($origin) {
@@ -157,7 +164,12 @@ class WebAuthnService
                 $rpId,
                 $publicKeyCredentialSource->userHandle,
             );
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->logger->warning('Passkey assertion verification failed.', [
+                'error' => $e->getMessage(),
+                'rpId' => $rpId,
+                'userAgent' => $request->headers->get('User-Agent'),
+            ]);
             return null;
         }
 
