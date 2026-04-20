@@ -88,3 +88,6 @@ client_signature: 'Semnatura client'
 receipt_title: 'BON FISCAL'
 fiscal_number: 'Nr. fiscal'
 cash_register: 'Casa de marcat'
+
+# Status watermarks
+cancelled_watermark: 'ANULATA'

@@ -88,3 +88,6 @@ client_signature: 'Client signature'
 receipt_title: 'FISCAL RECEIPT'
 fiscal_number: 'Fiscal no.'
 cash_register: 'Cash register'
+
+# Status watermarks
+cancelled_watermark: 'CANCELLED'
