@@ -1666,6 +1666,16 @@ export default defineI18nLocale(async () => {
     },
 
     // ── OAuth2 Apps ────────────────────────────────────────────
+    authorizedApps: {
+      title: 'Aplicatii autorizate',
+      description: 'Aplicatii externe carora le-ai acordat acces la contul tau. Revocarea le deconecteaza imediat.',
+      empty: 'Nu ai autorizat inca nicio aplicatie externa.',
+      revoke: 'Revoca acces',
+      lastActive: 'Ultima activitate: {date}',
+      confirmRevoke: 'Esti sigur ca vrei sa revoci accesul pentru {name}? Aplicatia va fi deconectata imediat.',
+      revokedTitle: 'Acces revocat',
+      revokedMsg: 'Accesul pentru {name} a fost revocat.',
+    },
     oauth2: {
       title: 'Aplicatii OAuth2',
       description: 'Gestioneaza aplicatiile externe care se pot conecta la contul tau Storno',

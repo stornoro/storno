@@ -1667,6 +1667,16 @@ export default defineI18nLocale(async () => {
   },
 
   // ── OAuth2 Apps ────────────────────────────────────────────
+  authorizedApps: {
+    title: 'Authorized apps',
+    description: 'Third-party apps you have granted access to your account. Revoking disconnects them immediately.',
+    empty: "You haven't authorized any third-party apps yet.",
+    revoke: 'Revoke access',
+    lastActive: 'Last active: {date}',
+    confirmRevoke: 'Revoke access for {name}? The app will be disconnected immediately.',
+    revokedTitle: 'Access revoked',
+    revokedMsg: 'Access for {name} has been revoked.',
+  },
   oauth2: {
     title: 'OAuth2 Apps',
     description: 'Manage external applications that can connect to your Storno account',

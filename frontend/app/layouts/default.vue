@@ -96,6 +96,11 @@ const links = computed(() => {
       onSelect: close,
     },
     {
+      label: $t('authorizedApps.title'),
+      to: '/settings/authorized-apps',
+      onSelect: close,
+    },
+    {
       label: $t('settings.organization'),
       to: '/settings/organization',
       onSelect: close,
