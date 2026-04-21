@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\OAuth2Client;
 use App\Entity\OAuth2RefreshToken;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -45,6 +46,21 @@ class OAuth2RefreshTokenRepository extends ServiceEntityRepository
             ->set('t.revokedAt', ':now')
             ->where('t.client = :client')
             ->andWhere('t.revokedAt IS NULL')
+            ->setParameter('client', $client)
+            ->setParameter('now', new \DateTimeImmutable())
+            ->getQuery()
+            ->execute();
+    }
+
+    public function revokeAllForUserAndClient(User $user, OAuth2Client $client): int
+    {
+        return $this->createQueryBuilder('t')
+            ->update()
+            ->set('t.revokedAt', ':now')
+            ->where('t.user = :user')
+            ->andWhere('t.client = :client')
+            ->andWhere('t.revokedAt IS NULL')
+            ->setParameter('user', $user)
             ->setParameter('client', $client)
             ->setParameter('now', new \DateTimeImmutable())
             ->getQuery()
