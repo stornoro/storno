@@ -334,6 +334,16 @@ function getRowActions(inv: any) {
     }
   }
 
+  // Cancel — only for issued (backend rejects cancel on sent-to-provider / validated
+  // and on issued invoices already uploaded to ANAF).
+  if (inv.status === 'issued' && can(P.INVOICE_CANCEL)) {
+    group.push({
+      label: $t('bulk.cancel'),
+      icon: 'i-lucide-x-circle',
+      onSelect: () => openRowCancelConfirm(inv.id),
+    })
+  }
+
   if (['draft', 'cancelled'].includes(inv.status)) {
     if (can(P.INVOICE_DELETE)) {
       group.push({
@@ -371,6 +381,31 @@ async function handleRowMarkUnpaid(uuid: string) {
   if (result) {
     toast.add({ title: $t('bulk.markUnpaidSuccess', { count: 1 }), color: 'success' })
     await fetchInvoices()
+  }
+}
+
+const rowCancelId = ref<string | null>(null)
+const rowCancelConfirmOpen = ref(false)
+const rowCancelLoading = ref(false)
+
+function openRowCancelConfirm(uuid: string) {
+  rowCancelId.value = uuid
+  rowCancelConfirmOpen.value = true
+}
+
+async function handleRowCancel() {
+  if (!rowCancelId.value) return
+  rowCancelLoading.value = true
+  const result = await invoicesStore.cancelInvoice(rowCancelId.value)
+  rowCancelLoading.value = false
+  rowCancelConfirmOpen.value = false
+  rowCancelId.value = null
+  if (result) {
+    toast.add({ title: $t('bulk.cancelSuccess', { count: 1 }), color: 'success' })
+    await fetchInvoices()
+  }
+  else {
+    toast.add({ title: invoicesStore.error || $t('common.error'), color: 'error' })
   }
 }
 
@@ -1187,6 +1222,22 @@ onUnmounted(() => {
           <div class="flex justify-end gap-2">
             <UButton :label="$t('common.cancel')" variant="ghost" @click="cancelConfirmOpen = false" />
             <UButton :label="$t('bulk.cancel')" color="warning" :loading="bulkLoading" @click="handleBulkCancel" />
+          </div>
+        </template>
+      </UModal>
+
+      <!-- Row Cancel Confirm -->
+      <UModal v-model:open="rowCancelConfirmOpen">
+        <template #header>
+          <h3 class="text-lg font-semibold">{{ $t('bulk.cancelConfirmTitle') }}</h3>
+        </template>
+        <template #body>
+          <p class="text-sm">{{ $t('bulk.cancelConfirmDescription', { count: 1 }) }}</p>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton :label="$t('common.cancel')" variant="ghost" @click="rowCancelConfirmOpen = false" />
+            <UButton :label="$t('bulk.cancel')" color="warning" :loading="rowCancelLoading" @click="handleRowCancel" />
           </div>
         </template>
       </UModal>
