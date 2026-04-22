@@ -64,7 +64,9 @@ class SendPushNotificationHandler
                 ->withNotification(Notification::create($message->getTitle(), $message->getBody()));
 
             if (!empty($message->getData())) {
-                $cloudMessage = $cloudMessage->withData(array_map('strval', $message->getData()));
+                // FCM requires all data values to be strings — encode nested
+                // arrays/objects as JSON so the mobile client can parse them.
+                $cloudMessage = $cloudMessage->withData(PushRelayService::stringifyData($message->getData()));
             }
 
             if ($message->getBadge() !== null) {
