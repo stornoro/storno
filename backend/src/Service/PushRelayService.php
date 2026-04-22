@@ -36,7 +36,7 @@ class PushRelayService
                     'title' => $title,
                     'body' => $body,
                 ],
-                'data' => !empty($data) ? array_map('strval', $data) : new \stdClass(),
+                'data' => !empty($data) ? self::stringifyData($data) : new \stdClass(),
                 'android' => [
                     'priority' => 'high',
                 ],
@@ -63,5 +63,33 @@ class PushRelayService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Flatten a notification data payload into a string-only map.
+     *
+     * FCM requires every value in `data` to be a string. Nested arrays/objects
+     * (e.g. messageParams, errors list) would otherwise throw
+     * "Array to string conversion" when passed to strval(). Encode them as JSON
+     * so the mobile client can JSON.parse the value back into an object.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, string>
+     */
+    public static function stringifyData(array $data): array
+    {
+        $out = [];
+        foreach ($data as $key => $value) {
+            if (is_array($value) || is_object($value)) {
+                $out[$key] = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+            } elseif (is_bool($value)) {
+                $out[$key] = $value ? 'true' : 'false';
+            } elseif ($value === null) {
+                $out[$key] = '';
+            } else {
+                $out[$key] = (string) $value;
+            }
+        }
+        return $out;
     }
 }
