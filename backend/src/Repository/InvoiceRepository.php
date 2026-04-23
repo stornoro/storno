@@ -636,6 +636,42 @@ class InvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Net outstanding balance a client owes to this company, as of a given date,
+     * in a single currency. Sums (total - amountPaid) across all outgoing invoices
+     * with issueDate <= asOfDate, excluding drafts and cancelled documents.
+     *
+     * Advance payments on future invoices naturally contribute 0 (total == amountPaid),
+     * so unpaid older invoices are not offset by prepaid ones — which is the intended
+     * "how much is still owed right now" view.
+     */
+    public function getClientOutstandingBalance(
+        Company $company,
+        \App\Entity\Client $client,
+        string $currency,
+        \DateTimeInterface $asOfDate,
+    ): string {
+        $result = $this->createQueryBuilder('i')
+            ->select('COALESCE(SUM(i.total - i.amountPaid), 0) AS outstanding')
+            ->where('i.company = :company')
+            ->andWhere('i.client = :client')
+            ->andWhere('i.currency = :currency')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.issueDate <= :asOfDate')
+            ->andWhere('i.status NOT IN (:excluded)')
+            ->setParameter('company', $company)
+            ->setParameter('client', $client)
+            ->setParameter('currency', $currency)
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('asOfDate', $asOfDate)
+            ->setParameter('excluded', [DocumentStatus::DRAFT, DocumentStatus::CANCELLED])
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return number_format((float) $result, 2, '.', '');
+    }
+
+    /**
      * Find billing invoices issued by the billing company to a specific org (matched by receiverCif).
      */
     public function findBillingInvoicesForOrg(Company $billingCompany, string $receiverCif, int $page = 1, int $limit = 20): array

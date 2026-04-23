@@ -26,6 +26,7 @@ class EmailTemplateController extends AbstractController
             '[[issue_date]]',
             '[[company_name]]',
             '[[balance]]',
+            '[[client_outstanding]]',
             '[[currency]]',
         ],
         'delivery_note' => [
@@ -237,6 +238,7 @@ Va transmitem alaturat factura **nr. [[invoice_number]]** emisa in data de **[[i
 - **Data scadenta:** [[due_date]]
 - **Total de plata:** [[total]] [[currency]]
 - **Rest de plata:** [[balance]] [[currency]]
+- **Sold total client la zi:** [[client_outstanding]] [[currency]]
 
 ---
 
