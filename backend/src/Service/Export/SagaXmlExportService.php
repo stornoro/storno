@@ -36,7 +36,7 @@ class SagaXmlExportService
             $this->addElement($dom, $node, 'Cod_fiscal', $client->getVatCode() ?: ($client->getCui() ?? ''));
             $this->addElement($dom, $node, 'Reg_com', $client->getRegistrationNumber() ?? '');
             $this->addElement($dom, $node, 'Tara', $client->getCountry());
-            $this->addElement($dom, $node, 'Judet', $client->getCounty() ?? '');
+            $this->addElement($dom, $node, 'Judet', $client->getCountry() === 'RO' ? ($client->getCounty() ?? '') : '');
             $this->addElement($dom, $node, 'Localitate', $client->getCity() ?? '');
             $this->addElement($dom, $node, 'Adresa', $client->getAddress() ?? '');
             $this->addElement($dom, $node, 'Cont_banca', $client->getBankAccount() ?? '');
@@ -166,8 +166,9 @@ class SagaXmlExportService
             $this->addElement($dom, $antetNode, 'ClientInformatiiSuplimentare', '');
             $this->addElement($dom, $antetNode, 'ClientCIF', $invoice->getReceiverCif() ?? ($client?->getCui() ?? ''));
             $this->addElement($dom, $antetNode, 'ClientNrRegCom', $client?->getRegistrationNumber() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientJudet', $client?->getCounty() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientTara', $client?->getCountry() ?? 'RO');
+            $clientCountry = $client?->getCountry() ?? 'RO';
+            $this->addElement($dom, $antetNode, 'ClientJudet', $clientCountry === 'RO' ? ($client?->getCounty() ?? '') : '');
+            $this->addElement($dom, $antetNode, 'ClientTara', $clientCountry);
             $this->addElement($dom, $antetNode, 'ClientLocalitate', $client?->getCity() ?? '');
             $this->addElement($dom, $antetNode, 'ClientAdresa', $client?->getAddress() ?? '');
             $this->addElement($dom, $antetNode, 'ClientBanca', $client?->getBankName() ?? '');
