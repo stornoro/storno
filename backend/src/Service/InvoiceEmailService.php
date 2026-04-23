@@ -11,6 +11,7 @@ use App\Enum\EmailEventType;
 use App\Enum\EmailStatus;
 use App\EventListener\SesMessageIdListener;
 use App\Repository\EmailUnsubscribeRepository;
+use App\Repository\InvoiceRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\CommonMarkConverter;
 use League\Flysystem\FilesystemOperator;
@@ -33,6 +34,7 @@ class InvoiceEmailService
         private readonly InvoiceShareService $shareService,
         private readonly EmailUnsubscribeService $emailUnsubscribeService,
         private readonly EmailUnsubscribeRepository $emailUnsubscribeRepository,
+        private readonly InvoiceRepository $invoiceRepository,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
     ) {}
@@ -214,9 +216,26 @@ class InvoiceEmailService
             '[[company_name]]' => $companyName,
             '[[balance]]' => $invoice->getBalance() ?? '0.00',
             '[[currency]]' => $invoice->getCurrency() ?? 'RON',
+            '[[client_outstanding]]' => $this->calculateClientOutstanding($invoice),
         ];
 
         return str_replace(array_keys($replacements), array_values($replacements), $text);
+    }
+
+    private function calculateClientOutstanding(Invoice $invoice): string
+    {
+        $client = $invoice->getClient();
+        $company = $invoice->getCompany();
+        if (!$client || !$company) {
+            return '0.00';
+        }
+
+        return $this->invoiceRepository->getClientOutstandingBalance(
+            $company,
+            $client,
+            $invoice->getCurrency() ?? 'RON',
+            new \DateTimeImmutable('today'),
+        );
     }
 
     public function getDefaultRecipient(Invoice $invoice): ?string
