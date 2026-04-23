@@ -1318,9 +1318,13 @@ class InvoiceController extends AbstractController
 
         $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
 
+        $countryPrefix = $company->getCountry() ?: 'RO';
+        $countMode = count($invoices) === 1 ? 'single' : 'multiple';
+        $filename = sprintf('F_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="FCT_%s.xml"', date('Y-m-d')),
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
         ]);
     }
 
@@ -1339,9 +1343,13 @@ class InvoiceController extends AbstractController
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::OUTGOING);
         $xml = $this->sagaXmlExportService->generateReceiptsXml($payments);
 
+        $countryPrefix = $company->getCountry() ?: 'RO';
+        $countMode = count($payments) === 1 ? 'single' : 'multiple';
+        $filename = sprintf('I_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="INC_%s.xml"', date('Y-m-d')),
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
         ]);
     }
 
@@ -1360,9 +1368,13 @@ class InvoiceController extends AbstractController
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::INCOMING);
         $xml = $this->sagaXmlExportService->generatePaymentsXml($payments);
 
+        $countryPrefix = $company->getCountry() ?: 'RO';
+        $countMode = count($payments) === 1 ? 'single' : 'multiple';
+        $filename = sprintf('P_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="PLT_%s.xml"', date('Y-m-d')),
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
         ]);
     }
 
