@@ -197,11 +197,7 @@ class StripeAppInvoiceService
             }
         }
 
-        // Name is deliberately NOT used as a match key. In past incidents a
-        // Stripe customer with a common first-name-only "name" (e.g. "Juan
-        // Manuel") was merged onto an unrelated Storno client with the same
-        // name, and invoices were then issued against the wrong company. The
-        // only stable identity keys are CUI and email.
+        // Name is not an identity key — distinct payers can share a name.
 
         // Create new client if we have enough info
         if (!$name && !$email) {
