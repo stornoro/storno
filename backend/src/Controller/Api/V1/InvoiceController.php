@@ -1318,9 +1318,7 @@ class InvoiceController extends AbstractController
 
         $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
 
-        $countryPrefix = $company->getCountry() ?: 'RO';
-        $countMode = count($invoices) === 1 ? 'single' : 'multiple';
-        $filename = sprintf('F_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+        $filename = $this->buildSagaFilename('F', $company, $invoices, fn (Invoice $i) => $i->getIssueDate());
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1343,9 +1341,7 @@ class InvoiceController extends AbstractController
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::OUTGOING);
         $xml = $this->sagaXmlExportService->generateReceiptsXml($payments);
 
-        $countryPrefix = $company->getCountry() ?: 'RO';
-        $countMode = count($payments) === 1 ? 'single' : 'multiple';
-        $filename = sprintf('I_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+        $filename = $this->buildSagaFilename('I', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1368,9 +1364,7 @@ class InvoiceController extends AbstractController
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::INCOMING);
         $xml = $this->sagaXmlExportService->generatePaymentsXml($payments);
 
-        $countryPrefix = $company->getCountry() ?: 'RO';
-        $countMode = count($payments) === 1 ? 'single' : 'multiple';
-        $filename = sprintf('P_%s%d_%s_%s.xml', $countryPrefix, $company->getCif(), $countMode, date('d_m_Y'));
+        $filename = $this->buildSagaFilename('P', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1752,6 +1746,46 @@ class InvoiceController extends AbstractController
     private function resolveCompany(Request $request): ?\App\Entity\Company
     {
         return $this->organizationContext->resolveCompany($request);
+    }
+
+    /**
+     * Build a SAGA-C-compliant XML filename: {prefix}_{country}{cif}_{single|multiple}_{start}_{end}.xml.
+     * Start/end are the min/max of the given date on the exported set; if the set is empty,
+     * both fall back to today.
+     */
+    private function buildSagaFilename(string $prefix, \App\Entity\Company $company, array $docs, callable $dateExtractor): string
+    {
+        $countryPrefix = $company->getCountry() ?: 'RO';
+        $countMode = count($docs) === 1 ? 'single' : 'multiple';
+
+        $start = null;
+        $end = null;
+        foreach ($docs as $doc) {
+            $d = $dateExtractor($doc);
+            if (!$d instanceof \DateTimeInterface) {
+                continue;
+            }
+            if ($start === null || $d < $start) {
+                $start = $d;
+            }
+            if ($end === null || $d > $end) {
+                $end = $d;
+            }
+        }
+
+        $fallback = new \DateTimeImmutable('today');
+        $start ??= $fallback;
+        $end ??= $fallback;
+
+        return sprintf(
+            '%s_%s%d_%s_%s_%s.xml',
+            $prefix,
+            $countryPrefix,
+            $company->getCif(),
+            $countMode,
+            $start->format('d_m_Y'),
+            $end->format('d_m_Y'),
+        );
     }
 
     private function findInvoice(string $uuid): ?Invoice
