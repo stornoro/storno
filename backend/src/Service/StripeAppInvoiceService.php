@@ -197,13 +197,11 @@ class StripeAppInvoiceService
             }
         }
 
-        // Match by name
-        if ($name) {
-            $client = $this->clientRepository->findOneBy(['company' => $company, 'name' => $name]);
-            if ($client) {
-                return $client;
-            }
-        }
+        // Name is deliberately NOT used as a match key. In past incidents a
+        // Stripe customer with a common first-name-only "name" (e.g. "Juan
+        // Manuel") was merged onto an unrelated Storno client with the same
+        // name, and invoices were then issued against the wrong company. The
+        // only stable identity keys are CUI and email.
 
         // Create new client if we have enough info
         if (!$name && !$email) {
