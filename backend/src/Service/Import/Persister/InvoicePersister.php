@@ -57,10 +57,7 @@ class InvoicePersister implements EntityPersisterInterface
         $companyId = $company->getId()->toRfc4122();
         $conn = $this->entityManager->getConnection();
 
-        // Pre-load clients keyed only by CUI and email. Name is deliberately
-        // excluded — it is not unique (many foreign customers share a common
-        // first-name-only "name" in source exports) and falling back to it
-        // would link invoices to the wrong client.
+        // Name is not unique enough to be an identity key — keep to CUI/email.
         $rows = $conn->fetchAllAssociative(
             'SELECT id, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
             ['companyId' => $companyId],
@@ -275,7 +272,6 @@ class InvoicePersister implements EntityPersisterInterface
 
     /**
      * Find a client ID from the pre-loaded cache. No DB queries.
-     * Matches by email first, then CUI. Name is not used — see initialize().
      */
     private function findClientId(Company $company, ?string $email, ?string $cui, ?string $name): ?string
     {

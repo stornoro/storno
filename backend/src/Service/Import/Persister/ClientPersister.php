@@ -36,7 +36,7 @@ class ClientPersister implements EntityPersisterInterface
     }
 
     /**
-     * Pre-load all existing client keys (cui, email, name) for fast dedup.
+     * Pre-load existing client keys (cui, email) for fast dedup.
      */
     private function initialize(Company $company): void
     {
@@ -79,8 +79,6 @@ class ClientPersister implements EntityPersisterInterface
         $email = !empty($mappedData['email']) ? trim($mappedData['email']) : null;
         $type = $mappedData['type'] ?? ($cui ? 'company' : 'individual');
 
-        // Fast dedup check against pre-loaded set. Only CUI and email are
-        // used as identity keys — see initialize() for the reasoning.
         $isExisting = false;
         if ($cui && isset($this->knownClients[$companyId . ':cui:' . $cui])) {
             $isExisting = true;
@@ -133,7 +131,6 @@ class ClientPersister implements EntityPersisterInterface
 
         $this->entityManager->persist($client);
 
-        // Track in known set — CUI/email only, never name.
         if ($cui) {
             $this->knownClients[$companyId . ':cui:' . $cui] = true;
         }
