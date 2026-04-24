@@ -248,17 +248,20 @@ class SagaXmlExportService
         foreach ($payments as $payment) {
             $node = $dom->createElement('Linie');
             $invoice = $payment->getInvoice();
+            $invoiceNumber = $invoice?->getNumber() ?? '';
+            $paymentDate = $payment->getPaymentDate()?->format('d.m.Y') ?? '';
+            $explicatie = $payment->getNotes()
+                ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
 
-            $this->addElement($dom, $node, 'Data', $payment->getPaymentDate()?->format('d.m.Y') ?? '');
-            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?? '');
+            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($payment->getPaymentMethod()));
+            $this->addElement($dom, $node, 'Data', $paymentDate);
+            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
             $this->addElement($dom, $node, 'Suma', $payment->getAmount());
             $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($payment->getPaymentMethod(), $accountMap));
-            $this->addElement($dom, $node, 'ContClient', '');
-            $this->addElement($dom, $node, 'Explicatie', $payment->getNotes() ?: sprintf('contravaloarea facturii %s', $invoice?->getNumber() ?? ''));
-            $this->addElement($dom, $node, 'FacturaID', '');
-            $this->addElement($dom, $node, 'FacturaNumar', $invoice?->getNumber() ?? '');
+            $this->addElement($dom, $node, 'Explicatie', $explicatie);
+            $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
+            $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
             $this->addElement($dom, $node, 'CodFiscal', $invoice?->getReceiverCif() ?? '');
-            $this->addElement($dom, $node, 'Moneda', $payment->getCurrency());
 
             $root->appendChild($node);
         }
@@ -283,17 +286,20 @@ class SagaXmlExportService
         foreach ($payments as $payment) {
             $node = $dom->createElement('Linie');
             $invoice = $payment->getInvoice();
+            $invoiceNumber = $invoice?->getNumber() ?? '';
+            $paymentDate = $payment->getPaymentDate()?->format('d.m.Y') ?? '';
+            $explicatie = $payment->getNotes()
+                ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
 
-            $this->addElement($dom, $node, 'Data', $payment->getPaymentDate()?->format('d.m.Y') ?? '');
-            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?? '');
+            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($payment->getPaymentMethod()));
+            $this->addElement($dom, $node, 'Data', $paymentDate);
+            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
             $this->addElement($dom, $node, 'Suma', $payment->getAmount());
             $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($payment->getPaymentMethod(), $accountMap));
-            $this->addElement($dom, $node, 'ContFurnizor', '');
-            $this->addElement($dom, $node, 'Explicatie', $payment->getNotes() ?: sprintf('contravaloarea facturii %s', $invoice?->getNumber() ?? ''));
-            $this->addElement($dom, $node, 'FacturaID', '');
-            $this->addElement($dom, $node, 'FacturaNumar', $invoice?->getNumber() ?? '');
+            $this->addElement($dom, $node, 'Explicatie', $explicatie);
+            $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
+            $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
             $this->addElement($dom, $node, 'CodFiscal', $invoice?->getSenderCif() ?? '');
-            $this->addElement($dom, $node, 'Moneda', $payment->getCurrency());
 
             $root->appendChild($node);
         }
@@ -436,5 +442,15 @@ class SagaXmlExportService
         $merged = array_merge($defaults, $accountMap);
 
         return $merged[$method] ?? $merged['bank_transfer'];
+    }
+
+    private function mapPaymentMethodToTipDocument(string $method): string
+    {
+        return match ($method) {
+            'cash' => 'Chitanta',
+            'card' => 'Card',
+            'bank_transfer' => 'OP',
+            default => 'OP',
+        };
     }
 }
