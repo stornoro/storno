@@ -57,17 +57,17 @@ class InvoicePersister implements EntityPersisterInterface
         $companyId = $company->getId()->toRfc4122();
         $conn = $this->entityManager->getConnection();
 
-        // Pre-load all clients: name → id, email → id, cui → id
+        // Pre-load clients keyed only by CUI and email. Name is deliberately
+        // excluded — it is not unique (many foreign customers share a common
+        // first-name-only "name" in source exports) and falling back to it
+        // would link invoices to the wrong client.
         $rows = $conn->fetchAllAssociative(
-            'SELECT id, LOWER(name) as name, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
+            'SELECT id, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
             ['companyId' => $companyId],
         );
 
         foreach ($rows as $row) {
             $clientId = $row['id'];
-            if (!empty($row['name'])) {
-                $this->clientCache[$companyId . ':name:' . $row['name']] = $clientId;
-            }
             if (!empty($row['email'])) {
                 $this->clientCache[$companyId . ':email:' . $row['email']] = $clientId;
             }
@@ -275,6 +275,7 @@ class InvoicePersister implements EntityPersisterInterface
 
     /**
      * Find a client ID from the pre-loaded cache. No DB queries.
+     * Matches by email first, then CUI. Name is not used — see initialize().
      */
     private function findClientId(Company $company, ?string $email, ?string $cui, ?string $name): ?string
     {
@@ -289,13 +290,6 @@ class InvoicePersister implements EntityPersisterInterface
 
         if (!empty($cui)) {
             $key = $companyId . ':cui:' . trim($cui);
-            if (isset($this->clientCache[$key])) {
-                return $this->clientCache[$key];
-            }
-        }
-
-        if (!empty($name)) {
-            $key = $companyId . ':name:' . mb_strtolower(trim($name));
             if (isset($this->clientCache[$key])) {
                 return $this->clientCache[$key];
             }

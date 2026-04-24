@@ -48,7 +48,7 @@ class ClientPersister implements EntityPersisterInterface
         $conn = $this->entityManager->getConnection();
 
         $rows = $conn->fetchAllAssociative(
-            'SELECT LOWER(name) as name, LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
+            'SELECT LOWER(email) as email, cui FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
             ['companyId' => $companyId],
         );
 
@@ -58,9 +58,6 @@ class ClientPersister implements EntityPersisterInterface
             }
             if (!empty($row['email'])) {
                 $this->knownClients[$companyId . ':email:' . $row['email']] = true;
-            }
-            if (!empty($row['name'])) {
-                $this->knownClients[$companyId . ':name:' . $row['name']] = true;
             }
         }
 
@@ -82,13 +79,12 @@ class ClientPersister implements EntityPersisterInterface
         $email = !empty($mappedData['email']) ? trim($mappedData['email']) : null;
         $type = $mappedData['type'] ?? ($cui ? 'company' : 'individual');
 
-        // Fast dedup check against pre-loaded set
+        // Fast dedup check against pre-loaded set. Only CUI and email are
+        // used as identity keys — see initialize() for the reasoning.
         $isExisting = false;
         if ($cui && isset($this->knownClients[$companyId . ':cui:' . $cui])) {
             $isExisting = true;
         } elseif ($email && isset($this->knownClients[$companyId . ':email:' . mb_strtolower($email)])) {
-            $isExisting = true;
-        } elseif (isset($this->knownClients[$companyId . ':name:' . mb_strtolower($name)])) {
             $isExisting = true;
         }
 
@@ -137,14 +133,13 @@ class ClientPersister implements EntityPersisterInterface
 
         $this->entityManager->persist($client);
 
-        // Track in known set
+        // Track in known set — CUI/email only, never name.
         if ($cui) {
             $this->knownClients[$companyId . ':cui:' . $cui] = true;
         }
         if ($email) {
             $this->knownClients[$companyId . ':email:' . mb_strtolower($email)] = true;
         }
-        $this->knownClients[$companyId . ':name:' . mb_strtolower($name)] = true;
 
         $result->incrementCreated();
 
