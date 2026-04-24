@@ -44,6 +44,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('0 2 * * 0', new RunCommandMessage('app:user:clear-unconfirmed')))
             ->add(RecurringMessage::cron('0 3 * * 0', new RunCommandMessage('app:archive:cleanup')))
             // Monthly audit log purge — 1st of month
-            ->add(RecurringMessage::cron('0 4 1 * *', new RunCommandMessage('app:audit-log:purge')));
+            ->add(RecurringMessage::cron('0 4 1 * *', new RunCommandMessage('app:audit-log:purge')))
+            // Monthly EU VAT rates refresh from GitHub — 1st of month
+            ->add(RecurringMessage::cron('0 5 1 * *', new RunCommandMessage('app:vat-rates:sync')));
     }
 }
