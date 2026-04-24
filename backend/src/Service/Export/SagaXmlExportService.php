@@ -160,21 +160,23 @@ class SagaXmlExportService
             $this->addElement($dom, $antetNode, 'FurnizorIBAN', $company->getBankAccount() ?? '');
             $this->addElement($dom, $antetNode, 'FurnizorInformatiiSuplimentare', '');
 
-            // Client
-            $client = $invoice->getClient();
-            $this->addElement($dom, $antetNode, 'ClientNume', $invoice->getReceiverName() ?? ($client?->getName() ?? ''));
+            // Client — read from buyer snapshot (frozen at issue time) to
+            // avoid showing the wrong details if the linked client is later
+            // edited or re-linked.
+            $buyer = $this->resolveBuyer($invoice);
+            $this->addElement($dom, $antetNode, 'ClientNume', $invoice->getReceiverName() ?? ($buyer['name'] ?? ''));
             $this->addElement($dom, $antetNode, 'ClientInformatiiSuplimentare', '');
-            $this->addElement($dom, $antetNode, 'ClientCIF', $invoice->getReceiverCif() ?? ($client?->getCui() ?? ''));
-            $this->addElement($dom, $antetNode, 'ClientNrRegCom', $client?->getRegistrationNumber() ?? '');
-            $clientCountry = $client?->getCountry() ?? 'RO';
-            $this->addElement($dom, $antetNode, 'ClientJudet', $clientCountry === 'RO' ? ($client?->getCounty() ?? '') : '');
+            $this->addElement($dom, $antetNode, 'ClientCIF', $invoice->getReceiverCif() ?? ($buyer['cui'] ?? ''));
+            $this->addElement($dom, $antetNode, 'ClientNrRegCom', $buyer['registrationNumber'] ?? '');
+            $clientCountry = $buyer['country'] ?? 'RO';
+            $this->addElement($dom, $antetNode, 'ClientJudet', $clientCountry === 'RO' ? ($buyer['county'] ?? '') : '');
             $this->addElement($dom, $antetNode, 'ClientTara', $clientCountry);
-            $this->addElement($dom, $antetNode, 'ClientLocalitate', $client?->getCity() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientAdresa', $client?->getAddress() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientBanca', $client?->getBankName() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientIBAN', $client?->getBankAccount() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientTelefon', $client?->getPhone() ?? '');
-            $this->addElement($dom, $antetNode, 'ClientMail', $client?->getEmail() ?? '');
+            $this->addElement($dom, $antetNode, 'ClientLocalitate', $buyer['city'] ?? '');
+            $this->addElement($dom, $antetNode, 'ClientAdresa', $buyer['address'] ?? '');
+            $this->addElement($dom, $antetNode, 'ClientBanca', $buyer['bankName'] ?? '');
+            $this->addElement($dom, $antetNode, 'ClientIBAN', $buyer['bankAccount'] ?? '');
+            $this->addElement($dom, $antetNode, 'ClientTelefon', $buyer['phone'] ?? '');
+            $this->addElement($dom, $antetNode, 'ClientMail', $buyer['email'] ?? '');
 
             // Factura metadata
             $this->addElement($dom, $antetNode, 'FacturaNumar', $invoice->getNumber() ?? '');
@@ -421,14 +423,56 @@ class SagaXmlExportService
     private function isOss(Invoice $invoice): bool
     {
         $company = $invoice->getCompany();
+        $buyer = $this->resolveBuyer($invoice);
+        $country = $buyer['country'] ?? null;
         $client = $invoice->getClient();
 
         return $company
             && $company->isOss()
-            && $client
-            && $client->getCountry() !== 'RO'
-            && $client->getCountry() !== null
-            && $client->isViesValid() !== true;
+            && $country !== 'RO'
+            && $country !== null
+            && $client?->isViesValid() !== true;
+    }
+
+    /**
+     * Returns the buyer details for export. Prefers the invoice's frozen
+     * buyer snapshot over the live Client entity so that historical exports
+     * keep showing the details at issue time.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveBuyer(Invoice $invoice): array
+    {
+        $snapshot = $invoice->getBuyerSnapshot();
+        if (!empty($snapshot)) {
+            return $snapshot;
+        }
+
+        $client = $invoice->getClient();
+        if ($client === null) {
+            return [];
+        }
+
+        return [
+            'type' => $client->getType(),
+            'name' => $client->getName(),
+            'cui' => $client->getCui(),
+            'cnp' => $client->getCnp(),
+            'vatCode' => $client->getVatCode(),
+            'isVatPayer' => $client->isVatPayer(),
+            'registrationNumber' => $client->getRegistrationNumber(),
+            'address' => $client->getAddress(),
+            'city' => $client->getCity(),
+            'county' => $client->getCounty(),
+            'country' => $client->getCountry(),
+            'postalCode' => $client->getPostalCode(),
+            'email' => $client->getEmail(),
+            'phone' => $client->getPhone(),
+            'bankName' => $client->getBankName(),
+            'bankAccount' => $client->getBankAccount(),
+            'clientCode' => $client->getClientCode(),
+            'einvoiceIdentifiers' => $client->getEinvoiceIdentifiers(),
+        ];
     }
 
     private function mapPaymentMethodToAccount(string $method, array $accountMap = []): string
