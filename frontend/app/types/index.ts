@@ -407,6 +407,16 @@ export interface Supplier {
   updatedAt: string | null
 }
 
+// ── Product Category ────────────────────────────────────────────────
+export interface ProductCategory {
+  id: string
+  name: string
+  color: string | null
+  sortOrder: number
+  createdAt?: string
+  updatedAt?: string | null
+}
+
 // ── Document Series ─────────────────────────────────────────────────
 export interface DocumentSeries {
   id: string

@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Entity\Product;
 use App\Manager\ProductManager;
 use App\Repository\CompanyRepository;
+use App\Repository\ProductCategoryRepository;
 use App\Repository\ProductRepository;
 use App\Service\Export\SagaXmlExportService;
 use App\Constants\Pagination;
@@ -26,6 +27,7 @@ class ProductController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly CompanyRepository $companyRepository,
         private readonly ProductRepository $productRepository,
+        private readonly ProductCategoryRepository $productCategoryRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly SagaXmlExportService $sagaXmlExportService,
     ) {}
@@ -201,6 +203,12 @@ class ProductController extends AbstractController
         if (array_key_exists('color', $data)) {
             $product->setColor($this->normalizeColor($data['color']));
         }
+        if (array_key_exists('categoryId', $data)) {
+            $product->setCategory($this->resolveCategory($data['categoryId'], $company));
+        }
+        if (array_key_exists('sgrAmount', $data)) {
+            $product->setSgrAmount($this->normalizeSgrAmount($data['sgrAmount']));
+        }
 
         $this->entityManager->persist($product);
         $this->entityManager->flush();
@@ -308,6 +316,12 @@ class ProductController extends AbstractController
         if (array_key_exists('color', $data)) {
             $product->setColor($this->normalizeColor($data['color']));
         }
+        if (array_key_exists('categoryId', $data)) {
+            $product->setCategory($this->resolveCategory($data['categoryId'], $product->getCompany()));
+        }
+        if (array_key_exists('sgrAmount', $data)) {
+            $product->setSgrAmount($this->normalizeSgrAmount($data['sgrAmount']));
+        }
 
         $this->entityManager->flush();
 
@@ -328,6 +342,31 @@ class ProductController extends AbstractController
             return '#' . strtolower($m[1]);
         }
         return null;
+    }
+
+    private function resolveCategory(mixed $value, ?\App\Entity\Company $company): ?\App\Entity\ProductCategory
+    {
+        if ($value === null || $value === '') return null;
+        if (!is_string($value) || !$company) return null;
+        try {
+            $category = $this->productCategoryRepository->find(Uuid::fromString($value));
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$category) return null;
+        if ($category->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
+            return null;
+        }
+        return $category;
+    }
+
+    private function normalizeSgrAmount(mixed $value): ?string
+    {
+        if ($value === null || $value === '') return null;
+        if (!is_numeric($value)) return null;
+        $f = (float) $value;
+        if ($f < 0 || $f > 999.99) return null;
+        return number_format($f, 2, '.', '');
     }
 
     #[Route('/{uuid}/usage', methods: ['GET'])]

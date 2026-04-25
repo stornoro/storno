@@ -142,6 +142,20 @@ class Receipt
     #[Groups(['receipt:detail'])]
     private ?Invoice $convertedInvoice = null;
 
+    // The receipt this one refunds (when this receipt IS a refund).
+    // Serialized via getRefundOfRef() as a slim {id, number} shape so the
+    // bidirectional refundOf↔refundedBy relation doesn't blow up the serializer.
+    #[ORM\ManyToOne(targetEntity: Receipt::class, inversedBy: 'refundedBy')]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Receipt $refundOf = null;
+
+    // Refund receipts that were issued against this receipt (when this is the parent).
+    // Note: this raw collection includes cancelled refunds; the serialized
+    // `refundedBy` field uses getActiveRefunds() so cancelled ones drop off
+    // the public API surface.
+    #[ORM\OneToMany(mappedBy: 'refundOf', targetEntity: Receipt::class)]
+    private Collection $refundedBy;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['receipt:detail'])]
     private ?\DateTimeImmutable $issuedAt = null;
@@ -163,6 +177,7 @@ class Receipt
     {
         $this->id = Uuid::v7();
         $this->lines = new ArrayCollection();
+        $this->refundedBy = new ArrayCollection();
         $this->issueDate = new \DateTime();
     }
 
@@ -593,5 +608,93 @@ class Receipt
         $this->idempotencyKey = $idempotencyKey;
 
         return $this;
+    }
+
+    public function getRefundOf(): ?Receipt
+    {
+        return $this->refundOf;
+    }
+
+    public function setRefundOf(?Receipt $refundOf): static
+    {
+        $this->refundOf = $refundOf;
+
+        return $this;
+    }
+
+    /** @return Collection<int, Receipt> */
+    public function getRefundedBy(): Collection
+    {
+        return $this->refundedBy;
+    }
+
+    /**
+     * Refunds that still count against this parent — i.e. anything except
+     * cancelled refund receipts. Cancelling a refund returns its quantities
+     * to the refundable pool.
+     *
+     * Internal use (e.g. ReceiptManager::refund tally). Not serialized — the
+     * public API exposes the slim shape via getRefundedByRefs().
+     *
+     * @return Receipt[]
+     */
+    public function getActiveRefunds(): array
+    {
+        $out = [];
+        foreach ($this->refundedBy as $r) {
+            if ($r->getStatus() !== \App\Enum\ReceiptStatus::CANCELLED) {
+                $out[] = $r;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Slim serialization of refundOf for the receipt:detail JSON. Returning
+     * a plain array (instead of the full Receipt entity) avoids the
+     * Receipt → refundOf → activeRefunds → Receipt circular reference that
+     * Symfony's serializer otherwise hits at depth 1.
+     */
+    #[\Symfony\Component\Serializer\Attribute\SerializedName('refundOf')]
+    #[Groups(['receipt:detail'])]
+    public function getRefundOfRef(): ?array
+    {
+        if ($this->refundOf === null) {
+            return null;
+        }
+        return [
+            'id' => (string) $this->refundOf->getId(),
+            'number' => $this->refundOf->getNumber(),
+        ];
+    }
+
+    /**
+     * Slim serialization of active refunds for the receipt:detail JSON.
+     * Each entry is `{id, number}` — same reasoning as getRefundOfRef().
+     *
+     * @return array<int, array{id: string, number: string}>
+     */
+    #[\Symfony\Component\Serializer\Attribute\SerializedName('refundedBy')]
+    #[Groups(['receipt:detail'])]
+    public function getRefundedByRefs(): array
+    {
+        $out = [];
+        foreach ($this->getActiveRefunds() as $r) {
+            $out[] = [
+                'id' => (string) $r->getId(),
+                'number' => $r->getNumber(),
+            ];
+        }
+        return $out;
+    }
+
+    public function isRefund(): bool
+    {
+        return $this->refundOf !== null;
+    }
+
+    public function isFullyRefunded(): bool
+    {
+        return count($this->getActiveRefunds()) > 0;
     }
 }

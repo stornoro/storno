@@ -34,6 +34,11 @@ const links = computed(() => {
       to: '/settings/document-series',
     },
     {
+      label: $t('productCategories.title'),
+      icon: 'i-lucide-tags',
+      to: '/settings/product-categories',
+    },
+    {
       label: $t('vatRates.title'),
       icon: 'i-lucide-percent',
       to: '/settings/vat-rates',

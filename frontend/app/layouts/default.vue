@@ -120,6 +120,11 @@ const links = computed(() => {
       to: '/settings/document-series',
       onSelect: close,
     },
+    can(P.PRODUCT_VIEW) && {
+      label: $t('productCategories.title'),
+      to: '/settings/product-categories',
+      onSelect: close,
+    },
     can(P.SETTINGS_VIEW) && {
       label: $t('vatRates.title'),
       to: '/settings/vat-rates',

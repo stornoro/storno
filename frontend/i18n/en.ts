@@ -1935,6 +1935,25 @@ export default defineI18nLocale(async () => {
     M: { label: 'Margin scheme', description: 'Special VAT regimes (e.g., used goods, travel)' },
   },
 
+  // ── Product Categories ──────────────────────────────────────
+  productCategories: {
+    title: 'Product categories',
+    description: 'Group products into categories to organize them on the POS grid.',
+    add: 'Add category',
+    edit: 'Edit category',
+    name: 'Name',
+    namePlaceholder: 'e.g. Coffees',
+    color: 'Color',
+    sortOrder: 'Sort order',
+    noCategories: 'No categories defined',
+    noCategoriesHint: 'Categories appear as quick filters above the POS product grid.',
+    createSuccess: 'Category created.',
+    updateSuccess: 'Category updated.',
+    deleteSuccess: 'Category deleted.',
+    deleteTitle: 'Delete category',
+    deleteDescription: 'Delete category "{name}"? Associated products remain but lose the category.',
+  },
+
   // ── Document Series ─────────────────────────────────────────
   documentSeries: {
     title: 'Document series',
