@@ -475,14 +475,28 @@ export interface VatRate {
 // ── Bank Account ────────────────────────────────────────────────────
 export interface BankAccount {
   id: string
-  iban: string
+  iban: string | null
   bankName: string | null
   currency: string
   isDefault: boolean
   showOnInvoice: boolean
   source: string
+  type: 'bank' | 'cash'
+  openingBalance: string | null
+  openingBalanceDate: string | null
   createdAt: string
   updatedAt: string | null
+}
+
+export interface CashRegisterBalance {
+  configured: boolean
+  cashAccountId?: string
+  currency?: string
+  openingBalance?: string
+  openingBalanceDate?: string
+  cashReceipts?: string
+  cashPayments?: string
+  currentBalance?: string
 }
 
 // ── Invoice Attachment ──────────────────────────────────────────────

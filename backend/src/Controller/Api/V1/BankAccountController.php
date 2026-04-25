@@ -52,24 +52,41 @@ class BankAccountController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        $iban = $data['iban'] ?? null;
+        $type = $data['type'] ?? BankAccount::TYPE_BANK;
 
-        if (!$iban) {
-            return $this->json(['error' => 'Field "iban" is required.'], Response::HTTP_BAD_REQUEST);
+        if (!in_array($type, BankAccount::TYPES, true)) {
+            return $this->json(['error' => 'Invalid type. Allowed: ' . implode(', ', BankAccount::TYPES)], Response::HTTP_BAD_REQUEST);
         }
 
-        $existing = $this->bankAccountRepository->findByIban($company, $iban);
-        if ($existing) {
-            return $this->json(['error' => 'Bank account with this IBAN already exists.'], Response::HTTP_CONFLICT);
+        if ($type === BankAccount::TYPE_CASH) {
+            if ($this->bankAccountRepository->findCashAccount($company)) {
+                return $this->json(['error' => 'A cash account already exists for this company.'], Response::HTTP_CONFLICT);
+            }
+        } else {
+            $iban = $data['iban'] ?? null;
+            if (!$iban) {
+                return $this->json(['error' => 'Field "iban" is required.'], Response::HTTP_BAD_REQUEST);
+            }
+            if ($this->bankAccountRepository->findByIban($company, $iban)) {
+                return $this->json(['error' => 'Bank account with this IBAN already exists.'], Response::HTTP_CONFLICT);
+            }
         }
 
         $account = new BankAccount();
         $account->setCompany($company);
-        $account->setIban($iban);
+        $account->setType($type);
+        $account->setIban($type === BankAccount::TYPE_BANK ? ($data['iban'] ?? null) : null);
         $account->setBankName($data['bankName'] ?? null);
         $account->setCurrency($data['currency'] ?? 'RON');
-        $account->setIsDefault($data['isDefault'] ?? false);
-        $account->setShowOnInvoice($data['showOnInvoice'] ?? false);
+        $account->setIsDefault($type === BankAccount::TYPE_BANK && ($data['isDefault'] ?? false));
+        $account->setShowOnInvoice($type === BankAccount::TYPE_BANK && ($data['showOnInvoice'] ?? false));
+
+        if ($type === BankAccount::TYPE_CASH) {
+            $error = $this->applyOpeningBalance($account, $data, false);
+            if ($error) {
+                return $error;
+            }
+        }
 
         // If setting as default, unset others
         if ($account->isDefault()) {
@@ -114,7 +131,14 @@ class BankAccountController extends AbstractController
             }
         }
         if (isset($data['showOnInvoice'])) {
-            $account->setShowOnInvoice((bool) $data['showOnInvoice']);
+            $account->setShowOnInvoice($account->isCash() ? false : (bool) $data['showOnInvoice']);
+        }
+
+        if ($account->isCash() && (array_key_exists('openingBalance', $data) || array_key_exists('openingBalanceDate', $data))) {
+            $error = $this->applyOpeningBalance($account, $data, true);
+            if ($error) {
+                return $error;
+            }
         }
 
         $this->entityManager->flush();
@@ -143,6 +167,48 @@ class BankAccountController extends AbstractController
         $this->entityManager->flush();
 
         return $this->json(['message' => 'Bank account deleted.']);
+    }
+
+    /**
+     * Validate and apply openingBalance / openingBalanceDate fields.
+     * Returns a JsonResponse on validation error, null on success.
+     *
+     * SmartBill-style rules: opening balance must be ≥ 0, and once it has been set
+     * the user cannot change it (only edit forward via cash movements — Phase 3).
+     */
+    private function applyOpeningBalance(BankAccount $account, array $data, bool $isUpdate): ?JsonResponse
+    {
+        if ($isUpdate && $account->getOpeningBalance() !== null) {
+            return $this->json([
+                'error' => 'Opening balance is locked once set. Adjust via cash register movements.',
+            ], Response::HTTP_CONFLICT);
+        }
+
+        $rawAmount = $data['openingBalance'] ?? null;
+        $rawDate   = $data['openingBalanceDate'] ?? null;
+
+        if ($rawAmount === null && $rawDate === null) {
+            return null; // nothing to apply, allow create with unconfigured balance
+        }
+
+        if ($rawAmount === null || $rawDate === null) {
+            return $this->json(['error' => 'openingBalance and openingBalanceDate must both be provided.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!is_numeric($rawAmount) || (float) $rawAmount < 0) {
+            return $this->json(['error' => 'openingBalance must be zero or a positive number.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $date = new \DateTimeImmutable((string) $rawDate);
+        } catch (\Exception) {
+            return $this->json(['error' => 'openingBalanceDate is not a valid date (YYYY-MM-DD expected).'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $account->setOpeningBalance(number_format((float) $rawAmount, 2, '.', ''));
+        $account->setOpeningBalanceDate($date);
+
+        return null;
     }
 
     private function unsetOtherDefaults(\App\Entity\Company $company, ?BankAccount $except = null): void

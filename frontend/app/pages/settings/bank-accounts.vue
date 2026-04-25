@@ -17,7 +17,24 @@ const accounts = computed(() => store.items)
 const modalOpen = ref(false)
 const saving = ref(false)
 const editingAccount = ref<BankAccount | null>(null)
-const form = ref({ iban: '', bankName: '', currency: 'RON', isDefault: false })
+const form = ref({
+  iban: '',
+  bankName: '',
+  currency: 'RON',
+  isDefault: false,
+  type: 'bank' as 'bank' | 'cash',
+  openingBalance: '',
+  openingBalanceDate: '',
+})
+
+const typeOptions = computed(() => [
+  { label: $t('bankAccounts.typeBank'), value: 'bank' },
+  { label: $t('bankAccounts.typeCash'), value: 'cash' },
+])
+
+const cashAccountExists = computed(() => accounts.value.some(a => a.type === 'cash'))
+const isCashForm = computed(() => form.value.type === 'cash')
+const openingBalanceLocked = computed(() => Boolean(editingAccount.value?.openingBalance))
 
 // Romanian bank code → bank name mapping (SWIFT/BIC first 4 chars)
 const BANK_CODES: Record<string, string> = {
@@ -81,6 +98,14 @@ const ibanError = computed(() => {
 })
 
 const canSave = computed(() => {
+  if (isCashForm.value) {
+    // Opening balance + date must be provided together (or both empty for "configure later").
+    const hasAmount = form.value.openingBalance.trim() !== ''
+    const hasDate = form.value.openingBalanceDate.trim() !== ''
+    if (hasAmount !== hasDate) return false
+    if (hasAmount && Number(form.value.openingBalance) < 0) return false
+    return true
+  }
   if (!editingAccount.value && !form.value.iban.trim()) return false
   if (!editingAccount.value && ibanError.value) return false
   return true
@@ -105,27 +130,62 @@ const columns = [
   { id: 'actions', header: $t('common.actions') },
 ]
 
-function openCreate() {
+function openCreate(type: 'bank' | 'cash' = 'bank') {
   editingAccount.value = null
-  form.value = { iban: '', bankName: '', currency: 'RON', isDefault: false }
+  form.value = {
+    iban: '',
+    bankName: '',
+    currency: 'RON',
+    isDefault: false,
+    type,
+    openingBalance: '',
+    openingBalanceDate: '',
+  }
   modalOpen.value = true
 }
 
 function openEdit(account: BankAccount) {
   editingAccount.value = account
   form.value = {
-    iban: account.iban,
+    iban: account.iban || '',
     bankName: account.bankName || '',
     currency: account.currency,
     isDefault: account.isDefault,
+    type: account.type ?? 'bank',
+    openingBalance: account.openingBalance ?? '',
+    openingBalanceDate: account.openingBalanceDate ?? '',
   }
   modalOpen.value = true
 }
 
+function buildPayload() {
+  if (isCashForm.value) {
+    const payload: Record<string, unknown> = {
+      type: 'cash',
+      bankName: form.value.bankName || null,
+      currency: form.value.currency,
+    }
+    const hasOpening = form.value.openingBalance.trim() !== '' && form.value.openingBalanceDate.trim() !== ''
+    if (hasOpening) {
+      payload.openingBalance = String(Number(form.value.openingBalance).toFixed(2))
+      payload.openingBalanceDate = form.value.openingBalanceDate
+    }
+    return payload
+  }
+  return {
+    type: 'bank',
+    iban: form.value.iban,
+    bankName: form.value.bankName,
+    currency: form.value.currency,
+    isDefault: form.value.isDefault,
+  }
+}
+
 async function onSave() {
   saving.value = true
+  const payload = buildPayload()
   if (editingAccount.value) {
-    const ok = await store.updateBankAccount(editingAccount.value.id, form.value)
+    const ok = await store.updateBankAccount(editingAccount.value.id, payload as Partial<BankAccount>)
     if (ok) {
       toast.add({ title: $t('bankAccounts.updateSuccess'), color: 'success' })
       modalOpen.value = false
@@ -135,7 +195,7 @@ async function onSave() {
     }
   }
   else {
-    const result = await store.createBankAccount(form.value)
+    const result = await store.createBankAccount(payload as Parameters<typeof store.createBankAccount>[0])
     if (result) {
       toast.add({ title: $t('bankAccounts.createSuccess'), color: 'success' })
       modalOpen.value = false
@@ -187,13 +247,22 @@ onMounted(() => {
       orientation="horizontal"
       class="mb-4"
     >
-      <UButton
-        :label="$t('bankAccounts.addAccount')"
-        color="neutral"
-        icon="i-lucide-plus"
-        class="w-fit lg:ms-auto"
-        @click="openCreate"
-      />
+      <div class="flex flex-wrap gap-2 lg:ms-auto">
+        <UButton
+          v-if="!cashAccountExists"
+          :label="$t('bankAccounts.addCashAccount')"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-coins"
+          @click="openCreate('cash')"
+        />
+        <UButton
+          :label="$t('bankAccounts.addAccount')"
+          color="neutral"
+          icon="i-lucide-plus"
+          @click="openCreate('bank')"
+        />
+      </div>
     </UPageCard>
 
     <UPageCard
@@ -213,10 +282,15 @@ onMounted(() => {
         }"
       >
         <template #iban-cell="{ row }">
-          <span class="flex items-center gap-1 font-mono text-sm">
+          <span v-if="row.original.type === 'cash'" class="inline-flex items-center gap-1.5 text-sm">
+            <UIcon name="i-lucide-coins" class="size-4" />
+            {{ $t('bankAccounts.typeCash') }}
+          </span>
+          <span v-else-if="row.original.iban" class="flex items-center gap-1 font-mono text-sm">
             {{ row.original.iban }}
             <UButton icon="i-lucide-copy" variant="ghost" size="xs" @click="copy(row.original.iban)" />
           </span>
+          <span v-else class="text-sm text-(--ui-text-muted)">-</span>
         </template>
         <template #isDefault-cell="{ row }">
           <UBadge v-if="row.original.isDefault" color="success" variant="subtle" size="sm">
@@ -225,10 +299,12 @@ onMounted(() => {
         </template>
         <template #showOnInvoice-cell="{ row }">
           <USwitch
+            v-if="row.original.type !== 'cash'"
             :model-value="row.original.showOnInvoice"
             size="sm"
             @update:model-value="(val: boolean) => store.updateBankAccount(row.original.id, { showOnInvoice: val })"
           />
+          <span v-else class="text-(--ui-text-muted) text-xs">—</span>
         </template>
         <template #actions-cell="{ row }">
           <div class="flex gap-1">
@@ -256,8 +332,8 @@ onMounted(() => {
     <USlideover v-model:open="modalOpen">
       <template #header>
         <div class="flex items-center justify-between w-full">
-          <h3 class="text-lg font-semibold">{{ editingAccount ? $t('bankAccounts.editAccount') : $t('bankAccounts.addAccount') }}</h3>
-          <div class="flex items-center gap-2">
+          <h3 class="text-lg font-semibold">{{ editingAccount ? $t('bankAccounts.editAccount') : (isCashForm ? $t('bankAccounts.addCashAccount') : $t('bankAccounts.addAccount')) }}</h3>
+          <div v-if="!isCashForm" class="flex items-center gap-2">
             <USwitch v-model="form.isDefault" size="sm" />
             <span class="text-sm text-(--ui-text-muted)">{{ $t('bankAccounts.isDefault') }}</span>
           </div>
@@ -265,24 +341,70 @@ onMounted(() => {
       </template>
       <template #body>
         <div class="space-y-4">
-          <UFormField :label="$t('bankAccounts.iban')" :error="ibanError ?? undefined">
-            <UInput
-              v-model="form.iban"
-              size="xl"
-              class="w-full"
-              placeholder="RO49..."
-              :color="ibanError ? 'error' : undefined"
-              :disabled="!!editingAccount"
-            />
+          <UFormField v-if="!editingAccount" :label="$t('bankAccounts.type')">
+            <USelectMenu v-model="form.type" :items="typeOptions" value-key="value" size="xl" class="w-full" />
           </UFormField>
-          <div class="grid grid-cols-2 gap-3">
-            <UFormField :label="$t('bankAccounts.bankName')">
-              <UInput v-model="form.bankName" size="xl" class="w-full" />
+
+          <template v-if="!isCashForm">
+            <UFormField :label="$t('bankAccounts.iban')" :error="ibanError ?? undefined">
+              <UInput
+                v-model="form.iban"
+                size="xl"
+                class="w-full"
+                placeholder="RO49..."
+                :color="ibanError ? 'error' : undefined"
+                :disabled="!!editingAccount"
+              />
+            </UFormField>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField :label="$t('bankAccounts.bankName')">
+                <UInput v-model="form.bankName" size="xl" class="w-full" />
+              </UFormField>
+              <UFormField :label="$t('bankAccounts.currency')">
+                <USelectMenu v-model="form.currency" :items="currencyOptions" value-key="value" size="xl" class="w-full" />
+              </UFormField>
+            </div>
+          </template>
+
+          <template v-else>
+            <UFormField :label="$t('bankAccounts.cashAccountLabel')">
+              <UInput v-model="form.bankName" size="xl" class="w-full" :placeholder="$t('bankAccounts.cashAccountPlaceholder')" />
             </UFormField>
             <UFormField :label="$t('bankAccounts.currency')">
-              <USelectMenu v-model="form.currency" :items="currencyOptions" value-key="value" size="xl" class="w-full" />
+              <USelectMenu v-model="form.currency" :items="currencyOptions" value-key="value" size="xl" class="w-full" :disabled="openingBalanceLocked" />
             </UFormField>
-          </div>
+            <UAlert
+              v-if="openingBalanceLocked"
+              icon="i-lucide-lock"
+              :title="$t('bankAccounts.openingBalanceLocked')"
+              :description="$t('bankAccounts.openingBalanceLockedDesc')"
+              color="info"
+              variant="subtle"
+            />
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField :label="$t('bankAccounts.openingBalance')" :hint="form.currency">
+                <UInput
+                  v-model="form.openingBalance"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  size="xl"
+                  class="w-full"
+                  :disabled="openingBalanceLocked"
+                />
+              </UFormField>
+              <UFormField :label="$t('bankAccounts.openingBalanceDate')">
+                <UInput
+                  v-model="form.openingBalanceDate"
+                  type="date"
+                  size="xl"
+                  class="w-full"
+                  :disabled="openingBalanceLocked"
+                />
+              </UFormField>
+            </div>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('bankAccounts.openingBalanceHint') }}</p>
+          </template>
         </div>
       </template>
       <template #footer>

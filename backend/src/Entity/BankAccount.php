@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Entity\Traits\AuditableTrait;
 use App\Repository\BankAccountRepository;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use App\Doctrine\Type\UuidType;
 use Symfony\Component\Uid\Uuid;
@@ -15,6 +16,10 @@ class BankAccount
 {
     use AuditableTrait;
 
+    public const TYPE_BANK = 'bank';
+    public const TYPE_CASH = 'cash';
+    public const TYPES = [self::TYPE_BANK, self::TYPE_CASH];
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['bankaccount:list', 'bankaccount:detail'])]
@@ -24,7 +29,7 @@ class BankAccount
     #[ORM\JoinColumn(nullable: false)]
     private ?Company $company = null;
 
-    #[ORM\Column(length: 34)]
+    #[ORM\Column(length: 34, nullable: true)]
     #[Groups(['bankaccount:list', 'bankaccount:detail'])]
     private ?string $iban = null;
 
@@ -47,6 +52,18 @@ class BankAccount
     #[ORM\Column(length: 20)]
     #[Groups(['bankaccount:detail'])]
     private string $source = 'manual';
+
+    #[ORM\Column(length: 10, options: ['default' => self::TYPE_BANK])]
+    #[Groups(['bankaccount:list', 'bankaccount:detail'])]
+    private string $type = self::TYPE_BANK;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 14, scale: 2, nullable: true)]
+    #[Groups(['bankaccount:list', 'bankaccount:detail'])]
+    private ?string $openingBalance = null;
+
+    #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
+    #[Groups(['bankaccount:list', 'bankaccount:detail'])]
+    private ?\DateTimeImmutable $openingBalanceDate = null;
 
     public function __construct()
     {
@@ -75,9 +92,9 @@ class BankAccount
         return $this->iban;
     }
 
-    public function setIban(string $iban): static
+    public function setIban(?string $iban): static
     {
-        $this->iban = strtoupper(preg_replace('/\s+/', '', $iban));
+        $this->iban = $iban === null ? null : strtoupper(preg_replace('/\s+/', '', $iban));
 
         return $this;
     }
@@ -138,6 +155,47 @@ class BankAccount
     public function setSource(string $source): static
     {
         $this->source = $source;
+
+        return $this;
+    }
+
+    public function getType(): string
+    {
+        return $this->type;
+    }
+
+    public function setType(string $type): static
+    {
+        $this->type = $type;
+
+        return $this;
+    }
+
+    public function isCash(): bool
+    {
+        return $this->type === self::TYPE_CASH;
+    }
+
+    public function getOpeningBalance(): ?string
+    {
+        return $this->openingBalance;
+    }
+
+    public function setOpeningBalance(?string $openingBalance): static
+    {
+        $this->openingBalance = $openingBalance;
+
+        return $this;
+    }
+
+    public function getOpeningBalanceDate(): ?\DateTimeImmutable
+    {
+        return $this->openingBalanceDate;
+    }
+
+    public function setOpeningBalanceDate(?\DateTimeImmutable $openingBalanceDate): static
+    {
+        $this->openingBalanceDate = $openingBalanceDate;
 
         return $this;
     }
