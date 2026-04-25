@@ -1934,6 +1934,25 @@ export default defineI18nLocale(async () => {
       M: { label: 'Regimul marjei', description: 'Regimuri speciale de TVA (ex: bunuri second-hand, turism)' },
     },
 
+    // ── Product Categories ──────────────────────────────────────
+    productCategories: {
+      title: 'Categorii produse',
+      description: 'Grupeaza produsele in categorii pentru a le organiza pe ecranul POS.',
+      add: 'Adauga categorie',
+      edit: 'Editeaza categorie',
+      name: 'Denumire',
+      namePlaceholder: 'ex: Cafele',
+      color: 'Culoare',
+      sortOrder: 'Ordine',
+      noCategories: 'Nicio categorie definita',
+      noCategoriesHint: 'Categoriile apar ca filtre rapide deasupra grilei de produse din POS.',
+      createSuccess: 'Categorie creata.',
+      updateSuccess: 'Categorie actualizata.',
+      deleteSuccess: 'Categorie stearsa.',
+      deleteTitle: 'Sterge categoria',
+      deleteDescription: 'Sigur vrei sa stergi categoria "{name}"? Produsele asociate raman, dar isi pierd categoria.',
+    },
+
     // ── Document Series ─────────────────────────────────────────
     documentSeries: {
       title: 'Serii de documente',

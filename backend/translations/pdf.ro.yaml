@@ -86,6 +86,8 @@ client_signature: 'Semnatura client'
 
 # Receipt (bon fiscal)
 receipt_title: 'BON FISCAL'
+refund_title: 'BON DE RAMBURSARE'
+refund_of: 'Rambursare pentru'
 fiscal_number: 'Nr. fiscal'
 cash_register: 'Casa de marcat'
 

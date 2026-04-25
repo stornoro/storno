@@ -86,9 +86,11 @@ class ReceiptController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         // Honor the standard Idempotency-Key header in addition to the body field.
-        // POS clients use this to safely retry queued offline sales.
+        // POS clients use this to safely retry queued offline sales. The header
+        // wins when both are present — clients that set both intentionally are
+        // expressing their preference via the standard HTTP header.
         $headerKey = $request->headers->get('Idempotency-Key');
-        if ($headerKey && empty($data['idempotencyKey'])) {
+        if ($headerKey) {
             $data['idempotencyKey'] = $headerKey;
         }
 
@@ -264,6 +266,40 @@ class ReceiptController extends AbstractController
         }
 
         return $this->json($invoice, Response::HTTP_CREATED, [], ['groups' => ['invoice:detail']]);
+    }
+
+    #[Route('/receipts/{uuid}/refund', methods: ['POST'])]
+    public function refund(string $uuid, Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::INVOICE_REFUND)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $receipt = $this->receiptManager->find($uuid);
+        if (!$receipt || $receipt->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'Authentication required.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $body = json_decode($request->getContent() ?: '[]', true);
+        $lineSelections = is_array($body['lineSelections'] ?? null) ? $body['lineSelections'] : [];
+
+        try {
+            $refund = $this->receiptManager->refund($receipt, $user, $lineSelections);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return $this->json($refund, Response::HTTP_CREATED, [], ['groups' => ['receipt:detail']]);
     }
 
     #[Route('/receipts/{uuid}/pdf', methods: ['GET'])]

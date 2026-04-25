@@ -145,12 +145,20 @@
 
     <hr class="solid">
 
-    <div class="doc-title">{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+    {% set isRefund = invoice.refundOf is defined and invoice.refundOf %}
+    <div class="doc-title">
+        {% if isRefund %}{{ 'refund_title'|trans({}, 'pdf', locale|default('ro')) }}{% else %}{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}{% endif %}
+    </div>
 
     <div class="meta-row">
         <div>Nr: <span class="b">{{ invoice.number }}</span></div>
         <div class="right">{{ invoice.issueDate|date('d.m.Y H:i') }}</div>
     </div>
+    {% if isRefund %}
+        <div class="meta-row" style="display:block;">
+            <div>{{ 'refund_of'|trans({}, 'pdf', locale|default('ro')) }}: <span class="b">{{ invoice.refundOf.number }}</span></div>
+        </div>
+    {% endif %}
     {% if invoice.fiscalNumber or invoice.cashRegisterName %}
         <div class="meta-row">
             {% if invoice.cashRegisterName %}<div>{{ 'cash_register'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.cashRegisterName }}</div>{% endif %}

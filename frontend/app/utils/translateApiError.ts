@@ -35,6 +35,14 @@ const exactMap: Record<string, string> = {
   'Forbidden.': 'Acces interzis.',
   'Permission denied.': 'Permisiune refuzata.',
   'Permission denied': 'Permisiune refuzata.',
+
+  // ── Receipt refund ───────────────────────────────────────────────
+  'Only issued receipts can be refunded.': 'Doar bonurile emise pot fi rambursate.',
+  'A refund receipt cannot itself be refunded.': 'Un bon de rambursare nu poate fi rambursat.',
+  'Receipt has already been refunded.': 'Bonul a fost deja rambursat.',
+  'Selected line does not belong to this receipt.': 'Linia selectata nu apartine acestui bon.',
+  'Refund quantity must be positive.': 'Cantitatea de rambursat trebuie sa fie pozitiva.',
+  'Select at least one line to refund.': 'Selectati cel putin o linie pentru rambursare.',
   'No company selected.': 'Nicio companie selectata.',
   'No organization found.': 'Nicio organizatie gasita.',
   'Organization not found.': 'Organizatia nu a fost gasita.',
@@ -282,6 +290,11 @@ const patternMap: [RegExp, string | ((match: RegExpMatchArray) => string)][] = [
   [
     /^(Assertion|Attestation) verification failed: (.+)$/,
     (m) => `Verificarea ${m[1] === 'Assertion' ? 'autentificarii' : 'inregistrarii'} a esuat: ${m[2]}`,
+  ],
+  // Receipt refund partial-quantity guard
+  [
+    /^Requested quantity \(([^)]+)\) exceeds remaining refundable quantity \(([^)]+)\) for line "(.+)"\.$/,
+    (m) => `Cantitatea ceruta (${m[1]}) depaseste cantitatea ramasa de rambursat (${m[2]}) pentru linia "${m[3]}".`,
   ],
 ]
 

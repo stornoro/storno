@@ -351,4 +351,215 @@ class ReceiptManager
     {
         $this->recalculateStoredTotals($receipt);
     }
+
+    /**
+     * Create a refund (counter-)receipt that mirrors `parent`'s lines with
+     * negative quantities. The refund is automatically issued and linked back
+     * to the parent via refundOf. The parent must already be issued.
+     *
+     * When `lineSelections` is non-empty, only the selected source lines are
+     * mirrored, each with the requested partial quantity (negated). The
+     * resulting refund's payment amounts are scaled proportionally to the
+     * refunded gross share so the cash-register impact stays consistent.
+     *
+     * @param array<int, array{sourceLineId: string, quantity: float|string}> $lineSelections
+     *
+     * @throws \DomainException when the parent isn't refundable or selections invalid.
+     */
+    public function refund(Receipt $parent, User $user, array $lineSelections = []): Receipt
+    {
+        if ($parent->getStatus() !== ReceiptStatus::ISSUED) {
+            throw new \DomainException('Only issued receipts can be refunded.');
+        }
+        if ($parent->isRefund()) {
+            throw new \DomainException('A refund receipt cannot itself be refunded.');
+        }
+
+        // Resolve and validate selections. An empty array means "refund the
+        // whole receipt" (legacy/full-refund behaviour); a non-empty array
+        // means "refund just these lines, possibly partially".
+        $isPartial = count($lineSelections) > 0;
+        $linesToRefund = [];  // [{sourceLine, qtyToRefund}]
+        if ($isPartial) {
+            // Index parent lines by id for O(1) lookup.
+            $parentLines = [];
+            foreach ($parent->getLines() as $pl) {
+                $parentLines[(string) $pl->getId()] = $pl;
+            }
+            // Sum quantities already refunded per source line so we can validate
+            // we don't over-refund across multiple partial passes. Cancelled
+            // refunds release their quantities back to the pool.
+            $alreadyRefunded = [];
+            foreach ($parent->getActiveRefunds() as $existingRefund) {
+                foreach ($existingRefund->getLines() as $rl) {
+                    $key = trim((string) $rl->getDescription());
+                    $alreadyRefunded[$key] = bcadd(
+                        $alreadyRefunded[$key] ?? '0',
+                        bcmul($rl->getQuantity(), '-1', 4),
+                        4,
+                    );
+                }
+            }
+            foreach ($lineSelections as $selection) {
+                $sourceLineId = (string) ($selection['sourceLineId'] ?? '');
+                $reqQty = (string) ($selection['quantity'] ?? '0');
+                if ($sourceLineId === '' || !isset($parentLines[$sourceLineId])) {
+                    throw new \DomainException('Selected line does not belong to this receipt.');
+                }
+                if ((float) $reqQty <= 0) {
+                    throw new \DomainException('Refund quantity must be positive.');
+                }
+                $sourceLine = $parentLines[$sourceLineId];
+                $refunded = $alreadyRefunded[trim((string) $sourceLine->getDescription())] ?? '0';
+                $remaining = bcsub($sourceLine->getQuantity(), $refunded, 4);
+                if (bccomp($reqQty, $remaining, 4) > 0) {
+                    throw new \DomainException(sprintf(
+                        'Requested quantity (%s) exceeds remaining refundable quantity (%s) for line "%s".',
+                        $reqQty,
+                        $remaining,
+                        $sourceLine->getDescription(),
+                    ));
+                }
+                $linesToRefund[] = ['source' => $sourceLine, 'qty' => $reqQty];
+            }
+            if (count($linesToRefund) === 0) {
+                throw new \DomainException('Select at least one line to refund.');
+            }
+        } else {
+            if ($parent->isFullyRefunded()) {
+                throw new \DomainException('Receipt has already been refunded.');
+            }
+            foreach ($parent->getLines() as $sourceLine) {
+                $linesToRefund[] = ['source' => $sourceLine, 'qty' => $sourceLine->getQuantity()];
+            }
+        }
+
+        // Compute the gross share being refunded so we can scale payment amounts.
+        $parentGross = '0.00';
+        foreach ($parent->getLines() as $pl) {
+            $parentGross = bcadd($parentGross, $this->lineGross($pl), 2);
+        }
+        $refundGross = '0.00';
+        foreach ($linesToRefund as $entry) {
+            $refundGross = bcadd($refundGross, $this->lineGrossPartial($entry['source'], $entry['qty']), 2);
+        }
+        $share = $parentGross === '0.00'
+            ? '1.0000'
+            : bcdiv($refundGross, $parentGross, 6);
+
+        $refund = new Receipt();
+        $refund->setCompany($parent->getCompany());
+        $refund->setStatus(ReceiptStatus::DRAFT);
+        $refund->setRefundOf($parent);
+        $refund->setClient($parent->getClient());
+        $refund->setIssueDate(new \DateTime());
+        $refund->setCurrency($parent->getCurrency());
+        $refund->setExchangeRate($parent->getExchangeRate());
+        $refund->setIssuerName($parent->getIssuerName());
+        $refund->setIssuerId($parent->getIssuerId());
+        $refund->setSalesAgent($parent->getSalesAgent());
+        $refund->setNotes($parent->getNotes());
+        $refund->setMentions($parent->getMentions());
+        $refund->setInternalNote($parent->getInternalNote());
+        $refund->setProjectReference($parent->getProjectReference());
+        $refund->setCustomerName($parent->getCustomerName());
+        $refund->setCustomerCif($parent->getCustomerCif());
+        $refund->setCashRegisterName($parent->getCashRegisterName());
+        $refund->setFiscalNumber($parent->getFiscalNumber());
+
+        // Mirror payment method, with cash/card/other amounts flipped and
+        // proportionally scaled when this is a partial refund.
+        $refund->setPaymentMethod($parent->getPaymentMethod());
+        if ($parent->getCashPayment() !== null) {
+            $refund->setCashPayment($this->scaleNegative($parent->getCashPayment(), $share));
+        }
+        if ($parent->getCardPayment() !== null) {
+            $refund->setCardPayment($this->scaleNegative($parent->getCardPayment(), $share));
+        }
+        if ($parent->getOtherPayment() !== null) {
+            $refund->setOtherPayment($this->scaleNegative($parent->getOtherPayment(), $share));
+        }
+
+        // Inherit the same series so the refund's number is sequential alongside it.
+        if ($parent->getDocumentSeries()) {
+            $refund->setDocumentSeries($parent->getDocumentSeries());
+        }
+        $refund->setNumber('REFUND-' . substr(Uuid::v7()->toRfc4122(), 0, 8));
+
+        // Mirror selected lines with negative quantities.
+        $position = 1;
+        foreach ($linesToRefund as $entry) {
+            $sourceLine = $entry['source'];
+            $absQty = (string) $entry['qty'];
+            // Scale the line discount proportionally to the refunded fraction
+            // of the source line so partial refunds get partial discount credit.
+            $sourceQty = $sourceLine->getQuantity();
+            $discountShare = bccomp($sourceQty, '0', 4) > 0
+                ? bcdiv($absQty, $sourceQty, 6)
+                : '1.000000';
+            $lineDiscount = bcmul(
+                $sourceLine->getDiscount() ?: '0.00',
+                $discountShare,
+                2,
+            );
+            $line = new ReceiptLine();
+            $this->populateLineFields($line, [
+                'description' => $sourceLine->getDescription(),
+                'quantity' => bcmul($absQty, '-1', 4),
+                'unitOfMeasure' => $sourceLine->getUnitOfMeasure(),
+                'unitPrice' => $sourceLine->getUnitPrice(),
+                'vatRate' => $sourceLine->getVatRate(),
+                'vatCategoryCode' => $sourceLine->getVatCategoryCode(),
+                'discount' => bcmul($lineDiscount, '-1', 2),
+                'discountPercent' => $sourceLine->getDiscountPercent(),
+                'vatIncluded' => $sourceLine->isVatIncluded(),
+            ], $position++);
+            $refund->addLine($line);
+        }
+
+        $this->recalculateTotals($refund);
+
+        $this->entityManager->persist($refund);
+        $this->entityManager->flush();
+
+        // Auto-issue the refund — it represents a real money-out event.
+        $this->issue($refund, $user);
+
+        return $refund;
+    }
+
+    private function lineGross(\App\Entity\ReceiptLine $line): string
+    {
+        $gross = bcsub(
+            bcmul($line->getQuantity(), $line->getUnitPrice(), 4),
+            $line->getDiscount() ?: '0.00',
+            2,
+        );
+        if (!$line->isVatIncluded()) {
+            $rate = $line->getVatRate() ?: '0';
+            $gross = bcmul($gross, bcadd('1', bcdiv($rate, '100', 6), 6), 2);
+        }
+        return $gross;
+    }
+
+    private function lineGrossPartial(\App\Entity\ReceiptLine $line, string $partialQty): string
+    {
+        // Reuse lineGross logic but with a clone-like math path on the partial qty.
+        $gross = bcmul($partialQty, $line->getUnitPrice(), 2);
+        $sourceQty = $line->getQuantity();
+        if (bccomp($sourceQty, '0', 4) > 0) {
+            $share = bcdiv($partialQty, $sourceQty, 6);
+            $gross = bcsub($gross, bcmul($line->getDiscount() ?: '0.00', $share, 2), 2);
+        }
+        if (!$line->isVatIncluded()) {
+            $rate = $line->getVatRate() ?: '0';
+            $gross = bcmul($gross, bcadd('1', bcdiv($rate, '100', 6), 6), 2);
+        }
+        return $gross;
+    }
+
+    private function scaleNegative(string $amount, string $share): string
+    {
+        return bcmul(bcmul($amount, '-1', 6), $share, 2);
+    }
 }

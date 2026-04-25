@@ -85,6 +85,19 @@ class Product
     #[Groups(['product:list', 'product:detail'])]
     private ?string $color = null;
 
+    // Optional category for grid grouping on the POS.
+    #[ORM\ManyToOne(targetEntity: ProductCategory::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['product:list', 'product:detail'])]
+    private ?ProductCategory $category = null;
+
+    // SGR (Sistem Garantie-Returnare) deposit per unit, e.g. "0.50" for plastic
+    // beverage bottles in Romania. Null when the product is not SGR-eligible.
+    // The deposit is VAT-exempt and appears as a separate line on receipts.
+    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
+    #[Groups(['product:list', 'product:detail'])]
+    private ?string $sgrAmount = null;
+
     #[ORM\Column(length: 20)]
     #[Groups(['product:detail'])]
     private string $source = 'anaf_sync';
@@ -303,6 +316,30 @@ class Product
     public function setColor(?string $color): static
     {
         $this->color = $color;
+
+        return $this;
+    }
+
+    public function getCategory(): ?ProductCategory
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?ProductCategory $category): static
+    {
+        $this->category = $category;
+
+        return $this;
+    }
+
+    public function getSgrAmount(): ?string
+    {
+        return $this->sgrAmount;
+    }
+
+    public function setSgrAmount(?string $sgrAmount): static
+    {
+        $this->sgrAmount = $sgrAmount;
 
         return $this;
     }
