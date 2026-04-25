@@ -6,6 +6,7 @@
           <p class="text-xs text-muted uppercase mb-1.5">{{ $t('dashboard.charts.monthlyTrends') }}</p>
           <p class="text-3xl text-highlighted font-semibold tabular-nums">
             {{ formattedTotal }}
+            <span class="text-sm text-(--ui-text-muted) font-normal">{{ currency ?? 'RON' }}</span>
           </p>
           <div v-if="delta" class="mt-1">
             <DashboardStatDelta :delta="delta" />
@@ -49,7 +50,7 @@ import type { DeltaResult } from '~/stores/dashboard'
 
 const props = defineProps<{
   data: MonthlyTotal[]
-  totalAmount?: string | number
+  currency?: string
   delta?: DeltaResult
 }>()
 
@@ -66,10 +67,16 @@ const tabItems = computed(() => [
 
 const hasData = computed(() => props.data.length > 0)
 
-const formattedTotal = computed(() => {
-  const num = Number(props.totalAmount || 0)
-  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: 'RON', maximumFractionDigits: 0 }).format(num)
+// Match DashboardSalesCard: latest month's outgoing in the company default currency.
+const currentMonthAmount = computed(() => {
+  if (!props.data.length) return 0
+  const last = props.data[props.data.length - 1]
+  return Number(last?.outgoing ?? 0)
 })
+
+const formattedTotal = computed(() =>
+  new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(currentMonthAmount.value),
+)
 
 function formatMonth(ym: string): string {
   const parts = ym.split('-')

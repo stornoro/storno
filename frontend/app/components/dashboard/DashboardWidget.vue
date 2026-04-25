@@ -35,7 +35,6 @@ const {
   lastSyncedAt,
   outgoingAmountDelta,
   incomingAmountDelta,
-  totalAmountDelta,
   clientCountDelta,
 } = storeToRefs(dashboardStore)
 
@@ -160,8 +159,8 @@ const companyStore = useCompanyStore()
     <DashboardChartsCard
       v-else-if="id === 'monthly-charts'"
       :data="monthlyTotals as MonthlyTotal[]"
-      :total-amount="outgoingAmount"
-      :delta="totalAmountDelta"
+      :currency="currency"
+      :delta="outgoingAmountDelta"
     />
 
     <!-- Sync Status -->
