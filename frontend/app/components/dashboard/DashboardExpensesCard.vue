@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MonthlyTotal } from '~/stores/dashboard'
+import type { MonthlyTotal, DeltaResult } from '~/stores/dashboard'
 
 const props = defineProps<{
   incomingAmount: string | number
@@ -8,6 +8,7 @@ const props = defineProps<{
   invoicesByStatus: Record<string, number>
   currency?: string
   loading?: boolean
+  delta?: DeltaResult
 }>()
 
 const { t: $t } = useI18n()
@@ -102,6 +103,11 @@ function getBarColor(status: string): string {
             <UIcon :name="monthChange > 0 ? 'i-lucide-trending-up' : 'i-lucide-trending-down'" class="size-3 mr-0.5" />
             {{ Math.abs(monthChange) }}%
           </UBadge>
+        </div>
+
+        <!-- Delta vs previous period -->
+        <div v-if="delta" class="mb-1">
+          <DashboardStatDelta :delta="delta" :invert-semantic="true" />
         </div>
 
         <!-- Total label -->

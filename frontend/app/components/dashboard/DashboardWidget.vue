@@ -33,6 +33,10 @@ const {
   currency,
   isSyncEnabled,
   lastSyncedAt,
+  outgoingAmountDelta,
+  incomingAmountDelta,
+  totalAmountDelta,
+  clientCountDelta,
 } = storeToRefs(dashboardStore)
 
 const companyStore = useCompanyStore()
@@ -71,6 +75,7 @@ const companyStore = useCompanyStore()
       :monthly-data="monthlyTotals as MonthlyTotal[]"
       :currency="currency"
       :loading="loading"
+      :delta="outgoingAmountDelta"
     />
 
     <!-- Expenses Card -->
@@ -82,6 +87,7 @@ const companyStore = useCompanyStore()
       :invoices-by-status="invoicesByStatus"
       :currency="currency"
       :loading="loading"
+      :delta="incomingAmountDelta"
     />
 
     <!-- Client Balance Card -->
@@ -90,6 +96,7 @@ const companyStore = useCompanyStore()
       :recent-activity="recentActivity as RecentActivityItem[]"
       :currency="currency"
       :loading="loading"
+      :delta="clientCountDelta"
     />
 
     <!-- Unpaid Card -->
@@ -154,6 +161,7 @@ const companyStore = useCompanyStore()
       v-else-if="id === 'monthly-charts'"
       :data="monthlyTotals as MonthlyTotal[]"
       :total-amount="outgoingAmount"
+      :delta="totalAmountDelta"
     />
 
     <!-- Sync Status -->

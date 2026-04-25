@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { RecentActivityItem } from '~/stores/dashboard'
+import type { RecentActivityItem, DeltaResult } from '~/stores/dashboard'
 
 const props = defineProps<{
   recentActivity: RecentActivityItem[]
   currency?: string
   loading?: boolean
+  delta?: DeltaResult
 }>()
 
 const { t: $t } = useI18n()
@@ -55,6 +56,11 @@ function formatMoney(amount: number) {
         </div>
       </template>
       <template v-else>
+        <!-- Delta indicator -->
+        <div v-if="delta" class="mb-3">
+          <DashboardStatDelta :delta="delta" />
+        </div>
+
         <!-- Client list with bars -->
         <div v-if="topClients.length" class="space-y-3 flex-1">
           <div v-for="client in topClients" :key="client.name" class="space-y-1">

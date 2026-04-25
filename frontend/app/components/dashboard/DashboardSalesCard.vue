@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MonthlyTotal } from '~/stores/dashboard'
+import type { MonthlyTotal, DeltaResult } from '~/stores/dashboard'
 
 const props = defineProps<{
   amount: string | number
@@ -7,6 +7,7 @@ const props = defineProps<{
   monthlyData: MonthlyTotal[]
   currency?: string
   loading?: boolean
+  delta?: DeltaResult
 }>()
 
 const { t: $t } = useI18n()
@@ -112,11 +113,16 @@ const sparklineLabels = computed(() => {
       <template v-else>
         <div v-if="invoiceCount > 0" class="flex-1 flex flex-col">
           <!-- Big amount -->
-          <div class="flex items-baseline gap-1.5 mb-3">
+          <div class="flex items-baseline gap-1.5 mb-1">
             <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
               {{ formatMoney(currentMonthAmount) }}
             </span>
             <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
+          </div>
+
+          <!-- Delta indicator -->
+          <div class="mb-3">
+            <DashboardStatDelta v-if="delta" :delta="delta" />
           </div>
 
           <!-- Stats row -->

@@ -7,6 +7,9 @@
           <p class="text-3xl text-highlighted font-semibold tabular-nums">
             {{ formattedTotal }}
           </p>
+          <div v-if="delta" class="mt-1">
+            <DashboardStatDelta :delta="delta" />
+          </div>
         </div>
         <UTabs v-model="activeTab" :items="tabItems" :content="false" size="xs" />
       </div>
@@ -42,9 +45,12 @@ import type { MonthlyTotal } from '~/stores/dashboard'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip, Legend)
 
+import type { DeltaResult } from '~/stores/dashboard'
+
 const props = defineProps<{
   data: MonthlyTotal[]
   totalAmount?: string | number
+  delta?: DeltaResult
 }>()
 
 const { t: $t } = useI18n()
