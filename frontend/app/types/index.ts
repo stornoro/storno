@@ -501,6 +501,7 @@ export interface CashRegisterBalance {
 
 export interface CashRegisterEntry {
   kind: 'receipt' | 'payment' | 'movement'
+  movementId?: string
   documentNumber: string
   documentType: 'chitanta' | 'plata' | 'depunere' | 'ridicare' | 'altele'
   description: string
@@ -508,6 +509,18 @@ export interface CashRegisterEntry {
   out: string
   balanceAfter: string
   sourceId: string
+}
+
+export interface CashMovement {
+  id: string
+  movementDate: string
+  kind: 'deposit' | 'withdrawal' | 'other'
+  direction: 'in' | 'out'
+  amount: string
+  currency: string
+  description: string | null
+  documentNumber: string | null
+  createdAt: string
 }
 
 export interface CashRegisterDay {

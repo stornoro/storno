@@ -15,6 +15,7 @@ const allModules = [
   { key: MODULE_KEYS.PROFORMA_INVOICES, label: $t('nav.proformaInvoices'), icon: 'i-lucide-file-check' },
   { key: MODULE_KEYS.RECURRING_INVOICES, label: $t('nav.recurringInvoices'), icon: 'i-lucide-repeat' },
   { key: MODULE_KEYS.REPORTS, label: $t('nav.reports'), icon: 'i-lucide-bar-chart-3' },
+  { key: MODULE_KEYS.CASH_REGISTER, label: $t('reports.cashRegister.title'), icon: 'i-lucide-coins' },
   { key: MODULE_KEYS.EFACTURA, label: $t('nav.efactura'), icon: 'i-lucide-cloud-download' },
   { key: MODULE_KEYS.SPV_MESSAGES, label: $t('nav.spvMessages'), icon: 'i-lucide-mail' },
 ]

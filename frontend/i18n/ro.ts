@@ -1589,6 +1589,14 @@ export default defineI18nLocale(async () => {
         periodIn: 'Total incasari',
         periodOut: 'Total plati',
         noEntries: 'Nicio miscare in aceasta zi',
+        addMovement: 'Adauga miscare',
+        movementAdded: 'Miscare adaugata',
+        movementDeleted: 'Miscare stearsa',
+        confirmDelete: 'Sigur stergi aceasta miscare?',
+        amount: 'Suma',
+        movementDate: 'Data',
+        direction: 'Sens',
+        docNumberPlaceholder: 'ex: dispozitie nr. 42',
         col: {
           type: 'Tip',
           docNumber: 'Document',
@@ -1742,6 +1750,7 @@ export default defineI18nLocale(async () => {
       openingBalanceHint: 'Soldul initial nu poate fi negativ. Tranzactiile in numerar emise dupa data soldului initial sunt agregate automat.',
       openingBalanceLocked: 'Sold initial blocat',
       openingBalanceLockedDesc: 'Soldul initial este deja setat. Pentru ajustari, foloseste miscari de casa (urmeaza in faza urmatoare).',
+      openingBalanceResetConfirm: 'Exista deja tranzactii de numerar. Schimbarea soldului initial va recalcula soldul curent fata de noul punct de pornire. Continui?',
     },
 
     // ── API Keys ───────────────────────────────────────────────

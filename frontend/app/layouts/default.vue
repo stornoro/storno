@@ -222,7 +222,7 @@ const links = computed(() => {
         { label: $t('reports.salesAnalysis.title'), to: '/reports/sales', onSelect: close },
         { label: $t('reports.vatReportTitle'), to: '/reports/vat', onSelect: close },
         { label: $t('reports.balanceAnalysis.title'), to: '/reports/balances', onSelect: close },
-        { label: $t('reports.cashRegister.title'), to: '/reports/cash-register', onSelect: close },
+        ...(isModuleEnabled(MODULE_KEYS.CASH_REGISTER) ? [{ label: $t('reports.cashRegister.title'), to: '/reports/cash-register', onSelect: close }] : []),
       ],
     },
     {

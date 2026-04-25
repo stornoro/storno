@@ -4,6 +4,7 @@ export const MODULE_KEYS = {
   PROFORMA_INVOICES: 'proforma_invoices',
   RECURRING_INVOICES: 'recurring_invoices',
   REPORTS: 'reports',
+  CASH_REGISTER: 'cash_register',
   EFACTURA: 'efactura',
   SPV_MESSAGES: 'spv_messages',
 } as const
