@@ -112,17 +112,42 @@ class DashboardController extends AbstractController
             $amountParams
         );
 
-        // Client count (unfiltered — entity count, not transactional)
-        $clientCount = $conn->fetchOne(
-            'SELECT COUNT(*) FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
-            ['companyId' => $companyId]
-        );
+        // Client count: when a period is selected, count distinct clients with
+        // non-cancelled invoices in that range (transactional metric matching the
+        // rest of the dashboard). Without a period, fall back to the address-book
+        // total so "All Time" reflects everyone the user has on file.
+        if ($hasDateFilter) {
+            $clientCount = $conn->fetchOne(
+                'SELECT COUNT(DISTINCT client_id) FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND client_id IS NOT NULL' . $activeFilter . $dateFilter,
+                $baseParams
+            );
+        } else {
+            $clientCount = $conn->fetchOne(
+                'SELECT COUNT(*) FROM client WHERE company_id = :companyId AND deleted_at IS NULL',
+                ['companyId' => $companyId]
+            );
+        }
 
-        // Product count (unfiltered — entity count, not transactional)
-        $productCount = $conn->fetchOne(
-            'SELECT COUNT(*) FROM product WHERE company_id = :companyId AND deleted_at IS NULL',
-            ['companyId' => $companyId]
-        );
+        // Product count: same hybrid — distinct products billed in period, or
+        // catalogue total when no period is selected.
+        if ($hasDateFilter) {
+            $productDateFilter = '';
+            if ($dateFrom) {
+                $productDateFilter .= ' AND i.issue_date >= :dateFrom';
+            }
+            if ($dateTo) {
+                $productDateFilter .= ' AND i.issue_date <= :dateTo';
+            }
+            $productCount = $conn->fetchOne(
+                "SELECT COUNT(DISTINCT il.product_id) FROM invoice_line il INNER JOIN invoice i ON il.invoice_id = i.id WHERE i.company_id = :companyId AND i.deleted_at IS NULL AND il.product_id IS NOT NULL AND i.status != 'cancelled'" . $productDateFilter,
+                $baseParams
+            );
+        } else {
+            $productCount = $conn->fetchOne(
+                'SELECT COUNT(*) FROM product WHERE company_id = :companyId AND deleted_at IS NULL',
+                ['companyId' => $companyId]
+            );
+        }
 
         // Monthly totals (last 12 months, grouped by direction, converted to default currency)
         $monthlyRows = $conn->fetchAllAssociative(
@@ -159,10 +184,13 @@ class DashboardController extends AbstractController
             if ($row['direction'] === 'outgoing') $amountsByDirection['outgoing'] = $row['amount'];
         }
 
-        // Recent activity (last 10 synced, filtered by date if provided)
+        // Recent activity (last 10 synced, filtered by date if provided).
+        // Exclude cancelled invoices to match the rest of the dashboard.
         $qb = $this->invoiceRepository->createQueryBuilder('i')
             ->where('i.company = :company')
+            ->andWhere('i.status != :cancelledStatus')
             ->setParameter('company', $company)
+            ->setParameter('cancelledStatus', DocumentStatus::CANCELLED)
             ->orderBy('i.syncedAt', 'DESC')
             ->setMaxResults(10);
 
