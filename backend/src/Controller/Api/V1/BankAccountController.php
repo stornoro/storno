@@ -171,17 +171,22 @@ class BankAccountController extends AbstractController
 
     /**
      * Validate and apply openingBalance / openingBalanceDate fields.
+     * Opening balance must be ≥ 0. The user can keep editing it freely until
+     * cash transactions (receipts, payments, or manual movements) exist for
+     * this account; after that, the change requires `confirmReset: true` and
+     * the current balance simply re-derives against the new opening point.
      * Returns a JsonResponse on validation error, null on success.
-     *
-     * SmartBill-style rules: opening balance must be ≥ 0, and once it has been set
-     * the user cannot change it (only edit forward via cash movements — Phase 3).
      */
     private function applyOpeningBalance(BankAccount $account, array $data, bool $isUpdate): ?JsonResponse
     {
-        if ($isUpdate && $account->getOpeningBalance() !== null) {
-            return $this->json([
-                'error' => 'Opening balance is locked once set. Adjust via cash register movements.',
-            ], Response::HTTP_CONFLICT);
+        $confirmReset = !empty($data['confirmReset']);
+        if ($isUpdate && $account->getOpeningBalance() !== null && !$confirmReset) {
+            if ($this->cashAccountHasTransactions($account)) {
+                return $this->json([
+                    'error' => 'opening_balance_locked',
+                    'message' => 'Opening balance is locked because cash transactions exist for this account. Pass confirmReset=true to override; the current balance will be recomputed against the new opening point.',
+                ], Response::HTTP_CONFLICT);
+            }
         }
 
         $rawAmount = $data['openingBalance'] ?? null;
@@ -209,6 +214,54 @@ class BankAccountController extends AbstractController
         $account->setOpeningBalanceDate($date);
 
         return null;
+    }
+
+    /**
+     * Cash transactions = cash receipts (payment_method=cash or split-cash > 0)
+     * + payments paid in cash + manual cash movements, scoped to this account's
+     * company and currency.
+     */
+    private function cashAccountHasTransactions(BankAccount $account): bool
+    {
+        $company = $account->getCompany();
+        if (!$company) {
+            return false;
+        }
+        $companyId = (string) $company->getId();
+        $currency = $account->getCurrency();
+        $conn = $this->entityManager->getConnection();
+
+        $hasReceipt = (bool) $conn->fetchOne(
+            "SELECT 1 FROM receipt
+             WHERE company_id = :c
+               AND deleted_at IS NULL
+               AND status NOT IN ('draft', 'cancelled')
+               AND currency = :cur
+               AND (payment_method = 'cash' OR (cash_payment IS NOT NULL AND cash_payment > 0))
+             LIMIT 1",
+            ['c' => $companyId, 'cur' => $currency],
+        );
+        if ($hasReceipt) {
+            return true;
+        }
+
+        $hasPayment = (bool) $conn->fetchOne(
+            "SELECT 1 FROM payment p
+             INNER JOIN invoice i ON i.id = p.invoice_id
+             WHERE i.company_id = :c
+               AND p.payment_method = 'cash'
+               AND p.currency = :cur
+             LIMIT 1",
+            ['c' => $companyId, 'cur' => $currency],
+        );
+        if ($hasPayment) {
+            return true;
+        }
+
+        return (bool) $conn->fetchOne(
+            'SELECT 1 FROM cash_movement WHERE company_id = :c AND currency = :cur LIMIT 1',
+            ['c' => $companyId, 'cur' => $currency],
+        );
     }
 
     private function unsetOtherDefaults(\App\Entity\Company $company, ?BankAccount $except = null): void

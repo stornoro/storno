@@ -27,6 +27,7 @@ class Company
         'proforma_invoices',
         'recurring_invoices',
         'reports',
+        'cash_register',
         'efactura',
         'spv_messages',
     ];

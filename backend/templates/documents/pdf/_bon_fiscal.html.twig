@@ -1,0 +1,281 @@
+{# Shared fiscal-receipt layout (80mm thermal). All template variants render the same body. #}
+<!DOCTYPE html>
+<html lang="{{ locale|default('ro') }}">
+<head>
+<meta charset="UTF-8">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
+        font-size: 10px;
+        color: #000;
+        line-height: 1.35;
+        background: #fff;
+    }
+    .page { padding: 4px 6px; }
+    .center { text-align: center; }
+    .right  { text-align: right; }
+    .b      { font-weight: bold; }
+    hr.solid  { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+    hr.thick  { border: none; border-top: 2px solid #000; margin: 4px 0; }
+
+    .logo { display: block; margin: 0 auto 4px; max-height: 32px; max-width: 80%; }
+
+    .company-name {
+        font-size: 12px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 2px;
+    }
+    .company-meta { text-align: center; font-size: 9px; line-height: 1.4; margin-bottom: 4px; }
+
+    .doc-title {
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+        letter-spacing: 2px;
+        color: {{ primaryColor|default('#000') }};
+        margin: 2px 0;
+    }
+
+    .meta-row {
+        display: table;
+        width: 100%;
+        font-size: 9px;
+    }
+    .meta-row > div { display: table-cell; }
+    .meta-row .right { text-align: right; }
+
+    table.lines { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    table.lines td {
+        font-size: 10px;
+        padding: 1px 0;
+        vertical-align: top;
+    }
+    .line-desc { font-weight: bold; }
+    .line-detail {
+        font-size: 9px;
+        color: #000;
+    }
+    .line-detail .right { float: right; }
+
+    .totals { margin-top: 6px; font-size: 10px; }
+    .totals-row {
+        display: table;
+        width: 100%;
+        padding: 1px 0;
+    }
+    .totals-row > div { display: table-cell; }
+    .totals-row .right { text-align: right; }
+    .totals-grand {
+        font-size: 14px;
+        font-weight: bold;
+        margin-top: 4px;
+        padding-top: 4px;
+        border-top: 2px solid #000;
+    }
+
+    .vat-class {
+        margin-top: 6px;
+        font-size: 9px;
+    }
+    .vat-class table { width: 100%; border-collapse: collapse; }
+    .vat-class td { padding: 1px 0; }
+
+    .payment {
+        margin-top: 6px;
+        font-size: 10px;
+    }
+
+    .footer {
+        margin-top: 8px;
+        text-align: center;
+        font-size: 8px;
+        color: #000;
+        line-height: 1.4;
+    }
+    .footer .legal { margin-top: 4px; font-style: italic; }
+
+    .cancelled-watermark-wrap {
+        position: fixed;
+        top: 35%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        pointer-events: none;
+    }
+    .cancelled-watermark {
+        display: inline-block;
+        transform: rotate(-22deg);
+        font-size: 36px;
+        font-weight: bold;
+        color: rgba(220, 38, 38, 0.18);
+        border: 3px solid rgba(220, 38, 38, 0.18);
+        padding: 6px 14px;
+        letter-spacing: 3px;
+    }
+
+    {% if customCss %}
+    {{ customCss|raw }}
+    {% endif %}
+</style>
+</head>
+<body>
+<div class="page">
+    {% if invoice.status is defined and invoice.status.value == 'cancelled' %}
+        <div class="cancelled-watermark-wrap">
+            <div class="cancelled-watermark">{{ 'cancelled_watermark'|trans({}, 'pdf', locale|default('ro')) }}</div>
+        </div>
+    {% endif %}
+
+    {# Company header #}
+    {% if (showLogo is not defined or showLogo) and logoDataUri %}
+        <img class="logo" src="{{ logoDataUri }}" alt="Logo">
+    {% endif %}
+    <div class="company-name">{{ company.name|upper }}</div>
+    <div class="company-meta">
+        {% if company.cif %}{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.cif }}{% endif %}
+        {% if company.registrationNumber %} · {{ company.registrationNumber }}{% endif %}<br>
+        {% if company.address %}{{ company.address }}<br>{% endif %}
+        {% set city = company.city|default('') %}
+        {% set county = company.county|default('') %}
+        {% if city or county %}{{ city }}{% if city and county %}, {% endif %}{{ county }}<br>{% endif %}
+        {% if company.phone %}{{ 'phone'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.phone }}{% endif %}
+    </div>
+
+    <hr class="solid">
+
+    <div class="doc-title">{{ 'receipt_title'|trans({}, 'pdf', locale|default('ro')) }}</div>
+
+    <div class="meta-row">
+        <div>Nr: <span class="b">{{ invoice.number }}</span></div>
+        <div class="right">{{ invoice.issueDate|date('d.m.Y H:i') }}</div>
+    </div>
+    {% if invoice.fiscalNumber or invoice.cashRegisterName %}
+        <div class="meta-row">
+            {% if invoice.cashRegisterName %}<div>{{ 'cash_register'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.cashRegisterName }}</div>{% endif %}
+            {% if invoice.fiscalNumber %}<div class="right">{{ 'fiscal_number'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.fiscalNumber }}</div>{% endif %}
+        </div>
+    {% endif %}
+
+    {% if invoice.customerName or invoice.customerCif %}
+        <hr class="solid">
+        <div class="meta-row" style="display:block;">
+            <div class="b">{{ 'receipt_customer'|trans({}, 'pdf', locale|default('ro')) }}</div>
+            {% if invoice.customerName %}<div>{{ invoice.customerName }}</div>{% endif %}
+            {% if invoice.customerCif %}<div>{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ invoice.customerCif }}</div>{% endif %}
+        </div>
+    {% endif %}
+
+    <hr class="solid">
+
+    {# Lines #}
+    <table class="lines">
+        {% for line in invoice.lines %}
+            <tr>
+                <td>
+                    <div class="line-desc">{{ line.description }}</div>
+                    <div class="line-detail">
+                        {{ line.quantity|number_format(line.quantity|number_format(4) matches '/0000$/' ? 0 : 3, ',', '.') }}
+                        {{ line.unitOfMeasure }}
+                        × {{ line.unitPrice|number_format(2, ',', '.') }}
+                        <span class="right b">{{ line.lineTotal|number_format(2, ',', '.') }}</span>
+                    </div>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <hr class="solid">
+
+    {# VAT breakdown grouped by (rate, categoryCode), labelled from the company's configured VAT rates. #}
+    {% if vatClassBreakdown is defined and vatClassBreakdown|length > 0 %}
+        <div class="vat-class">
+            <table>
+                {% for b in vatClassBreakdown %}
+                    <tr>
+                        <td>{{ b.label ?: ('vat_label'|trans({}, 'pdf', locale|default('ro'))) }} {{ b.rate }}%</td>
+                        <td class="right">{{ b.base|number_format(2, ',', '.') }}</td>
+                        <td class="right">{{ b.vat|number_format(2, ',', '.') }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <hr class="solid">
+    {% endif %}
+
+    {# Totals #}
+    <div class="totals">
+        <div class="totals-row">
+            <div>Subtotal</div>
+            <div class="right">{{ invoice.subtotal|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+        </div>
+        {% if invoice.discount and invoice.discount > 0 %}
+        <div class="totals-row">
+            <div>Discount</div>
+            <div class="right">-{{ invoice.discount|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+        </div>
+        {% endif %}
+        <div class="totals-row">
+            <div>TVA total</div>
+            <div class="right">{{ invoice.vatTotal|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+        </div>
+        <div class="totals-row totals-grand">
+            <div>TOTAL</div>
+            <div class="right">{{ invoice.total|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+        </div>
+    </div>
+
+    {# Payment method #}
+    {% if invoice.paymentMethod is defined and invoice.paymentMethod %}
+        <hr class="solid">
+        {% set payLabels = {
+            'cash':        'receipt_pay_cash',
+            'card':        'receipt_pay_card',
+            'meal_ticket': 'receipt_pay_meal_ticket',
+        } %}
+        <div class="payment">
+            {% if invoice.paymentMethod == 'mixed' %}
+                {% if invoice.cashPayment %}
+                <div class="totals-row">
+                    <div>{{ 'receipt_pay_cash_lc'|trans({}, 'pdf', locale|default('ro')) }}</div>
+                    <div class="right">{{ invoice.cashPayment|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+                </div>
+                {% endif %}
+                {% if invoice.cardPayment %}
+                <div class="totals-row">
+                    <div>{{ 'receipt_pay_card_lc'|trans({}, 'pdf', locale|default('ro')) }}</div>
+                    <div class="right">{{ invoice.cardPayment|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+                </div>
+                {% endif %}
+                {% if invoice.otherPayment %}
+                <div class="totals-row">
+                    <div>{{ 'receipt_pay_other_lc'|trans({}, 'pdf', locale|default('ro')) }}</div>
+                    <div class="right">{{ invoice.otherPayment|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="totals-row">
+                    <div class="b">{{ (payLabels[invoice.paymentMethod]|default('receipt_pay_other'))|trans({}, 'pdf', locale|default('ro')) }}</div>
+                    <div class="right b">{{ invoice.total|number_format(2, ',', '.') }} {{ invoice.currency }}</div>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if invoice.notes %}
+        <hr class="solid">
+        <div class="payment">{{ invoice.notes|nl2br }}</div>
+    {% endif %}
+
+    <hr class="thick">
+    <div class="footer">
+        {{ 'receipt_thank_you'|trans({}, 'pdf', locale|default('ro')) }}<br>
+        {% if config is defined and config.footerText %}
+            {{ config.footerText }}<br>
+        {% endif %}
+        <div class="legal">{{ 'receipt_emitted_via'|trans({}, 'pdf', locale|default('ro')) }} Storno.ro</div>
+    </div>
+</div>
+</body>
+</html>
