@@ -297,7 +297,7 @@
                     </div>
                     <div>
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.senderCif || invoice.supplier?.cif || invoice.supplier?.registrationNumber, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</dd>
                     </div>
                     <template v-if="invoice.supplier && invoice.direction === 'incoming'">
                       <div v-if="invoice.supplier.registrationNumber">
@@ -347,7 +347,7 @@
                     </div>
                     <div>
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
-                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.buyerSnapshot ? invoice.buyerSnapshot.isVatPayer : (invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer)) || '-' }}</dd>
+                      <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif || invoice.buyerSnapshot?.cui || invoice.buyerSnapshot?.registrationNumber, invoice.buyerSnapshot ? invoice.buyerSnapshot.isVatPayer : (invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer)) || '-' }}</dd>
                     </div>
                     <template v-if="invoice.buyerSnapshot || (invoice.client && invoice.direction === 'outgoing')">
                       <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.registrationNumber : invoice.client?.registrationNumber">
