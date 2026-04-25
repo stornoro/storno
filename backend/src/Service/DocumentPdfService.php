@@ -11,6 +11,7 @@ use App\Entity\Receipt;
 use App\Enum\InvoiceDirection;
 use App\Repository\BankAccountRepository;
 use App\Repository\PdfTemplateConfigRepository;
+use App\Service\EuVatRateService;
 use App\Service\Storage\OrganizationStorageResolver;
 use Knp\Snappy\Pdf;
 use League\Flysystem\FilesystemOperator;
@@ -59,6 +60,7 @@ class DocumentPdfService
         private readonly Pdf $snappy,
         private readonly PdfTemplateConfigRepository $configRepository,
         private readonly BankAccountRepository $bankAccountRepository,
+        private readonly EuVatRateService $euVatRateService,
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly LoggerInterface $logger,
@@ -137,9 +139,69 @@ class DocumentPdfService
             'config' => $config,
             'logoDataUri' => $this->resolveLogoDataUri($receipt->getCompany(), $config),
             'locale' => 'ro',
+            'vatClassBreakdown' => $this->computeVatClassBreakdown($receipt),
         ]));
 
-        return $this->convertToPdf($html);
+        // Fiscal receipts are thermal-printer format: 80mm wide, variable height.
+        return $this->convertReceiptToPdf($html);
+    }
+
+    /**
+     * Group VAT totals by rate, decorating each bucket with a semantic label
+     * (Standard / Reduced / Zero / etc.) resolved from the company's country
+     * via the EU VAT rates feed. Country-agnostic — falls back to a plain
+     * numeric label when the rate isn't recognized.
+     *
+     * @return list<array{rate: string, label: ?string, base: float, vat: float}>
+     */
+    private function computeVatClassBreakdown(Receipt $receipt): array
+    {
+        $buckets = [];
+        foreach ($receipt->getLines() as $line) {
+            $rate = number_format((float) $line->getVatRate(), 2, '.', '');
+            $vat  = (float) $line->getVatAmount();
+            $base = (float) $line->getLineTotal() - $vat;
+            if (!isset($buckets[$rate])) {
+                $buckets[$rate] = ['rate' => $rate, 'label' => null, 'base' => 0.0, 'vat' => 0.0];
+            }
+            $buckets[$rate]['base'] += $base;
+            $buckets[$rate]['vat']  += $vat;
+        }
+
+        $country = $receipt->getCompany()?->getCountry();
+        if ($country && !empty($buckets)) {
+            $countryRates = $this->euVatRateService->getAllRates($country) ?? [];
+            // Build a map from "21.00" → "standard" for the country
+            $rateToTier = [];
+            foreach ($countryRates as $tier => $value) {
+                $rateToTier[number_format((float) $value, 2, '.', '')] = $tier;
+            }
+            foreach ($buckets as &$b) {
+                if (isset($rateToTier[$b['rate']])) {
+                    $b['label'] = $this->vatTierLabel($rateToTier[$b['rate']]);
+                } elseif ((float) $b['rate'] === 0.0) {
+                    $b['label'] = $this->vatTierLabel('zero');
+                }
+            }
+            unset($b);
+        }
+
+        usort($buckets, fn($a, $b) => (float) $b['rate'] <=> (float) $a['rate']);
+        return array_values($buckets);
+    }
+
+    private function vatTierLabel(string $tier): string
+    {
+        return match ($tier) {
+            'standard'      => 'Standard',
+            'reduced'       => 'Reduced',
+            'reduced1'      => 'Reduced',
+            'reduced2'      => 'Reduced',
+            'super_reduced' => 'Super reduced',
+            'parking'       => 'Parking',
+            'zero'          => 'Zero',
+            default         => ucfirst($tier),
+        };
     }
 
     public function renderSampleHtml(Company $company, array $overrides = []): string
@@ -257,6 +319,27 @@ class DocumentPdfService
             'margin-bottom' => '10mm',
             'margin-left' => '10mm',
             'margin-right' => '10mm',
+            'encoding' => 'UTF-8',
+            'print-media-type' => true,
+            'no-outline' => true,
+            'enable-local-file-access' => true,
+        ]);
+    }
+
+    /**
+     * Render a fiscal-receipt-shaped PDF: 80mm thermal-printer paper, no client block,
+     * monospace, narrow margins. Height grows automatically per content via wkhtmltopdf
+     * page-height upper bound; long receipts simply paginate.
+     */
+    private function convertReceiptToPdf(string $html): string
+    {
+        return $this->snappy->getOutputFromHtml($html, [
+            'page-width' => '80mm',
+            'page-height' => '297mm',
+            'margin-top' => '4mm',
+            'margin-bottom' => '4mm',
+            'margin-left' => '4mm',
+            'margin-right' => '4mm',
             'encoding' => 'UTF-8',
             'print-media-type' => true,
             'no-outline' => true,

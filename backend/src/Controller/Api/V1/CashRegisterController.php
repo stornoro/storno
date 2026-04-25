@@ -2,7 +2,9 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\CashMovement;
 use App\Repository\BankAccountRepository;
+use App\Repository\CashMovementRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use Doctrine\ORM\EntityManagerInterface;
@@ -11,12 +13,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Uid\Uuid;
 
 #[Route('/api/v1/cash-register')]
 class CashRegisterController extends AbstractController
 {
     public function __construct(
         private readonly BankAccountRepository $bankAccountRepository,
+        private readonly CashMovementRepository $cashMovementRepository,
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
     ) {}
@@ -31,6 +35,9 @@ class CashRegisterController extends AbstractController
 
         if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
         }
 
         $cashAccount = $this->bankAccountRepository->findCashAccount($company);
@@ -89,8 +96,16 @@ class CashRegisterController extends AbstractController
             'openingDate' => $openingDate,
         ]);
 
+        // Manual cash movements (deposits, withdrawals, miscellaneous)
+        $movementsNet = $this->cashMovementRepository->sumNetInRange(
+            $company,
+            $currency,
+            $cashAccount->getOpeningBalanceDate(),
+            new \DateTimeImmutable('today'),
+        );
+
         $opening = (float) $cashAccount->getOpeningBalance();
-        $current = $opening + (float) $cashReceipts - (float) $cashPayments;
+        $current = $opening + (float) $cashReceipts - (float) $cashPayments + $movementsNet;
 
         return $this->json([
             'configured' => true,
@@ -100,6 +115,7 @@ class CashRegisterController extends AbstractController
             'openingBalanceDate' => $openingDate,
             'cashReceipts' => $cashReceipts,
             'cashPayments' => $cashPayments,
+            'manualNet' => number_format($movementsNet, 2, '.', ''),
             'currentBalance' => number_format($current, 2, '.', ''),
         ]);
     }
@@ -120,6 +136,9 @@ class CashRegisterController extends AbstractController
 
         if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
         }
 
         $cashAccount = $this->bankAccountRepository->findCashAccount($company);
@@ -186,7 +205,10 @@ class CashRegisterController extends AbstractController
             ['companyId' => $companyId, 'currency' => $currency, 'fromStr' => $fromStr, 'toStr' => $toStr],
         );
 
-        // Pre-range running balance: opening + receipts/payments between openingDate and (from-1)
+        // Manual cash movements
+        $movementRows = $this->cashMovementRepository->findInRange($company, $currency, $from, $to);
+
+        // Pre-range running balance: opening + receipts/payments/movements between openingDate and (from-1)
         $running = (float) $cashAccount->getOpeningBalance();
         if ($fromStr > $openingDateStr) {
             $preIn = (float) $conn->fetchOne(
@@ -217,7 +239,13 @@ class CashRegisterController extends AbstractController
                   AND p.payment_date < :fromStr",
                 ['companyId' => $companyId, 'currency' => $currency, 'openingDate' => $openingDateStr, 'fromStr' => $fromStr],
             );
-            $running += $preIn - $preOut;
+            $preMovementsNet = $this->cashMovementRepository->sumNetInRange(
+                $company,
+                $currency,
+                $opening,
+                $from->modify('-1 day'),
+            );
+            $running += $preIn - $preOut + $preMovementsNet;
         }
 
         // Bucket entries by day
@@ -263,6 +291,28 @@ class CashRegisterController extends AbstractController
             ];
         }
 
+        $kindToDocType = [
+            CashMovement::KIND_DEPOSIT    => 'depunere',
+            CashMovement::KIND_WITHDRAWAL => 'ridicare',
+            CashMovement::KIND_OTHER      => 'altele',
+        ];
+        foreach ($movementRows as $m) {
+            $key = $m->getMovementDate()->format('Y-m-d');
+            if (!isset($buckets[$key])) continue;
+            $isIn = $m->getDirection() === CashMovement::DIR_IN;
+            $buckets[$key]['entries'][] = [
+                'kind' => 'movement',
+                'movementId' => (string) $m->getId(),
+                'documentNumber' => $m->getDocumentNumber() ?: '-',
+                'documentType' => $kindToDocType[$m->getKind()] ?? 'altele',
+                'description' => $m->getDescription() ?: '-',
+                'in' => $isIn ? $m->getAmount() : '0.00',
+                'out' => $isIn ? '0.00' : $m->getAmount(),
+                'sourceId' => (string) $m->getId(),
+                'sortKey' => $m->getMovementDate()->format('Y-m-d') . 'T' . ($m->getCreatedAt()?->format('H:i:s') ?? '00:00:00'),
+            ];
+        }
+
         // Sort entries within each day, compute running balance.
         $days = [];
         foreach ($buckets as $key => $bucket) {
@@ -297,5 +347,217 @@ class CashRegisterController extends AbstractController
             'to' => $toStr,
             'days' => $days,
         ]);
+    }
+
+    #[Route('/movements', methods: ['GET'])]
+    public function listMovements(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $cashAccount = $this->bankAccountRepository->findCashAccount($company);
+        if (!$cashAccount) {
+            return $this->json(['data' => []]);
+        }
+
+        try {
+            $from = $request->query->get('from')
+                ? new \DateTimeImmutable((string) $request->query->get('from'))
+                : ($cashAccount->getOpeningBalanceDate() ?? new \DateTimeImmutable('-30 days'));
+            $to = $request->query->get('to')
+                ? new \DateTimeImmutable((string) $request->query->get('to'))
+                : new \DateTimeImmutable('today');
+        } catch (\Exception) {
+            return $this->json(['error' => 'Invalid date range.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $movements = $this->cashMovementRepository->findInRange(
+            $company,
+            $cashAccount->getCurrency(),
+            $from,
+            $to,
+        );
+
+        return $this->json([
+            'data' => array_map(fn (CashMovement $m) => $this->serializeMovement($m), $movements),
+        ]);
+    }
+
+    #[Route('/movements', methods: ['POST'])]
+    public function createMovement(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $cashAccount = $this->bankAccountRepository->findCashAccount($company);
+        if (!$cashAccount) {
+            return $this->json(['error' => 'Configure a cash register before adding movements.'], Response::HTTP_CONFLICT);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $movement = new CashMovement();
+        $movement->setCompany($company);
+        $movement->setCurrency($cashAccount->getCurrency());
+
+        $error = $this->applyMovementData($movement, $data, $cashAccount->getOpeningBalanceDate());
+        if ($error) {
+            return $error;
+        }
+
+        $this->entityManager->persist($movement);
+        $this->entityManager->flush();
+
+        return $this->json($this->serializeMovement($movement), Response::HTTP_CREATED);
+    }
+
+    #[Route('/movements/{uuid}', methods: ['PATCH'], requirements: ['uuid' => '[0-9a-f-]{36}'])]
+    public function updateMovement(string $uuid, Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $movement = $this->cashMovementRepository->find(Uuid::fromString($uuid));
+        if (!$movement || $movement->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Movement not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $cashAccount = $this->bankAccountRepository->findCashAccount($company);
+        $data = json_decode($request->getContent(), true) ?? [];
+
+        $error = $this->applyMovementData($movement, $data, $cashAccount?->getOpeningBalanceDate());
+        if ($error) {
+            return $error;
+        }
+
+        $this->entityManager->flush();
+
+        return $this->json($this->serializeMovement($movement));
+    }
+
+    #[Route('/movements/{uuid}', methods: ['DELETE'], requirements: ['uuid' => '[0-9a-f-]{36}'])]
+    public function deleteMovement(string $uuid, Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        if (!$company->isModuleEnabled('cash_register')) {
+            return $this->json(['error' => 'Cash register module is disabled.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $movement = $this->cashMovementRepository->find(Uuid::fromString($uuid));
+        if (!$movement || $movement->getCompany()?->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
+            return $this->json(['error' => 'Movement not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->entityManager->remove($movement);
+        $this->entityManager->flush();
+
+        return $this->json(['message' => 'Movement deleted.']);
+    }
+
+    /**
+     * Validate and write incoming JSON onto a CashMovement entity.
+     * Returns a JsonResponse on validation failure, null on success.
+     */
+    private function applyMovementData(CashMovement $movement, array $data, ?\DateTimeImmutable $openingDate): ?JsonResponse
+    {
+        if (isset($data['kind'])) {
+            if (!in_array($data['kind'], CashMovement::KINDS, true)) {
+                return $this->json(['error' => 'Invalid kind. Allowed: ' . implode(', ', CashMovement::KINDS)], Response::HTTP_BAD_REQUEST);
+            }
+            $movement->setKind($data['kind']);
+            // Auto-direction: deposit pulls cash out of the till; withdrawal puts cash into the till.
+            if ($data['kind'] === CashMovement::KIND_DEPOSIT) {
+                $movement->setDirection(CashMovement::DIR_OUT);
+            } elseif ($data['kind'] === CashMovement::KIND_WITHDRAWAL) {
+                $movement->setDirection(CashMovement::DIR_IN);
+            }
+        }
+
+        if ($movement->getKind() === CashMovement::KIND_OTHER && isset($data['direction'])) {
+            if (!in_array($data['direction'], CashMovement::DIRS, true)) {
+                return $this->json(['error' => 'Invalid direction. Allowed: ' . implode(', ', CashMovement::DIRS)], Response::HTTP_BAD_REQUEST);
+            }
+            $movement->setDirection($data['direction']);
+        }
+
+        if (isset($data['amount'])) {
+            if (!is_numeric($data['amount']) || (float) $data['amount'] <= 0) {
+                return $this->json(['error' => 'amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
+            }
+            $movement->setAmount(number_format((float) $data['amount'], 2, '.', ''));
+        }
+
+        if (isset($data['movementDate'])) {
+            try {
+                $date = new \DateTimeImmutable((string) $data['movementDate']);
+            } catch (\Exception) {
+                return $this->json(['error' => 'movementDate is not a valid date.'], Response::HTTP_BAD_REQUEST);
+            }
+            if ($openingDate && $date < $openingDate) {
+                return $this->json(['error' => 'movementDate cannot be earlier than the cash register opening date.'], Response::HTTP_BAD_REQUEST);
+            }
+            $movement->setMovementDate($date);
+        }
+
+        if (array_key_exists('description', $data)) {
+            $movement->setDescription($data['description'] !== null ? (string) $data['description'] : null);
+        }
+        if (array_key_exists('documentNumber', $data)) {
+            $movement->setDocumentNumber($data['documentNumber'] !== null ? (string) $data['documentNumber'] : null);
+        }
+
+        // Required fields on creation
+        if (!$movement->getMovementDate()) {
+            return $this->json(['error' => 'movementDate is required.'], Response::HTTP_BAD_REQUEST);
+        }
+        if ((float) $movement->getAmount() <= 0) {
+            return $this->json(['error' => 'amount is required.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        return null;
+    }
+
+    private function serializeMovement(CashMovement $m): array
+    {
+        return [
+            'id' => (string) $m->getId(),
+            'movementDate' => $m->getMovementDate()?->format('Y-m-d'),
+            'kind' => $m->getKind(),
+            'direction' => $m->getDirection(),
+            'amount' => $m->getAmount(),
+            'currency' => $m->getCurrency(),
+            'description' => $m->getDescription(),
+            'documentNumber' => $m->getDocumentNumber(),
+            'createdAt' => $m->getCreatedAt()?->format('c'),
+        ];
     }
 }

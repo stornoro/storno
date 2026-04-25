@@ -89,5 +89,18 @@ receipt_title: 'TICKET DE CAISSE'
 fiscal_number: 'N° fiscal'
 cash_register: 'Caisse'
 
+# Fiscal receipt
+receipt_pay_cash: 'ESPECES'
+receipt_pay_card: 'CARTE'
+receipt_pay_meal_ticket: 'TICKETS-RESTAURANT'
+receipt_pay_other: 'AUTRE'
+receipt_pay_cash_lc: 'Especes'
+receipt_pay_card_lc: 'Carte'
+receipt_pay_other_lc: 'Autre'
+receipt_thank_you: 'MERCI !'
+receipt_customer: 'CLIENT'
+receipt_emitted_via: 'Emis via'
+taxable_base: 'Base'
+
 # Status watermarks
 cancelled_watermark: 'ANNULEE'

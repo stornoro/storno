@@ -89,5 +89,18 @@ receipt_title: 'BON FISCAL'
 fiscal_number: 'Nr. fiscal'
 cash_register: 'Casa de marcat'
 
+# Fiscal receipt
+receipt_pay_cash: 'NUMERAR'
+receipt_pay_card: 'CARD'
+receipt_pay_meal_ticket: 'TICHETE'
+receipt_pay_other: 'ALTELE'
+receipt_pay_cash_lc: 'Numerar'
+receipt_pay_card_lc: 'Card'
+receipt_pay_other_lc: 'Altele'
+receipt_thank_you: 'VA MULTUMIM!'
+receipt_customer: 'CLIENT'
+receipt_emitted_via: 'Emis prin'
+taxable_base: 'Baza'
+
 # Status watermarks
 cancelled_watermark: 'ANULATA'

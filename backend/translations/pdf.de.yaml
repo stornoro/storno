@@ -89,5 +89,18 @@ receipt_title: 'KASSENBON'
 fiscal_number: 'Fiskalnr.'
 cash_register: 'Kasse'
 
+# Fiscal receipt
+receipt_pay_cash: 'BAR'
+receipt_pay_card: 'KARTE'
+receipt_pay_meal_ticket: 'ESSENSGUTSCHEINE'
+receipt_pay_other: 'SONSTIGE'
+receipt_pay_cash_lc: 'Bar'
+receipt_pay_card_lc: 'Karte'
+receipt_pay_other_lc: 'Sonstige'
+receipt_thank_you: 'DANKE!'
+receipt_customer: 'KUNDE'
+receipt_emitted_via: 'Ausgestellt uber'
+taxable_base: 'Bemessung'
+
 # Status watermarks
 cancelled_watermark: 'STORNIERT'

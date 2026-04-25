@@ -89,5 +89,18 @@ receipt_title: 'FISCAL RECEIPT'
 fiscal_number: 'Fiscal no.'
 cash_register: 'Cash register'
 
+# Fiscal receipt
+receipt_pay_cash: 'CASH'
+receipt_pay_card: 'CARD'
+receipt_pay_meal_ticket: 'MEAL TICKETS'
+receipt_pay_other: 'OTHER'
+receipt_pay_cash_lc: 'Cash'
+receipt_pay_card_lc: 'Card'
+receipt_pay_other_lc: 'Other'
+receipt_thank_you: 'THANK YOU!'
+receipt_customer: 'CUSTOMER'
+receipt_emitted_via: 'Issued via'
+taxable_base: 'Base'
+
 # Status watermarks
 cancelled_watermark: 'CANCELLED'
