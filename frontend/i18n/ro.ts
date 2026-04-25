@@ -316,6 +316,10 @@ export default defineI18nLocale(async () => {
         statusDistribution: 'Distributie status',
         incomingVsOutgoing: 'Primite vs Trimise',
       },
+      delta: {
+        vsPreviousPeriod: 'vs perioada anterioara',
+        noBaseline: 'fara referinta',
+      },
       noChartData: 'Nu exista date pentru grafic',
       last12Months: 'Ultimele 12 luni',
       outstandingReceivables: 'De incasat',

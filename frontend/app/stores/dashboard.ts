@@ -13,6 +13,21 @@ export interface PaymentStats {
   overdueAmount: string
 }
 
+export interface PreviousPeriod {
+  from: string
+  to: string
+  invoices: { total: number; incoming: number; outgoing: number }
+  amounts: { total: string; vat: string }
+  amountsByDirection: { incoming: string; outgoing: string }
+  clientCount: number
+  productCount: number
+}
+
+export interface DeltaResult {
+  value: number | null
+  direction: 'up' | 'down' | 'flat'
+}
+
 export interface DashboardStatsResponse {
   invoices: {
     total: number
@@ -36,6 +51,7 @@ export interface DashboardStatsResponse {
   }
   payments?: PaymentStats
   currency?: string
+  previousPeriod?: PreviousPeriod | null
 }
 
 export interface RecentActivityItem {
@@ -95,6 +111,77 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const overdueAmount = computed(() => stats.value?.payments?.overdueAmount ?? '0.00')
   const currency = computed(() => stats.value?.currency ?? 'RON')
 
+  // ── Previous period ────────────────────────────────────────────────
+  const previousPeriod = computed<PreviousPeriod | null>(
+    () => stats.value?.previousPeriod ?? null,
+  )
+
+  function calcDelta(current: number, previous: number): DeltaResult {
+    if (previous === 0) return { value: null, direction: 'flat' }
+    const pct = ((current - previous) / previous) * 100
+    const direction = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'
+    return { value: pct, direction }
+  }
+
+  function numericDelta(current: number, previous: number | null): DeltaResult {
+    if (previous === null || previousPeriod.value === null) return { value: null, direction: 'flat' }
+    return calcDelta(current, previous)
+  }
+
+  const outgoingAmountDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(Number(outgoingAmount.value), Number(prev.amountsByDirection.outgoing))
+  })
+
+  const incomingAmountDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(Number(incomingAmount.value), Number(prev.amountsByDirection.incoming))
+  })
+
+  const totalAmountDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(Number(totalAmount.value), Number(prev.amounts.total))
+  })
+
+  const totalVatDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(Number(totalVat.value), Number(prev.amounts.vat))
+  })
+
+  const totalInvoicesDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(totalInvoices.value, prev.invoices.total)
+  })
+
+  const outgoingInvoicesDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(outgoingInvoices.value, prev.invoices.outgoing)
+  })
+
+  const incomingInvoicesDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(incomingInvoices.value, prev.invoices.incoming)
+  })
+
+  const clientCountDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(clientCount.value, prev.clientCount)
+  })
+
+  const productCountDelta = computed<DeltaResult>(() => {
+    const prev = previousPeriod.value
+    if (!prev) return { value: null, direction: 'flat' }
+    return numericDelta(productCount.value, prev.productCount)
+  })
+
   // ── Actions ────────────────────────────────────────────────────────
   async function fetchStats(params?: { dateFrom?: string; dateTo?: string }): Promise<void> {
     const { get } = useApi()
@@ -152,6 +239,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
     overdueCount,
     overdueAmount,
     currency,
+    previousPeriod,
+
+    // Delta getters
+    outgoingAmountDelta,
+    incomingAmountDelta,
+    totalAmountDelta,
+    totalVatDelta,
+    totalInvoicesDelta,
+    outgoingInvoicesDelta,
+    incomingInvoicesDelta,
+    clientCountDelta,
+    productCountDelta,
 
     // Actions
     fetchStats,

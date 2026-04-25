@@ -12,6 +12,7 @@ use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\ExchangeRateService;
 use App\Service\PaymentService;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -51,7 +52,7 @@ class DashboardController extends AbstractController
 
         // Optional date filtering
         $dateFrom = $request->query->get('dateFrom');
-        $dateTo = $request->query->get('dateTo');
+        $dateTo   = $request->query->get('dateTo');
         $hasDateFilter = $dateFrom || $dateTo;
 
         $dateFilter = '';
@@ -224,6 +225,29 @@ class DashboardController extends AbstractController
         // Payment summary (converted to default currency)
         $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo, $defaultCurrency, $defaultRate, $fallbackRateSql);
 
+        // Previous-period comparison — only when a date filter is active.
+        // Resolve effective bounds first (handle one-sided filters gracefully).
+        $previousPeriod = null;
+        if ($hasDateFilter) {
+            $today = new \DateTimeImmutable('today');
+            $effectiveTo   = $dateTo   ? new \DateTimeImmutable($dateTo)   : $today;
+            $effectiveFrom = $dateFrom ? new \DateTimeImmutable($dateFrom)  : $effectiveTo->modify('-30 days');
+
+            $span      = (int) $effectiveFrom->diff($effectiveTo)->days; // inclusive days − 1
+            $prevTo    = $effectiveFrom->modify('-1 day');
+            $prevFrom  = $prevTo->modify("-{$span} days");
+
+            $previousPeriod = $this->computePreviousPeriodStats(
+                $conn,
+                $companyId,
+                $prevFrom,
+                $prevTo,
+                $defaultCurrency,
+                $defaultRate,
+                $fallbackRateSql
+            );
+        }
+
         $response = $this->json([
             'invoices' => [
                 'total' => $incoming + $outgoing,
@@ -244,6 +268,7 @@ class DashboardController extends AbstractController
             'amountsByDirection' => $amountsByDirection,
             'payments' => $paymentSummary,
             'currency' => $defaultCurrency,
+            'previousPeriod' => $previousPeriod,
         ]);
 
         // Skip cache when date params are present (filtered data)
@@ -465,6 +490,100 @@ class DashboardController extends AbstractController
         $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;
+    }
+
+    /**
+     * Run the four aggregate queries for a previous period and return the
+     * structured array that is embedded under the `previousPeriod` response key.
+     *
+     * The method intentionally mirrors the main `stats()` queries so that the
+     * numbers are directly comparable. `monthlyTotals` and `recentActivity` are
+     * intentionally excluded — they are not meaningful for comparison.
+     */
+    private function computePreviousPeriodStats(
+        Connection $conn,
+        string $companyId,
+        \DateTimeImmutable $prevFrom,
+        \DateTimeImmutable $prevTo,
+        string $defaultCurrency,
+        float $defaultRate,
+        string $fallbackRateSql
+    ): array {
+        $prevFromStr = $prevFrom->format('Y-m-d');
+        $prevToStr   = $prevTo->format('Y-m-d');
+
+        $activeFilter = " AND status != 'cancelled'";
+        $dateFilter   = ' AND issue_date >= :dateFrom AND issue_date <= :dateTo';
+        $baseParams   = [
+            'companyId' => $companyId,
+            'dateFrom'  => $prevFromStr,
+            'dateTo'    => $prevToStr,
+        ];
+        $amountParams = array_merge($baseParams, [
+            'defaultCurrency' => $defaultCurrency,
+            'defaultRate'     => $defaultRate,
+        ]);
+
+        $convertTotal = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+        $convertVat   = "CASE WHEN currency = :defaultCurrency THEN vat_total ELSE vat_total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        // 1. Invoice counts by direction
+        $directionCounts = $conn->fetchAllAssociative(
+            'SELECT direction, COUNT(*) as cnt FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL' . $activeFilter . $dateFilter . ' GROUP BY direction',
+            $baseParams
+        );
+        $incoming = 0;
+        $outgoing = 0;
+        foreach ($directionCounts as $row) {
+            if ($row['direction'] === 'incoming') $incoming = (int) $row['cnt'];
+            if ($row['direction'] === 'outgoing') $outgoing = (int) $row['cnt'];
+        }
+
+        // 2. Aggregate amounts (total + VAT)
+        $totals = $conn->fetchAssociative(
+            "SELECT COALESCE(SUM($convertTotal), 0) as total_amount, COALESCE(SUM($convertVat), 0) as total_vat FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . $dateFilter,
+            $amountParams
+        );
+
+        // 3. Amounts by direction
+        $directionAmounts = $conn->fetchAllAssociative(
+            "SELECT direction, COALESCE(SUM($convertTotal), 0) AS amount FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . $dateFilter . ' GROUP BY direction',
+            $amountParams
+        );
+        $amountsByDirection = ['incoming' => '0.00', 'outgoing' => '0.00'];
+        foreach ($directionAmounts as $row) {
+            if ($row['direction'] === 'incoming') $amountsByDirection['incoming'] = $row['amount'];
+            if ($row['direction'] === 'outgoing') $amountsByDirection['outgoing'] = $row['amount'];
+        }
+
+        // 4a. Distinct clients with non-cancelled invoices in range
+        $clientCount = (int) $conn->fetchOne(
+            'SELECT COUNT(DISTINCT client_id) FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND client_id IS NOT NULL' . $activeFilter . $dateFilter,
+            $baseParams
+        );
+
+        // 4b. Distinct products billed in range
+        $productCount = (int) $conn->fetchOne(
+            "SELECT COUNT(DISTINCT il.product_id) FROM invoice_line il INNER JOIN invoice i ON il.invoice_id = i.id WHERE i.company_id = :companyId AND i.deleted_at IS NULL AND il.product_id IS NOT NULL AND i.status != 'cancelled' AND i.issue_date >= :dateFrom AND i.issue_date <= :dateTo",
+            $baseParams
+        );
+
+        return [
+            'from'               => $prevFromStr,
+            'to'                 => $prevToStr,
+            'invoices'           => [
+                'total'    => $incoming + $outgoing,
+                'incoming' => $incoming,
+                'outgoing' => $outgoing,
+            ],
+            'amounts'            => [
+                'total' => $totals['total_amount'] ?? '0.00',
+                'vat'   => $totals['total_vat']    ?? '0.00',
+            ],
+            'amountsByDirection' => $amountsByDirection,
+            'clientCount'        => $clientCount,
+            'productCount'       => $productCount,
+        ];
     }
 
     private function resolveCompany(Request $request): ?\App\Entity\Company

@@ -316,6 +316,10 @@ export default defineI18nLocale(async () => {
         statusDistribution: 'Status distribution',
         incomingVsOutgoing: 'Incoming vs Outgoing',
       },
+      delta: {
+        vsPreviousPeriod: 'vs previous period',
+        noBaseline: 'no baseline',
+      },
       noChartData: 'No data available for chart',
       last12Months: 'Last 12 months',
       outstandingReceivables: 'Outstanding',
