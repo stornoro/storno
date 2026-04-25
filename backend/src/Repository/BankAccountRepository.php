@@ -53,4 +53,16 @@ class BankAccountRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    public function findCashAccount(Company $company): ?BankAccount
+    {
+        return $this->createQueryBuilder('ba')
+            ->where('ba.company = :company')
+            ->andWhere('ba.type = :type')
+            ->setParameter('company', $company)
+            ->setParameter('type', BankAccount::TYPE_CASH)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

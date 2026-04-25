@@ -24,7 +24,15 @@ export const useBankAccountStore = defineStore('bankAccounts', () => {
     }
   }
 
-  async function createBankAccount(data: { iban: string, bankName?: string, currency?: string, isDefault?: boolean }): Promise<BankAccount | null> {
+  async function createBankAccount(data: {
+    iban?: string | null
+    bankName?: string | null
+    currency?: string
+    isDefault?: boolean
+    type?: 'bank' | 'cash'
+    openingBalance?: string | null
+    openingBalanceDate?: string | null
+  }): Promise<BankAccount | null> {
     const { post } = useApi()
     error.value = null
     try {
