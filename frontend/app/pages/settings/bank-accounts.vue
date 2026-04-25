@@ -100,10 +100,12 @@ const ibanError = computed(() => {
 const canSave = computed(() => {
   if (isCashForm.value) {
     // Opening balance + date must be provided together (or both empty for "configure later").
-    const hasAmount = form.value.openingBalance.trim() !== ''
-    const hasDate = form.value.openingBalanceDate.trim() !== ''
+    // openingBalance comes from a number input so it can be a number or empty string; coerce.
+    const amount = form.value.openingBalance
+    const hasAmount = amount !== '' && amount !== null && amount !== undefined
+    const hasDate = String(form.value.openingBalanceDate ?? '').trim() !== ''
     if (hasAmount !== hasDate) return false
-    if (hasAmount && Number(form.value.openingBalance) < 0) return false
+    if (hasAmount && Number(amount) < 0) return false
     return true
   }
   if (!editingAccount.value && !form.value.iban.trim()) return false
@@ -165,10 +167,12 @@ function buildPayload() {
       bankName: form.value.bankName || null,
       currency: form.value.currency,
     }
-    const hasOpening = form.value.openingBalance.trim() !== '' && form.value.openingBalanceDate.trim() !== ''
+    const amount = form.value.openingBalance
+    const date = String(form.value.openingBalanceDate ?? '').trim()
+    const hasOpening = amount !== '' && amount !== null && amount !== undefined && date !== ''
     if (hasOpening) {
-      payload.openingBalance = String(Number(form.value.openingBalance).toFixed(2))
-      payload.openingBalanceDate = form.value.openingBalanceDate
+      payload.openingBalance = Number(amount).toFixed(2)
+      payload.openingBalanceDate = date
     }
     return payload
   }

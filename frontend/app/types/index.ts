@@ -499,6 +499,35 @@ export interface CashRegisterBalance {
   currentBalance?: string
 }
 
+export interface CashRegisterEntry {
+  kind: 'receipt' | 'payment' | 'movement'
+  documentNumber: string
+  documentType: 'chitanta' | 'plata' | 'depunere' | 'ridicare' | 'altele'
+  description: string
+  in: string
+  out: string
+  balanceAfter: string
+  sourceId: string
+}
+
+export interface CashRegisterDay {
+  date: string
+  opening: string
+  totalIn: string
+  totalOut: string
+  closing: string
+  entries: CashRegisterEntry[]
+}
+
+export interface CashRegisterLedger {
+  configured: boolean
+  currency?: string
+  openingBalanceDate?: string
+  from?: string
+  to?: string
+  days: CashRegisterDay[]
+}
+
 // ── Invoice Attachment ──────────────────────────────────────────────
 export interface InvoiceAttachment {
   id: string
