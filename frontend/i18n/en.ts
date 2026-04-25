@@ -556,7 +556,7 @@ export default defineI18nLocale(async () => {
       receiver: 'Receiver',
       buyer: 'Buyer',
       seller: 'Seller',
-      counterparty: 'Seller / Buyer',
+      counterparty: 'Counterparty',
       senderCif: 'Sender Tax ID',
       subtotal: 'Subtotal',
       vatTotal: 'Total VAT',
