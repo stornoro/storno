@@ -80,6 +80,11 @@ class Product
     #[Groups(['product:list', 'product:detail'])]
     private ?string $cpvCode = null;
 
+    // Optional hex colour swatch for the POS product grid (e.g. "#1e40af").
+    #[ORM\Column(length: 7, nullable: true)]
+    #[Groups(['product:list', 'product:detail'])]
+    private ?string $color = null;
+
     #[ORM\Column(length: 20)]
     #[Groups(['product:detail'])]
     private string $source = 'anaf_sync';
@@ -286,6 +291,18 @@ class Product
     public function setCpvCode(?string $cpvCode): static
     {
         $this->cpvCode = $cpvCode;
+
+        return $this;
+    }
+
+    public function getColor(): ?string
+    {
+        return $this->color;
+    }
+
+    public function setColor(?string $color): static
+    {
+        $this->color = $color;
 
         return $this;
     }

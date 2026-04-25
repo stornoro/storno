@@ -40,9 +40,20 @@ class ReceiptManager
 
     public function create(Company $company, array $data, User $user): Receipt
     {
+        // Idempotency — return the existing receipt for repeat submissions of the
+        // same logical sale. POS clients use this to safely retry queued offline
+        // sales and ambiguous timeouts without producing duplicate fiscal receipts.
+        if (!empty($data['idempotencyKey'])) {
+            $existing = $this->receiptRepository->findOneBy(['idempotencyKey' => $data['idempotencyKey']]);
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $receipt = new Receipt();
         $receipt->setCompany($company);
         $receipt->setStatus(ReceiptStatus::DRAFT);
+        $receipt->setIdempotencyKey($data['idempotencyKey'] ?? null);
 
         // Resolve client (optional for B2C)
         if (!empty($data['clientId'])) {

@@ -150,6 +150,10 @@ class Receipt
     #[Groups(['receipt:detail'])]
     private ?\DateTimeImmutable $cancelledAt = null;
 
+    // Idempotency key for duplicate prevention (POS offline retries, ambiguous timeouts).
+    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    private ?string $idempotencyKey = null;
+
     #[ORM\OneToMany(mappedBy: 'receipt', targetEntity: ReceiptLine::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['position' => 'ASC'])]
     #[Groups(['receipt:detail'])]
@@ -577,5 +581,17 @@ class Receipt
     public function getClientName(): ?string
     {
         return $this->client?->getName();
+    }
+
+    public function getIdempotencyKey(): ?string
+    {
+        return $this->idempotencyKey;
+    }
+
+    public function setIdempotencyKey(?string $idempotencyKey): static
+    {
+        $this->idempotencyKey = $idempotencyKey;
+
+        return $this;
     }
 }

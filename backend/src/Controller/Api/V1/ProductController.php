@@ -198,6 +198,9 @@ class ProductController extends AbstractController
         if (array_key_exists('cpvCode', $data)) {
             $product->setCpvCode($data['cpvCode'] ?: null);
         }
+        if (array_key_exists('color', $data)) {
+            $product->setColor($this->normalizeColor($data['color']));
+        }
 
         $this->entityManager->persist($product);
         $this->entityManager->flush();
@@ -302,10 +305,29 @@ class ProductController extends AbstractController
         if (array_key_exists('cpvCode', $data)) {
             $product->setCpvCode($data['cpvCode'] ?: null);
         }
+        if (array_key_exists('color', $data)) {
+            $product->setColor($this->normalizeColor($data['color']));
+        }
 
         $this->entityManager->flush();
 
         return $this->json($product, context: ['groups' => ['product:detail']]);
+    }
+
+    private function normalizeColor(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (!is_string($value)) {
+            return null;
+        }
+        $trimmed = trim($value);
+        // Accept "#RRGGBB" or "RRGGBB"; normalize to lowercase #RRGGBB.
+        if (preg_match('/^#?([0-9a-fA-F]{6})$/', $trimmed, $m) === 1) {
+            return '#' . strtolower($m[1]);
+        }
+        return null;
     }
 
     #[Route('/{uuid}/usage', methods: ['GET'])]

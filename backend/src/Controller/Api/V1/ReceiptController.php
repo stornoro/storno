@@ -85,6 +85,13 @@ class ReceiptController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
+        // Honor the standard Idempotency-Key header in addition to the body field.
+        // POS clients use this to safely retry queued offline sales.
+        $headerKey = $request->headers->get('Idempotency-Key');
+        if ($headerKey && empty($data['idempotencyKey'])) {
+            $data['idempotencyKey'] = $headerKey;
+        }
+
         // Basic validation
         if (empty($data['lines']) || !is_array($data['lines'])) {
             return $this->json(['error' => 'At least one line is required.'], Response::HTTP_BAD_REQUEST);
