@@ -163,6 +163,8 @@ export default defineI18nLocale(async () => {
       today: 'Astazi',
       unknown: 'Necunoscut',
       refresh: 'Reincarca',
+      invoices: 'Facturi',
+      units: 'Unitati',
     },
 
     // ── Bulk actions ────────────────────────────────────────────────
@@ -381,6 +383,93 @@ export default defineI18nLocale(async () => {
         noPeriodData: 'Nicio factura in aceasta perioada',
         noActivityPeriod: 'Nicio activitate in aceasta perioada',
         changePeriod: 'Incearca o alta perioada',
+      },
+      edit: {
+        editDashboard: 'Personalizeaza tabloul de bord',
+        editModeHint: 'Trage widgeturile pentru a le reordona. Apasa ochiul pentru a ascunde un widget.',
+        addWidget: 'Adauga widget',
+        done: 'Gata',
+        hideWidget: 'Ascunde widget',
+        noWidgets: 'Niciun widget activ',
+        noWidgetsDesc: 'Adauga widgeturi din catalog pentru a personaliza tabloul de bord.',
+        allWidgetsAdded: 'Toate widgeturile sunt deja adaugate',
+        allWidgetsAddedDesc: 'Ascunde widgeturi din tabloul de bord pentru a le putea re-adauga.',
+        categories: {
+          sales: 'Vanzari',
+          expenses: 'Cheltuieli',
+          clients: 'Clienti',
+          activity: 'Activitate',
+          charts: 'Grafice',
+          system: 'Sistem',
+        },
+        size: {
+          sm: 'Mic',
+          md: 'Mediu',
+          lg: 'Mare',
+          xl: 'Extra mare',
+        },
+      },
+      widgets: {
+        salesCard: {
+          name: 'Vanzari',
+          description: 'Urmareste vanzarile si evolutia lunara.',
+        },
+        expensesCard: {
+          name: 'Cheltuieli',
+          description: 'Afla cheltuielile si distributia pe categorii.',
+        },
+        clientBalanceCard: {
+          name: 'Sold clienti',
+          description: 'Top clienti in functie de sumele datorate.',
+        },
+        unpaidCard: {
+          name: 'Facturi neincasate',
+          description: 'Lista facturilor neincasate si restante.',
+        },
+        amountsToPayCard: {
+          name: 'Sume de incasat',
+          description: 'Sumar sume in termen si restante.',
+        },
+        activityCard: {
+          name: 'Activitate recenta',
+          description: 'Ultimele facturi emise si primite.',
+        },
+        dueTodayCard: {
+          name: 'Scadente',
+          description: 'Sume scadente azi si in urmatoarele 7 zile.',
+        },
+        cashBalanceCard: {
+          name: 'Sold casa',
+          description: 'Soldul curent al casei de marcat.',
+        },
+        recentInvoicesTable: {
+          name: 'Facturi recente',
+          description: 'Tabel cu cele mai recente facturi.',
+        },
+        statusBreakdownChart: {
+          name: 'Distributie status',
+          description: 'Grafic circular cu distributia facturilor pe status.',
+        },
+        monthlyCharts: {
+          name: 'Evolutie lunara',
+          description: 'Grafice de evolutie lunara a vanzarilor si cheltuielilor.',
+        },
+        syncStatus: {
+          name: 'Status sincronizare',
+          description: 'Status curent al sincronizarii e-Factura.',
+        },
+        topClientsRevenue: {
+          name: 'Top clienti dupa venit',
+          description: 'Cei mai profitabili clienti in perioada selectata.',
+        },
+        topProductsRevenue: {
+          name: 'Top produse vandute',
+          description: 'Cele mai vandute produse in perioada selectata.',
+        },
+        topOutstandingClients: {
+          name: 'Clienti cu sold restant',
+          description: 'Clientii cu cele mai mari sume restante.',
+        },
       },
     },
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Sortable from 'sortablejs'
 import { storeToRefs } from 'pinia'
 import type { DropdownMenuItem } from '@nuxt/ui'
 
@@ -8,32 +9,17 @@ const { t: $t } = useI18n()
 useHead({ title: $t('dashboard.title') })
 const { isNotificationsSlideoverOpen } = useDashboard()
 const dashboardStore = useDashboardStore()
+const configStore = useDashboardConfigStore()
 const syncStore = useSyncStore()
 const companyStore = useCompanyStore()
 const {
   loading,
-  recentActivity,
-  totalInvoices,
-  incomingInvoices,
-  outgoingInvoices,
-  totalAmount,
-  totalVat,
-  clientCount,
-  productCount,
   isSyncEnabled,
   lastSyncedAt,
-  invoicesByStatus,
-  monthlyTotals,
-  incomingAmount,
-  outgoingAmount,
-  outstandingCount,
-  outstandingAmount,
-  overdueCount,
-  overdueAmount,
-  currency,
 } = storeToRefs(dashboardStore)
 
 const { syncing } = storeToRefs(syncStore)
+const { activeWidgets, saving } = storeToRefs(configStore)
 
 // ── Period selector ───────────────────────────────────────────────
 const {
@@ -119,11 +105,12 @@ watch(() => syncStore.lastSyncResult, (result) => {
 const invoiceRealtime = useInvoiceRealtime(() => fetchWithPeriod())
 const syncRealtime = useSyncRealtime()
 
-onMounted(() => {
+onMounted(async () => {
   fetchWithPeriod()
   syncStore.fetchStatus()
   invoiceRealtime.start()
   syncRealtime.start()
+  await configStore.loadConfig()
 })
 
 onUnmounted(() => {
@@ -133,11 +120,85 @@ onUnmounted(() => {
 
 watch(() => companyStore.currentCompanyId, () => {
   fetchWithPeriod()
+  configStore.loadConfig()
   invoiceRealtime.stop()
   invoiceRealtime.start()
   syncRealtime.stop()
   syncRealtime.start()
 })
+
+// ── Edit mode ─────────────────────────────────────────────────────
+const editMode = ref(false)
+const showAddWidgetModal = ref(false)
+
+function enterEditMode() {
+  editMode.value = true
+}
+
+async function exitEditMode() {
+  editMode.value = false
+  await configStore.saveConfig()
+}
+
+function handleHideWidget(id: string) {
+  configStore.toggleWidget(id)
+}
+
+function handleAddWidget(id: string) {
+  configStore.addWidget(id)
+  showAddWidgetModal.value = false
+}
+
+// ── Sortable (drag and drop) ──────────────────────────────────────
+const gridRef = ref<HTMLElement | null>(null)
+let sortableInstance: ReturnType<typeof Sortable.create> | null = null
+
+function initSortable() {
+  if (!gridRef.value) return
+  sortableInstance = Sortable.create(gridRef.value, {
+    animation: 150,
+    handle: '.dashboard-drag-handle',
+    ghostClass: 'opacity-40',
+    chosenClass: 'ring-2 ring-primary rounded-lg',
+    dragClass: 'shadow-2xl',
+    onEnd(evt) {
+      // Build new order array from DOM
+      const items = gridRef.value?.querySelectorAll('[data-widget-id]')
+      if (!items) return
+      const newOrder: string[] = []
+      items.forEach((el) => {
+        const id = el.getAttribute('data-widget-id')
+        if (id) newOrder.push(id)
+      })
+      // Apply the reorder (evt.newIndex used as reference — DOM is source of truth)
+      void evt
+      configStore.reorderWidgets(newOrder)
+    },
+  })
+}
+
+function destroySortable() {
+  sortableInstance?.destroy()
+  sortableInstance = null
+}
+
+watch(editMode, async (isEdit) => {
+  if (isEdit) {
+    await nextTick()
+    initSortable()
+  }
+  else {
+    destroySortable()
+  }
+})
+
+onUnmounted(() => {
+  destroySortable()
+})
+
+// Resolved period for widgets that need it
+const resolvedDateFrom = computed(() => resolvedRange.value.dateFrom)
+const resolvedDateTo = computed(() => resolvedRange.value.dateTo)
 </script>
 
 <template>
@@ -149,20 +210,56 @@ watch(() => companyStore.currentCompanyId, () => {
         </template>
 
         <template #right>
-          <UTooltip :text="$t('notifications.title')" :kbds="['N']">
+          <!-- Edit mode actions -->
+          <template v-if="editMode">
             <UButton
               color="neutral"
-              variant="ghost"
-              square
-              @click="isNotificationsSlideoverOpen = true"
+              variant="soft"
+              icon="i-lucide-plus"
+              size="md"
+              @click="showAddWidgetModal = true"
             >
-              <UIcon name="i-lucide-bell" class="size-5 shrink-0" />
+              {{ $t('dashboard.edit.addWidget') }}
             </UButton>
-          </UTooltip>
+            <UButton
+              color="primary"
+              icon="i-lucide-check"
+              size="md"
+              :loading="saving"
+              @click="exitEditMode"
+            >
+              {{ $t('dashboard.edit.done') }}
+            </UButton>
+          </template>
 
-          <UDropdownMenu :items="quickActions">
-            <UButton icon="i-lucide-plus" size="md" class="rounded-full" />
-          </UDropdownMenu>
+          <!-- Normal mode actions -->
+          <template v-else>
+            <UTooltip :text="$t('notifications.title')" :kbds="['N']">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                square
+                @click="isNotificationsSlideoverOpen = true"
+              >
+                <UIcon name="i-lucide-bell" class="size-5 shrink-0" />
+              </UButton>
+            </UTooltip>
+
+            <UTooltip :text="$t('dashboard.edit.editDashboard')">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                square
+                @click="enterEditMode"
+              >
+                <UIcon name="i-lucide-layout-grid" class="size-5 shrink-0" />
+              </UButton>
+            </UTooltip>
+
+            <UDropdownMenu :items="quickActions">
+              <UButton icon="i-lucide-plus" size="md" class="rounded-full" />
+            </UDropdownMenu>
+          </template>
         </template>
       </UDashboardNavbar>
 
@@ -241,68 +338,51 @@ watch(() => companyStore.currentCompanyId, () => {
       <!-- Onboarding checklist -->
       <DashboardOnboardingChecklist />
 
-      <!-- Row 1: Sales, Client Balance, Unpaid Invoices -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        <DashboardSalesCard
-          :amount="outgoingAmount"
-          :invoice-count="outgoingInvoices"
-          :monthly-data="monthlyTotals"
-          :currency="currency"
-          :loading="loading"
-        />
-
-        <DashboardClientBalanceCard
-          :recent-activity="recentActivity"
-          :currency="currency"
-          :loading="loading"
-        />
-
-        <DashboardUnpaidCard
-          :outstanding-count="outstandingCount"
-          :outstanding-amount="outstandingAmount"
-          :overdue-count="overdueCount"
-          :overdue-amount="overdueAmount"
-          :recent-activity="recentActivity"
-          :currency="currency"
-          :loading="loading"
-        />
+      <!-- Edit mode banner -->
+      <div v-if="editMode" class="rounded-lg border border-primary/40 bg-primary/5 px-4 py-3 flex items-center gap-3">
+        <UIcon name="i-lucide-layout-grid" class="size-5 text-primary shrink-0" />
+        <p class="text-sm text-(--ui-text)">
+          {{ $t('dashboard.edit.editModeHint') }}
+        </p>
       </div>
 
-      <!-- Row 2: Expenses, Amounts to Pay, Activity, Due Today -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <DashboardExpensesCard
-          :incoming-amount="incomingAmount"
-          :incoming-invoices="incomingInvoices"
-          :monthly-data="monthlyTotals"
-          :invoices-by-status="invoicesByStatus"
-          :currency="currency"
-          :loading="loading"
-        />
-
-        <DashboardAmountsToPayCard
-          :outstanding-amount="outstandingAmount"
-          :outstanding-count="outstandingCount"
-          :overdue-amount="overdueAmount"
-          :overdue-count="overdueCount"
-          :currency="companyStore.currentCompany?.defaultCurrency"
-          :loading="loading"
-        />
-
-        <DashboardActivityCard
-          :data="recentActivity"
-          :loading="loading"
-        />
-
-        <!-- Stacked: Due Today -->
-        <div class="flex flex-col gap-5">
-          <DashboardDueTodayCard
-            :overdue-amount="overdueAmount"
-            :outstanding-amount="outstandingAmount"
-            :currency="currency"
-            :loading="loading"
+      <!-- Widget grid -->
+      <div
+        ref="gridRef"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"
+        :class="{ 'select-none': editMode }"
+      >
+        <div
+          v-for="widget in activeWidgets"
+          :key="widget.id"
+          :data-widget-id="widget.id"
+          :class="configStore.getColSpanClass(widget.id)"
+        >
+          <DashboardWidget
+            :id="widget.id"
+            :edit-mode="editMode"
+            :date-from="resolvedDateFrom"
+            :date-to="resolvedDateTo"
+            @hide="handleHideWidget"
           />
         </div>
       </div>
+
+      <!-- Empty state when all widgets hidden -->
+      <div v-if="activeWidgets.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
+        <UIcon name="i-lucide-layout-grid" class="size-16 text-(--ui-text-muted) mb-4" />
+        <p class="text-lg font-semibold text-(--ui-text) mb-2">{{ $t('dashboard.edit.noWidgets') }}</p>
+        <p class="text-sm text-(--ui-text-muted) mb-6">{{ $t('dashboard.edit.noWidgetsDesc') }}</p>
+        <UButton color="primary" icon="i-lucide-plus" @click="showAddWidgetModal = true">
+          {{ $t('dashboard.edit.addWidget') }}
+        </UButton>
+      </div>
     </template>
   </UDashboardPanel>
+
+  <!-- Add Widget Modal -->
+  <DashboardAddWidgetModal
+    v-model="showAddWidgetModal"
+    @add="handleAddWidget"
+  />
 </template>

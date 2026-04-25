@@ -163,6 +163,8 @@ export default defineI18nLocale(async () => {
       today: 'Today',
       unknown: 'Unknown',
       refresh: 'Refresh',
+      invoices: 'Invoices',
+      units: 'Units',
     },
 
     // ── Bulk actions ────────────────────────────────────────────────
@@ -381,6 +383,93 @@ export default defineI18nLocale(async () => {
         noPeriodData: 'No invoices in this period',
         noActivityPeriod: 'No activity in this period',
         changePeriod: 'Try a different period',
+      },
+      edit: {
+        editDashboard: 'Customize dashboard',
+        editModeHint: 'Drag widgets to reorder them. Click the eye icon to hide a widget.',
+        addWidget: 'Add widget',
+        done: 'Done',
+        hideWidget: 'Hide widget',
+        noWidgets: 'No active widgets',
+        noWidgetsDesc: 'Add widgets from the catalog to customize your dashboard.',
+        allWidgetsAdded: 'All widgets are already added',
+        allWidgetsAddedDesc: 'Hide widgets from the dashboard to be able to re-add them.',
+        categories: {
+          sales: 'Sales',
+          expenses: 'Expenses',
+          clients: 'Clients',
+          activity: 'Activity',
+          charts: 'Charts',
+          system: 'System',
+        },
+        size: {
+          sm: 'Small',
+          md: 'Medium',
+          lg: 'Large',
+          xl: 'Extra large',
+        },
+      },
+      widgets: {
+        salesCard: {
+          name: 'Sales',
+          description: 'Track your sales and monthly evolution.',
+        },
+        expensesCard: {
+          name: 'Expenses',
+          description: 'View your expenses and category breakdown.',
+        },
+        clientBalanceCard: {
+          name: 'Client balance',
+          description: 'Top clients by outstanding amounts.',
+        },
+        unpaidCard: {
+          name: 'Unpaid invoices',
+          description: 'List of unpaid and overdue invoices.',
+        },
+        amountsToPayCard: {
+          name: 'Amounts to collect',
+          description: 'Summary of on-time and overdue amounts.',
+        },
+        activityCard: {
+          name: 'Recent activity',
+          description: 'Latest issued and received invoices.',
+        },
+        dueTodayCard: {
+          name: 'Due amounts',
+          description: 'Amounts due today and in the next 7 days.',
+        },
+        cashBalanceCard: {
+          name: 'Cash balance',
+          description: 'Current cash register balance.',
+        },
+        recentInvoicesTable: {
+          name: 'Recent invoices',
+          description: 'Table with the most recent invoices.',
+        },
+        statusBreakdownChart: {
+          name: 'Status distribution',
+          description: 'Doughnut chart with invoice status distribution.',
+        },
+        monthlyCharts: {
+          name: 'Monthly trends',
+          description: 'Charts showing monthly sales and expense trends.',
+        },
+        syncStatus: {
+          name: 'Sync status',
+          description: 'Current e-Factura synchronization status.',
+        },
+        topClientsRevenue: {
+          name: 'Top clients by revenue',
+          description: 'Most profitable clients in the selected period.',
+        },
+        topProductsRevenue: {
+          name: 'Top products sold',
+          description: 'Best selling products in the selected period.',
+        },
+        topOutstandingClients: {
+          name: 'Clients with outstanding balance',
+          description: 'Clients with the highest outstanding amounts.',
+        },
       },
     },
 

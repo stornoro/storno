@@ -256,6 +256,217 @@ class DashboardController extends AbstractController
         return $response;
     }
 
+    #[Route('/top-clients-revenue', methods: ['GET'])]
+    public function topClientsRevenue(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $conn = $this->entityManager->getConnection();
+        $companyId = (string) $company->getId();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+
+        $limit = min((int) ($request->query->get('limit', 5)), 20);
+        if ($limit < 1) {
+            $limit = 5;
+        }
+
+        $dateFrom = $request->query->get('dateFrom');
+        $dateTo = $request->query->get('dateTo');
+
+        $dateFilter = '';
+        $params = [
+            'companyId' => $companyId,
+            'defaultCurrency' => $defaultCurrency,
+            'defaultRate' => $defaultRate,
+        ];
+
+        if ($dateFrom) {
+            $dateFilter .= ' AND i.issue_date >= :dateFrom';
+            $params['dateFrom'] = $dateFrom;
+        }
+        if ($dateTo) {
+            $dateFilter .= ' AND i.issue_date <= :dateTo';
+            $params['dateTo'] = $dateTo;
+        }
+
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $convertTotal = "CASE WHEN i.currency = :defaultCurrency THEN i.total ELSE i.total * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        $rows = $conn->fetchAllAssociative(
+            "SELECT c.id, c.name, COALESCE(SUM($convertTotal), 0) AS amount, COUNT(i.id) AS invoice_count
+             FROM invoice i
+             INNER JOIN client c ON i.client_id = c.id
+             WHERE i.company_id = :companyId
+               AND i.deleted_at IS NULL
+               AND i.status != 'cancelled'
+               AND i.direction = 'outgoing'
+               AND i.client_id IS NOT NULL
+               $dateFilter
+             GROUP BY c.id, c.name
+             ORDER BY amount DESC
+             LIMIT $limit",
+            $params
+        );
+
+        $clients = array_map(fn (array $row) => [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'amount' => number_format((float) $row['amount'], 2, '.', ''),
+            'invoiceCount' => (int) $row['invoice_count'],
+        ], $rows);
+
+        $response = $this->json([
+            'currency' => $defaultCurrency,
+            'clients' => $clients,
+        ]);
+        $response->setPrivate();
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
+    }
+
+    #[Route('/top-products-revenue', methods: ['GET'])]
+    public function topProductsRevenue(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $conn = $this->entityManager->getConnection();
+        $companyId = (string) $company->getId();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+
+        $limit = min((int) ($request->query->get('limit', 5)), 20);
+        if ($limit < 1) {
+            $limit = 5;
+        }
+
+        $dateFrom = $request->query->get('dateFrom');
+        $dateTo = $request->query->get('dateTo');
+
+        $dateFilter = '';
+        $params = [
+            'companyId' => $companyId,
+            'defaultCurrency' => $defaultCurrency,
+            'defaultRate' => $defaultRate,
+        ];
+
+        if ($dateFrom) {
+            $dateFilter .= ' AND i.issue_date >= :dateFrom';
+            $params['dateFrom'] = $dateFrom;
+        }
+        if ($dateTo) {
+            $dateFilter .= ' AND i.issue_date <= :dateTo';
+            $params['dateTo'] = $dateTo;
+        }
+
+        // line_total is already per-line; multiply by invoice exchange_rate to convert to default currency
+        $convertLineTotal = "CASE WHEN i.currency = :defaultCurrency THEN il.line_total ELSE il.line_total * COALESCE(i.exchange_rate, (SELECT r.rate FROM exchange_rate r WHERE r.currency_code = i.currency ORDER BY r.date DESC LIMIT 1)) / :defaultRate END";
+
+        // Use the same fallback rate SQL approach as the rest of the dashboard
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $convertLineTotal = "CASE WHEN i.currency = :defaultCurrency THEN il.line_total ELSE il.line_total * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        $rows = $conn->fetchAllAssociative(
+            "SELECT p.id, p.name, COALESCE(SUM($convertLineTotal), 0) AS amount, COALESCE(SUM(il.quantity), 0) AS quantity
+             FROM invoice_line il
+             INNER JOIN invoice i ON il.invoice_id = i.id
+             INNER JOIN product p ON il.product_id = p.id
+             WHERE i.company_id = :companyId
+               AND i.deleted_at IS NULL
+               AND i.status != 'cancelled'
+               AND i.direction = 'outgoing'
+               AND il.product_id IS NOT NULL
+               AND p.deleted_at IS NULL
+               $dateFilter
+             GROUP BY p.id, p.name
+             ORDER BY amount DESC
+             LIMIT $limit",
+            $params
+        );
+
+        $products = array_map(fn (array $row) => [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'amount' => number_format((float) $row['amount'], 2, '.', ''),
+            'quantity' => number_format((float) $row['quantity'], 3, '.', ''),
+        ], $rows);
+
+        $response = $this->json([
+            'currency' => $defaultCurrency,
+            'products' => $products,
+        ]);
+        $response->setPrivate();
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
+    }
+
+    #[Route('/top-outstanding-clients', methods: ['GET'])]
+    public function topOutstandingClients(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $conn = $this->entityManager->getConnection();
+        $companyId = (string) $company->getId();
+        $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
+        $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
+
+        $limit = min((int) ($request->query->get('limit', 5)), 20);
+        if ($limit < 1) {
+            $limit = 5;
+        }
+
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $convertOutstanding = "CASE WHEN i.currency = :defaultCurrency THEN (i.total - i.amount_paid) ELSE (i.total - i.amount_paid) * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
+
+        $rows = $conn->fetchAllAssociative(
+            "SELECT c.id, c.name, COALESCE(SUM($convertOutstanding), 0) AS amount, COUNT(i.id) AS invoice_count
+             FROM invoice i
+             INNER JOIN client c ON i.client_id = c.id
+             WHERE i.company_id = :companyId
+               AND i.deleted_at IS NULL
+               AND i.status NOT IN ('cancelled', 'draft')
+               AND i.direction = 'outgoing'
+               AND i.paid_at IS NULL
+               AND i.client_id IS NOT NULL
+             GROUP BY c.id, c.name
+             HAVING amount > 0
+             ORDER BY amount DESC
+             LIMIT $limit",
+            [
+                'companyId' => $companyId,
+                'defaultCurrency' => $defaultCurrency,
+                'defaultRate' => $defaultRate,
+            ]
+        );
+
+        $clients = array_map(fn (array $row) => [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'amount' => number_format((float) $row['amount'], 2, '.', ''),
+            'invoiceCount' => (int) $row['invoice_count'],
+        ], $rows);
+
+        $response = $this->json([
+            'currency' => $defaultCurrency,
+            'clients' => $clients,
+        ]);
+        $response->setPrivate();
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
+    }
+
     private function resolveCompany(Request $request): ?\App\Entity\Company
     {
         return $this->organizationContext->resolveCompany($request);
