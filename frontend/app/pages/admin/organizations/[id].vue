@@ -109,11 +109,11 @@
           </div>
           <div>
             <label class="text-sm text-muted mb-1 block">{{ $t('admin.maxUsers') }}</label>
-            <UInput v-model.number="form.maxUsers" type="number" :min="1" />
+            <p class="font-medium pt-2">{{ formatLimit(org.maxUsers) }}</p>
           </div>
           <div>
             <label class="text-sm text-muted mb-1 block">{{ $t('admin.maxCompanies') }}</label>
-            <UInput v-model.number="form.maxCompanies" type="number" :min="1" />
+            <p class="font-medium pt-2">{{ formatLimit(org.maxCompanies) }}</p>
           </div>
         </div>
         <div class="mt-4 flex justify-end">
@@ -175,8 +175,6 @@ const toggling = ref(false)
 
 const form = reactive({
   plan: null as string | null,
-  maxUsers: 1,
-  maxCompanies: 1,
 })
 
 const planOptions = [
@@ -216,14 +214,17 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(intlLocale)
 }
 
+function formatLimit(value: number | null | undefined): string {
+  if (value == null) return '-'
+  return value >= 999999 ? $t('plan.unlimited') : String(value)
+}
+
 async function savePlan() {
   saving.value = true
   const { patch } = useApi()
   try {
     const result = await patch<any>(`/v1/admin/organizations/${route.params.id}`, {
       plan: form.plan,
-      maxUsers: form.maxUsers,
-      maxCompanies: form.maxCompanies,
     })
     org.value.plan = result.plan
     org.value.maxUsers = result.maxUsers
@@ -258,8 +259,6 @@ onMounted(async () => {
     const { get } = useApi()
     org.value = await get<any>(`/v1/admin/organizations/${route.params.id}`)
     form.plan = org.value.plan
-    form.maxUsers = org.value.maxUsers
-    form.maxCompanies = org.value.maxCompanies
   } catch {
     // Not found or unauthorized
   } finally {

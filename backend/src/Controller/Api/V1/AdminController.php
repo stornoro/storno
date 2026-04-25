@@ -185,8 +185,8 @@ class AdminController extends AbstractController
                 'isActive' => $o->isActive(),
                 'memberCount' => $o->getMemberships()->count(),
                 'companyCount' => $o->getCompanies()->count(),
-                'maxUsers' => $o->getMaxUsers(),
-                'maxCompanies' => $o->getMaxCompanies(),
+                'maxUsers' => $this->licenseManager->getMaxUsers($o),
+                'maxCompanies' => $this->licenseManager->getMaxCompanies($o),
                 'trialEndsAt' => $o->getTrialEndsAt()?->format('c'),
                 'createdAt' => $o->getCreatedAt()?->format('c'),
             ], $organizations),
@@ -234,8 +234,8 @@ class AdminController extends AbstractController
             'slug' => $org->getSlug(),
             'plan' => $org->getPlan(),
             'isActive' => $org->isActive(),
-            'maxUsers' => $org->getMaxUsers(),
-            'maxCompanies' => $org->getMaxCompanies(),
+            'maxUsers' => $this->licenseManager->getMaxUsers($org),
+            'maxCompanies' => $this->licenseManager->getMaxCompanies($org),
             'stripeCustomerId' => $org->getStripeCustomerId(),
             'stripeSubscriptionId' => $org->getStripeSubscriptionId(),
             'stripePriceId' => $org->getStripePriceId(),
@@ -266,22 +266,6 @@ class AdminController extends AbstractController
             $org->setPlan($data['plan']);
         }
 
-        if (isset($data['maxUsers'])) {
-            $maxUsers = (int) $data['maxUsers'];
-            if ($maxUsers < 1) {
-                return $this->json(['error' => 'maxUsers must be at least 1.'], Response::HTTP_BAD_REQUEST);
-            }
-            $org->setMaxUsers($maxUsers);
-        }
-
-        if (isset($data['maxCompanies'])) {
-            $maxCompanies = (int) $data['maxCompanies'];
-            if ($maxCompanies < 1) {
-                return $this->json(['error' => 'maxCompanies must be at least 1.'], Response::HTTP_BAD_REQUEST);
-            }
-            $org->setMaxCompanies($maxCompanies);
-        }
-
         if (isset($data['isActive'])) {
             $org->setIsActive((bool) $data['isActive']);
         }
@@ -291,8 +275,8 @@ class AdminController extends AbstractController
         return $this->json([
             'message' => 'Organization updated.',
             'plan' => $org->getPlan(),
-            'maxUsers' => $org->getMaxUsers(),
-            'maxCompanies' => $org->getMaxCompanies(),
+            'maxUsers' => $this->licenseManager->getMaxUsers($org),
+            'maxCompanies' => $this->licenseManager->getMaxCompanies($org),
             'isActive' => $org->isActive(),
         ]);
     }
