@@ -6,7 +6,6 @@ use App\Entity\BankAccount;
 use App\Repository\BankAccountRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
-use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -21,7 +20,6 @@ class BankAccountController extends AbstractController
         private readonly BankAccountRepository $bankAccountRepository,
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
-        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/bank-accounts', methods: ['GET'])]
@@ -51,14 +49,6 @@ class BankAccountController extends AbstractController
 
         if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
-        }
-
-        $org = $company->getOrganization();
-        if (!$this->licenseManager->canUseBankStatements($org)) {
-            return $this->json([
-                'error' => 'Bank accounts are not available on your plan.',
-                'code' => 'PLAN_LIMIT',
-            ], Response::HTTP_PAYMENT_REQUIRED);
         }
 
         $data = json_decode($request->getContent(), true);
