@@ -69,7 +69,7 @@
       <template #counterparty-cell="{ row }">
         <div class="text-sm truncate">
           <span class="text-(--ui-text-muted) mr-1">{{ row.original.direction === 'incoming' ? $t('invoices.seller') : $t('invoices.buyer') }}:</span>
-          <span class="text-(--ui-text)">{{ row.original.senderName || row.original.receiverName || '-' }}</span>
+          <span class="text-(--ui-text)">{{ (row.original.direction === 'incoming' ? row.original.senderName : row.original.receiverName) || '-' }}</span>
         </div>
       </template>
 
