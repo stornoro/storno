@@ -19,6 +19,15 @@
           <UButton icon="i-lucide-refresh-cw" :loading="loading" class="w-full sm:w-auto" @click="fetchReport">
             {{ $t('reports.generate') }}
           </UButton>
+          <UButton
+            v-if="ledger?.configured"
+            icon="i-lucide-plus"
+            color="primary"
+            class="w-full sm:w-auto"
+            @click="openAddMovement"
+          >
+            {{ $t('reports.cashRegister.addMovement') }}
+          </UButton>
         </div>
       </UDashboardToolbar>
 
@@ -91,12 +100,77 @@
             <template #balanceAfter-cell="{ row }">
               <span class="tabular-nums font-medium">{{ formatMoney(row.original.balanceAfter) }}</span>
             </template>
+            <template #actions-cell="{ row }">
+              <UButton
+                v-if="row.original.kind === 'movement'"
+                icon="i-lucide-trash-2"
+                variant="ghost"
+                color="error"
+                size="xs"
+                @click="deleteMovement(row.original)"
+              />
+            </template>
           </UTable>
           <p v-else class="px-4 py-3 text-sm text-(--ui-text-muted)">{{ $t('reports.cashRegister.noEntries') }}</p>
         </UCard>
       </div>
 
       <UEmpty v-else-if="ledger" icon="i-lucide-inbox" :title="$t('reports.cashRegister.noEntries')" class="py-16" />
+
+      <USlideover v-model:open="movementModalOpen">
+        <template #header>
+          <h3 class="text-lg font-semibold">{{ $t('reports.cashRegister.addMovement') }}</h3>
+        </template>
+        <template #body>
+          <div class="space-y-4">
+            <UFormField :label="$t('reports.cashRegister.col.type')">
+              <USelectMenu v-model="movementForm.kind" :items="movementKindOptions" value-key="value" size="xl" class="w-full" />
+            </UFormField>
+            <UFormField v-if="movementForm.kind === 'other'" :label="$t('reports.cashRegister.direction')">
+              <div class="flex gap-2">
+                <UButton
+                  :variant="movementForm.direction === 'in' ? 'solid' : 'outline'"
+                  :color="movementForm.direction === 'in' ? 'success' : 'neutral'"
+                  block
+                  @click="movementForm.direction = 'in'"
+                >
+                  + {{ $t('reports.cashRegister.col.in') }}
+                </UButton>
+                <UButton
+                  :variant="movementForm.direction === 'out' ? 'solid' : 'outline'"
+                  :color="movementForm.direction === 'out' ? 'error' : 'neutral'"
+                  block
+                  @click="movementForm.direction = 'out'"
+                >
+                  − {{ $t('reports.cashRegister.col.out') }}
+                </UButton>
+              </div>
+            </UFormField>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField :label="$t('reports.cashRegister.amount')" :hint="ledger?.currency">
+                <UInput v-model="movementForm.amount" type="number" step="0.01" min="0" size="xl" class="w-full" />
+              </UFormField>
+              <UFormField :label="$t('reports.cashRegister.movementDate')">
+                <UInput v-model="movementForm.movementDate" type="date" size="xl" class="w-full" />
+              </UFormField>
+            </div>
+            <UFormField :label="$t('reports.cashRegister.col.docNumber')">
+              <UInput v-model="movementForm.documentNumber" :placeholder="$t('reports.cashRegister.docNumberPlaceholder')" size="xl" class="w-full" />
+            </UFormField>
+            <UFormField :label="$t('reports.cashRegister.col.description')">
+              <UTextarea v-model="movementForm.description" :rows="3" class="w-full" />
+            </UFormField>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" @click="movementModalOpen = false">{{ $t('common.cancel') }}</UButton>
+            <UButton :loading="savingMovement" :disabled="!movementForm.amount || Number(movementForm.amount) <= 0" @click="submitMovement">
+              {{ $t('common.save') }}
+            </UButton>
+          </div>
+        </template>
+      </USlideover>
     </template>
   </UDashboardPanel>
 </template>
@@ -138,7 +212,77 @@ const entryColumns = [
   { accessorKey: 'in', header: $t('reports.cashRegister.col.in') },
   { accessorKey: 'out', header: $t('reports.cashRegister.col.out') },
   { accessorKey: 'balanceAfter', header: $t('reports.cashRegister.col.balance') },
+  { id: 'actions', header: '' },
 ]
+
+// ── Add movement modal ─────────────────────────────────────────────
+const movementModalOpen = ref(false)
+const savingMovement = ref(false)
+const toast = useToast()
+const movementForm = reactive({
+  kind: 'deposit' as 'deposit' | 'withdrawal' | 'other',
+  direction: 'out' as 'in' | 'out',
+  amount: '',
+  movementDate: today,
+  description: '',
+  documentNumber: '',
+})
+
+const movementKindOptions = computed(() => [
+  { label: $t('reports.cashRegister.docType.depunere'), value: 'deposit' },
+  { label: $t('reports.cashRegister.docType.ridicare'), value: 'withdrawal' },
+  { label: $t('reports.cashRegister.docType.altele'), value: 'other' },
+])
+
+function openAddMovement() {
+  movementForm.kind = 'deposit'
+  movementForm.direction = 'out'
+  movementForm.amount = ''
+  movementForm.movementDate = today
+  movementForm.description = ''
+  movementForm.documentNumber = ''
+  movementModalOpen.value = true
+}
+
+async function submitMovement() {
+  if (!movementForm.amount || Number(movementForm.amount) <= 0) return
+  savingMovement.value = true
+  try {
+    const { post } = useApi()
+    const payload: Record<string, unknown> = {
+      kind: movementForm.kind,
+      amount: Number(movementForm.amount).toFixed(2),
+      movementDate: movementForm.movementDate,
+      description: movementForm.description || null,
+      documentNumber: movementForm.documentNumber || null,
+    }
+    if (movementForm.kind === 'other') payload.direction = movementForm.direction
+    await post('/v1/cash-register/movements', payload)
+    movementModalOpen.value = false
+    toast.add({ title: $t('reports.cashRegister.movementAdded'), color: 'success' })
+    await fetchReport()
+  }
+  catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('error.generic'), color: 'error' })
+  }
+  finally {
+    savingMovement.value = false
+  }
+}
+
+async function deleteMovement(row: { kind: string, movementId?: string }) {
+  if (row.kind !== 'movement' || !row.movementId) return
+  if (!confirm($t('reports.cashRegister.confirmDelete'))) return
+  try {
+    const { del } = useApi()
+    await del(`/v1/cash-register/movements/${row.movementId}`)
+    toast.add({ title: $t('reports.cashRegister.movementDeleted'), color: 'success' })
+    await fetchReport()
+  }
+  catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('error.generic'), color: 'error' })
+  }
+}
 
 const periodOpening = computed(() => ledger.value?.days?.[0]?.opening ?? '0')
 const periodClosing = computed(() => {

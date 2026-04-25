@@ -301,12 +301,29 @@
           <div class="flex-1 border-t border-(--ui-border) mx-2" />
           <UIcon :name="showCustomer ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-3.5 text-(--ui-text-muted) group-hover:text-(--ui-text) transition-colors" />
         </button>
-        <div v-if="showCustomer" class="pb-3 pl-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div v-if="showCustomer" class="pb-3 pl-6 space-y-4">
+          <UFormField :label="$t('receipts.customerCif')" :hint="anafError ? $t('clients.anafLookupError') : (anafSuccess ? $t('clients.anafLookupSuccess') : undefined)">
+            <div class="flex gap-2">
+              <UButton
+                type="button"
+                size="sm"
+                :variant="form.customerIsVatPayer ? 'solid' : 'outline'"
+                :color="form.customerIsVatPayer ? 'primary' : 'neutral'"
+                @click="form.customerIsVatPayer = !form.customerIsVatPayer"
+              >
+                RO
+              </UButton>
+              <UInput
+                v-model="form.customerCif"
+                class="flex-1"
+                placeholder="33832001"
+                :loading="anafLookupLoading"
+                @blur="onCifBlur"
+              />
+            </div>
+          </UFormField>
           <UFormField :label="$t('receipts.customerName')">
             <UInput v-model="form.customerName" />
-          </UFormField>
-          <UFormField :label="$t('receipts.customerCif')">
-            <UInput v-model="form.customerCif" />
           </UFormField>
         </div>
       </div>
@@ -419,6 +436,49 @@ const quickSeriesStartNumber = ref(0)
 const quickSeriesSaving = ref(false)
 const toast = useToast()
 
+// ── Customer CIF + ANAF auto-lookup ─────────────────────────────────
+const anafLookupLoading = ref(false)
+const anafSuccess = ref(false)
+const anafError = ref(false)
+let lastLookedUpCif = ''
+
+function combinedCustomerCif(): string {
+  const digits = (form.customerCif || '').replace(/\s+/g, '')
+  if (!digits) return ''
+  // Strip any RO the user already typed; toggle drives the prefix.
+  const clean = digits.replace(/^RO/i, '')
+  return form.customerIsVatPayer ? `RO${clean}` : clean
+}
+
+async function onCifBlur() {
+  const digits = (form.customerCif || '').replace(/\s+/g, '').replace(/^RO/i, '')
+  // Don't lookup unless we have a plausible CUI (≥ 2 digits) and we haven't already looked up this value.
+  if (!digits || digits.length < 2 || digits === lastLookedUpCif) return
+  if (form.customerName.trim().length > 0) return // user already typed a name; don't overwrite
+  if (!navigator.onLine) return // offline — skip lookup silently
+
+  anafLookupLoading.value = true
+  anafSuccess.value = false
+  anafError.value = false
+  lastLookedUpCif = digits
+
+  try {
+    const { get } = useApi()
+    const res = await get<{ data: Record<string, any> }>('/v1/clients/anaf-lookup', { cui: digits })
+    if (res?.data) {
+      const d = res.data
+      if (d.name && !form.customerName) form.customerName = d.name
+      if (d.cui) form.customerCif = d.cui
+      if (typeof d.isVatPayer === 'boolean') form.customerIsVatPayer = d.isVatPayer
+      anafSuccess.value = true
+    }
+  } catch {
+    anafError.value = true
+  } finally {
+    anafLookupLoading.value = false
+  }
+}
+
 async function onQuickCreateSeries() {
   if (!quickSeriesPrefix.value) return
   quickSeriesSaving.value = true
@@ -499,6 +559,7 @@ const form = reactive({
   fiscalNumber: '',
   customerName: '',
   customerCif: '',
+  customerIsVatPayer: false,
   vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
@@ -521,7 +582,12 @@ if (props.receipt) {
   form.cashRegisterName = props.receipt.cashRegisterName || ''
   form.fiscalNumber = props.receipt.fiscalNumber || ''
   form.customerName = props.receipt.customerName || ''
-  form.customerCif = props.receipt.customerCif || ''
+  {
+    const raw = props.receipt.customerCif || ''
+    const m = raw.match(/^RO(\d+)$/i)
+    form.customerCif = m ? m[1] : raw
+    form.customerIsVatPayer = !!m
+  }
   form.vatIncluded = props.receipt.lines.some(l => l.vatIncluded)
   form.lines = props.receipt.lines.length > 0
     ? props.receipt.lines.map(l => ({
@@ -658,7 +724,7 @@ async function onSave() {
       cashRegisterName: form.cashRegisterName || null,
       fiscalNumber: form.fiscalNumber || null,
       customerName: form.customerName || null,
-      customerCif: form.customerCif || null,
+      customerCif: combinedCustomerCif() || null,
       lines,
     }
     result = await receiptStore.updateReceipt(props.receipt.id, payload)
@@ -682,7 +748,7 @@ async function onSave() {
       cashRegisterName: form.cashRegisterName || undefined,
       fiscalNumber: form.fiscalNumber || undefined,
       customerName: form.customerName || undefined,
-      customerCif: form.customerCif || undefined,
+      customerCif: combinedCustomerCif() || undefined,
       lines,
     }
     result = await receiptStore.createReceipt(payload)
@@ -734,7 +800,12 @@ onMounted(async () => {
       form.cashRegisterName = source.cashRegisterName || ''
       form.fiscalNumber = source.fiscalNumber || ''
       form.customerName = source.customerName || ''
-      form.customerCif = source.customerCif || ''
+      {
+        const raw = (source.customerCif || '') as string
+        const m = raw.match(/^RO(\d+)$/i)
+        form.customerCif = m ? m[1] : raw
+        form.customerIsVatPayer = !!m
+      }
       if (source.notes || source.mentions || source.projectReference) {
         showNotes.value = true
       }

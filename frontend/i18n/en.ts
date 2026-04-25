@@ -1590,6 +1590,14 @@ export default defineI18nLocale(async () => {
       periodIn: 'Total in',
       periodOut: 'Total out',
       noEntries: 'No entries on this day',
+      addMovement: 'Add movement',
+      movementAdded: 'Movement added',
+      movementDeleted: 'Movement deleted',
+      confirmDelete: 'Delete this movement?',
+      amount: 'Amount',
+      movementDate: 'Date',
+      direction: 'Direction',
+      docNumberPlaceholder: 'e.g. slip no. 42',
       col: {
         type: 'Type',
         docNumber: 'Document',
@@ -1743,6 +1751,7 @@ export default defineI18nLocale(async () => {
     openingBalanceHint: 'Opening balance must be zero or positive. Cash transactions issued on or after the opening date are aggregated automatically.',
     openingBalanceLocked: 'Opening balance is locked',
     openingBalanceLockedDesc: 'Once set, the opening balance is locked. Future adjustments will be handled via cash register movements (Phase 3).',
+    openingBalanceResetConfirm: 'Cash transactions already exist. Changing the opening balance will recompute the current balance against the new starting point. Continue?',
   },
 
   // ── API Keys ───────────────────────────────────────────────

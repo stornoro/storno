@@ -39,6 +39,7 @@ const {
 } = storeToRefs(dashboardStore)
 
 const companyStore = useCompanyStore()
+const { isModuleEnabled } = useModules()
 </script>
 
 <template>
@@ -137,9 +138,9 @@ const companyStore = useCompanyStore()
       :loading="loading"
     />
 
-    <!-- Cash Balance Card -->
+    <!-- Cash Balance Card (gated by cash_register module) -->
     <DashboardCashBalanceCard
-      v-else-if="id === 'cash-balance-card'"
+      v-else-if="id === 'cash-balance-card' && isModuleEnabled('cash_register')"
     />
 
     <!-- Recent Invoices Table -->

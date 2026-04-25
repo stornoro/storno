@@ -10,6 +10,8 @@ const companyStore = useCompanyStore()
 const toast = useToast()
 const { copy } = useClipboard()
 const { fetchDefaults, currencyOptions } = useInvoiceDefaults()
+const { isModuleEnabled, MODULE_KEYS } = useModules()
+const cashRegisterEnabled = computed(() => isModuleEnabled(MODULE_KEYS.CASH_REGISTER))
 
 const loading = computed(() => store.loading)
 const accounts = computed(() => store.items)
@@ -34,7 +36,6 @@ const typeOptions = computed(() => [
 
 const cashAccountExists = computed(() => accounts.value.some(a => a.type === 'cash'))
 const isCashForm = computed(() => form.value.type === 'cash')
-const openingBalanceLocked = computed(() => Boolean(editingAccount.value?.openingBalance))
 
 // Romanian bank code → bank name mapping (SWIFT/BIC first 4 chars)
 const BANK_CODES: Record<string, string> = {
@@ -187,15 +188,24 @@ function buildPayload() {
 
 async function onSave() {
   saving.value = true
-  const payload = buildPayload()
+  let payload = buildPayload() as Record<string, unknown>
   if (editingAccount.value) {
-    const ok = await store.updateBankAccount(editingAccount.value.id, payload as Partial<BankAccount>)
-    if (ok) {
+    const ok = await runUpdate(editingAccount.value.id, payload)
+    if (ok === 'locked') {
+      // Backend says the opening balance is locked because cash transactions exist.
+      // Confirm with the user, then retry with the override flag.
+      if (window.confirm($t('bankAccounts.openingBalanceResetConfirm'))) {
+        payload = { ...payload, confirmReset: true }
+        const retry = await runUpdate(editingAccount.value.id, payload)
+        if (retry === true) {
+          toast.add({ title: $t('bankAccounts.updateSuccess'), color: 'success' })
+          modalOpen.value = false
+        }
+      }
+    }
+    else if (ok === true) {
       toast.add({ title: $t('bankAccounts.updateSuccess'), color: 'success' })
       modalOpen.value = false
-    }
-    else if (store.error) {
-      toast.add({ title: store.error, color: 'error' })
     }
   }
   else {
@@ -209,6 +219,24 @@ async function onSave() {
     }
   }
   saving.value = false
+}
+
+// Wraps the update call so we can distinguish the lock-conflict error from other failures.
+async function runUpdate(id: string, payload: Record<string, unknown>): Promise<true | 'locked' | false> {
+  const { patch } = useApi()
+  try {
+    await patch(`/v1/bank-accounts/${id}`, payload)
+    await store.fetchBankAccounts()
+    return true
+  }
+  catch (err: any) {
+    const code = err?.data?.error
+    if (err?.statusCode === 409 && code === 'opening_balance_locked') {
+      return 'locked'
+    }
+    toast.add({ title: code ? translateApiError(code) : $t('error.generic'), color: 'error' })
+    return false
+  }
 }
 
 const deleteModalOpen = ref(false)
@@ -253,7 +281,7 @@ onMounted(() => {
     >
       <div class="flex flex-wrap gap-2 lg:ms-auto">
         <UButton
-          v-if="!cashAccountExists"
+          v-if="cashRegisterEnabled && !cashAccountExists"
           :label="$t('bankAccounts.addCashAccount')"
           color="neutral"
           variant="outline"
@@ -375,36 +403,14 @@ onMounted(() => {
               <UInput v-model="form.bankName" size="xl" class="w-full" :placeholder="$t('bankAccounts.cashAccountPlaceholder')" />
             </UFormField>
             <UFormField :label="$t('bankAccounts.currency')">
-              <USelectMenu v-model="form.currency" :items="currencyOptions" value-key="value" size="xl" class="w-full" :disabled="openingBalanceLocked" />
+              <USelectMenu v-model="form.currency" :items="currencyOptions" value-key="value" size="xl" class="w-full" />
             </UFormField>
-            <UAlert
-              v-if="openingBalanceLocked"
-              icon="i-lucide-lock"
-              :title="$t('bankAccounts.openingBalanceLocked')"
-              :description="$t('bankAccounts.openingBalanceLockedDesc')"
-              color="info"
-              variant="subtle"
-            />
             <div class="grid grid-cols-2 gap-3">
               <UFormField :label="$t('bankAccounts.openingBalance')" :hint="form.currency">
-                <UInput
-                  v-model="form.openingBalance"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  size="xl"
-                  class="w-full"
-                  :disabled="openingBalanceLocked"
-                />
+                <UInput v-model="form.openingBalance" type="number" step="0.01" min="0" size="xl" class="w-full" />
               </UFormField>
               <UFormField :label="$t('bankAccounts.openingBalanceDate')">
-                <UInput
-                  v-model="form.openingBalanceDate"
-                  type="date"
-                  size="xl"
-                  class="w-full"
-                  :disabled="openingBalanceLocked"
-                />
+                <UInput v-model="form.openingBalanceDate" type="date" size="xl" class="w-full" />
               </UFormField>
             </div>
             <p class="text-xs text-(--ui-text-muted)">{{ $t('bankAccounts.openingBalanceHint') }}</p>
