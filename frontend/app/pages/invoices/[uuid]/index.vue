@@ -349,7 +349,7 @@
                       <dt class="text-xs text-(--ui-text-muted)">CIF</dt>
                       <dd class="font-medium mt-0.5">{{ formatCif(invoice.receiverCif, invoice.buyerSnapshot ? invoice.buyerSnapshot.isVatPayer : (invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer)) || '-' }}</dd>
                     </div>
-                    <template v-if="(invoice.buyerSnapshot || invoice.client) && invoice.direction === 'outgoing'">
+                    <template v-if="invoice.buyerSnapshot || (invoice.client && invoice.direction === 'outgoing')">
                       <div v-if="invoice.buyerSnapshot ? invoice.buyerSnapshot.registrationNumber : invoice.client?.registrationNumber">
                         <dt class="text-xs text-(--ui-text-muted)">{{ $t('clients.registrationNumber') }}</dt>
                         <dd class="font-medium mt-0.5">{{ invoice.buyerSnapshot ? invoice.buyerSnapshot.registrationNumber : invoice.client?.registrationNumber }}</dd>

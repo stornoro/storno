@@ -582,6 +582,12 @@ class EFacturaSyncService
             $invoice->setSupplier($supplier);
         }
 
+        // INCOMING: snapshot the buyer (our company) from the XML so the detail page
+        // can show all parsed fields (address, bank, contact info, ...).
+        if ($direction === InvoiceDirection::INCOMING && $parsed->buyer) {
+            $invoice->setBuyerSnapshot($this->buildBuyerSnapshotFromParsed($parsed->buyer));
+        }
+
         // Auto-extract bank accounts only from own company data (seller on outgoing invoices)
         if ($direction === InvoiceDirection::OUTGOING && $parsed->seller?->bankAccount) {
             $this->findOrCreateBankAccount($company, $parsed->seller->bankAccount, $parsed->seller->bankName, $parsed->currency);
@@ -761,6 +767,49 @@ class EFacturaSyncService
         } catch (\Throwable) {
             // Ignore parse errors
         }
+    }
+
+    /**
+     * Build a buyerSnapshot array from a parsed UBL party.
+     * Mirrors {@see \App\Command\BackfillBuyerSnapshotCommand}.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildBuyerSnapshotFromParsed(ParsedParty $buyer): array
+    {
+        $type = 'company';
+        $cui = $buyer->cif;
+        $cnp = null;
+
+        if ($cui && preg_match('/^\d{13}$/', $cui)) {
+            $type = 'individual';
+            $cnp = $cui;
+            $cui = null;
+        } elseif ($cui === '0000000000000') {
+            $type = 'individual';
+            $cui = null;
+        }
+
+        return [
+            'type' => $type,
+            'name' => $buyer->name,
+            'cui' => $cui,
+            'cnp' => $cnp,
+            'vatCode' => $buyer->vatCode,
+            'isVatPayer' => $buyer->isVatPayer(),
+            'registrationNumber' => $buyer->registrationNumber,
+            'address' => $buyer->address,
+            'city' => $buyer->city,
+            'county' => $buyer->county,
+            'country' => $buyer->country,
+            'postalCode' => $buyer->postalCode,
+            'email' => $buyer->email,
+            'phone' => $buyer->phone,
+            'bankName' => $buyer->bankName,
+            'bankAccount' => $buyer->bankAccount,
+            'clientCode' => null,
+            'einvoiceIdentifiers' => null,
+        ];
     }
 
     private function findOrCreateSupplier(Company $company, ParsedParty $party, SyncResult $result): Supplier
