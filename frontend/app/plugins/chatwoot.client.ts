@@ -65,6 +65,13 @@ export default defineNuxtPlugin(() => {
       return
     }
 
+    // While impersonating, keep Chatwoot anonymous so the admin's support
+    // session is not tagged with the impersonated user's email/CIF/plan.
+    if (authStore.isImpersonating) {
+      window.$chatwoot.reset()
+      return
+    }
+
     const companyStore = useCompanyStore()
     const company = companyStore.currentCompany
 
