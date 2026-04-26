@@ -159,5 +159,20 @@ class ReceiptRepository extends ServiceEntityRepository
             $qb->andWhere("$a.issueDate <= :dateTo")
                 ->setParameter('dateTo', new \DateTime($filters['dateTo']));
         }
+
+        if (isset($filters['paymentMethod']) && in_array($filters['paymentMethod'], ['cash', 'card', 'meal_ticket', 'mixed', 'other'], true)) {
+            $qb->andWhere("$a.paymentMethod = :paymentMethod")
+                ->setParameter('paymentMethod', $filters['paymentMethod']);
+        }
+
+        if (isset($filters['hasCustomer']) && in_array($filters['hasCustomer'], ['yes', 'no'], true)) {
+            if ($filters['hasCustomer'] === 'yes') {
+                $qb->andWhere("$a.customerCif IS NOT NULL OR $a.customerName IS NOT NULL OR c.id IS NOT NULL");
+            } else {
+                $qb->andWhere("$a.customerCif IS NULL")
+                    ->andWhere("$a.customerName IS NULL")
+                    ->andWhere('c.id IS NULL');
+            }
+        }
     }
 }

@@ -910,6 +910,12 @@ export default defineI18nLocale(async () => {
   proformaInvoices: {
     title: 'Proforma',
     description: 'Manage proforma invoices and convert them to invoices',
+    filters: {
+      expired: 'Validity',
+      expiredAll: 'All',
+      expiredYes: 'Expired',
+      expiredNo: 'Within validity',
+    },
     newProforma: 'New proforma',
     copyProforma: 'Copy proforma',
     editProforma: 'Edit proforma',
@@ -979,6 +985,12 @@ export default defineI18nLocale(async () => {
   deliveryNotes: {
     title: 'Delivery notes',
     description: 'Manage goods delivery notes',
+    filters: {
+      converted: 'Converted to invoice',
+      convertedAll: 'All',
+      convertedYes: 'Converted',
+      convertedNo: 'Not converted',
+    },
     newDeliveryNote: 'New delivery note',
     copyDeliveryNote: 'Copy delivery note',
     editDeliveryNote: 'Edit delivery note',
@@ -1100,6 +1112,15 @@ export default defineI18nLocale(async () => {
   receipts: {
     title: 'Receipts',
     description: 'Manage receipts',
+    filters: {
+      paymentMethodAll: 'All methods',
+      hasCustomer: 'Customer info',
+      hasCustomerAll: 'All',
+      hasCustomerYes: 'With customer info',
+      hasCustomerNo: 'Anonymous (no customer)',
+      dateFrom: 'From',
+      dateTo: 'To',
+    },
     newReceipt: 'New receipt',
     copyReceipt: 'Copy receipt',
     editReceipt: 'Edit receipt',
@@ -1132,6 +1153,7 @@ export default defineI18nLocale(async () => {
     paymentMethodBankTransfer: 'Bank transfer',
     paymentMethodMealTicket: 'Meal tickets',
     paymentMethodMixed: 'Mixed',
+    paymentMethodOther: 'Other',
     paymentInfo: 'Payment information',
     customerInfo: 'Customer information',
     createSuccess: 'Receipt created successfully',
@@ -1348,6 +1370,9 @@ export default defineI18nLocale(async () => {
   clients: {
     title: 'Clients',
     description: 'Your company\'s clients, automatically extracted from sent invoices',
+    filters: {
+      countryAll: 'All countries',
+    },
     noClientsDesc: 'Clients will appear automatically after syncing invoices',
     name: 'Name',
     email: 'Email',
@@ -1424,6 +1449,17 @@ export default defineI18nLocale(async () => {
   products: {
     title: 'Products',
     description: 'Manage your company\'s products and services',
+    type: 'Product type',
+    filters: {
+      priceHigh: 'Price high → low',
+      priceLow: 'Price low → high',
+      status: 'Status',
+      statusAll: 'All',
+      statusActive: 'Active only',
+      statusInactive: 'Inactive only',
+      categoryAll: 'All categories',
+      categoryNone: 'No category',
+    },
     noProductsDesc: 'Add products and services to use them in invoices and proforma.',
     name: 'Name',
     namePlaceholder: 'E.g.: IT consulting services',
@@ -1481,6 +1517,29 @@ export default defineI18nLocale(async () => {
   suppliers: {
     title: 'Suppliers',
     description: 'Your company\'s suppliers, automatically extracted from received invoices',
+    sort: {
+      recent: 'Recently added',
+      mostInvoiced: 'Highest billed amount',
+      mostInvoices: 'Most invoices',
+      recentActivity: 'Recent activity',
+      name: 'Name A → Z',
+    },
+    filters: {
+      title: 'Filters',
+      clear: 'Clear filters',
+      vatPayer: 'VAT payer',
+      vatPayerAll: 'All',
+      vatPayerYes: 'VAT payers only',
+      vatPayerNo: 'Non-payers only',
+      hasInvoices: 'Activity',
+      hasInvoicesAll: 'All',
+      hasInvoicesActive: 'With invoices',
+      hasInvoicesDormant: 'Without invoices',
+      source: 'Source',
+      sourceAll: 'Any source',
+      sourceAnaf: 'Synced from ANAF',
+      sourceManual: 'Added manually',
+    },
     noSuppliersDesc: 'Suppliers will appear automatically after syncing invoices or add them manually',
     name: 'Supplier name',
     cif: 'CIF',
@@ -1992,6 +2051,10 @@ export default defineI18nLocale(async () => {
   efactura: {
     title: 'e-Factura',
     description: 'e-Factura ANAF sync status and log',
+    filters: {
+      directionAll: 'All directions',
+      statusAll: 'All statuses',
+    },
     tabSync: 'Sync',
     tabMessages: 'SPV Messages',
     syncNow: 'Sync now',

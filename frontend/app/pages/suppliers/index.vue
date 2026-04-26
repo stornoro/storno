@@ -91,6 +91,63 @@ const onSearchInput = useDebounceFn(() => {
   fetchSuppliers()
 }, 300)
 
+const sortOptions = computed(() => [
+  { value: 'recent', label: $t('suppliers.sort.recent') },
+  { value: 'mostInvoiced', label: $t('suppliers.sort.mostInvoiced') },
+  { value: 'mostInvoices', label: $t('suppliers.sort.mostInvoices') },
+  { value: 'recentActivity', label: $t('suppliers.sort.recentActivity') },
+  { value: 'name', label: $t('suppliers.sort.name') },
+])
+
+// USelectMenu reserves '' as the cleared sentinel — every option needs a non-empty value.
+// Use 'all' as a UI sentinel for "no filter" and translate to '' when sending to the store.
+const vatPayerOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.vatPayerAll') },
+  { value: 'yes', label: $t('suppliers.filters.vatPayerYes') },
+  { value: 'no', label: $t('suppliers.filters.vatPayerNo') },
+])
+
+const hasInvoicesOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.hasInvoicesAll') },
+  { value: 'active', label: $t('suppliers.filters.hasInvoicesActive') },
+  { value: 'dormant', label: $t('suppliers.filters.hasInvoicesDormant') },
+])
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.sourceAll') },
+  { value: 'anaf_sync', label: $t('suppliers.filters.sourceAnaf') },
+  { value: 'manual', label: $t('suppliers.filters.sourceManual') },
+])
+
+const vatPayerSel = computed({
+  get: () => store.vatPayerFilter || 'all',
+  set: (v: string) => { store.vatPayerFilter = v === 'all' ? '' : v as any },
+})
+const hasInvoicesSel = computed({
+  get: () => store.hasInvoicesFilter || 'all',
+  set: (v: string) => { store.hasInvoicesFilter = v === 'all' ? '' : v as any },
+})
+const sourceSel = computed({
+  get: () => store.sourceFilter || 'all',
+  set: (v: string) => { store.sourceFilter = v === 'all' ? '' : v as any },
+})
+
+const activeFilterCount = computed(() =>
+  [store.vatPayerFilter, store.hasInvoicesFilter, store.sourceFilter].filter(Boolean).length,
+)
+
+function onFilterChange() {
+  page.value = 1
+  fetchSuppliers()
+}
+
+function clearFilters() {
+  store.vatPayerFilter = ''
+  store.hasInvoicesFilter = ''
+  store.sourceFilter = ''
+  onFilterChange()
+}
+
 function onRowClick(_e: Event, row: any) {
   router.push(`/suppliers/${row.original.id}`)
 }
@@ -152,8 +209,45 @@ onMounted(() => fetchSuppliers())
     </template>
 
     <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-1.5">
+      <div class="flex flex-wrap items-center gap-1.5">
         <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+
+        <USelectMenu
+          v-model="store.sort"
+          :items="sortOptions"
+          value-key="value"
+          icon="i-lucide-arrow-up-down"
+          class="w-52"
+          @update:model-value="onFilterChange"
+        />
+
+        <UPopover>
+          <UButton
+            icon="i-lucide-filter"
+            color="neutral"
+            variant="outline"
+            :label="activeFilterCount ? $t('suppliers.filters.title') + ' · ' + activeFilterCount : $t('suppliers.filters.title')"
+          />
+          <template #content>
+            <div class="p-3 min-w-64 space-y-3">
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.vatPayer') }}</p>
+                <USelectMenu v-model="vatPayerSel" :items="vatPayerOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.hasInvoices') }}</p>
+                <USelectMenu v-model="hasInvoicesSel" :items="hasInvoicesOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.source') }}</p>
+                <USelectMenu v-model="sourceSel" :items="sourceOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div v-if="activeFilterCount" class="pt-1 border-t border-default">
+                <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearFilters" />
+              </div>
+            </div>
+          </template>
+        </UPopover>
       </div>
 
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">

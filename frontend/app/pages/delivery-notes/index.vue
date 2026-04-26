@@ -252,16 +252,50 @@ function onRowClick(_e: Event, row: any) {
   router.push(`/delivery-notes/${row.original.id}`)
 }
 
+const dateFrom = ref<string>('')
+const dateTo = ref<string>('')
+
+const convertedOptions = computed(() => [
+  { value: 'all', label: $t('deliveryNotes.filters.convertedAll') },
+  { value: 'yes', label: $t('deliveryNotes.filters.convertedYes') },
+  { value: 'no', label: $t('deliveryNotes.filters.convertedNo') },
+])
+
+const convertedSel = computed({
+  get: () => deliveryNoteStore.filters.convertedToInvoice || 'all',
+  set: (v: string) => { deliveryNoteStore.filters.convertedToInvoice = (v === 'all' ? '' : v) as any },
+})
+
+const popoverFilterCount = computed(() => [
+  deliveryNoteStore.filters.convertedToInvoice,
+  deliveryNoteStore.filters.dateFrom,
+  deliveryNoteStore.filters.dateTo,
+].filter(Boolean).length)
+
 async function fetchDeliveryNotes() {
   deliveryNoteStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as DeliveryNoteStatus : null,
     search: search.value,
     currency: currencyFilter.value || null,
+    dateFrom: dateFrom.value || null,
+    dateTo: dateTo.value || null,
   })
   deliveryNoteStore.page = page.value
   deliveryNoteStore.limit = limit.value
   applySortToStore()
   await deliveryNoteStore.fetchDeliveryNotes()
+}
+
+function onPopoverFilterChange() {
+  page.value = 1
+  fetchDeliveryNotes()
+}
+
+function clearAllFilters() {
+  dateFrom.value = ''
+  dateTo.value = ''
+  deliveryNoteStore.filters.convertedToInvoice = ''
+  onPopoverFilterChange()
 }
 
 watch([page, statusFilter, currencyFilter], () => fetchDeliveryNotes())
@@ -313,6 +347,35 @@ onMounted(() => {
         <div class="flex flex-wrap items-center gap-2 w-full">
           <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-full sm:w-56" @update:model-value="onSearchInput" />
           <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('deliveryNotes.status')" class="w-full sm:w-44" />
+
+          <UPopover>
+            <UButton
+              icon="i-lucide-filter"
+              color="neutral"
+              variant="outline"
+              :label="popoverFilterCount ? $t('suppliers.filters.title') + ' · ' + popoverFilterCount : $t('suppliers.filters.title')"
+            />
+            <template #content>
+              <div class="p-3 min-w-72 space-y-3">
+                <div>
+                  <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('deliveryNotes.filters.converted') }}</p>
+                  <USelectMenu v-model="convertedSel" :items="convertedOptions" value-key="value" class="w-full" @update:model-value="onPopoverFilterChange" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <UFormField :label="$t('receipts.filters.dateFrom')">
+                    <UInput v-model="dateFrom" type="date" class="w-full" @update:model-value="onPopoverFilterChange" />
+                  </UFormField>
+                  <UFormField :label="$t('receipts.filters.dateTo')">
+                    <UInput v-model="dateTo" type="date" class="w-full" @update:model-value="onPopoverFilterChange" />
+                  </UFormField>
+                </div>
+                <div v-if="popoverFilterCount" class="pt-1 border-t border-default">
+                  <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearAllFilters" />
+                </div>
+              </div>
+            </template>
+          </UPopover>
+
           <template v-if="deliveryNoteStore.distinctCurrencies.length > 1">
             <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
             <div class="flex items-center gap-1">

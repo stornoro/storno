@@ -68,8 +68,14 @@ class ClientController extends AbstractController
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
         $search = $request->query->get('search');
         $country = $request->query->get('country') ?: null;
+        $filters = [
+            'sort'        => $request->query->get('sort'),
+            'vatPayer'    => $request->query->get('vatPayer'),
+            'hasInvoices' => $request->query->get('hasInvoices'),
+            'source'      => $request->query->get('source'),
+        ];
 
-        $result = $this->clientManager->listGrouped($company, $page, $limit, $search, $country);
+        $result = $this->clientManager->listGrouped($company, $page, $limit, $search, $country, $filters);
 
         $response = $this->json([
             'data' => $result['data'],

@@ -9,6 +9,8 @@ export interface ProformaFilters {
   dateFrom: string | null
   dateTo: string | null
   currency: string | null
+  convertedToInvoice: '' | 'yes' | 'no'
+  expired: '' | 'yes' | 'no'
 }
 
 interface DocumentTotals {
@@ -39,6 +41,8 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
     dateFrom: null,
     dateTo: null,
     currency: null,
+    convertedToInvoice: '',
+    expired: '',
   })
 
   const page = ref(1)
@@ -81,6 +85,8 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       if (filters.value.dateFrom) params.dateFrom = filters.value.dateFrom
       if (filters.value.dateTo) params.dateTo = filters.value.dateTo
       if (filters.value.currency) params.currency = filters.value.currency
+      if (filters.value.convertedToInvoice) params.convertedToInvoice = filters.value.convertedToInvoice
+      if (filters.value.expired) params.expired = filters.value.expired
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -217,6 +223,8 @@ export const useProformaInvoiceStore = defineStore('proformaInvoices', () => {
       dateFrom: null,
       dateTo: null,
       currency: null,
+      convertedToInvoice: '',
+      expired: '',
     }
     page.value = 1
   }

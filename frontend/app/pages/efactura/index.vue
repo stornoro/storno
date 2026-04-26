@@ -142,11 +142,37 @@
 
       <UCard>
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
             <h3 class="font-semibold">{{ $t('efactura.syncLog') }}</h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-alert-circle" @click="openErrors">
-              {{ $t('efactura.viewErrors') }}
-            </UButton>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <UInput
+                v-model="syncStore.syncLogSearch"
+                :placeholder="$t('common.search')"
+                icon="i-lucide-search"
+                size="sm"
+                class="w-48"
+                @update:model-value="onLogSearch"
+              />
+              <USelectMenu
+                v-model="logDirectionSel"
+                :items="logDirectionOptions"
+                value-key="value"
+                size="sm"
+                class="w-32"
+                @update:model-value="onLogFilterChange"
+              />
+              <USelectMenu
+                v-model="logStatusSel"
+                :items="logStatusOptions"
+                value-key="value"
+                size="sm"
+                class="w-36"
+                @update:model-value="onLogFilterChange"
+              />
+              <UButton variant="ghost" size="sm" icon="i-lucide-alert-circle" @click="openErrors">
+                {{ $t('efactura.viewErrors') }}
+              </UButton>
+            </div>
           </div>
         </template>
         <div class="space-y-4">
@@ -375,6 +401,38 @@ function openErrors() {
   errorsOpen.value = true
   fetchRejectedInvoices()
 }
+
+// ── Sync log filters ───────────────────────────────────────────────
+const logDirectionOptions = computed(() => [
+  { value: 'all', label: $t('efactura.filters.directionAll') },
+  { value: 'incoming', label: $t('common.incoming') },
+  { value: 'outgoing', label: $t('common.outgoing') },
+])
+
+const logStatusOptions = computed(() => [
+  { value: 'all', label: $t('efactura.filters.statusAll') },
+  { value: 'synced', label: $t('documentStatus.synced') },
+  { value: 'validated', label: $t('documentStatus.validated') },
+  { value: 'rejected', label: $t('documentStatus.rejected') },
+  { value: 'paid', label: $t('documentStatus.paid') },
+])
+
+const logDirectionSel = computed({
+  get: () => syncStore.syncLogDirection || 'all',
+  set: (v: string) => { syncStore.syncLogDirection = v === 'all' ? '' : v as any },
+})
+const logStatusSel = computed({
+  get: () => syncStore.syncLogStatus || 'all',
+  set: (v: string) => { syncStore.syncLogStatus = v === 'all' ? '' : v },
+})
+
+function onLogFilterChange() {
+  syncStore.fetchLog()
+}
+
+const onLogSearch = useDebounceFn(() => {
+  syncStore.fetchLog()
+}, 300)
 
 const syncRealtime = useSyncRealtime()
 

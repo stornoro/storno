@@ -22,17 +22,33 @@ const { visibility: columnVisibility, toggle: toggleColumn, filterColumns, toggl
 const page = ref(1)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
 const search = ref('')
-const typeFilter = ref<'all' | 'service' | 'goods'>('all')
-const usageFilter = ref<string>('all')
+
+// Server-side filters now live on the store; these computed proxies translate
+// the UI's "all" sentinel into the store's empty-string value (Combobox can't
+// hold an empty string itself, see suppliers/clients pages for the same pattern).
+const typeSel = computed({
+  get: () => productsStore.typeFilter || 'all',
+  set: (v: string) => { productsStore.typeFilter = v === 'all' ? '' : v as any },
+})
+const usageSel = computed({
+  get: () => productsStore.usageFilter || 'all',
+  set: (v: string) => { productsStore.usageFilter = v === 'all' ? '' : v as any },
+})
+const statusSel = computed({
+  get: () => productsStore.statusFilter || 'all',
+  set: (v: string) => { productsStore.statusFilter = v === 'all' ? '' : v as any },
+})
+const sourceSel = computed({
+  get: () => productsStore.sourceFilter || 'all',
+  set: (v: string) => { productsStore.sourceFilter = v === 'all' ? '' : v as any },
+})
+const categorySel = computed({
+  get: () => productsStore.categoryFilter || 'all',
+  set: (v: string) => { productsStore.categoryFilter = v === 'all' ? '' : v },
+})
 
 const loading = computed(() => productsStore.loading)
-const products = computed(() => {
-  let items = productsStore.items
-  if (typeFilter.value === 'service') items = items.filter(p => p.isService)
-  else if (typeFilter.value === 'goods') items = items.filter(p => !p.isService)
-  if (usageFilter.value !== 'all') items = items.filter(p => p.usage === usageFilter.value)
-  return items
-})
+const products = computed(() => productsStore.items)
 const total = computed(() => productsStore.total)
 
 // ── Slideover state ──────────────────────────────────────────────────
@@ -144,7 +160,7 @@ const canSave = computed(() =>
 const typeOptions = [
   { label: $t('products.allTypes'), value: 'all' },
   { label: $t('products.servicesOnly'), value: 'service' },
-  { label: $t('products.goodsOnly'), value: 'goods' },
+  { label: $t('products.goodsOnly'), value: 'product' },
 ]
 
 const usageOptions = [
@@ -154,6 +170,54 @@ const usageOptions = [
   { label: $t('products.usageOptions.both'), value: 'both' },
   { label: $t('products.usageOptions.internal'), value: 'internal' },
 ]
+
+const sortOptions = computed(() => [
+  { value: 'recent', label: $t('suppliers.sort.recent') },
+  { value: 'name', label: $t('suppliers.sort.name') },
+  { value: 'priceHigh', label: $t('products.filters.priceHigh') },
+  { value: 'priceLow', label: $t('products.filters.priceLow') },
+])
+
+const statusOptions = computed(() => [
+  { value: 'all', label: $t('products.filters.statusAll') },
+  { value: 'active', label: $t('products.filters.statusActive') },
+  { value: 'inactive', label: $t('products.filters.statusInactive') },
+])
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.sourceAll') },
+  { value: 'anaf_sync', label: $t('suppliers.filters.sourceAnaf') },
+  { value: 'manual', label: $t('suppliers.filters.sourceManual') },
+])
+
+const categoriesStore = useProductCategoriesStore()
+const categoryOptions = computed(() => [
+  { value: 'all', label: $t('products.filters.categoryAll') },
+  { value: 'none', label: $t('products.filters.categoryNone') },
+  ...(categoriesStore.items ?? []).map(c => ({ value: c.id, label: c.name })),
+])
+
+const activeFilterCount = computed(() => [
+  productsStore.typeFilter,
+  productsStore.usageFilter,
+  productsStore.statusFilter,
+  productsStore.sourceFilter,
+  productsStore.categoryFilter,
+].filter(Boolean).length)
+
+function onFilterChange() {
+  page.value = 1
+  fetchProducts()
+}
+
+function clearFilters() {
+  productsStore.typeFilter = ''
+  productsStore.usageFilter = ''
+  productsStore.statusFilter = ''
+  productsStore.sourceFilter = ''
+  productsStore.categoryFilter = ''
+  onFilterChange()
+}
 
 const usageFormOptions = [
   { label: $t('products.usageOptions.sales'), value: 'sales' },
@@ -363,8 +427,11 @@ watch([page], () => fetchProducts())
 watch(() => companyStore.currentCompanyId, () => {
   page.value = 1
   search.value = ''
-  typeFilter.value = 'all'
-  usageFilter.value = 'all'
+  productsStore.typeFilter = ''
+  productsStore.usageFilter = ''
+  productsStore.statusFilter = ''
+  productsStore.sourceFilter = ''
+  productsStore.categoryFilter = ''
   fetchProducts()
 })
 
@@ -372,6 +439,7 @@ watch(() => companyStore.currentCompanyId, () => {
 onMounted(() => {
   fetchProducts()
   fetchDefaults()
+  categoriesStore.fetchCategories()
 })
 </script>
 
@@ -416,7 +484,7 @@ onMounted(() => {
 
     <template #body>
       <!-- Filters bar -->
-      <div class="flex flex-wrap items-center gap-3 mb-4">
+      <div class="flex flex-wrap items-center gap-1.5 mb-4">
         <UInput
           v-model="search"
           :placeholder="$t('common.search')"
@@ -424,26 +492,51 @@ onMounted(() => {
           class="max-w-sm"
           @update:model-value="onSearchInput"
         />
-        <div class="flex gap-1">
-          <UButton
-            v-for="opt in typeOptions"
-            :key="opt.value"
-            size="sm"
-            :variant="typeFilter === opt.value ? 'solid' : 'outline'"
-            :color="typeFilter === opt.value ? 'primary' : 'neutral'"
-            @click="typeFilter = opt.value as any"
-          >
-            {{ opt.label }}
-          </UButton>
-        </div>
+
         <USelectMenu
-          v-model="usageFilter"
-          :items="usageOptions"
+          v-model="productsStore.sort"
+          :items="sortOptions"
           value-key="value"
-          size="sm"
-          class="w-48"
-          :placeholder="$t('products.usage')"
+          icon="i-lucide-arrow-up-down"
+          class="w-52"
+          @update:model-value="onFilterChange"
         />
+
+        <UPopover>
+          <UButton
+            icon="i-lucide-filter"
+            color="neutral"
+            variant="outline"
+            :label="activeFilterCount ? $t('suppliers.filters.title') + ' · ' + activeFilterCount : $t('suppliers.filters.title')"
+          />
+          <template #content>
+            <div class="p-3 min-w-72 space-y-3">
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('products.type') }}</p>
+                <USelectMenu v-model="typeSel" :items="typeOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('products.usage') }}</p>
+                <USelectMenu v-model="usageSel" :items="usageOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('products.filters.status') }}</p>
+                <USelectMenu v-model="statusSel" :items="statusOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('productCategories.title') }}</p>
+                <USelectMenu v-model="categorySel" :items="categoryOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.source') }}</p>
+                <USelectMenu v-model="sourceSel" :items="sourceOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div v-if="activeFilterCount" class="pt-1 border-t border-default">
+                <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearFilters" />
+              </div>
+            </div>
+          </template>
+        </UPopover>
       </div>
 
       <!-- Bulk Bar -->

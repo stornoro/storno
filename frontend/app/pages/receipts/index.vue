@@ -198,16 +198,65 @@ function onRowClick(_e: Event, row: any) {
   router.push(`/receipts/${row.original.id}`)
 }
 
+const dateFrom = ref<string>('')
+const dateTo = ref<string>('')
+
+const paymentMethodOptions = computed(() => [
+  { value: 'all', label: $t('receipts.filters.paymentMethodAll') },
+  { value: 'cash', label: $t('receipts.paymentMethodCash') },
+  { value: 'card', label: $t('receipts.paymentMethodCard') },
+  { value: 'meal_ticket', label: $t('receipts.paymentMethodMealTicket') },
+  { value: 'mixed', label: $t('receipts.paymentMethodMixed') },
+  { value: 'other', label: $t('receipts.paymentMethodOther') },
+])
+
+const hasCustomerOptions = computed(() => [
+  { value: 'all', label: $t('receipts.filters.hasCustomerAll') },
+  { value: 'yes', label: $t('receipts.filters.hasCustomerYes') },
+  { value: 'no', label: $t('receipts.filters.hasCustomerNo') },
+])
+
+const paymentMethodSel = computed({
+  get: () => receiptStore.filters.paymentMethod || 'all',
+  set: (v: string) => { receiptStore.filters.paymentMethod = (v === 'all' ? '' : v) as any },
+})
+const hasCustomerSel = computed({
+  get: () => receiptStore.filters.hasCustomer || 'all',
+  set: (v: string) => { receiptStore.filters.hasCustomer = (v === 'all' ? '' : v) as any },
+})
+
+const popoverFilterCount = computed(() => [
+  receiptStore.filters.paymentMethod,
+  receiptStore.filters.hasCustomer,
+  receiptStore.filters.dateFrom,
+  receiptStore.filters.dateTo,
+].filter(Boolean).length)
+
 async function fetchReceipts() {
   receiptStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as ReceiptStatus : null,
     search: search.value,
     currency: currencyFilter.value || null,
+    dateFrom: dateFrom.value || null,
+    dateTo: dateTo.value || null,
   })
   receiptStore.page = page.value
   receiptStore.limit = limit.value
   applySortToStore()
   await receiptStore.fetchReceipts()
+}
+
+function onPopoverFilterChange() {
+  page.value = 1
+  fetchReceipts()
+}
+
+function clearAllFilters() {
+  dateFrom.value = ''
+  dateTo.value = ''
+  receiptStore.filters.paymentMethod = ''
+  receiptStore.filters.hasCustomer = ''
+  onPopoverFilterChange()
 }
 
 watch([page, statusFilter, currencyFilter], () => fetchReceipts())
@@ -259,6 +308,39 @@ onMounted(() => {
         <div class="flex flex-wrap items-center gap-2 w-full">
           <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-full sm:w-56" @update:model-value="onSearchInput" />
           <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('receipts.status')" class="w-full sm:w-44" />
+
+          <UPopover>
+            <UButton
+              icon="i-lucide-filter"
+              color="neutral"
+              variant="outline"
+              :label="popoverFilterCount ? $t('suppliers.filters.title') + ' · ' + popoverFilterCount : $t('suppliers.filters.title')"
+            />
+            <template #content>
+              <div class="p-3 min-w-72 space-y-3">
+                <div>
+                  <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('receipts.paymentMethod') }}</p>
+                  <USelectMenu v-model="paymentMethodSel" :items="paymentMethodOptions" value-key="value" class="w-full" @update:model-value="onPopoverFilterChange" />
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('receipts.filters.hasCustomer') }}</p>
+                  <USelectMenu v-model="hasCustomerSel" :items="hasCustomerOptions" value-key="value" class="w-full" @update:model-value="onPopoverFilterChange" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <UFormField :label="$t('receipts.filters.dateFrom')">
+                    <UInput v-model="dateFrom" type="date" class="w-full" @update:model-value="onPopoverFilterChange" />
+                  </UFormField>
+                  <UFormField :label="$t('receipts.filters.dateTo')">
+                    <UInput v-model="dateTo" type="date" class="w-full" @update:model-value="onPopoverFilterChange" />
+                  </UFormField>
+                </div>
+                <div v-if="popoverFilterCount" class="pt-1 border-t border-default">
+                  <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearAllFilters" />
+                </div>
+              </div>
+            </template>
+          </UPopover>
+
           <template v-if="receiptStore.distinctCurrencies.length > 1">
             <div class="h-5 w-px bg-(--ui-border) mx-1 hidden sm:block" />
             <div class="flex items-center gap-1">

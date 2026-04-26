@@ -909,6 +909,12 @@ export default defineI18nLocale(async () => {
     proformaInvoices: {
       title: 'Proforma',
       description: 'Gestioneaza proformele si converteste-le in facturi',
+      filters: {
+        expired: 'Valabilitate',
+        expiredAll: 'Toate',
+        expiredYes: 'Expirate',
+        expiredNo: 'In termen de valabilitate',
+      },
       newProforma: 'Proforma noua',
       copyProforma: 'Copiaza proforma',
       editProforma: 'Editeaza proforma',
@@ -978,6 +984,12 @@ export default defineI18nLocale(async () => {
     deliveryNotes: {
       title: 'Avize',
       description: 'Gestioneaza avizele de insotire a marfii',
+      filters: {
+        converted: 'Convertit in factura',
+        convertedAll: 'Toate',
+        convertedYes: 'Convertite',
+        convertedNo: 'Neconvertite',
+      },
       newDeliveryNote: 'Aviz nou',
       copyDeliveryNote: 'Copiaza aviz',
       editDeliveryNote: 'Editeaza aviz',
@@ -1099,6 +1111,15 @@ export default defineI18nLocale(async () => {
     receipts: {
       title: 'Bonuri fiscale',
       description: 'Gestioneaza bonurile fiscale',
+      filters: {
+        paymentMethodAll: 'Toate metodele',
+        hasCustomer: 'Date client',
+        hasCustomerAll: 'Toate',
+        hasCustomerYes: 'Cu date client',
+        hasCustomerNo: 'Fara date client',
+        dateFrom: 'De la',
+        dateTo: 'Pana la',
+      },
       newReceipt: 'Bon fiscal nou',
       copyReceipt: 'Copiaza bon',
       editReceipt: 'Editeaza bon',
@@ -1131,6 +1152,7 @@ export default defineI18nLocale(async () => {
       paymentMethodBankTransfer: 'Transfer bancar',
       paymentMethodMealTicket: 'Tichete de masa',
       paymentMethodMixed: 'Mixt',
+      paymentMethodOther: 'Altele',
       paymentInfo: 'Informatii plata',
       customerInfo: 'Informatii client',
       createSuccess: 'Bon fiscal creat cu succes',
@@ -1347,6 +1369,9 @@ export default defineI18nLocale(async () => {
     clients: {
       title: 'Clienti',
       description: 'Clientii companiei tale, extrasi automat din facturile trimise',
+      filters: {
+        countryAll: 'Toate tarile',
+      },
       noClientsDesc: 'Clientii vor aparea automat dupa sincronizarea facturilor',
       name: 'Nume',
       email: 'Email',
@@ -1423,6 +1448,17 @@ export default defineI18nLocale(async () => {
     products: {
       title: 'Produse',
       description: 'Gestioneaza produsele si serviciile companiei tale',
+      type: 'Tip produs',
+      filters: {
+        priceHigh: 'Pret descrescator',
+        priceLow: 'Pret crescator',
+        status: 'Status',
+        statusAll: 'Toate',
+        statusActive: 'Doar active',
+        statusInactive: 'Doar inactive',
+        categoryAll: 'Toate categoriile',
+        categoryNone: 'Fara categorie',
+      },
       noProductsDesc: 'Adauga produse si servicii pentru a le folosi in facturi si proforma.',
       name: 'Denumire',
       namePlaceholder: 'Ex: Servicii consultanta IT',
@@ -1480,6 +1516,29 @@ export default defineI18nLocale(async () => {
     suppliers: {
       title: 'Furnizori',
       description: 'Furnizorii companiei tale, extrasi automat din facturile primite',
+      sort: {
+        recent: 'Adaugati recent',
+        mostInvoiced: 'Cele mai mari sume',
+        mostInvoices: 'Cele mai multe facturi',
+        recentActivity: 'Activitate recenta',
+        name: 'Nume A → Z',
+      },
+      filters: {
+        title: 'Filtre',
+        clear: 'Sterge filtrele',
+        vatPayer: 'Platitor TVA',
+        vatPayerAll: 'Toti',
+        vatPayerYes: 'Doar platitori TVA',
+        vatPayerNo: 'Doar neplatitori',
+        hasInvoices: 'Activitate',
+        hasInvoicesAll: 'Toti',
+        hasInvoicesActive: 'Cu facturi',
+        hasInvoicesDormant: 'Fara facturi',
+        source: 'Sursa',
+        sourceAll: 'Orice sursa',
+        sourceAnaf: 'Sincronizati ANAF',
+        sourceManual: 'Adaugati manual',
+      },
       noSuppliersDesc: 'Furnizorii vor aparea automat dupa sincronizarea facturilor sau adaugati manual',
       name: 'Nume furnizor',
       cif: 'CIF',
@@ -1991,6 +2050,10 @@ export default defineI18nLocale(async () => {
     efactura: {
       title: 'e-Factura',
       description: 'Status sincronizare si jurnal e-Factura ANAF',
+      filters: {
+        directionAll: 'Toate directiile',
+        statusAll: 'Toate statusurile',
+      },
       tabSync: 'Sincronizare',
       tabMessages: 'Mesaje SPV',
       syncNow: 'Sincronizeaza acum',

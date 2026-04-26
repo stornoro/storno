@@ -12,8 +12,11 @@ class ProductManager
         private readonly ProductRepository $productRepository,
     ) {}
 
-    public function list(Company $company, int $page = 1, int $limit = 20, ?string $search = null): Paginator
+    /**
+     * @param array{sort?: ?string, type?: ?string, status?: ?string, usage?: ?string, categoryId?: ?string, source?: ?string} $filters
+     */
+    public function list(Company $company, int $page = 1, int $limit = 20, ?string $search = null, array $filters = []): Paginator
     {
-        return $this->productRepository->findByCompanyPaginated($company, $page, $limit, $search);
+        return $this->productRepository->findByCompanyPaginated($company, $page, $limit, $search, $filters);
     }
 }

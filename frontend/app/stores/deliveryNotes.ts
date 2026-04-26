@@ -9,6 +9,7 @@ export interface DeliveryNoteFilters {
   dateFrom: string | null
   dateTo: string | null
   currency: string | null
+  convertedToInvoice: '' | 'yes' | 'no'
 }
 
 interface DocumentTotals {
@@ -39,6 +40,7 @@ export const useDeliveryNoteStore = defineStore('deliveryNotes', () => {
     dateFrom: null,
     dateTo: null,
     currency: null,
+    convertedToInvoice: '',
   })
 
   const page = ref(1)
@@ -81,6 +83,7 @@ export const useDeliveryNoteStore = defineStore('deliveryNotes', () => {
       if (filters.value.dateFrom) params.dateFrom = filters.value.dateFrom
       if (filters.value.dateTo) params.dateTo = filters.value.dateTo
       if (filters.value.currency) params.currency = filters.value.currency
+      if (filters.value.convertedToInvoice) params.convertedToInvoice = filters.value.convertedToInvoice
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -270,6 +273,7 @@ export const useDeliveryNoteStore = defineStore('deliveryNotes', () => {
       dateFrom: null,
       dateTo: null,
       currency: null,
+      convertedToInvoice: '',
     }
     page.value = 1
   }

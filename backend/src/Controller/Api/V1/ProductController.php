@@ -47,8 +47,16 @@ class ProductController extends AbstractController
         $page = $request->query->getInt('page', 1);
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
         $search = $request->query->get('search');
+        $filters = [
+            'sort'       => $request->query->get('sort'),
+            'type'       => $request->query->get('type'),
+            'status'     => $request->query->get('status'),
+            'usage'      => $request->query->get('usage'),
+            'categoryId' => $request->query->get('categoryId'),
+            'source'     => $request->query->get('source'),
+        ];
 
-        $paginator = $this->productManager->list($company, $page, $limit, $search);
+        $paginator = $this->productManager->list($company, $page, $limit, $search, $filters);
 
         $response = $this->json([
             'data' => array_values(iterator_to_array($paginator)),

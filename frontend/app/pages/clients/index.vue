@@ -61,9 +61,18 @@ const loading = computed(() => clientsStore.loading)
 const clients = computed(() => clientsStore.items)
 const total = computed(() => clientsStore.total)
 const distinctCountries = computed(() => clientsStore.distinctCountries)
-const countryOptions = computed(() =>
-  distinctCountries.value.map(code => ({ label: `${countryFlag(code)} ${code}`, value: code })),
-)
+// Country code as the primary label (reliable across platforms); flag emoji
+// kept inside as a leading decoration. Plus a sentinel "all" entry so we can
+// model the cleared state without using an empty string (which Combobox rejects).
+const countryOptions = computed(() => [
+  { label: $t('clients.filters.countryAll'), value: 'all' },
+  ...distinctCountries.value.map(code => ({ label: `${code} ${countryFlag(code)}`.trim(), value: code })),
+])
+
+const countrySel = computed({
+  get: () => countryFilter.value || 'all',
+  set: (v: string) => { countryFilter.value = v === 'all' ? null : v },
+})
 
 const EU_COUNTRY_CODES = [
   'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
@@ -118,6 +127,62 @@ async function fetchClients() {
   clientsStore.country = countryFilter.value
   clientsStore.page = page.value
   await clientsStore.fetchClients()
+}
+
+const sortOptions = computed(() => [
+  { value: 'recent', label: $t('suppliers.sort.recent') },
+  { value: 'mostInvoiced', label: $t('suppliers.sort.mostInvoiced') },
+  { value: 'mostInvoices', label: $t('suppliers.sort.mostInvoices') },
+  { value: 'recentActivity', label: $t('suppliers.sort.recentActivity') },
+  { value: 'name', label: $t('suppliers.sort.name') },
+])
+
+const vatPayerOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.vatPayerAll') },
+  { value: 'yes', label: $t('suppliers.filters.vatPayerYes') },
+  { value: 'no', label: $t('suppliers.filters.vatPayerNo') },
+])
+
+const hasInvoicesOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.hasInvoicesAll') },
+  { value: 'active', label: $t('suppliers.filters.hasInvoicesActive') },
+  { value: 'dormant', label: $t('suppliers.filters.hasInvoicesDormant') },
+])
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: $t('suppliers.filters.sourceAll') },
+  { value: 'anaf_sync', label: $t('suppliers.filters.sourceAnaf') },
+  { value: 'manual', label: $t('suppliers.filters.sourceManual') },
+])
+
+const vatPayerSel = computed({
+  get: () => clientsStore.vatPayerFilter || 'all',
+  set: (v: string) => { clientsStore.vatPayerFilter = v === 'all' ? '' : v as any },
+})
+const hasInvoicesSel = computed({
+  get: () => clientsStore.hasInvoicesFilter || 'all',
+  set: (v: string) => { clientsStore.hasInvoicesFilter = v === 'all' ? '' : v as any },
+})
+const sourceSel = computed({
+  get: () => clientsStore.sourceFilter || 'all',
+  set: (v: string) => { clientsStore.sourceFilter = v === 'all' ? '' : v as any },
+})
+
+const activeFilterCount = computed(() =>
+  [clientsStore.vatPayerFilter, clientsStore.hasInvoicesFilter, clientsStore.sourceFilter, countryFilter.value].filter(Boolean).length,
+)
+
+function onFilterChange() {
+  page.value = 1
+  fetchClients()
+}
+
+function clearFilters() {
+  clientsStore.vatPayerFilter = ''
+  clientsStore.hasInvoicesFilter = ''
+  clientsStore.sourceFilter = ''
+  countryFilter.value = null
+  onFilterChange()
 }
 
 function onClientSaved() {
@@ -182,19 +247,55 @@ onMounted(() => fetchClients())
     </template>
 
     <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
-          <USelectMenu
-            v-if="countryOptions.length > 0"
-            v-model="countryFilter"
-            :options="countryOptions"
-            value-key="value"
-            :placeholder="$t('common.country')"
-            class="w-36"
-            clearable
+      <div class="flex flex-wrap items-center gap-1.5">
+        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+
+        <USelectMenu
+          v-model="clientsStore.sort"
+          :items="sortOptions"
+          value-key="value"
+          icon="i-lucide-arrow-up-down"
+          class="w-52"
+          @update:model-value="onFilterChange"
+        />
+
+        <USelectMenu
+          v-if="distinctCountries.length > 0"
+          v-model="countrySel"
+          :items="countryOptions"
+          value-key="value"
+          icon="i-lucide-globe"
+          class="w-36"
+          @update:model-value="onFilterChange"
+        />
+
+        <UPopover>
+          <UButton
+            icon="i-lucide-filter"
+            color="neutral"
+            variant="outline"
+            :label="activeFilterCount ? $t('suppliers.filters.title') + ' · ' + activeFilterCount : $t('suppliers.filters.title')"
           />
-        </div>
+          <template #content>
+            <div class="p-3 min-w-64 space-y-3">
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.vatPayer') }}</p>
+                <USelectMenu v-model="vatPayerSel" :items="vatPayerOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.hasInvoices') }}</p>
+                <USelectMenu v-model="hasInvoicesSel" :items="hasInvoicesOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('suppliers.filters.source') }}</p>
+                <USelectMenu v-model="sourceSel" :items="sourceOptions" value-key="value" class="w-full" @update:model-value="onFilterChange" />
+              </div>
+              <div v-if="activeFilterCount" class="pt-1 border-t border-default">
+                <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearFilters" />
+              </div>
+            </div>
+          </template>
+        </UPopover>
       </div>
 
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">

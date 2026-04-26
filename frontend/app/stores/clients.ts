@@ -37,6 +37,10 @@ export const useClientStore = defineStore('clients', () => {
   const currency = ref('RON')
   const hasForeignCurrencies = ref(false)
   const distinctCountries = ref<string[]>([])
+  const sort = ref<'recent' | 'mostInvoiced' | 'mostInvoices' | 'recentActivity' | 'name'>('recent')
+  const vatPayerFilter = ref<'' | 'yes' | 'no'>('')
+  const hasInvoicesFilter = ref<'' | 'active' | 'dormant'>('')
+  const sourceFilter = ref<'' | 'anaf_sync' | 'manual'>('')
 
   // ── Getters ────────────────────────────────────────────────────────
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
@@ -67,6 +71,11 @@ export const useClientStore = defineStore('clients', () => {
       if (country.value) {
         params.country = country.value
       }
+
+      params.sort = sort.value
+      if (vatPayerFilter.value) params.vatPayer = vatPayerFilter.value
+      if (hasInvoicesFilter.value) params.hasInvoices = hasInvoicesFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
 
       const response = await get<ClientPaginatedResponse>('/v1/clients', params)
 
@@ -208,6 +217,10 @@ export const useClientStore = defineStore('clients', () => {
     page.value = 1
     total.value = 0
     distinctCountries.value = []
+    sort.value = 'recent'
+    vatPayerFilter.value = ''
+    hasInvoicesFilter.value = ''
+    sourceFilter.value = ''
   }
 
   return {
@@ -223,6 +236,10 @@ export const useClientStore = defineStore('clients', () => {
     currency,
     hasForeignCurrencies,
     distinctCountries,
+    sort,
+    vatPayerFilter,
+    hasInvoicesFilter,
+    sourceFilter,
 
     // Getters
     totalPages,
