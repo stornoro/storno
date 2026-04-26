@@ -2602,6 +2602,7 @@ export default defineI18nLocale(async () => {
       maxInvoices500: '500 invoices / month',
       noTimeLimit: 'No time limit',
       paymentLinks: 'Online payment links',
+      posModule: 'POS module — direct sales with scanner and offline mode',
       mobileApp: 'Mobile app',
       importExport: 'Data import / export',
       unlimitedInvoices: 'Unlimited invoices',

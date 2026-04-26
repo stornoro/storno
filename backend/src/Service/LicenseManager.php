@@ -482,6 +482,7 @@ class LicenseManager
                 'includesPlan' => self::PLAN_FREEMIUM,
                 'features' => [
                     'plan.feature.efacturaSync12h',
+                    'plan.feature.posModule',
                     'plan.feature.paymentLinks',
                     'plan.feature.mobileApp',
                     'plan.feature.importExport',
