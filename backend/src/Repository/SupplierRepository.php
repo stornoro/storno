@@ -98,23 +98,23 @@ class SupplierRepository extends ServiceEntityRepository
         $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
         $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
 
-        $convertTotalSql = "CASE WHEN currency = '$defaultCurrency' THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / $defaultRate END";
+        // Defaults bound as named placeholders so user-controlled values can never
+        // become part of the SQL fragment. Matches DashboardController / SalesAnalysisService.
+        $convertTotalSql = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         $clauses = [];
         $extraParams = [];
         if ($search) {
-            $clauses[] = '(s.name LIKE ? OR s.cif LIKE ? OR s.vat_code LIKE ?)';
-            $extraParams[] = "%$search%";
-            $extraParams[] = "%$search%";
-            $extraParams[] = "%$search%";
+            $clauses[] = '(s.name LIKE :search OR s.cif LIKE :search OR s.vat_code LIKE :search)';
+            $extraParams['search'] = "%$search%";
         }
         if (!empty($filters['vatPayer']) && in_array($filters['vatPayer'], ['yes', 'no'], true)) {
-            $clauses[] = 's.is_vat_payer = ?';
-            $extraParams[] = $filters['vatPayer'] === 'yes' ? 1 : 0;
+            $clauses[] = 's.is_vat_payer = :vatPayer';
+            $extraParams['vatPayer'] = $filters['vatPayer'] === 'yes' ? 1 : 0;
         }
         if (!empty($filters['source']) && in_array($filters['source'], ['anaf_sync', 'manual'], true)) {
-            $clauses[] = 's.source = ?';
-            $extraParams[] = $filters['source'];
+            $clauses[] = 's.source = :source';
+            $extraParams['source'] = $filters['source'];
         }
         $hasInvoicesClause = '';
         if (!empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true)) {
@@ -128,8 +128,8 @@ class SupplierRepository extends ServiceEntityRepository
         $orderBy = self::SORT_MAP[$sortKey] ?? self::SORT_MAP['recent'];
 
         $hasForeignCurrencies = (bool) $conn->fetchOne(
-            "SELECT 1 FROM invoice WHERE company_id = ? AND deleted_at IS NULL AND direction = 'incoming' AND currency != ? LIMIT 1",
-            [$companyId, $defaultCurrency],
+            'SELECT 1 FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND direction = :incoming AND currency != :defaultCurrency LIMIT 1',
+            ['companyId' => $companyId, 'incoming' => 'incoming', 'defaultCurrency' => $defaultCurrency],
         );
 
         $sql = "
@@ -147,22 +147,28 @@ class SupplierRepository extends ServiceEntityRepository
                        SUM($convertTotalSql) AS invoice_total,
                        MAX(issue_date) AS last_invoice_date
                 FROM invoice
-                WHERE company_id = ? AND deleted_at IS NULL AND direction = 'incoming'
+                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'incoming'
                 GROUP BY sender_cif
             ) inv ON inv.cif = s.cif
-            WHERE s.company_id = ? AND s.deleted_at IS NULL
+            WHERE s.company_id = :companyId AND s.deleted_at IS NULL
             $whereExtra
             $hasInvoicesClause
             ORDER BY $orderBy
-            LIMIT ? OFFSET ?
+            LIMIT :pageLimit OFFSET :pageOffset
         ";
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([$companyId, $companyId], $extraParams, [$limit, $offset]);
-        $types = array_merge(
-            array_fill(0, 2 + count($extraParams), ParameterType::STRING),
-            [ParameterType::INTEGER, ParameterType::INTEGER],
-        );
+        $params = array_merge([
+            'companyId'       => $companyId,
+            'defaultCurrency' => $defaultCurrency,
+            'defaultRate'     => $defaultRate,
+            'pageLimit'       => $limit,
+            'pageOffset'      => $offset,
+        ], $extraParams);
+        $types = [
+            'pageLimit'  => ParameterType::INTEGER,
+            'pageOffset' => ParameterType::INTEGER,
+        ];
 
         $rows = $conn->fetchAllAssociative($sql, $params, $types);
 
@@ -181,15 +187,15 @@ class SupplierRepository extends ServiceEntityRepository
             LEFT JOIN (
                 SELECT sender_cif AS cif, COUNT(*) AS invoice_count
                 FROM invoice
-                WHERE company_id = ? AND deleted_at IS NULL AND direction = 'incoming'
+                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'incoming'
                 GROUP BY sender_cif
             ) inv ON inv.cif = s.cif
-            WHERE s.company_id = ? AND s.deleted_at IS NULL
+            WHERE s.company_id = :companyId AND s.deleted_at IS NULL
             $whereExtra
             $hasInvoicesClause
         ";
 
-        $countParams = array_merge([$companyId, $companyId], $extraParams);
+        $countParams = array_merge(['companyId' => $companyId], $extraParams);
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
         return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
