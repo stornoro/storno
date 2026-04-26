@@ -159,5 +159,13 @@ class DeliveryNoteRepository extends ServiceEntityRepository
             $qb->andWhere("$a.issueDate <= :dateTo")
                 ->setParameter('dateTo', new \DateTime($filters['dateTo']));
         }
+
+        if (isset($filters['convertedToInvoice']) && in_array($filters['convertedToInvoice'], ['yes', 'no'], true)) {
+            if ($filters['convertedToInvoice'] === 'yes') {
+                $qb->andWhere("$a.convertedInvoice IS NOT NULL");
+            } else {
+                $qb->andWhere("$a.convertedInvoice IS NULL");
+            }
+        }
     }
 }

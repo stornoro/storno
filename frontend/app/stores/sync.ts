@@ -40,6 +40,9 @@ export const useSyncStore = defineStore('sync', () => {
   const syncLog = ref<SyncLogEntry[]>([])
   const syncLogTotal = ref(0)
   const syncLogLoading = ref(false)
+  const syncLogDirection = ref<'' | 'incoming' | 'outgoing'>('')
+  const syncLogStatus = ref<string>('')
+  const syncLogSearch = ref<string>('')
   const syncing = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -88,13 +91,21 @@ export const useSyncStore = defineStore('sync', () => {
 
   const hasMoreLog = computed(() => syncLog.value.length < syncLogTotal.value)
 
+  function logFilterParams(): Record<string, string> {
+    const params: Record<string, string> = {}
+    if (syncLogDirection.value) params.direction = syncLogDirection.value
+    if (syncLogStatus.value) params.status = syncLogStatus.value
+    if (syncLogSearch.value) params.search = syncLogSearch.value
+    return params
+  }
+
   async function fetchLog(): Promise<void> {
     const { get } = useApi()
     loading.value = true
     error.value = null
 
     try {
-      const response = await get<{ entries: SyncLogEntry[], total: number }>('/v1/sync/log', { limit: 10, offset: 0 })
+      const response = await get<{ entries: SyncLogEntry[], total: number }>('/v1/sync/log', { limit: 10, offset: 0, ...logFilterParams() })
       syncLog.value = response.entries
       syncLogTotal.value = response.total
     }
@@ -112,7 +123,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncLogLoading.value = true
 
     try {
-      const response = await get<{ entries: SyncLogEntry[], total: number }>('/v1/sync/log', { limit: 10, offset: syncLog.value.length })
+      const response = await get<{ entries: SyncLogEntry[], total: number }>('/v1/sync/log', { limit: 10, offset: syncLog.value.length, ...logFilterParams() })
       syncLog.value = [...syncLog.value, ...response.entries]
       syncLogTotal.value = response.total
     }
@@ -213,6 +224,9 @@ export const useSyncStore = defineStore('sync', () => {
     lastSyncResult,
     lastSyncError,
     syncProgress,
+    syncLogDirection,
+    syncLogStatus,
+    syncLogSearch,
 
     // Getters
     isSyncEnabled,

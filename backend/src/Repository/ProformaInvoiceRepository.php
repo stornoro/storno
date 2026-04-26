@@ -164,5 +164,23 @@ class ProformaInvoiceRepository extends ServiceEntityRepository
             $qb->andWhere("$a.issueDate <= :dateTo")
                 ->setParameter('dateTo', new \DateTime($filters['dateTo']));
         }
+
+        if (isset($filters['convertedToInvoice']) && in_array($filters['convertedToInvoice'], ['yes', 'no'], true)) {
+            if ($filters['convertedToInvoice'] === 'yes') {
+                $qb->andWhere("$a.convertedInvoice IS NOT NULL");
+            } else {
+                $qb->andWhere("$a.convertedInvoice IS NULL");
+            }
+        }
+
+        if (isset($filters['expired']) && in_array($filters['expired'], ['yes', 'no'], true)) {
+            if ($filters['expired'] === 'yes') {
+                $qb->andWhere("$a.validUntil IS NOT NULL AND $a.validUntil < :today")
+                    ->setParameter('today', new \DateTime('today'));
+            } else {
+                $qb->andWhere("$a.validUntil IS NULL OR $a.validUntil >= :today")
+                    ->setParameter('today', new \DateTime('today'));
+            }
+        }
     }
 }

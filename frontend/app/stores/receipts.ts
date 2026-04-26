@@ -9,6 +9,8 @@ export interface ReceiptFilters {
   dateFrom: string | null
   dateTo: string | null
   currency: string | null
+  paymentMethod: '' | 'cash' | 'card' | 'meal_ticket' | 'mixed' | 'other'
+  hasCustomer: '' | 'yes' | 'no'
 }
 
 interface DocumentTotals {
@@ -39,6 +41,8 @@ export const useReceiptStore = defineStore('receipts', () => {
     dateFrom: null,
     dateTo: null,
     currency: null,
+    paymentMethod: '',
+    hasCustomer: '',
   })
 
   const page = ref(1)
@@ -81,6 +85,8 @@ export const useReceiptStore = defineStore('receipts', () => {
       if (filters.value.dateFrom) params.dateFrom = filters.value.dateFrom
       if (filters.value.dateTo) params.dateTo = filters.value.dateTo
       if (filters.value.currency) params.currency = filters.value.currency
+      if ((filters.value as any).paymentMethod) params.paymentMethod = (filters.value as any).paymentMethod
+      if ((filters.value as any).hasCustomer) params.hasCustomer = (filters.value as any).hasCustomer
       if (sort.value) params.sort = sort.value
       if (order.value) params.order = order.value
 
@@ -237,6 +243,8 @@ export const useReceiptStore = defineStore('receipts', () => {
       dateFrom: null,
       dateTo: null,
       currency: null,
+      paymentMethod: '',
+      hasCustomer: '',
     }
     page.value = 1
   }

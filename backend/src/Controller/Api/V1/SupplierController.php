@@ -44,8 +44,14 @@ class SupplierController extends AbstractController
         $page = $request->query->getInt('page', 1);
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
         $search = $request->query->get('search');
+        $filters = [
+            'sort'        => $request->query->get('sort'),
+            'vatPayer'    => $request->query->get('vatPayer'),
+            'hasInvoices' => $request->query->get('hasInvoices'),
+            'source'      => $request->query->get('source'),
+        ];
 
-        $result = $this->supplierRepository->findByCompanyGrouped($company, $page, $limit, $search);
+        $result = $this->supplierRepository->findByCompanyGrouped($company, $page, $limit, $search, $filters);
 
         return $this->json([
             'data' => $result['data'],

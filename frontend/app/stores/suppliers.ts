@@ -28,6 +28,10 @@ export const useSupplierStore = defineStore('suppliers', () => {
   const total = ref(0)
   const currency = ref('RON')
   const hasForeignCurrencies = ref(false)
+  const sort = ref<'recent' | 'mostInvoiced' | 'mostInvoices' | 'recentActivity' | 'name'>('recent')
+  const vatPayerFilter = ref<'' | 'yes' | 'no'>('')
+  const hasInvoicesFilter = ref<'' | 'active' | 'dormant'>('')
+  const sourceFilter = ref<'' | 'anaf_sync' | 'manual'>('')
 
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
   const hasNextPage = computed(() => page.value < totalPages.value)
@@ -43,8 +47,12 @@ export const useSupplierStore = defineStore('suppliers', () => {
       const params: Record<string, any> = {
         page: page.value,
         limit: limit.value,
+        sort: sort.value,
       }
       if (search.value) params.search = search.value
+      if (vatPayerFilter.value) params.vatPayer = vatPayerFilter.value
+      if (hasInvoicesFilter.value) params.hasInvoices = hasInvoicesFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
 
       const response = await get<SupplierPaginatedResponse>('/v1/suppliers', params)
       items.value = response.data
@@ -138,10 +146,15 @@ export const useSupplierStore = defineStore('suppliers', () => {
     search.value = ''
     page.value = 1
     total.value = 0
+    sort.value = 'recent'
+    vatPayerFilter.value = ''
+    hasInvoicesFilter.value = ''
+    sourceFilter.value = ''
   }
 
   return {
     items, loading, error, search, page, limit, total, currency, hasForeignCurrencies,
+    sort, vatPayerFilter, hasInvoicesFilter, sourceFilter,
     totalPages, hasNextPage, hasPreviousPage, isEmpty,
     fetchSuppliers, fetchSupplier, createSupplier, updateSupplier, deleteSupplier, bulkDelete, setSearch, setPage, $reset,
   }

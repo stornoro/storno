@@ -190,8 +190,23 @@ class SyncController extends AbstractController
 
         $limit = min((int) $request->query->get('limit', 10), 50);
         $offset = max((int) $request->query->get('offset', 0), 0);
+        $direction = $request->query->get('direction');
+        $status    = $request->query->get('status');
+        $search    = trim((string) $request->query->get('search', ''));
 
-        // Return recent sync activity — latest synced invoices
+        $applyFilters = function ($qb) use ($direction, $status, $search) {
+            if ($direction && in_array($direction, ['incoming', 'outgoing'], true)) {
+                $qb->andWhere('i.direction = :direction')->setParameter('direction', $direction);
+            }
+            if ($status) {
+                $qb->andWhere('i.status = :status')->setParameter('status', $status);
+            }
+            if ($search !== '') {
+                $qb->andWhere('i.number LIKE :search OR i.senderName LIKE :search OR i.receiverName LIKE :search OR i.senderCif LIKE :search OR i.receiverCif LIKE :search')
+                    ->setParameter('search', '%' . $search . '%');
+            }
+        };
+
         $qb = $this->invoiceRepository->createQueryBuilder('i')
             ->where('i.company = :company')
             ->andWhere('i.syncedAt IS NOT NULL')
@@ -199,16 +214,16 @@ class SyncController extends AbstractController
             ->orderBy('i.syncedAt', 'DESC')
             ->setFirstResult($offset)
             ->setMaxResults($limit);
-
+        $applyFilters($qb);
         $recentInvoices = $qb->getQuery()->getResult();
 
-        $total = (int) $this->invoiceRepository->createQueryBuilder('i')
+        $countQb = $this->invoiceRepository->createQueryBuilder('i')
             ->select('COUNT(i.id)')
             ->where('i.company = :company')
             ->andWhere('i.syncedAt IS NOT NULL')
-            ->setParameter('company', $company)
-            ->getQuery()
-            ->getSingleScalarResult();
+            ->setParameter('company', $company);
+        $applyFilters($countQb);
+        $total = (int) $countQb->getQuery()->getSingleScalarResult();
 
         return $this->json([
             'entries' => array_map(function ($invoice) {

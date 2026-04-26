@@ -19,6 +19,12 @@ export const useProductStore = defineStore('products', () => {
   const page = ref(1)
   const limit = ref(PAGINATION.DEFAULT_LIMIT)
   const total = ref(0)
+  const sort = ref<'recent' | 'name' | 'priceHigh' | 'priceLow'>('recent')
+  const typeFilter = ref<'' | 'product' | 'service'>('')
+  const statusFilter = ref<'' | 'active' | 'inactive'>('')
+  const usageFilter = ref<'' | 'sales' | 'purchases' | 'both' | 'internal'>('')
+  const sourceFilter = ref<'' | 'anaf_sync' | 'manual'>('')
+  const categoryFilter = ref<string>('')
 
   // ── Getters ────────────────────────────────────────────────────────
   const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
@@ -41,6 +47,13 @@ export const useProductStore = defineStore('products', () => {
       if (search.value) {
         params.search = search.value
       }
+
+      params.sort = sort.value
+      if (typeFilter.value) params.type = typeFilter.value
+      if (statusFilter.value) params.status = statusFilter.value
+      if (usageFilter.value) params.usage = usageFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
+      if (categoryFilter.value) params.categoryId = categoryFilter.value
 
       const response = await get<ProductPaginatedResponse>('/v1/products', params)
 
@@ -161,6 +174,12 @@ export const useProductStore = defineStore('products', () => {
     search.value = ''
     page.value = 1
     total.value = 0
+    sort.value = 'recent'
+    typeFilter.value = ''
+    statusFilter.value = ''
+    usageFilter.value = ''
+    sourceFilter.value = ''
+    categoryFilter.value = ''
   }
 
   return {
@@ -172,6 +191,12 @@ export const useProductStore = defineStore('products', () => {
     page,
     limit,
     total,
+    sort,
+    typeFilter,
+    statusFilter,
+    usageFilter,
+    sourceFilter,
+    categoryFilter,
 
     // Getters
     totalPages,
