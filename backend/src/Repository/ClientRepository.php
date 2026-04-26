@@ -67,25 +67,26 @@ class ClientRepository extends ServiceEntityRepository
         $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
         $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
 
-        $convertTotalSql = "CASE WHEN currency = '$defaultCurrency' THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / $defaultRate END";
+        // Defaults bound as named placeholders. Matches DashboardController / SalesAnalysisService.
+        $convertTotalSql = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         $innerClauses = [];
         $innerParams = [];
         if ($search) {
-            $innerClauses[] = '(c.name LIKE ? OR c.cui LIKE ? OR c.cnp LIKE ? OR c.email LIKE ? OR c.id_number LIKE ? OR c.vat_code LIKE ?)';
-            $innerParams = array_merge($innerParams, array_fill(0, 6, "%$search%"));
+            $innerClauses[] = '(c.name LIKE :search OR c.cui LIKE :search OR c.cnp LIKE :search OR c.email LIKE :search OR c.id_number LIKE :search OR c.vat_code LIKE :search)';
+            $innerParams['search'] = "%$search%";
         }
         if ($country) {
-            $innerClauses[] = 'c.country = ?';
-            $innerParams[] = $country;
+            $innerClauses[] = 'c.country = :country';
+            $innerParams['country'] = $country;
         }
         if (!empty($filters['vatPayer']) && in_array($filters['vatPayer'], ['yes', 'no'], true)) {
-            $innerClauses[] = 'c.is_vat_payer = ?';
-            $innerParams[] = $filters['vatPayer'] === 'yes' ? 1 : 0;
+            $innerClauses[] = 'c.is_vat_payer = :vatPayer';
+            $innerParams['vatPayer'] = $filters['vatPayer'] === 'yes' ? 1 : 0;
         }
         if (!empty($filters['source']) && in_array($filters['source'], ['anaf_sync', 'manual'], true)) {
-            $innerClauses[] = 'c.source = ?';
-            $innerParams[] = $filters['source'];
+            $innerClauses[] = 'c.source = :source';
+            $innerParams['source'] = $filters['source'];
         }
         $innerWhere = $innerClauses ? ' AND ' . implode(' AND ', $innerClauses) : '';
 
@@ -100,13 +101,13 @@ class ClientRepository extends ServiceEntityRepository
         $orderBy = self::CLIENT_SORT_MAP[$sortKey] ?? self::CLIENT_SORT_MAP['recent'];
 
         $hasForeignCurrencies = (bool) $conn->fetchOne(
-            "SELECT 1 FROM invoice WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing' AND currency != ? LIMIT 1",
-            [$companyId, $defaultCurrency],
+            'SELECT 1 FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND direction = :outgoing AND currency != :defaultCurrency LIMIT 1',
+            ['companyId' => $companyId, 'outgoing' => 'outgoing', 'defaultCurrency' => $defaultCurrency],
         );
 
         $distinctCountriesRows = $conn->fetchFirstColumn(
-            "SELECT DISTINCT c.country FROM client c WHERE c.company_id = ? AND c.deleted_at IS NULL AND c.country IS NOT NULL AND c.country != '' ORDER BY c.country ASC",
-            [$companyId],
+            'SELECT DISTINCT c.country FROM client c WHERE c.company_id = :companyId AND c.deleted_at IS NULL AND c.country IS NOT NULL AND c.country != \'\' ORDER BY c.country ASC',
+            ['companyId' => $companyId],
         );
 
         // Pagination must happen AFTER JOINing with invoice stats so we can sort
@@ -123,7 +124,7 @@ class ClientRepository extends ServiceEntityRepository
             FROM (
                 SELECT MIN(c.id) AS id, MAX(c.created_at) AS group_created_at
                 FROM client c
-                WHERE c.company_id = ? AND c.deleted_at IS NULL
+                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
                 $innerWhere
                 GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
             ) dedup
@@ -134,20 +135,26 @@ class ClientRepository extends ServiceEntityRepository
                        SUM($convertTotalSql) AS invoice_total,
                        MAX(issue_date) AS last_invoice_date
                 FROM invoice
-                WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing'
+                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing'
                 GROUP BY receiver_cif
             ) s ON s.cif = COALESCE(c.cui, c.cnp)
             $hasInvoicesClause
             ORDER BY $orderBy
-            LIMIT ? OFFSET ?
+            LIMIT :pageLimit OFFSET :pageOffset
         ";
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([$companyId], $innerParams, [$companyId, $limit, $offset]);
-        $types = array_merge(
-            array_fill(0, 1 + count($innerParams), ParameterType::STRING),
-            [ParameterType::STRING, ParameterType::INTEGER, ParameterType::INTEGER],
-        );
+        $params = array_merge([
+            'companyId'       => $companyId,
+            'defaultCurrency' => $defaultCurrency,
+            'defaultRate'     => $defaultRate,
+            'pageLimit'       => $limit,
+            'pageOffset'      => $offset,
+        ], $innerParams);
+        $types = [
+            'pageLimit'  => ParameterType::INTEGER,
+            'pageOffset' => ParameterType::INTEGER,
+        ];
 
         $rows = $conn->fetchAllAssociative($sql, $params, $types);
 
@@ -164,7 +171,7 @@ class ClientRepository extends ServiceEntityRepository
                 FROM (
                     SELECT MIN(c.id) AS id
                     FROM client c
-                    WHERE c.company_id = ? AND c.deleted_at IS NULL
+                    WHERE c.company_id = :companyId AND c.deleted_at IS NULL
                     $innerWhere
                     GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
                 ) dedup
@@ -172,14 +179,14 @@ class ClientRepository extends ServiceEntityRepository
                 LEFT JOIN (
                     SELECT receiver_cif AS cif, COUNT(*) AS invoice_count
                     FROM invoice
-                    WHERE company_id = ? AND deleted_at IS NULL AND direction = 'outgoing'
+                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing'
                     GROUP BY receiver_cif
                 ) s ON s.cif = COALESCE(c.cui, c.cnp)
                 $hasInvoicesClause
             ) grouped
         ";
 
-        $countParams = array_merge([$companyId], $innerParams, [$companyId]);
+        $countParams = array_merge(['companyId' => $companyId], $innerParams);
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
         return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies, 'distinctCountries' => $distinctCountriesRows];
