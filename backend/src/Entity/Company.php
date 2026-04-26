@@ -530,7 +530,17 @@ class Company
 
     public function setDefaultCurrency(string $defaultCurrency): static
     {
-        $this->defaultCurrency = $defaultCurrency;
+        // Enforce ISO-4217 three-letter shape at the model layer. Several
+        // repositories interpolate this value into raw SQL fragments for
+        // multi-currency conversion; the column constraint (length: 3) would
+        // truncate to 3 chars at write time, but truncation can leave a
+        // partially-valid token. Reject anything that isn't strictly 3 A-Z
+        // characters so the SQL fragment is never reachable from user input.
+        $normalized = strtoupper(trim($defaultCurrency));
+        if (!preg_match('/^[A-Z]{3}$/', $normalized)) {
+            throw new \InvalidArgumentException(sprintf('Invalid currency code "%s". Must be an ISO-4217 three-letter code.', $defaultCurrency));
+        }
+        $this->defaultCurrency = $normalized;
 
         return $this;
     }
