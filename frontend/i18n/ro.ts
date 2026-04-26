@@ -2601,6 +2601,7 @@ export default defineI18nLocale(async () => {
         maxInvoices500: '500 facturi / luna',
         noTimeLimit: 'Fara limita de timp',
         paymentLinks: 'Linkuri de plata online',
+        posModule: 'Modul POS — vanzare directa cu scanner si offline',
         mobileApp: 'Aplicatie mobila',
         importExport: 'Import / Export date',
         unlimitedInvoices: 'Facturi nelimitate',
