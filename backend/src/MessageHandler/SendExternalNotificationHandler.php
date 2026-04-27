@@ -158,20 +158,25 @@ class SendExternalNotificationHandler
         array $data,
         string $locale,
     ): array {
-        $params = [];
+        $messageParams = [];
         foreach (($data['messageParams'] ?? []) as $key => $value) {
-            $params['%' . $key . '%'] = (string) $value;
+            $messageParams['%' . $key . '%'] = (string) $value;
+        }
+        // Some notifications need params in the title too (e.g. company name).
+        $titleParams = [];
+        foreach (($data['titleParams'] ?? []) as $key => $value) {
+            $titleParams['%' . $key . '%'] = (string) $value;
         }
 
         $titleKey = $data['titleKey'] ?? 'notification.' . str_replace('.', '_', $eventType) . '.title';
         $messageKey = $data['messageKey'] ?? 'notification.' . str_replace('.', '_', $eventType) . '.message';
 
-        $title = $this->translator->trans($titleKey, [], 'notifications', $locale);
+        $title = $this->translator->trans($titleKey, $titleParams, 'notifications', $locale);
         if ($title === $titleKey) {
             $title = $fallbackTitle;
         }
 
-        $body = $this->translator->trans($messageKey, $params, 'notifications', $locale);
+        $body = $this->translator->trans($messageKey, $messageParams, 'notifications', $locale);
         if ($body === $messageKey) {
             $body = $fallbackBody;
         }

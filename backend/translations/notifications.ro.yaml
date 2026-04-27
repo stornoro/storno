@@ -43,3 +43,12 @@ notification:
   payment_received:
     title: 'Plata inregistrata'
     message: 'Plata de %amount% %currency% inregistrata pentru factura %number%'
+  efactura:
+    new_documents:
+      title: '%company% — e-Factura'
+    new_incoming:
+      message: 'Primita %number% de la %counterparty% · %amount%'
+    new_outgoing:
+      message: 'Emisa %number% catre %counterparty% · %amount%'
+    new_documents_multi:
+      message: '%count% documente noi (%incoming% primite, %outgoing% emise)'

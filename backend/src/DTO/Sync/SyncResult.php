@@ -2,10 +2,20 @@
 
 namespace App\DTO\Sync;
 
+use App\Entity\Invoice;
+
 class SyncResult
 {
     /** @var string[] */
     private array $errors = [];
+
+    /**
+     * Lightweight per-invoice summaries captured during the sync.
+     * Used to build descriptive notifications instead of bare counts.
+     *
+     * @var list<array{id: string, number: ?string, direction: ?string, total: string, currency: string, senderName: ?string, receiverName: ?string}>
+     */
+    private array $newInvoiceSummaries = [];
 
     public function __construct(
         private int $newInvoices = 0,
@@ -18,6 +28,31 @@ class SyncResult
     public function incrementNewInvoices(): void
     {
         $this->newInvoices++;
+    }
+
+    /**
+     * Record a freshly synced invoice with enough info to drive a rich notification.
+     */
+    public function recordNewInvoice(Invoice $invoice): void
+    {
+        $this->newInvoices++;
+        $this->newInvoiceSummaries[] = [
+            'id' => (string) $invoice->getId(),
+            'number' => $invoice->getNumber(),
+            'direction' => $invoice->getDirection()?->value,
+            'total' => $invoice->getTotal(),
+            'currency' => $invoice->getCurrency(),
+            'senderName' => $invoice->getSenderName(),
+            'receiverName' => $invoice->getReceiverName(),
+        ];
+    }
+
+    /**
+     * @return list<array{id: string, number: ?string, direction: ?string, total: string, currency: string, senderName: ?string, receiverName: ?string}>
+     */
+    public function getNewInvoiceSummaries(): array
+    {
+        return $this->newInvoiceSummaries;
     }
 
     public function incrementSkippedDuplicates(): void
