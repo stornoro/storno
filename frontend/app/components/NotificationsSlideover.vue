@@ -66,7 +66,9 @@ function formatDate(dateStr: string): string {
 function resolvedTitle(n: BackendNotification): string {
   const key = n.data?.titleKey as string | undefined
   if (key) {
-    const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+    const titleParams = (n.data?.titleParams as Record<string, string>) || {}
+    const messageParams = (n.data?.messageParams as Record<string, string>) || {}
+    const translated = $t(`backendMessages.${key}`, { ...messageParams, ...titleParams })
     if (translated !== `backendMessages.${key}`) return translated
   }
   return n.title
@@ -75,7 +77,11 @@ function resolvedTitle(n: BackendNotification): string {
 function resolvedMessage(n: BackendNotification): string {
   const key = n.data?.messageKey as string | undefined
   if (key) {
-    const translated = $t(`backendMessages.${key}`, (n.data?.messageParams as Record<string, string>) || {})
+    const params = (n.data?.messageParams as Record<string, string | number>) || {}
+    const count = typeof params.count === 'number' ? params.count : Number(params.count)
+    const translated = Number.isFinite(count)
+      ? $t(`backendMessages.${key}`, params, count)
+      : $t(`backendMessages.${key}`, params)
     if (translated !== `backendMessages.${key}`) return translated
   }
   return n.message

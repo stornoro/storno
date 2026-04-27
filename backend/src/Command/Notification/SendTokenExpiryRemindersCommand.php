@@ -86,7 +86,9 @@ class SendTokenExpiryRemindersCommand extends Command
             }
 
             $locale = $user->getLocale() ?? 'ro';
-            $params = ['%days%' => $daysUntilExpiry];
+            $tokenLabel = $token->getLabel() ?: ($token->getValidatedCifs() ? implode(', ', $token->getValidatedCifs()) : 'ANAF');
+            $titleParams = ['%token%' => $tokenLabel];
+            $params = ['%count%' => $daysUntilExpiry, '%token%' => $tokenLabel];
 
             if ($hasRefreshToken) {
                 $translationKey = 'notification.token_expiring';
@@ -98,7 +100,7 @@ class SendTokenExpiryRemindersCommand extends Command
                 $messageKey = MessageKey::MSG_TOKEN_EXPIRING_NO_REFRESH;
             }
 
-            $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+            $title = $this->translator->trans($translationKey . '.title', $titleParams, 'notifications', $locale);
             $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
 
             if ($dryRun) {
@@ -112,10 +114,12 @@ class SendTokenExpiryRemindersCommand extends Command
                     $message,
                     [
                         'tokenId' => $token->getId()->toRfc4122(),
+                        'tokenLabel' => $tokenLabel,
                         'hasRefreshToken' => $hasRefreshToken,
                         'titleKey' => $titleKey,
+                        'titleParams' => ['token' => $tokenLabel],
                         'messageKey' => $messageKey,
-                        'messageParams' => ['days' => $daysUntilExpiry],
+                        'messageParams' => ['count' => $daysUntilExpiry, 'token' => $tokenLabel],
                     ],
                 );
             }

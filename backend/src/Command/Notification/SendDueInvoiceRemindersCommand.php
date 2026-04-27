@@ -103,12 +103,15 @@ class SendDueInvoiceRemindersCommand extends Command
                 }
 
                 $locale = $user->getLocale() ?? 'ro';
+                $companyName = $company->getName() ?? '—';
+                $titleParams = ['%company%' => $companyName];
                 $params = [
+                    '%company%' => $companyName,
                     '%number%' => $invoice->getNumber(),
                     '%date%' => $invoice->getDueDate()->format('d.m.Y'),
                 ];
 
-                $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+                $title = $this->translator->trans($translationKey . '.title', $titleParams, 'notifications', $locale);
                 $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
 
                 $clientName = $invoice->getClient()?->getName() ?? $invoice->getReceiverName() ?? '';
@@ -128,6 +131,15 @@ class SendDueInvoiceRemindersCommand extends Command
                             'invoiceId' => $invoice->getId()->toRfc4122(),
                             'invoiceNumber' => $invoice->getNumber(),
                             'companyId' => $company->getId()->toRfc4122(),
+                            'companyName' => $companyName,
+                            'titleKey' => $translationKey . '.title',
+                            'titleParams' => ['company' => $companyName],
+                            'messageKey' => $translationKey . '.message',
+                            'messageParams' => [
+                                'company' => $companyName,
+                                'number' => $invoice->getNumber(),
+                                'date' => $invoice->getDueDate()->format('d.m.Y'),
+                            ],
                         ],
                     );
                 }

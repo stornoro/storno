@@ -57,15 +57,19 @@ class RefreshAnafTokensCommand extends Command
 
                 if ($token->getUser()) {
                     try {
+                        $tokenLabel = $token->getLabel() ?: ($token->getValidatedCifs() ? implode(', ', $token->getValidatedCifs()) : 'ANAF');
                         $this->notificationService->createNotification(
                             $token->getUser(),
                             'token.refresh_failed',
-                            'ANAF token refresh failed',
-                            'Automatic ANAF token renewal failed. Please re-authorize.',
+                            sprintf('%s — ANAF token refresh failed', $tokenLabel),
+                            sprintf('Automatic ANAF token renewal failed for %s. Please re-authorize.', $tokenLabel),
                             [
                                 'tokenId' => $token->getId()->toRfc4122(),
+                                'tokenLabel' => $tokenLabel,
                                 'titleKey' => MessageKey::TITLE_TOKEN_REFRESH_FAILED,
+                                'titleParams' => ['token' => $tokenLabel],
                                 'messageKey' => MessageKey::MSG_TOKEN_REFRESH_FAILED,
+                                'messageParams' => ['token' => $tokenLabel],
                             ],
                         );
                     } catch (\Throwable) {

@@ -1450,15 +1450,17 @@ class EFacturaSyncService
             ]);
 
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
+            $companyName = $company->getName() ?? '—';
             $errorCount = count($userErrors);
             $firstError = $userErrors[0] ?? 'Unknown error';
+            $title = sprintf('%s — e-Factura sync error', $companyName);
             $message = $errorCount === 1
-                ? sprintf('%s — %s', $company->getName(), $firstError)
-                : sprintf('%s — %d sync errors. First: %s', $company->getName(), $errorCount, $firstError);
+                ? sprintf('%s — %s', $companyName, $firstError)
+                : sprintf('%s — %d sync errors. First: %s', $companyName, $errorCount, $firstError);
 
-            $messageKey = $errorCount === 1 ? 'notification.sync.error.single' : 'notification.sync.error.multiple';
+            $messageKey = $errorCount === 1 ? MessageKey::MSG_SYNC_ERROR_SINGLE : MessageKey::MSG_SYNC_ERROR_MULTIPLE;
             $messageParams = [
-                'company' => $company->getName(),
+                'company' => $companyName,
                 'error' => $firstError,
                 'count' => $errorCount,
                 'first_error' => $firstError,
@@ -1468,11 +1470,14 @@ class EFacturaSyncService
                 $this->notificationService->createNotification(
                     $user,
                     'sync.error',
-                    'e-Factura sync error',
+                    $title,
                     $message,
                     [
                         'companyId' => $company->getId()->toRfc4122(),
+                        'companyName' => $companyName,
                         'errors' => array_slice($userErrors, 0, 5),
+                        'titleKey' => MessageKey::TITLE_SYNC_ERROR,
+                        'titleParams' => ['company' => $companyName],
                         'messageKey' => $messageKey,
                         'messageParams' => $messageParams,
                     ],

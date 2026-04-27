@@ -114,12 +114,15 @@ class ProcessProformaExpiryCommand extends Command
                 }
 
                 $locale = $user->getLocale() ?? 'ro';
+                $companyName = $company->getName() ?? '—';
+                $titleParams = ['%company%' => $companyName];
                 $params = [
+                    '%company%' => $companyName,
                     '%number%' => $proforma->getNumber(),
                     '%date%' => $proforma->getValidUntil()->format('d.m.Y'),
                 ];
 
-                $title = $this->translator->trans($translationKey . '.title', [], 'notifications', $locale);
+                $title = $this->translator->trans($translationKey . '.title', $titleParams, 'notifications', $locale);
                 $message = $this->translator->trans($translationKey . '.message', $params, 'notifications', $locale);
 
                 $clientName = $proforma->getClient()?->getName() ?? '';
@@ -139,6 +142,15 @@ class ProcessProformaExpiryCommand extends Command
                             'proformaId' => $proforma->getId()->toRfc4122(),
                             'proformaNumber' => $proforma->getNumber(),
                             'companyId' => $company->getId()->toRfc4122(),
+                            'companyName' => $companyName,
+                            'titleKey' => $translationKey . '.title',
+                            'titleParams' => ['company' => $companyName],
+                            'messageKey' => $translationKey . '.message',
+                            'messageParams' => [
+                                'company' => $companyName,
+                                'number' => $proforma->getNumber(),
+                                'date' => $proforma->getValidUntil()->format('d.m.Y'),
+                            ],
                         ],
                     );
                 }

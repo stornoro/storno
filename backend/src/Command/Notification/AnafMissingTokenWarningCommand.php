@@ -76,13 +76,16 @@ class AnafMissingTokenWarningCommand extends Command
                 }
 
                 $locale = $user->getLocale() ?? 'ro';
+                $companyName = $company->getName() ?? '—';
+                $titleParams = ['%company%' => $companyName];
                 $params = [
+                    '%company%' => $companyName,
                     '%number%' => $invoice->getNumber(),
                     '%date%' => $invoice->getIssueDate()->format('d.m.Y'),
                     '%deadline%' => $deadline->format('d.m.Y'),
                 ];
 
-                $title = $this->translator->trans('notification.anaf_missing_token.title', [], 'notifications', $locale);
+                $title = $this->translator->trans('notification.anaf_missing_token.title', $titleParams, 'notifications', $locale);
                 $message = $this->translator->trans('notification.anaf_missing_token.message', $params, 'notifications', $locale);
 
                 if ($dryRun) {
@@ -97,9 +100,12 @@ class AnafMissingTokenWarningCommand extends Command
                             'invoiceId' => $invoice->getId()->toRfc4122(),
                             'invoiceNumber' => $invoice->getNumber(),
                             'companyId' => $company->getId()->toRfc4122(),
+                            'companyName' => $companyName,
                             'titleKey' => MessageKey::TITLE_ANAF_MISSING_TOKEN,
+                            'titleParams' => ['company' => $companyName],
                             'messageKey' => MessageKey::MSG_ANAF_MISSING_TOKEN,
                             'messageParams' => [
+                                'company' => $companyName,
                                 'number' => $invoice->getNumber(),
                                 'date' => $invoice->getIssueDate()->format('d.m.Y'),
                                 'deadline' => $deadline->format('d.m.Y'),

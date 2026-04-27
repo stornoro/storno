@@ -71,12 +71,15 @@ class AnafDeadlineWarningCommand extends Command
                 }
 
                 $locale = $user->getLocale() ?? 'ro';
+                $companyName = $company->getName() ?? '—';
+                $titleParams = ['%company%' => $companyName];
                 $params = [
+                    '%company%' => $companyName,
                     '%number%' => $invoice->getNumber(),
                     '%date%' => $invoice->getIssueDate()->format('d.m.Y'),
                 ];
 
-                $title = $this->translator->trans('notification.anaf_deadline.title', [], 'notifications', $locale);
+                $title = $this->translator->trans('notification.anaf_deadline.title', $titleParams, 'notifications', $locale);
                 $message = $this->translator->trans('notification.anaf_deadline.message', $params, 'notifications', $locale);
 
                 if ($dryRun) {
@@ -91,9 +94,12 @@ class AnafDeadlineWarningCommand extends Command
                             'invoiceId' => $invoice->getId()->toRfc4122(),
                             'invoiceNumber' => $invoice->getNumber(),
                             'companyId' => $company->getId()->toRfc4122(),
+                            'companyName' => $companyName,
                             'titleKey' => MessageKey::TITLE_ANAF_DEADLINE,
+                            'titleParams' => ['company' => $companyName],
                             'messageKey' => MessageKey::MSG_ANAF_DEADLINE,
                             'messageParams' => [
+                                'company' => $companyName,
                                 'number' => $invoice->getNumber(),
                                 'date' => $invoice->getIssueDate()->format('d.m.Y'),
                             ],
