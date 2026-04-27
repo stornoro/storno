@@ -153,22 +153,32 @@
                 class="w-48"
                 @update:model-value="onLogSearch"
               />
-              <USelectMenu
-                v-model="logDirectionSel"
-                :items="logDirectionOptions"
-                value-key="value"
-                size="sm"
-                class="w-32"
-                @update:model-value="onLogFilterChange"
-              />
-              <USelectMenu
-                v-model="logStatusSel"
-                :items="logStatusOptions"
-                value-key="value"
-                size="sm"
-                class="w-36"
-                @update:model-value="onLogFilterChange"
-              />
+
+              <UPopover>
+                <UButton
+                  icon="i-lucide-filter"
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  :label="logFilterCount ? $t('suppliers.filters.title') + ' · ' + logFilterCount : $t('suppliers.filters.title')"
+                />
+                <template #content>
+                  <div class="p-3 min-w-64 space-y-3">
+                    <div>
+                      <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('invoices.direction') }}</p>
+                      <USelectMenu v-model="logDirectionSel" :items="logDirectionOptions" value-key="value" class="w-full" @update:model-value="onLogFilterChange" />
+                    </div>
+                    <div>
+                      <p class="text-xs font-semibold text-muted mb-1.5">{{ $t('common.status') }}</p>
+                      <USelectMenu v-model="logStatusSel" :items="logStatusOptions" value-key="value" class="w-full" @update:model-value="onLogFilterChange" />
+                    </div>
+                    <div v-if="logFilterCount" class="pt-1 border-t border-default">
+                      <UButton block variant="ghost" size="xs" icon="i-lucide-x" :label="$t('suppliers.filters.clear')" @click="clearLogFilters" />
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+
               <UButton variant="ghost" size="sm" icon="i-lucide-alert-circle" @click="openErrors">
                 {{ $t('efactura.viewErrors') }}
               </UButton>
@@ -426,8 +436,18 @@ const logStatusSel = computed({
   set: (v: string) => { syncStore.syncLogStatus = v === 'all' ? '' : v },
 })
 
+const logFilterCount = computed(() =>
+  [syncStore.syncLogDirection, syncStore.syncLogStatus].filter(Boolean).length,
+)
+
 function onLogFilterChange() {
   syncStore.fetchLog()
+}
+
+function clearLogFilters() {
+  syncStore.syncLogDirection = ''
+  syncStore.syncLogStatus = ''
+  onLogFilterChange()
 }
 
 const onLogSearch = useDebounceFn(() => {
