@@ -302,7 +302,7 @@ class EFacturaSyncService
         }
 
         if ($result->getNewInvoices() > 0) {
-            $this->notifyNewDocuments($company, $result->getNewInvoices());
+            $this->notifyNewDocuments($company, $result->getNewInvoices(), $result->getNewInvoiceSummaries());
         }
 
         if ($result->hasErrors()) {
@@ -416,7 +416,7 @@ class EFacturaSyncService
                 ]);
             }
 
-            $result->incrementNewInvoices();
+            $result->recordNewInvoice($invoice);
             return true;
         } catch (AnafRateLimitException $e) {
             $result->addError("ANAF rate limit hit for message $messageId (retry after {$e->retryAfter}s)");
@@ -1138,26 +1138,85 @@ class EFacturaSyncService
         return $company->getSyncDaysBack();
     }
 
-    private function notifyNewDocuments(Company $company, int $count): void
+    /**
+     * @param list<array{id: string, number: ?string, direction: ?string, total: string, currency: string, senderName: ?string, receiverName: ?string}> $summaries
+     */
+    private function notifyNewDocuments(Company $company, int $count, array $summaries = []): void
     {
         try {
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
-            $message = $count === 1
-                ? '1 new document received in e-Factura'
-                : sprintf('%d new documents received in e-Factura', $count);
+            $companyName = $company->getName() ?? '—';
+
+            // Build a title that always identifies the company. Multi-company users
+            // glance at notifications and need to know "for which company" first.
+            $title = sprintf('%s — e-Factura', $companyName);
+
+            // Single document: name the counterparty + amount + currency. This is
+            // the high-value case for B2B users — they want to know what arrived
+            // at a glance without opening the app.
+            if ($count === 1 && !empty($summaries[0])) {
+                $s = $summaries[0];
+                $direction = $s['direction'] === 'incoming' ? 'incoming' : 'outgoing';
+                $counterparty = $direction === 'incoming'
+                    ? ($s['senderName'] ?: '—')
+                    : ($s['receiverName'] ?: '—');
+                $amount = $this->formatAmount($s['total'], $s['currency']);
+                $number = $s['number'] ?: '#?';
+                $message = $direction === 'incoming'
+                    ? sprintf('Incoming %s from %s · %s', $number, $counterparty, $amount)
+                    : sprintf('Outgoing %s to %s · %s', $number, $counterparty, $amount);
+
+                $messageKey = $direction === 'incoming'
+                    ? 'notification.efactura.new_incoming.message'
+                    : 'notification.efactura.new_outgoing.message';
+                $messageParams = [
+                    'company' => $companyName,
+                    'number' => $number,
+                    'counterparty' => $counterparty,
+                    'amount' => $amount,
+                ];
+            } else {
+                // Multiple documents: surface the total per direction so the user
+                // knows the overall shape before tapping in.
+                $byDir = ['incoming' => 0, 'outgoing' => 0];
+                foreach ($summaries as $s) {
+                    $key = $s['direction'] === 'outgoing' ? 'outgoing' : 'incoming';
+                    $byDir[$key]++;
+                }
+                $parts = [];
+                if ($byDir['incoming'] > 0) {
+                    $parts[] = $byDir['incoming'] . ' incoming';
+                }
+                if ($byDir['outgoing'] > 0) {
+                    $parts[] = $byDir['outgoing'] . ' outgoing';
+                }
+                $breakdown = $parts ? ' (' . implode(', ', $parts) . ')' : '';
+                $message = sprintf('%d new documents received%s', $count, $breakdown);
+
+                $messageKey = 'notification.efactura.new_documents_multi.message';
+                $messageParams = [
+                    'company' => $companyName,
+                    'count' => $count,
+                    'incoming' => $byDir['incoming'],
+                    'outgoing' => $byDir['outgoing'],
+                ];
+            }
 
             foreach ($users as $user) {
                 $this->notificationService->createNotification(
                     $user,
                     'efactura.new_documents',
-                    'New e-Factura documents',
+                    $title,
                     $message,
                     [
                         'companyId' => $company->getId()->toRfc4122(),
+                        'companyName' => $companyName,
                         'count' => $count,
-                        'titleKey' => MessageKey::TITLE_NEW_DOCUMENTS,
-                        'messageKey' => MessageKey::MSG_NEW_DOCUMENTS,
-                        'messageParams' => ['count' => $count],
+                        'titleKey' => 'notification.efactura.new_documents.title',
+                        'titleParams' => ['company' => $companyName],
+                        'messageKey' => $messageKey,
+                        'messageParams' => $messageParams,
+                        'invoices' => $summaries,
                     ],
                 );
             }
@@ -1167,6 +1226,11 @@ class EFacturaSyncService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function formatAmount(string $total, string $currency): string
+    {
+        return number_format((float) $total, 2, '.', ',') . ' ' . $currency;
     }
 
     private function processErrorMessage(?EFacturaMessage $spvMessage, string $messageId, Company $company, string $token, SyncResult $result): void

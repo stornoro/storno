@@ -43,3 +43,12 @@ notification:
   payment_received:
     title: 'Payment received'
     message: 'Payment of %amount% %currency% received for invoice %number%'
+  efactura:
+    new_documents:
+      title: '%company% — e-Factura'
+    new_incoming:
+      message: 'Incoming %number% from %counterparty% · %amount%'
+    new_outgoing:
+      message: 'Outgoing %number% to %counterparty% · %amount%'
+    new_documents_multi:
+      message: '%count% new documents (%incoming% incoming, %outgoing% outgoing)'
