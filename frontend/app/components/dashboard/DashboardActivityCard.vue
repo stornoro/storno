@@ -49,14 +49,18 @@ function getDirectionBadge(item: RecentActivityItem) {
 
 function getActivityLabel(item: RecentActivityItem) {
   if (item.paidAt) {
-    return `${$t('dashboard.cards.paymentOf')} ${formatMoney(item.total, item.currency)}`
+    // Render the per-row currency code explicitly so mixed-currency lists
+    // don't all look the same. (Intl 'currency' style swaps between symbols
+    // for some currencies and codes for others, which is confusing in a
+    // mixed list.)
+    return `${$t('dashboard.cards.paymentOf')} ${formatAmount(item.total)} ${item.currency || 'RON'}`
   }
   return item.number || '-'
 }
 
-function formatMoney(amount: string | number, currency = 'RON') {
+function formatAmount(amount: string | number) {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(num)
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
 </script>
 
