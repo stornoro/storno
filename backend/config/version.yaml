@@ -1,0 +1,30 @@
+# Single source of truth for client-update version metadata.
+# Bump these whenever a new web build or mobile binary is released so the
+# /api/v1/version endpoint can drive in-app upgrade prompts.
+parameters:
+    app.version_metadata:
+        web:
+            # latest is read from VERSION.txt; only `min` is configured here.
+            min: '2.6.0'
+            releaseNotes: 'https://github.com/stornoro/storno/releases'
+        # `latest` should match the binary currently published in each store.
+        # `min` is the lowest version still allowed to call the API; bump it
+        # only when you ship a breaking server change that older clients cannot
+        # handle. `storeUrl` is the deep link the prompt uses for the Update
+        # button — keep these in sync with README and store listings.
+        mobile:
+            ios:
+                latest: '1.1.2'
+                min: '1.0.0'
+                storeUrl: 'https://apps.apple.com/app/storno-ro/id6761785908'
+            android:
+                latest: '1.1.2'
+                min: '1.0.0'
+                storeUrl: 'https://play.google.com/store/apps/details?id=com.storno.app'
+            huawei:
+                latest: '1.1.2'
+                min: '1.0.0'
+                # TODO: replace with the real AppGallery app ID (C-prefixed)
+                # once the build is published. The placeholder is harmless
+                # — the upgrade prompt only opens this URL on Huawei devices.
+                storeUrl: 'https://appgallery.huawei.com/app/C0000000000'
