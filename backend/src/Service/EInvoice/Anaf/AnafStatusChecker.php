@@ -126,14 +126,21 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $this->eventDispatcher->dispatch(new InvoiceValidatedEvent($invoice), InvoiceValidatedEvent::NAME);
             $this->publishInvoiceChange($invoice, 'invoice.validated');
 
+            $companyName = $invoice->getCompany()?->getName() ?? '—';
+            $amount = $this->formatAmount($invoice->getTotal(), $invoice->getCurrency());
             $this->notifyOrgMembers(
                 $invoice,
                 'invoice.validated',
-                'Invoice validated by ANAF',
-                sprintf('Invoice %s has been validated by ANAF', $invoice->getNumber()),
+                sprintf('%s — invoice validated by ANAF', $companyName),
+                sprintf('Invoice %s · %s has been validated by ANAF', $invoice->getNumber(), $amount),
                 MessageKey::MSG_INVOICE_VALIDATED,
-                ['number' => $invoice->getNumber()],
+                [
+                    'company' => $companyName,
+                    'number' => $invoice->getNumber(),
+                    'amount' => $amount,
+                ],
                 MessageKey::TITLE_INVOICE_VALIDATED,
+                ['company' => $companyName],
             );
 
             return;
@@ -171,14 +178,22 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             $this->publishInvoiceChange($invoice, 'invoice.rejected');
 
             $notifyError = $errorMsg ?? 'Unknown error';
+            $companyName = $invoice->getCompany()?->getName() ?? '—';
+            $amount = $this->formatAmount($invoice->getTotal(), $invoice->getCurrency());
             $this->notifyOrgMembers(
                 $invoice,
                 'invoice.rejected',
-                'Invoice rejected by ANAF',
-                sprintf('Invoice %s was rejected by ANAF: %s', $invoice->getNumber(), $notifyError),
+                sprintf('%s — invoice rejected by ANAF', $companyName),
+                sprintf('Invoice %s · %s was rejected: %s', $invoice->getNumber(), $amount, $notifyError),
                 MessageKey::MSG_INVOICE_REJECTED,
-                ['number' => $invoice->getNumber(), 'error' => $notifyError],
+                [
+                    'company' => $companyName,
+                    'number' => $invoice->getNumber(),
+                    'amount' => $amount,
+                    'error' => $notifyError,
+                ],
                 MessageKey::TITLE_INVOICE_REJECTED,
+                ['company' => $companyName],
             );
 
             return;
@@ -208,7 +223,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
         ]);
     }
 
-    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = [], string $titleKey = ''): void
+    private function notifyOrgMembers(\App\Entity\Invoice $invoice, string $type, string $title, string $message, string $messageKey = '', array $messageParams = [], string $titleKey = '', array $titleParams = []): void
     {
         try {
             $company = $invoice->getCompany();
@@ -218,6 +233,7 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
                 'invoiceId' => $invoice->getId()->toRfc4122(),
                 'invoiceNumber' => $invoice->getNumber(),
                 'companyId' => $company->getId()->toRfc4122(),
+                'companyName' => $company->getName(),
             ];
             if ($messageKey) {
                 $data['messageKey'] = $messageKey;
@@ -225,6 +241,9 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
             }
             if ($titleKey) {
                 $data['titleKey'] = $titleKey;
+            }
+            if (!empty($titleParams)) {
+                $data['titleParams'] = $titleParams;
             }
 
             foreach ($users as $user) {
@@ -237,6 +256,11 @@ final class AnafStatusChecker implements EInvoiceStatusCheckerInterface
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function formatAmount(string $total, string $currency): string
+    {
+        return number_format((float) $total, 2, '.', ',') . ' ' . $currency;
     }
 
     /**

@@ -2,34 +2,34 @@
 
 notification:
   invoice_due_soon:
-    title: 'Factura scadenta in curand'
+    title: '%company% — factura scadenta in curand'
     message: 'Factura %number% scade in 3 zile (%date%)'
   invoice_due_today:
-    title: 'Factura scadenta astazi'
+    title: '%company% — factura scadenta astazi'
     message: 'Factura %number% scade astazi'
   invoice_overdue:
-    title: 'Factura restanta'
+    title: '%company% — factura restanta'
     message: 'Factura %number% este scadenta din %date%'
   proforma_expiring_soon:
-    title: 'Proforma expira in curand'
+    title: '%company% — proforma expira in curand'
     message: 'Proforma %number% expira in 3 zile (%date%)'
   proforma_expired:
-    title: 'Proforma expirata'
+    title: '%company% — proforma expirata'
     message: 'Proforma %number% a expirat pe %date%'
   token_expiring:
-    title: 'Token ANAF expira'
-    message: 'Tokenul ANAF expira in %days% zi(le)'
+    title: '%token% — token ANAF expira'
+    message: '{0} Tokenul ANAF (%token%) expira astazi|{1} Tokenul ANAF (%token%) expira intr-o zi|]1,19] Tokenul ANAF (%token%) expira in %count% zile|]19,Inf[ Tokenul ANAF (%token%) expira in %count% de zile'
   token_expiring_no_refresh:
-    title: 'Token ANAF expira — reinnoire manuala necesara'
-    message: 'Tokenul ANAF expira in %days% zi(le) si nu poate fi reinnoit automat. Re-autorizeaza manual.'
+    title: '%token% — token ANAF expira (manual)'
+    message: '{0} Tokenul ANAF (%token%) expira astazi si nu poate fi reinnoit automat. Re-autorizeaza manual.|{1} Tokenul ANAF (%token%) expira intr-o zi si nu poate fi reinnoit automat. Re-autorizeaza manual.|]1,19] Tokenul ANAF (%token%) expira in %count% zile si nu poate fi reinnoit automat. Re-autorizeaza manual.|]19,Inf[ Tokenul ANAF (%token%) expira in %count% de zile si nu poate fi reinnoit automat. Re-autorizeaza manual.'
   token_refresh_failed:
-    title: 'Eroare reinnoire token ANAF'
-    message: 'Tokenul ANAF nu a putut fi reinnoit automat. Re-autorizeaza manual.'
+    title: '%token% — eroare reinnoire token ANAF'
+    message: 'Tokenul ANAF (%token%) nu a putut fi reinnoit automat. Re-autorizeaza manual.'
   anaf_deadline:
-    title: 'Termen ANAF expira maine'
+    title: '%company% — termen ANAF expira maine'
     message: 'Factura %number% trebuie trimisa la ANAF pana maine (%date%)'
   anaf_missing_token:
-    title: 'Conecteaza SPV pentru a trimite la ANAF'
+    title: '%company% — conecteaza SPV pentru ANAF'
     message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza SPV pana pe %deadline% pentru a evita amenzile.'
   export_ready:
     title: 'Export finalizat'
@@ -41,8 +41,18 @@ notification:
     title: 'Restaurare finalizata'
     message: 'Backupul a fost restaurat cu succes.'
   payment_received:
-    title: 'Plata inregistrata'
+    title: '%company% — plata inregistrata'
     message: 'Plata de %amount% %currency% inregistrata pentru factura %number%'
+  invoice_validated:
+    title: '%company% — factura validata ANAF'
+    message: 'Factura %number% · %amount% a fost validata de ANAF'
+  invoice_rejected:
+    title: '%company% — factura respinsa ANAF'
+    message: 'Factura %number% · %amount% respinsa: %error%'
+  sync_error:
+    title: '%company% — eroare sincronizare e-Factura'
+    single: '%company% — %error%'
+    multiple: '%company% — %count% erori sincronizare. Prima: %first_error%'
   efactura:
     new_documents:
       title: '%company% — e-Factura'

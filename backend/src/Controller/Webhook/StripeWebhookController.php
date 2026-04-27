@@ -225,15 +225,19 @@ class StripeWebhookController extends AbstractController
                     // In-app + email notification to organization members
                     $org = $company->getOrganization();
                     if ($org) {
-                        $title = sprintf('Payment received: %s %s', $payment->getAmount(), $invoice->getCurrency());
+                        $companyName = $company->getName() ?? '—';
+                        $title = sprintf('%s — payment received: %s %s', $companyName, $payment->getAmount(), $invoice->getCurrency());
                         $message = sprintf('Invoice %s received a payment of %s %s via Stripe.', $invoice->getNumber(), $payment->getAmount(), $invoice->getCurrency());
                         foreach ($org->getMemberships() as $membership) {
                             $user = $membership->getUser();
                             if ($user) {
                                 $notifDataWithKeys = array_merge($notifData, [
+                                    'companyName' => $companyName,
                                     'titleKey' => MessageKey::TITLE_PAYMENT_RECEIVED,
+                                    'titleParams' => ['company' => $companyName],
                                     'messageKey' => MessageKey::MSG_PAYMENT_RECEIVED,
                                     'messageParams' => [
+                                        'company' => $companyName,
                                         'number' => $invoice->getNumber(),
                                         'amount' => $payment->getAmount(),
                                         'currency' => $invoice->getCurrency(),

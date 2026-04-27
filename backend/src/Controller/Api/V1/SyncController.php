@@ -255,15 +255,24 @@ class SyncController extends AbstractController
             ]);
 
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
+            $companyName = $company->getName() ?? '—';
             foreach ($users as $user) {
                 $this->notificationService->createNotification(
                     $user,
                     'sync.error',
-                    'e-Factura sync error',
-                    sprintf('%s — %s', $company->getName(), $errorMsg),
+                    sprintf('%s — e-Factura sync error', $companyName),
+                    sprintf('%s — %s', $companyName, $errorMsg),
                     [
                         'companyId' => $company->getId()->toRfc4122(),
+                        'companyName' => $companyName,
                         'code' => $code,
+                        'titleKey' => MessageKey::TITLE_SYNC_ERROR,
+                        'titleParams' => ['company' => $companyName],
+                        'messageKey' => MessageKey::MSG_SYNC_ERROR_SINGLE,
+                        'messageParams' => [
+                            'company' => $companyName,
+                            'error' => $errorMsg,
+                        ],
                     ],
                 );
             }

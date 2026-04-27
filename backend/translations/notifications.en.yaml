@@ -2,34 +2,34 @@
 
 notification:
   invoice_due_soon:
-    title: 'Invoice due soon'
+    title: '%company% — invoice due soon'
     message: 'Invoice %number% is due in 3 days (%date%)'
   invoice_due_today:
-    title: 'Invoice due today'
+    title: '%company% — invoice due today'
     message: 'Invoice %number% is due today'
   invoice_overdue:
-    title: 'Invoice overdue'
+    title: '%company% — invoice overdue'
     message: 'Invoice %number% has been overdue since %date%'
   proforma_expiring_soon:
-    title: 'Proforma expiring soon'
+    title: '%company% — proforma expiring soon'
     message: 'Proforma %number% expires in 3 days (%date%)'
   proforma_expired:
-    title: 'Proforma expired'
+    title: '%company% — proforma expired'
     message: 'Proforma %number% has expired on %date%'
   token_expiring:
-    title: 'ANAF token expiring'
-    message: 'ANAF token expires in %days% day(s)'
+    title: '%token% — ANAF token expiring'
+    message: '{0} ANAF token (%token%) expires today|{1} ANAF token (%token%) expires in 1 day|]1,Inf[ ANAF token (%token%) expires in %count% days'
   token_expiring_no_refresh:
-    title: 'ANAF token expiring — manual renewal required'
-    message: 'ANAF token expires in %days% day(s) and cannot be renewed automatically. Please re-authorize manually.'
+    title: '%token% — ANAF token expiring (manual)'
+    message: '{0} ANAF token (%token%) expires today and cannot be renewed automatically. Please re-authorize manually.|{1} ANAF token (%token%) expires in 1 day and cannot be renewed automatically. Please re-authorize manually.|]1,Inf[ ANAF token (%token%) expires in %count% days and cannot be renewed automatically. Please re-authorize manually.'
   token_refresh_failed:
-    title: 'ANAF token renewal failed'
-    message: 'The ANAF token could not be renewed automatically. Please re-authorize manually.'
+    title: '%token% — ANAF token renewal failed'
+    message: 'The ANAF token (%token%) could not be renewed automatically. Please re-authorize manually.'
   anaf_deadline:
-    title: 'ANAF deadline expires tomorrow'
+    title: '%company% — ANAF deadline expires tomorrow'
     message: 'Invoice %number% must be submitted to ANAF by tomorrow (%date%)'
   anaf_missing_token:
-    title: 'Connect SPV to submit to ANAF'
+    title: '%company% — connect SPV to submit to ANAF'
     message: 'Invoice %number% issued on %date% cannot be submitted to ANAF — no SPV token is configured. Connect SPV by %deadline% to avoid penalties.'
   export_ready:
     title: 'Export ready'
@@ -41,8 +41,18 @@ notification:
     title: 'Restore completed'
     message: 'Your backup has been restored successfully.'
   payment_received:
-    title: 'Payment received'
+    title: '%company% — payment received'
     message: 'Payment of %amount% %currency% received for invoice %number%'
+  invoice_validated:
+    title: '%company% — invoice validated by ANAF'
+    message: 'Invoice %number% · %amount% has been validated by ANAF'
+  invoice_rejected:
+    title: '%company% — invoice rejected by ANAF'
+    message: 'Invoice %number% · %amount% was rejected: %error%'
+  sync_error:
+    title: '%company% — e-Factura sync error'
+    single: '%company% — %error%'
+    multiple: '%company% — %count% sync errors. First: %first_error%'
   efactura:
     new_documents:
       title: '%company% — e-Factura'
