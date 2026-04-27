@@ -74,8 +74,9 @@
       </template>
 
       <template #total-cell="{ row }">
-        <span class="font-semibold tabular-nums">
-          {{ formatMoney(row.original.total, row.original.currency) }}
+        <span class="font-semibold tabular-nums whitespace-nowrap">
+          {{ formatAmount(row.original.total) }}
+          <span class="text-(--ui-text-muted) font-normal ml-1">{{ row.original.currency || 'RON' }}</span>
         </span>
       </template>
 
@@ -152,9 +153,9 @@ function getStatusColor(status: string): 'success' | 'info' | 'warning' | 'error
   return colors[status] || 'neutral'
 }
 
-function formatMoney(amount?: string | number, currency = 'RON') {
+function formatAmount(amount?: string | number) {
   const num = Number(amount || 0)
-  return new Intl.NumberFormat(intlLocale, { style: 'currency', currency }).format(num)
+  return new Intl.NumberFormat(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
 }
 
 function formatDate(dateStr: string) {
