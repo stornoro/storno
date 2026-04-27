@@ -112,16 +112,71 @@ class SendExternalNotificationHandler
             // the notification we just created (createNotification flushed
             // before dispatching this message).
             $badge = $this->notificationRepository->countUnread($user);
+
+            // The fallback strings stored on the Notification row are written
+            // in whatever language the dispatching code happened to use
+            // (mostly English). Translate them into the user's preferred
+            // locale before we hand them to FCM/APNs — otherwise the OS
+            // banner shows English text even though the in-app feed
+            // (which decodes data.titleKey/messageKey on the client) is in
+            // Romanian.
+            [$pushTitle, $pushBody] = $this->translatePushContent(
+                $message->getEventType(),
+                $message->getTitle(),
+                $message->getMessage(),
+                $message->getData(),
+                $user->getLocale(),
+            );
+
             foreach ($devices as $device) {
                 $this->messageBus->dispatch(new SendPushNotificationMessage(
                     deviceToken: $device->getToken(),
-                    title: $message->getTitle(),
-                    body: $message->getMessage(),
+                    title: $pushTitle,
+                    body: $pushBody,
                     data: $message->getData(),
                     badge: $badge,
                 ));
             }
         }
+    }
+
+    /**
+     * Translates the push title + body into the user's locale.
+     *
+     * Looks up the keys carried in the notification data
+     * (`titleKey` / `messageKey`) in the `notifications` translation domain
+     * with `messageParams` as placeholders. Falls back to deriving keys from
+     * the event type, then to the raw caller-provided strings if no
+     * translation exists.
+     *
+     * @return array{0: string, 1: string} [title, body]
+     */
+    private function translatePushContent(
+        string $eventType,
+        string $fallbackTitle,
+        string $fallbackBody,
+        array $data,
+        string $locale,
+    ): array {
+        $params = [];
+        foreach (($data['messageParams'] ?? []) as $key => $value) {
+            $params['%' . $key . '%'] = (string) $value;
+        }
+
+        $titleKey = $data['titleKey'] ?? 'notification.' . str_replace('.', '_', $eventType) . '.title';
+        $messageKey = $data['messageKey'] ?? 'notification.' . str_replace('.', '_', $eventType) . '.message';
+
+        $title = $this->translator->trans($titleKey, [], 'notifications', $locale);
+        if ($title === $titleKey) {
+            $title = $fallbackTitle;
+        }
+
+        $body = $this->translator->trans($messageKey, $params, 'notifications', $locale);
+        if ($body === $messageKey) {
+            $body = $fallbackBody;
+        }
+
+        return [$title, $body];
     }
 
     /**
