@@ -222,6 +222,7 @@ class StripeAppOAuthController extends AbstractController
                 'name' => $company->getName(),
                 'cif' => $company->getCif(),
             ],
+            'locale' => $appToken->getUser()?->getLocale(),
         ]);
     }
 
