@@ -113,9 +113,10 @@ async function decide(approve: boolean) {
             </div>
 
             <UFormField :label="$t('stripeApp.companyLabel')" required>
-              <USelect
+              <USelectMenu
                 v-model="selectedCompanyId"
-                :options="companyOptions"
+                :items="companyOptions"
+                value-key="value"
                 :placeholder="$t('stripeApp.companyPlaceholder')"
                 size="lg"
                 class="w-full"
