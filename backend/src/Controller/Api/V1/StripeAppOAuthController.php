@@ -2,13 +2,14 @@
 
 namespace App\Controller\Api\V1;
 
-use App\Entity\StripeAppLinkingCode;
+use App\Entity\StripeAppDeviceCode;
 use App\Enum\MessageKey;
 use App\Entity\StripeAppToken;
 use App\Enum\DocumentStatus;
 use App\Manager\InvoiceManager;
 use App\Repository\CompanyRepository;
 use App\Repository\InvoiceRepository;
+use App\Repository\StripeAppDeviceCodeRepository;
 use App\Repository\StripeAppTokenRepository;
 use App\Service\StripeAppInvoiceService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -27,6 +28,7 @@ class StripeAppOAuthController extends AbstractController
 {
     public function __construct(
         private readonly StripeAppTokenRepository $tokenRepository,
+        private readonly StripeAppDeviceCodeRepository $deviceCodeRepository,
         private readonly CompanyRepository $companyRepository,
         private readonly InvoiceRepository $invoiceRepository,
         private readonly EntityManagerInterface $em,
@@ -45,7 +47,7 @@ class StripeAppOAuthController extends AbstractController
         return match ($grantType) {
             'authorization_code' => $this->handleAuthorizationCode($data),
             'refresh_token' => $this->handleRefreshToken($data),
-            'linking_code' => $this->handleLinkingCode($data),
+            'device_code', 'urn:ietf:params:oauth:grant-type:device_code' => $this->handleDeviceCode($data),
             default => $this->json(['error' => 'unsupported_grant_type', 'message' => 'Tip de autentificare nesuportat'], Response::HTTP_BAD_REQUEST),
         };
     }
@@ -70,26 +72,103 @@ class StripeAppOAuthController extends AbstractController
         return $this->json(['status' => 'disconnected']);
     }
 
-    #[Route('/linking-code', name: 'stripe_app_linking_code', methods: ['POST'])]
-    public function createLinkingCode(): JsonResponse
+    /**
+     * RFC 8628 step 1: device authorization request. The Stripe app calls this
+     * to obtain a device_code (long, opaque, polled by the app) and a
+     * user_code (short, displayed to the user, entered on the verification UI).
+     */
+    #[Route('/oauth/device', name: 'stripe_app_oauth_device', methods: ['POST'])]
+    public function oauthDevice(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $stripeAccountId = $data['stripe_account_id'] ?? null;
+
+        if (!$stripeAccountId) {
+            return $this->json(['error' => 'invalid_request', 'message' => 'stripe_account_id este obligatoriu'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Retry on the (extremely unlikely) user_code collision
+        $deviceCode = null;
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $candidate = StripeAppDeviceCode::generateUserCode();
+            if (!$this->deviceCodeRepository->findByUserCode($candidate)) {
+                $deviceCode = new StripeAppDeviceCode();
+                $deviceCode->setDeviceCode(StripeAppDeviceCode::generateDeviceCode());
+                $deviceCode->setUserCode($candidate);
+                $deviceCode->setStripeAccountId($stripeAccountId);
+                $deviceCode->setExpiresAt(new \DateTimeImmutable('+10 minutes'));
+                break;
+            }
+        }
+
+        if (!$deviceCode) {
+            return $this->json(['error' => 'server_error', 'message' => 'Nu s-a putut genera codul'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        $this->em->persist($deviceCode);
+        $this->em->flush();
+
+        $verificationBase = 'https://app.storno.ro/stripe-link';
+
+        return $this->json([
+            'device_code' => $deviceCode->getDeviceCode(),
+            'user_code' => $deviceCode->getUserCode(),
+            'verification_uri' => $verificationBase,
+            'verification_uri_complete' => $verificationBase.'?code='.$deviceCode->getUserCode(),
+            'expires_in' => 600,
+            'interval' => 2,
+        ]);
+    }
+
+    /**
+     * RFC 8628 step 3: verification UI calls this to approve a pending
+     * device authorization. The current Storno user is bound to the
+     * device_code; the Stripe app's poll will then exchange it for tokens.
+     */
+    #[Route('/oauth/approve', name: 'stripe_app_oauth_approve', methods: ['POST'])]
+    public function oauthApprove(Request $request): JsonResponse
     {
         $user = $this->getUser();
 
         if (!$user) {
-            return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'unauthorized', 'message' => 'Sesiunea a expirat. Reconecteaza-te.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
-        $linkingCode = new StripeAppLinkingCode();
-        $linkingCode->setUser($user);
-        $linkingCode->setCode(StripeAppLinkingCode::generateCode());
-        $linkingCode->setExpiresAt(new \DateTimeImmutable('+5 minutes'));
+        $data = json_decode($request->getContent(), true) ?? [];
+        $userCode = strtoupper(trim((string) ($data['user_code'] ?? '')));
+        $approve = (bool) ($data['approve'] ?? true);
 
-        $this->em->persist($linkingCode);
+        if ($userCode === '') {
+            return $this->json(['error' => 'invalid_request', 'message' => 'Codul este obligatoriu'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $deviceCode = $this->deviceCodeRepository->findByUserCode($userCode);
+
+        if (!$deviceCode) {
+            return $this->json(['error' => 'invalid_grant', 'message' => 'Cod invalid'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($deviceCode->isExpired()) {
+            return $this->json(['error' => 'expired_token', 'message' => 'Codul a expirat'], Response::HTTP_GONE);
+        }
+
+        if (!$deviceCode->isPending()) {
+            return $this->json(['error' => 'invalid_grant', 'message' => 'Codul a fost deja folosit'], Response::HTTP_CONFLICT);
+        }
+
+        if ($approve) {
+            $deviceCode->setStatus(StripeAppDeviceCode::STATUS_APPROVED);
+            $deviceCode->setUser($user);
+            $deviceCode->setApprovedAt(new \DateTimeImmutable());
+        } else {
+            $deviceCode->setStatus(StripeAppDeviceCode::STATUS_DENIED);
+        }
+
         $this->em->flush();
 
         return $this->json([
-            'code' => $linkingCode->getCode(),
-            'expires_in' => 300,
+            'status' => $approve ? 'approved' : 'denied',
+            'stripe_account_id' => $deviceCode->getStripeAccountId(),
         ]);
     }
 
@@ -354,32 +433,59 @@ class StripeAppOAuthController extends AbstractController
         ]);
     }
 
-    private function handleLinkingCode(array $data): JsonResponse
+    /**
+     * RFC 8628 step 4: app polls /token with the device_code. Returns
+     * tokens once approved, or `authorization_pending` / `slow_down` /
+     * `expired_token` / `access_denied` per RFC.
+     */
+    private function handleDeviceCode(array $data): JsonResponse
     {
-        $code = strtoupper(trim($data['code'] ?? ''));
+        $code = (string) ($data['device_code'] ?? '');
         $stripeAccountId = $data['stripe_account_id'] ?? null;
 
-        if (!$code || !$stripeAccountId) {
-            return $this->json(['error' => 'invalid_request', 'message' => 'Codul si contul Stripe sunt obligatorii.'], Response::HTTP_BAD_REQUEST);
+        if ($code === '' || !$stripeAccountId) {
+            return $this->json(['error' => 'invalid_request', 'message' => 'device_code si stripe_account_id sunt obligatorii'], Response::HTTP_BAD_REQUEST);
         }
 
-        $linkingCode = $this->em->getRepository(StripeAppLinkingCode::class)->findOneBy(['code' => $code]);
+        $deviceCode = $this->deviceCodeRepository->findByDeviceCode($code);
 
-        if (!$linkingCode) {
-            return $this->json(['error' => 'invalid_grant', 'message' => 'Cod invalid'], Response::HTTP_UNAUTHORIZED);
+        if (!$deviceCode || $deviceCode->getStripeAccountId() !== $stripeAccountId) {
+            return $this->json(['error' => 'invalid_grant', 'message' => 'Cod invalid'], Response::HTTP_BAD_REQUEST);
         }
 
-        if (!$linkingCode->isValid()) {
-            $reason = $linkingCode->isUsed() ? 'Codul a fost deja folosit' : 'Codul a expirat';
+        // Slow-down enforcement: minimum 1s between polls
+        $now = new \DateTimeImmutable();
+        $last = $deviceCode->getLastPolledAt();
+        if ($last && ($now->getTimestamp() - $last->getTimestamp()) < 1) {
+            $deviceCode->setLastPolledAt($now);
+            $this->em->flush();
 
-            return $this->json(['error' => 'invalid_grant', 'message' => $reason], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'slow_down', 'message' => 'Poll prea des'], Response::HTTP_BAD_REQUEST);
+        }
+        $deviceCode->setLastPolledAt($now);
+
+        if ($deviceCode->isExpired()) {
+            $this->em->flush();
+
+            return $this->json(['error' => 'expired_token', 'message' => 'Codul a expirat'], Response::HTTP_BAD_REQUEST);
         }
 
-        $linkingCode->setUsedAt(new \DateTimeImmutable());
-        $user = $linkingCode->getUser();
+        if ($deviceCode->isDenied()) {
+            $this->em->flush();
 
+            return $this->json(['error' => 'access_denied', 'message' => 'Autorizarea a fost refuzata'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($deviceCode->isPending()) {
+            $this->em->flush();
+
+            return $this->json(['error' => 'authorization_pending', 'message' => 'In asteptarea autorizarii'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Approved — issue tokens and consume the device_code
+        $user = $deviceCode->getUser();
         $result = $this->createOrUpdateAppToken($user, $stripeAccountId);
-
+        $this->em->remove($deviceCode);
         $this->em->flush();
 
         return $result;
