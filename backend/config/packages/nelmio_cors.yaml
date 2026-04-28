@@ -8,11 +8,16 @@ nelmio_cors:
         expose_headers: ['Link']
         max_age: 3600
     paths:
-        # Stripe App runs in sandboxed iframe with origin "null"
+        # Two clients hit /api/v1/stripe-app/:
+        #   - Stripe extension iframe (sandboxed → Origin: null, uses X-Stripe-App-Token)
+        #   - Storno frontend /stripe-link page (Origin: app.storno.ro, uses JWT Bearer)
         '^/api/v1/stripe-app/':
-            origin_regex: false
-            allow_origin: ['*']
+            origin_regex: true
+            allow_origin:
+                - '^null$'
+                - '%env(CORS_ALLOW_ORIGIN)%'
+            allow_credentials: true
             allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
-            allow_headers: ['Content-Type', 'X-Stripe-App-Token', 'X-Company']
+            allow_headers: ['Accept', 'Content-Type', 'Authorization', 'X-Stripe-App-Token', 'X-Company', 'X-Organization']
             max_age: 3600
         '^/': null
