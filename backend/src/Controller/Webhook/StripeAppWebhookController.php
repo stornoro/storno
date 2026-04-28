@@ -94,14 +94,6 @@ class StripeAppWebhookController extends AbstractController
             return;
         }
 
-        if (!$appToken->getCompany()) {
-            $this->logger->info('Stripe App invoice.finalized: no company configured', [
-                'account' => $accountId,
-            ]);
-
-            return;
-        }
-
         $invoiceData = json_decode(json_encode($stripeInvoice), true);
         $this->invoiceService->createFromStripeInvoice($appToken, $invoiceData);
 

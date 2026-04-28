@@ -7,6 +7,7 @@ definePageMeta({
 const { t: $t } = useI18n()
 const route = useRoute()
 const { post } = useApi()
+const companyStore = useCompanyStore()
 
 useHead({ title: $t('stripeApp.title') })
 
@@ -15,9 +16,23 @@ const busy = ref(false)
 const result = ref<'approved' | 'denied' | null>(null)
 const error = ref<string | null>(null)
 
+const selectedCompanyId = ref<string | null>(companyStore.currentCompanyId)
+
+const companyOptions = computed(() =>
+  companyStore.companies.map(c => ({
+    label: `${c.name} (CIF ${c.cif})`,
+    value: c.id,
+  })),
+)
+
 async function decide(approve: boolean) {
   if (!code.value || code.value.length < 6) {
     error.value = $t('stripeApp.errorInvalidCode')
+    return
+  }
+
+  if (approve && !selectedCompanyId.value) {
+    error.value = $t('stripeApp.errorNoCompany')
     return
   }
 
@@ -28,6 +43,7 @@ async function decide(approve: boolean) {
     await post('/v1/stripe-app/oauth/approve', {
       user_code: code.value,
       approve,
+      ...(approve ? { company_id: selectedCompanyId.value } : {}),
     })
     result.value = approve ? 'approved' : 'denied'
   }
@@ -36,6 +52,7 @@ async function decide(approve: boolean) {
     if (status === 404) error.value = $t('stripeApp.errorInvalidCode')
     else if (status === 410) error.value = $t('stripeApp.errorExpired')
     else if (status === 409) error.value = $t('stripeApp.errorAlreadyUsed')
+    else if (status === 403) error.value = $t('stripeApp.errorNoAccess')
     else error.value = e?.data?.message || $t('stripeApp.errorGeneric')
   }
   finally {
@@ -95,6 +112,16 @@ async function decide(approve: boolean) {
               </p>
             </div>
 
+            <UFormField :label="$t('stripeApp.companyLabel')" required>
+              <USelect
+                v-model="selectedCompanyId"
+                :options="companyOptions"
+                :placeholder="$t('stripeApp.companyPlaceholder')"
+                size="lg"
+                class="w-full"
+              />
+            </UFormField>
+
             <UFormField :label="$t('stripeApp.codeLabel')" :hint="$t('stripeApp.enterCodeHint')">
               <UInput
                 v-model="code"
@@ -125,7 +152,7 @@ async function decide(approve: boolean) {
               <UButton
                 color="primary"
                 :loading="busy"
-                :disabled="busy || code.length < 6"
+                :disabled="busy || code.length < 6 || !selectedCompanyId"
                 class="flex-1 justify-center"
                 @click="decide(true)"
               >

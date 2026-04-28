@@ -31,10 +31,6 @@ class StripeAppInvoiceService
         $company = $token->getCompany();
         $user = $token->getUser();
 
-        if (!$company) {
-            throw new \RuntimeException('No company configured for this Stripe App connection');
-        }
-
         $stripeInvoiceId = $stripeInvoice['id'] ?? null;
         $idempotencyKey = 'stripe_app_' . $stripeInvoiceId;
 
