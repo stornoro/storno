@@ -215,6 +215,8 @@ class StripeAppOAuthController extends AbstractController
 
         $company = $appToken->getCompany();
 
+        $user = $appToken->getUser();
+
         return $this->json([
             'autoMode' => $appToken->isAutoMode(),
             'company' => [
@@ -222,7 +224,12 @@ class StripeAppOAuthController extends AbstractController
                 'name' => $company->getName(),
                 'cif' => $company->getCif(),
             ],
-            'locale' => $appToken->getUser()?->getLocale(),
+            'locale' => $user?->getLocale(),
+            'connectedUser' => $user ? [
+                'email' => $user->getEmail(),
+                'name' => $user->getFullName(),
+                'connectedAt' => $appToken->getCreatedAt()->format(\DateTimeInterface::ATOM),
+            ] : null,
         ]);
     }
 
@@ -274,10 +281,12 @@ class StripeAppOAuthController extends AbstractController
             ->getQuery()
             ->getResult();
 
+        // sent_to_anaf is the display name used by the extension; the internal
+        // enum value is sent_to_provider (generic across e-invoice providers).
         $statusCounts = [
             'draft' => 0,
             'issued' => 0,
-            'sent_to_provider' => 0,
+            'sent_to_anaf' => 0,
             'validated' => 0,
             'rejected' => 0,
             'total' => 0,
@@ -285,8 +294,10 @@ class StripeAppOAuthController extends AbstractController
 
         foreach ($counts as $row) {
             $status = $row['status'] instanceof DocumentStatus ? $row['status']->value : $row['status'];
-            if (isset($statusCounts[$status])) {
-                $statusCounts[$status] = (int) $row['cnt'];
+            // Map internal sent_to_provider → sent_to_anaf for the extension API.
+            $key = $status === 'sent_to_provider' ? 'sent_to_anaf' : $status;
+            if (isset($statusCounts[$key])) {
+                $statusCounts[$key] = (int) $row['cnt'];
             }
             $statusCounts['total'] += (int) $row['cnt'];
         }
@@ -300,16 +311,25 @@ class StripeAppOAuthController extends AbstractController
             ->getQuery()
             ->getResult();
 
-        $invoicesData = array_map(fn ($inv) => [
-            'id' => $inv->getId()->toRfc4122(),
-            'invoiceNumber' => $inv->getNumber(),
-            'issueDate' => $inv->getIssueDate()?->format('Y-m-d'),
-            'total' => $inv->getTotal(),
-            'currency' => $inv->getCurrency(),
-            'receiverName' => $inv->getReceiverName(),
-            'status' => $inv->getStatus()->value,
-            'anafStatus' => $inv->getAnafStatus(),
-        ], $recentInvoices);
+        $invoicesData = array_map(function ($inv) {
+            $status = $inv->getStatus()->value;
+            // Normalise sent_to_provider → sent_to_anaf for the extension API.
+            if ($status === 'sent_to_provider') {
+                $status = 'sent_to_anaf';
+            }
+
+            return [
+                'id' => $inv->getId()->toRfc4122(),
+                'invoiceNumber' => $inv->getNumber(),
+                'issueDate' => $inv->getIssueDate()?->format('Y-m-d'),
+                'total' => $inv->getTotal(),
+                'currency' => $inv->getCurrency(),
+                'receiverName' => $inv->getReceiverName(),
+                'status' => $status,
+                'anafStatus' => $inv->getAnafStatus(),
+                'anafErrorMessage' => $inv->getAnafErrorMessage(),
+            ];
+        }, $recentInvoices);
 
         return $this->json([
             'counts' => $statusCounts,
