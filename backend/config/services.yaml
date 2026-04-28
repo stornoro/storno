@@ -247,6 +247,10 @@ services:
         arguments:
             $stripeSecretKey: '%stripe.secret_key%'
 
+    App\Controller\Api\V1\StripeAppDataController:
+        arguments:
+            $stripeSecretKey: '%stripe.secret_key%'
+
     App\Controller\Webhook\StripeAppWebhookController:
         arguments:
             $stripeAppWebhookSecret: '%stripe.app_webhook_secret%'
