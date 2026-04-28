@@ -8,10 +8,12 @@ nelmio_cors:
         expose_headers: ['Link']
         max_age: 3600
     paths:
-        # Two clients hit /api/v1/stripe-app/:
-        #   - Stripe extension iframe (sandboxed → Origin: null, uses X-Stripe-App-Token)
-        #   - Storno frontend /stripe-link page (Origin: app.storno.ro, uses JWT Bearer)
-        '^/api/v1/stripe-app/':
+        # Paths the Stripe extension iframe (Origin: null, X-Stripe-App-Token)
+        # reaches into. /stripe-app/* is OAuth + extension-only; /invoices and
+        # /clients are shared with the Storno frontend (Origin: app.storno.ro,
+        # JWT Bearer) — both must work, so allow null + the configured frontend
+        # origin and a header set covering both auth schemes.
+        '^/api/v1/(stripe-app/|invoices(/|$)|clients(/|$))':
             origin_regex: true
             allow_origin:
                 - '^null$'
