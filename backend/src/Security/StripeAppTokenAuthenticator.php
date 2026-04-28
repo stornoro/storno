@@ -18,6 +18,12 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
 
 /**
  * Authenticates requests from the Stripe App using the X-Stripe-App-Token header.
+ *
+ * After authentication succeeds the resolved StripeAppToken is stored on the request
+ * attributes as `_stripe_app_token`. If the caller also sends an X-Company header its
+ * value is overwritten with the token's own company UUID so that downstream code that
+ * reads X-Company (e.g. OrganizationContext::resolveCompany) cannot escape the
+ * per-token company scope.
  */
 class StripeAppTokenAuthenticator extends AbstractAuthenticator
 {
@@ -51,6 +57,12 @@ class StripeAppTokenAuthenticator extends AbstractAuthenticator
         if (!$user) {
             throw new CustomUserMessageAuthenticationException('Stripe App token has no associated user');
         }
+
+        // Pin X-Company to the granted company so that OrganizationContext and any
+        // other header-reading code cannot be tricked into a different company scope.
+        $grantedCompanyId = $appToken->getCompany()->getId()->toRfc4122();
+        $request->headers->set('X-Company', $grantedCompanyId);
+        $request->attributes->set('_stripe_app_token', $appToken);
 
         return new SelfValidatingPassport(
             new UserBadge($user->getUserIdentifier(), fn () => $user)

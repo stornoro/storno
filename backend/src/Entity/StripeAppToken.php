@@ -23,8 +23,8 @@ class StripeAppToken
     private string $stripeAccountId;
 
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: true)]
-    private ?Company $company = null;
+    #[ORM\JoinColumn(nullable: false)]
+    private Company $company;
 
     #[ORM\Column(options: ['default' => false])]
     private bool $autoMode = false;
@@ -79,12 +79,12 @@ class StripeAppToken
         return $this;
     }
 
-    public function getCompany(): ?Company
+    public function getCompany(): Company
     {
         return $this->company;
     }
 
-    public function setCompany(?Company $company): static
+    public function setCompany(Company $company): static
     {
         $this->company = $company;
 

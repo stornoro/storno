@@ -9,6 +9,7 @@ use App\Enum\DocumentStatus;
 use App\Manager\InvoiceManager;
 use App\Repository\CompanyRepository;
 use App\Repository\InvoiceRepository;
+use App\Repository\OrganizationMembershipRepository;
 use App\Repository\StripeAppDeviceCodeRepository;
 use App\Repository\StripeAppTokenRepository;
 use App\Service\StripeAppInvoiceService;
@@ -30,6 +31,7 @@ class StripeAppOAuthController extends AbstractController
         private readonly StripeAppTokenRepository $tokenRepository,
         private readonly StripeAppDeviceCodeRepository $deviceCodeRepository,
         private readonly CompanyRepository $companyRepository,
+        private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly InvoiceRepository $invoiceRepository,
         private readonly EntityManagerInterface $em,
         private readonly JWTEncoderInterface $jwtEncoder,
@@ -122,8 +124,11 @@ class StripeAppOAuthController extends AbstractController
 
     /**
      * RFC 8628 step 3: verification UI calls this to approve a pending
-     * device authorization. The current Storno user is bound to the
-     * device_code; the Stripe app's poll will then exchange it for tokens.
+     * device authorization. The consenting user must supply the company_id
+     * they are granting access to; the server validates that they actually
+     * have access to that company via their OrganizationMembership (respecting
+     * allowedCompanies restrictions). Both user and company are stored on the
+     * device code and carried to the resulting StripeAppToken.
      */
     #[Route('/oauth/approve', name: 'stripe_app_oauth_approve', methods: ['POST'])]
     public function oauthApprove(Request $request): JsonResponse
@@ -137,9 +142,14 @@ class StripeAppOAuthController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         $userCode = strtoupper(trim((string) ($data['user_code'] ?? '')));
         $approve = (bool) ($data['approve'] ?? true);
+        $companyId = $data['company_id'] ?? null;
 
         if ($userCode === '') {
             return $this->json(['error' => 'invalid_request', 'message' => 'Codul este obligatoriu'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($approve && !$companyId) {
+            return $this->json(['error' => 'invalid_request', 'message' => 'company_id este obligatoriu'], Response::HTTP_BAD_REQUEST);
         }
 
         $deviceCode = $this->deviceCodeRepository->findByUserCode($userCode);
@@ -157,8 +167,30 @@ class StripeAppOAuthController extends AbstractController
         }
 
         if ($approve) {
+            try {
+                $companyUuid = Uuid::fromString($companyId);
+            } catch (\Throwable) {
+                return $this->json(['error' => 'invalid_request', 'message' => 'company_id invalid'], Response::HTTP_BAD_REQUEST);
+            }
+
+            $company = $this->companyRepository->find($companyUuid);
+            if (!$company) {
+                return $this->json(['error' => 'not_found', 'message' => 'Compania nu a fost gasita'], Response::HTTP_NOT_FOUND);
+            }
+
+            // Verify the user has access to this company via an active membership,
+            // honouring per-membership allowedCompanies restrictions.
+            $organization = $company->getOrganization();
+            $membership = $this->membershipRepository->findByUserAndOrganization($user, $organization);
+
+            if (!$membership || !$membership->hasAccessToCompany($company)) {
+                return $this->json(['error' => 'forbidden', 'message' => 'no access to this company'], Response::HTTP_FORBIDDEN);
+            }
+
             $deviceCode->setStatus(StripeAppDeviceCode::STATUS_APPROVED);
             $deviceCode->setUser($user);
+            $deviceCode->setCompany($company);
+            $deviceCode->setOrganization($organization);
             $deviceCode->setApprovedAt(new \DateTimeImmutable());
         } else {
             $deviceCode->setStatus(StripeAppDeviceCode::STATUS_DENIED);
@@ -181,17 +213,15 @@ class StripeAppOAuthController extends AbstractController
             return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
-        $user = $appToken->getUser();
-        $companies = $this->getAccessibleCompanies($user);
+        $company = $appToken->getCompany();
 
         return $this->json([
             'autoMode' => $appToken->isAutoMode(),
-            'defaultCompanyId' => $appToken->getCompany()?->getId()?->toRfc4122(),
-            'companies' => array_map(fn ($c) => [
-                'id' => $c->getId()->toRfc4122(),
-                'name' => $c->getName(),
-                'cif' => $c->getCif(),
-            ], $companies),
+            'company' => [
+                'id' => $company->getId()->toRfc4122(),
+                'name' => $company->getName(),
+                'cif' => $company->getCif(),
+            ],
         ]);
     }
 
@@ -206,13 +236,6 @@ class StripeAppOAuthController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
-        if (isset($data['defaultCompanyId'])) {
-            $company = $this->companyRepository->find(Uuid::fromString($data['defaultCompanyId']));
-            if ($company) {
-                $appToken->setCompany($company);
-            }
-        }
-
         if (isset($data['autoMode'])) {
             $appToken->setAutoMode((bool) $data['autoMode']);
         }
@@ -222,7 +245,11 @@ class StripeAppOAuthController extends AbstractController
 
         return $this->json([
             'autoMode' => $appToken->isAutoMode(),
-            'defaultCompanyId' => $appToken->getCompany()?->getId()?->toRfc4122(),
+            'company' => [
+                'id' => $appToken->getCompany()->getId()->toRfc4122(),
+                'name' => $appToken->getCompany()->getName(),
+                'cif' => $appToken->getCompany()->getCif(),
+            ],
         ]);
     }
 
@@ -236,15 +263,6 @@ class StripeAppOAuthController extends AbstractController
         }
 
         $company = $appToken->getCompany();
-
-        if (!$company) {
-            return $this->json([
-                'counts' => ['draft' => 0, 'issued' => 0, 'sent_to_provider' => 0, 'validated' => 0, 'rejected' => 0, 'total' => 0],
-                'recentInvoices' => [],
-                'autoMode' => $appToken->isAutoMode(),
-                'companyName' => null,
-            ]);
-        }
 
         $counts = $this->invoiceRepository->createQueryBuilder('i')
             ->select('i.status, COUNT(i.id) as cnt')
@@ -307,10 +325,6 @@ class StripeAppOAuthController extends AbstractController
 
         if (!$appToken) {
             return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
-        }
-
-        if (!$appToken->getCompany()) {
-            return $this->json(['error' => 'no_company', 'message' => 'Selecteaza o companie in setari'], Response::HTTP_BAD_REQUEST);
         }
 
         $data = json_decode($request->getContent(), true);
@@ -398,7 +412,8 @@ class StripeAppOAuthController extends AbstractController
             return $this->json(['error' => 'invalid_grant', 'message' => 'Token de autorizare invalid sau expirat.'], Response::HTTP_UNAUTHORIZED);
         }
 
-        return $this->createOrUpdateAppToken($user, $stripeAccountId);
+        // authorization_code flow does not carry a company — unsupported without device flow
+        return $this->json(['error' => 'unsupported_grant_type', 'message' => 'Foloseste fluxul device_code pentru conectare.'], Response::HTTP_BAD_REQUEST);
     }
 
     private function handleRefreshToken(array $data): JsonResponse
@@ -482,16 +497,25 @@ class StripeAppOAuthController extends AbstractController
             return $this->json(['error' => 'authorization_pending', 'message' => 'In asteptarea autorizarii'], Response::HTTP_BAD_REQUEST);
         }
 
-        // Approved — issue tokens and consume the device_code
+        // Approved — the company was captured at approve time
         $user = $deviceCode->getUser();
-        $result = $this->createOrUpdateAppToken($user, $stripeAccountId);
+        $company = $deviceCode->getCompany();
+
+        if (!$company) {
+            // Should never happen: oauthApprove always sets company before marking approved
+            $this->em->flush();
+
+            return $this->json(['error' => 'server_error', 'message' => 'Grant lacks company scope; please re-authorize'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        $result = $this->createOrUpdateAppToken($user, $stripeAccountId, $company);
         $this->em->remove($deviceCode);
         $this->em->flush();
 
         return $result;
     }
 
-    private function createOrUpdateAppToken($user, string $stripeAccountId): JsonResponse
+    private function createOrUpdateAppToken($user, string $stripeAccountId, \App\Entity\Company $company): JsonResponse
     {
         $appToken = $this->tokenRepository->findByStripeAccountId($stripeAccountId);
 
@@ -505,6 +529,7 @@ class StripeAppOAuthController extends AbstractController
         $refreshToken = bin2hex(random_bytes(32));
 
         $appToken->setUser($user);
+        $appToken->setCompany($company);
         $appToken->setAccessToken($accessToken);
         $appToken->setRefreshToken($refreshToken);
         $appToken->setExpiresAt(new \DateTimeImmutable('+1 hour'));
@@ -529,18 +554,5 @@ class StripeAppOAuthController extends AbstractController
         }
 
         return $this->tokenRepository->findValidByAccessToken($tokenValue);
-    }
-
-    private function getAccessibleCompanies($user): array
-    {
-        $companies = [];
-        foreach ($user->getOrganizationMemberships() as $membership) {
-            $org = $membership->getOrganization();
-            foreach ($org->getCompanies() as $company) {
-                $companies[] = $company;
-            }
-        }
-
-        return $companies;
     }
 }
