@@ -4058,6 +4058,30 @@ export default defineI18nLocale(async () => {
     },
   },
 
+  // ── Stripe Dashboard extension OAuth (device flow) ─────────────
+  stripeApp: {
+    title: 'Conecteaza Stripe Dashboard',
+    subtitle: 'Autorizeaza extensia Storno.ro din Stripe Dashboard sa acceseze contul tau.',
+    permissionsTitle: 'Aceasta extensie va putea:',
+    permissionRead: 'Vizualiza facturile, clientii si companiile tale',
+    permissionWrite: 'Crea e-Facturi din facturile Stripe',
+    permissionDisconnect: 'Conexiunea poate fi anulata oricand din extensia Stripe.',
+    enterCodeHint: 'Codul de autorizare este afisat in extensia Storno.ro din Stripe Dashboard.',
+    codeLabel: 'Cod de autorizare',
+    codePlaceholder: 'XXXXXXXX',
+    authorize: 'Autorizeaza',
+    deny: 'Refuza',
+    approving: 'Se autorizeaza...',
+    approveSuccessTitle: 'Conectat cu succes',
+    approveSuccessHint: 'Poti inchide aceasta fereastra. Extensia Stripe va finaliza conectarea automat.',
+    denySuccessTitle: 'Autorizare refuzata',
+    denySuccessHint: 'Poti inchide aceasta fereastra.',
+    errorInvalidCode: 'Cod invalid.',
+    errorExpired: 'Codul a expirat. Genereaza unul nou din extensia Stripe.',
+    errorAlreadyUsed: 'Codul a fost deja folosit.',
+    errorGeneric: 'Eroare la procesarea cererii.',
+  },
+
   backendMessages: {
     // Notification titles
     'notification.invoice_validated.title': '{company} — factură validată ANAF',

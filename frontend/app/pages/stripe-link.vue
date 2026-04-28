@@ -4,58 +4,44 @@ definePageMeta({
   layout: 'auth',
 })
 
+const { t: $t } = useI18n()
+const route = useRoute()
 const { post } = useApi()
-const code = ref<string | null>(null)
-const expiresIn = ref(300)
-const loading = ref(true)
-const error = ref<string | null>(null)
-const countdown = ref(0)
-let timer: ReturnType<typeof setInterval> | null = null
 
-async function generateCode() {
-  loading.value = true
+useHead({ title: $t('stripeApp.title') })
+
+const code = ref(((route.query.code as string) ?? '').toUpperCase())
+const busy = ref(false)
+const result = ref<'approved' | 'denied' | null>(null)
+const error = ref<string | null>(null)
+
+async function decide(approve: boolean) {
+  if (!code.value || code.value.length < 6) {
+    error.value = $t('stripeApp.errorInvalidCode')
+    return
+  }
+
+  busy.value = true
   error.value = null
-  code.value = null
 
   try {
-    const res = await post<{ code: string; expires_in: number }>('/v1/stripe-app/linking-code')
-    code.value = res.code
-    expiresIn.value = res.expires_in
-    countdown.value = res.expires_in
-    startCountdown()
+    await post('/v1/stripe-app/oauth/approve', {
+      user_code: code.value,
+      approve,
+    })
+    result.value = approve ? 'approved' : 'denied'
   }
   catch (e: any) {
-    error.value = e?.data?.message || 'Eroare la generarea codului'
+    const status = e?.response?.status
+    if (status === 404) error.value = $t('stripeApp.errorInvalidCode')
+    else if (status === 410) error.value = $t('stripeApp.errorExpired')
+    else if (status === 409) error.value = $t('stripeApp.errorAlreadyUsed')
+    else error.value = e?.data?.message || $t('stripeApp.errorGeneric')
   }
   finally {
-    loading.value = false
+    busy.value = false
   }
 }
-
-function startCountdown() {
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      if (timer) clearInterval(timer)
-      code.value = null
-    }
-  }, 1000)
-}
-
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-onMounted(() => {
-  generateCode()
-})
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
 </script>
 
 <template>
@@ -64,72 +50,89 @@ onUnmounted(() => {
       <div class="text-center">
         <img
           src="/logo.png"
-          alt="Storno.ro"
+          :alt="$t('app.name')"
           class="mx-auto h-12 w-auto"
         >
         <h1 class="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
-          Conectare Stripe App
+          {{ $t('stripeApp.title') }}
         </h1>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Introdu acest cod in aplicatia Stripe pentru a conecta contul tau Storno.ro
+          {{ $t('stripeApp.subtitle') }}
         </p>
       </div>
 
       <UCard>
-        <div class="space-y-6 text-center">
-          <div v-if="loading" class="py-8">
-            <UIcon name="i-lucide-loader-2" class="mx-auto h-8 w-8 animate-spin text-primary" />
-            <p class="mt-2 text-sm text-gray-500">Se genereaza codul...</p>
+        <div class="space-y-6">
+          <div v-if="result === 'approved'" class="space-y-2 py-4 text-center">
+            <UIcon name="i-lucide-circle-check" class="mx-auto h-10 w-10 text-success" />
+            <p class="text-base font-semibold">{{ $t('stripeApp.approveSuccessTitle') }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('stripeApp.approveSuccessHint') }}</p>
           </div>
 
-          <div v-else-if="error" class="py-4">
+          <div v-else-if="result === 'denied'" class="space-y-2 py-4 text-center">
+            <UIcon name="i-lucide-circle-x" class="mx-auto h-10 w-10 text-gray-400" />
+            <p class="text-base font-semibold">{{ $t('stripeApp.denySuccessTitle') }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('stripeApp.denySuccessHint') }}</p>
+          </div>
+
+          <template v-else>
+            <div>
+              <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                {{ $t('stripeApp.permissionsTitle') }}
+              </p>
+              <ul class="space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                <li class="flex gap-2">
+                  <UIcon name="i-lucide-check" class="h-4 w-4 mt-0.5 text-success" />
+                  <span>{{ $t('stripeApp.permissionRead') }}</span>
+                </li>
+                <li class="flex gap-2">
+                  <UIcon name="i-lucide-check" class="h-4 w-4 mt-0.5 text-success" />
+                  <span>{{ $t('stripeApp.permissionWrite') }}</span>
+                </li>
+              </ul>
+              <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ $t('stripeApp.permissionDisconnect') }}
+              </p>
+            </div>
+
+            <UFormField :label="$t('stripeApp.codeLabel')" :hint="$t('stripeApp.enterCodeHint')">
+              <UInput
+                v-model="code"
+                :placeholder="$t('stripeApp.codePlaceholder')"
+                size="lg"
+                class="w-full font-mono tracking-widest text-center"
+                maxlength="8"
+                @input="(e: Event) => code = (e.target as HTMLInputElement).value.toUpperCase()"
+              />
+            </UFormField>
+
             <UAlert
+              v-if="error"
               color="error"
               variant="subtle"
               :title="error"
             />
-            <UButton
-              class="mt-4"
-              @click="generateCode"
-            >
-              Incearca din nou
-            </UButton>
-          </div>
 
-          <div v-else-if="code" class="py-4">
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Codul tau:
-            </p>
-            <div class="mt-3 font-mono text-5xl font-bold tracking-[0.3em] text-primary">
-              {{ code }}
+            <div class="flex gap-2">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                :disabled="busy"
+                @click="decide(false)"
+              >
+                {{ $t('stripeApp.deny') }}
+              </UButton>
+              <UButton
+                color="primary"
+                :loading="busy"
+                :disabled="busy || code.length < 6"
+                class="flex-1 justify-center"
+                @click="decide(true)"
+              >
+                {{ busy ? $t('stripeApp.approving') : $t('stripeApp.authorize') }}
+              </UButton>
             </div>
-            <div class="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <UIcon name="i-lucide-clock" class="h-4 w-4" />
-              <span>Expira in {{ formatTime(countdown) }}</span>
-            </div>
-            <UDivider class="my-4" />
-            <div class="text-left text-sm text-gray-600 dark:text-gray-300">
-              <p class="font-medium">Pasi:</p>
-              <ol class="mt-2 list-inside list-decimal space-y-1">
-                <li>Deschide aplicatia Storno.ro din Stripe Dashboard</li>
-                <li>Mergi la Settings</li>
-                <li>Introdu codul de mai sus</li>
-                <li>Apasa "Conecteaza"</li>
-              </ol>
-            </div>
-          </div>
-
-          <div v-else class="py-4">
-            <p class="text-sm text-gray-500">
-              Codul a expirat.
-            </p>
-            <UButton
-              class="mt-4"
-              @click="generateCode"
-            >
-              Genereaza cod nou
-            </UButton>
-          </div>
+          </template>
         </div>
       </UCard>
     </div>

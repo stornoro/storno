@@ -4059,6 +4059,30 @@ export default defineI18nLocale(async () => {
     },
   },
 
+  // ── Stripe Dashboard extension OAuth (device flow) ─────────────
+  stripeApp: {
+    title: 'Connect Stripe Dashboard',
+    subtitle: 'Authorize the Storno.ro extension in Stripe Dashboard to access your account.',
+    permissionsTitle: 'This extension will be able to:',
+    permissionRead: 'View your invoices, clients, and companies',
+    permissionWrite: 'Create e-Factura from Stripe invoices',
+    permissionDisconnect: 'You can revoke this connection anytime from the Stripe extension.',
+    enterCodeHint: 'The authorization code is shown in the Storno.ro extension inside Stripe Dashboard.',
+    codeLabel: 'Authorization code',
+    codePlaceholder: 'XXXXXXXX',
+    authorize: 'Authorize',
+    deny: 'Deny',
+    approving: 'Authorizing...',
+    approveSuccessTitle: 'Connected successfully',
+    approveSuccessHint: 'You can close this window. The Stripe extension will finish the connection automatically.',
+    denySuccessTitle: 'Authorization denied',
+    denySuccessHint: 'You can close this window.',
+    errorInvalidCode: 'Invalid code.',
+    errorExpired: 'The code expired. Generate a new one from the Stripe extension.',
+    errorAlreadyUsed: 'The code has already been used.',
+    errorGeneric: 'Error processing your request.',
+  },
+
   backendMessages: {
     // Notification titles
     'notification.invoice_validated.title': '{company} — invoice validated by ANAF',
