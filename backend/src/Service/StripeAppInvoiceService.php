@@ -45,6 +45,7 @@ class StripeAppInvoiceService
             $company,
             $stripeInvoice['customer_name'] ?? null,
             $stripeInvoice['customer_email'] ?? null,
+            $stripeInvoice['customer_phone'] ?? null,
             $stripeInvoice['customer_tax_ids'] ?? [],
             $stripeInvoice['customer_address'] ?? [],
             $user,
@@ -53,7 +54,7 @@ class StripeAppInvoiceService
         // Build invoice lines from Stripe invoice lines
         $lines = [];
         $stripeLines = $stripeInvoice['lines']['data'] ?? [];
-        foreach ($stripeLines as $i => $line) {
+        foreach ($stripeLines as $line) {
             $unitPrice = ($line['unit_amount'] ?? $line['amount'] ?? 0) / 100;
             $quantity = $line['quantity'] ?? 1;
 
@@ -82,7 +83,45 @@ class StripeAppInvoiceService
             'lines' => $lines,
             'currency' => strtoupper($stripeInvoice['currency'] ?? 'RON'),
             'idempotencyKey' => $idempotencyKey,
+            // Stripe payments are card-based; default 'bank_transfer' is wrong.
+            'paymentMethod' => 'card',
+            // Lets the backend apply EU reverse charge / OSS rules automatically
+            // based on the resolved client's VIES status — without this, all
+            // invoices land at the company default VAT rate regardless of where
+            // the customer sits.
+            'autoApplyVatRules' => true,
         ];
+
+        // Map Stripe's effective_at (or created) to issueDate so the invoice
+        // reflects when Stripe finalised the bill, not whatever clock the
+        // backend has when it gets around to creating it.
+        $issueTimestamp = $stripeInvoice['effective_at']
+            ?? $stripeInvoice['status_transitions']['finalized_at']
+            ?? $stripeInvoice['created']
+            ?? null;
+        if ($issueTimestamp) {
+            $invoiceData['issueDate'] = date('Y-m-d', $issueTimestamp);
+        }
+
+        // Public-facing notes: Stripe invoice number for cross-reference, plus
+        // any description the merchant set on Stripe.
+        $noteParts = [];
+        if (!empty($stripeInvoice['number'])) {
+            $noteParts[] = 'Stripe ' . $stripeInvoice['number'];
+        }
+        if (!empty($stripeInvoice['description'])) {
+            $noteParts[] = $stripeInvoice['description'];
+        }
+        if ($noteParts) {
+            $invoiceData['notes'] = implode(' — ', $noteParts);
+        }
+
+        // PDF language follows the connected user's Storno locale; defaults to
+        // Romanian on the backend side.
+        $userLocale = $user?->getLocale();
+        if (in_array($userLocale, ['ro', 'en', 'de', 'fr'], true)) {
+            $invoiceData['language'] = $userLocale;
+        }
 
         if ($client) {
             $invoiceData['clientId'] = $client->getId()->toRfc4122();
@@ -171,11 +210,13 @@ class StripeAppInvoiceService
         Company $company,
         ?string $name,
         ?string $email,
+        ?string $phone,
         array $taxIds,
         array $address,
         User $user,
     ): ?Client {
         $cif = $this->extractCif($taxIds);
+        $vatCode = $this->extractVatCode($taxIds);
 
         // Match by CIF first
         if ($cif) {
@@ -205,11 +246,19 @@ class StripeAppInvoiceService
         $client->setName($name ?? $email);
         $client->setEmail($email);
         $client->setType($cif ? 'company' : 'individual');
-
         $client->setSource('stripe');
+
+        if ($phone) {
+            $client->setPhone($phone);
+        }
 
         if ($cif) {
             $client->setCui($cif);
+        }
+
+        if ($vatCode) {
+            $client->setVatCode($vatCode);
+            $client->setIsVatPayer(true);
         }
 
         if (!empty($address['line1'])) {
@@ -218,8 +267,22 @@ class StripeAppInvoiceService
         if (!empty($address['city'])) {
             $client->setCity($address['city']);
         }
-        if (!empty($address['country'])) {
-            $client->setCountry($address['country']);
+        if (!empty($address['state'])) {
+            $client->setCounty($address['state']);
+        }
+        if (!empty($address['postal_code'])) {
+            $client->setPostalCode($address['postal_code']);
+        }
+
+        // Country falls back to the prefix of the EU VAT number when the
+        // customer's billing address has no country — common for Stripe
+        // customers created via Checkout where VAT was collected separately.
+        $country = $address['country'] ?? null;
+        if (!$country && $vatCode && preg_match('/^([A-Z]{2})/', $vatCode, $m)) {
+            $country = $m[1];
+        }
+        if ($country) {
+            $client->setCountry($country);
         }
 
         $this->em->persist($client);
@@ -239,6 +302,26 @@ class StripeAppInvoiceService
                 return ltrim(substr($value, 2), '0');
             }
             if ($type === 'ro_tin') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Stripe stores VAT numbers like "RO12345678" or "DE123456789" under
+     * `eu_vat`. The Storno Client model keeps both `cui` (digits only) and
+     * `vatCode` (full prefixed code) — the latter feeds VIES validation and
+     * UBL XML generation, so it must include the country prefix.
+     */
+    private function extractVatCode(array $taxIds): ?string
+    {
+        foreach ($taxIds as $taxId) {
+            $type = $taxId['type'] ?? '';
+            $value = $taxId['value'] ?? '';
+
+            if ($type === 'eu_vat' && preg_match('/^[A-Z]{2}\w+$/', $value)) {
                 return $value;
             }
         }

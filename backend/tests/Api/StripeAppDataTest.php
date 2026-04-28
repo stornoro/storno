@@ -402,4 +402,114 @@ class StripeAppDataTest extends ApiTestCase
             $this->assertArrayHasKey('connectedAt', $resp['connectedUser']);
         }
     }
+
+    // ─── invoice creation enrichment (StripeAppInvoiceService) ────────────────
+
+    private function getAppTokenEntity(string $accessToken): \App\Entity\StripeAppToken
+    {
+        /** @var EntityManagerInterface $em */
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $token = $em->getRepository(\App\Entity\StripeAppToken::class)
+            ->findOneBy(['accessToken' => $accessToken]);
+        $this->assertNotNull($token, 'expected an active StripeAppToken for the linked account');
+
+        return $token;
+    }
+
+    public function testCreateFromStripeInvoicePopulatesClientAddressAndVat(): void
+    {
+        $tokens = $this->linkAccount();
+        $token = $this->getAppTokenEntity($tokens['access_token']);
+
+        /** @var \App\Service\StripeAppInvoiceService $service */
+        $service = self::getContainer()->get(\App\Service\StripeAppInvoiceService::class);
+
+        $stripeInvoice = [
+            'id' => 'in_test_' . uniqid(),
+            'number' => 'STRIPE-INV-001',
+            'currency' => 'eur',
+            'created' => 1735689600, // 2025-01-01
+            'effective_at' => 1735689600,
+            'amount_due' => 11900,
+            'description' => 'Annual subscription',
+            'customer_name' => 'Acme GmbH',
+            'customer_email' => 'billing@acme.de',
+            'customer_phone' => '+49 30 1234567',
+            'customer_tax_ids' => [
+                ['type' => 'eu_vat', 'value' => 'DE123456789'],
+            ],
+            'customer_address' => [
+                'line1' => 'Friedrichstr. 100',
+                'line2' => 'Etage 3',
+                'city' => 'Berlin',
+                'state' => 'Berlin',
+                'postal_code' => '10117',
+                'country' => 'DE',
+            ],
+            'lines' => ['data' => [
+                ['description' => 'Pro plan', 'unit_amount' => 9999, 'quantity' => 1],
+            ]],
+        ];
+
+        $invoice = $service->createFromStripeInvoice($token, $stripeInvoice);
+
+        // Invoice-level enrichment
+        $this->assertSame('EUR', $invoice->getCurrency());
+        $this->assertSame('2025-01-01', $invoice->getIssueDate()->format('Y-m-d'));
+        // Public-facing notes carry the Stripe invoice number for reconciliation.
+        $this->assertStringContainsString('STRIPE-INV-001', (string) $invoice->getNotes());
+
+        // Client-level enrichment — every field the docs say should be populated
+        // when present on the Stripe customer.
+        $client = $invoice->getClient();
+        $this->assertNotNull($client, 'invoice should be linked to a created client');
+        $this->assertSame('Acme GmbH', $client->getName());
+        $this->assertSame('billing@acme.de', $client->getEmail());
+        $this->assertSame('+49 30 1234567', $client->getPhone());
+        $this->assertStringContainsString('Friedrichstr. 100', (string) $client->getAddress());
+        $this->assertSame('Berlin', $client->getCity());
+        $this->assertSame('Berlin', $client->getCounty());
+        $this->assertSame('10117', $client->getPostalCode());
+        $this->assertSame('DE', $client->getCountry());
+        $this->assertSame('DE123456789', $client->getVatCode());
+        $this->assertTrue($client->isVatPayer());
+    }
+
+    public function testCreateFromStripeInvoiceFallsBackToVatPrefixForCountry(): void
+    {
+        $tokens = $this->linkAccount();
+        $token = $this->getAppTokenEntity($tokens['access_token']);
+
+        /** @var \App\Service\StripeAppInvoiceService $service */
+        $service = self::getContainer()->get(\App\Service\StripeAppInvoiceService::class);
+
+        // Customer with a VAT number but no billing-address country —
+        // common for Checkout-created customers.
+        $stripeInvoice = [
+            'id' => 'in_test_' . uniqid(),
+            'currency' => 'eur',
+            'created' => 1735689600,
+            'amount_due' => 5000,
+            'customer_name' => 'BV Holland',
+            'customer_email' => 'invoices@bv-holland.nl',
+            'customer_tax_ids' => [
+                ['type' => 'eu_vat', 'value' => 'NL000099998B57'],
+            ],
+            'customer_address' => [
+                'line1' => 'Damrak 1',
+                'city' => 'Amsterdam',
+                // no country
+            ],
+            'lines' => ['data' => [
+                ['description' => 'Service', 'unit_amount' => 5000, 'quantity' => 1],
+            ]],
+        ];
+
+        $invoice = $service->createFromStripeInvoice($token, $stripeInvoice);
+        $client = $invoice->getClient();
+
+        $this->assertNotNull($client);
+        $this->assertSame('NL', $client->getCountry(), 'country should fall back to the VAT prefix');
+        $this->assertSame('NL000099998B57', $client->getVatCode());
+    }
 }
