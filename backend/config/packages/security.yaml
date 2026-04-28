@@ -46,6 +46,10 @@ security:
             pattern: ^/api/v1/stripe-app/token$
             security: false
 
+        stripe_app_oauth_device:
+            pattern: ^/api/v1/stripe-app/oauth/device$
+            security: false
+
         anaf_token_link:
             pattern: ^/api/v1/anaf/token-links/[a-f0-9]+$
             security: false
@@ -109,6 +113,7 @@ security:
         - { path: ^/api/v1/system/health$, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/share/, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/stripe-app/token$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/stripe-app/oauth/device$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: "^/api/v1/anaf/token-links/[a-f0-9]+$", methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/contact$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/unsubscribe$, methods: [POST], roles: PUBLIC_ACCESS }
