@@ -19,7 +19,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId, $total] = $this->getFirstInvoiceId();
 
         // First clear any existing payments
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
 
         $data = $this->apiPost('/api/v1/invoices/' . $invoiceId . '/payments', [
             'amount' => '100.00',
@@ -39,7 +39,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId, $total] = $this->getFirstInvoiceId();
 
         // Clear payments
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
 
         // Record partial payment
         $this->apiPost('/api/v1/invoices/' . $invoiceId . '/payments', [
@@ -61,7 +61,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId, $total] = $this->getFirstInvoiceId();
 
         // Clear ALL payments first
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
 
         // Re-fetch to get the correct balance after clearing
         $invoice = $this->apiGet('/api/v1/invoices/' . $invoiceId, ['X-Company' => $companyId]);
@@ -88,7 +88,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId] = $this->getFirstInvoiceId();
 
         // Clear and add a payment
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
         $this->apiPost('/api/v1/invoices/' . $invoiceId . '/payments', [
             'amount' => '25.00',
             'paymentMethod' => 'card',
@@ -106,7 +106,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId] = $this->getFirstInvoiceId();
 
         // Clear and add a payment
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
         $payment = $this->apiPost('/api/v1/invoices/' . $invoiceId . '/payments', [
             'amount' => '30.00',
             'paymentMethod' => 'cash',
@@ -128,7 +128,7 @@ class PaymentTest extends ApiTestCase
         [$companyId, $invoiceId, $total] = $this->getFirstInvoiceId();
 
         // Clear payments
-        $this->apiPatch('/api/v1/invoices/' . $invoiceId . '/payment', ['paid' => false], ['X-Company' => $companyId]);
+        $this->apiPost('/api/v1/invoices/bulk-mark-unpaid', ['ids' => [$invoiceId]], ['X-Company' => $companyId]);
 
         // Try to pay more than total
         $overpayment = bcadd($total, '100.00', 2);
