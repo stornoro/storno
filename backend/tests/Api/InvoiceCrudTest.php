@@ -18,6 +18,25 @@ class InvoiceCrudTest extends ApiTestCase
         return $series;
     }
 
+    private function createTestClient(string $companyId): string
+    {
+        // Full address fields are required by UBL validator (BR-07/10/RO-080/090/120)
+        $response = $this->apiPost('/api/v1/clients', [
+            'name' => 'Test Client SRL ' . substr(md5(uniqid()), 0, 6),
+            'type' => 'company',
+            'cui' => 'RO' . rand(10000000, 99999999),
+            'registrationNumber' => 'J40/' . rand(100, 9999) . '/2020',
+            'address' => 'Str. Exemplu 1',
+            'city' => 'Bucuresti',
+            'county' => 'B',
+            'country' => 'RO',
+        ], ['X-Company' => $companyId]);
+
+        $this->assertResponseStatusCodeSame(201);
+
+        return $response['client']['id'];
+    }
+
     private function createDraftInvoice(string $companyId, ?string $seriesId = null, bool $withReceiver = false): array
     {
         $body = [
@@ -44,14 +63,14 @@ class InvoiceCrudTest extends ApiTestCase
             $body['documentSeriesId'] = $seriesId;
         }
         if ($withReceiver) {
-            $body['receiverName'] = 'Test Client SRL';
-            $body['receiverCif'] = 'RO12345678';
+            $body['clientId'] = $this->createTestClient($companyId);
         }
 
         $data = $this->apiPost('/api/v1/invoices', $body, ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(201);
 
-        return $data;
+        // POST /invoices returns { invoice: {...}, validation: {...} }
+        return $data['invoice'] ?? $data;
     }
 
     public function testCreateInvoiceSuccess(): void
@@ -134,6 +153,8 @@ class InvoiceCrudTest extends ApiTestCase
         ], ['X-Company' => $companyId]);
 
         $this->assertResponseStatusCodeSame(200);
+        // PUT /invoices/{id} returns { invoice: {...}, validation: {...} }
+        $updated = $updated['invoice'] ?? $updated;
         $this->assertEquals('Updated notes', $updated['notes']);
         $this->assertEquals('EUR', $updated['currency']);
         $this->assertCount(1, $updated['lines']);
@@ -144,18 +165,19 @@ class InvoiceCrudTest extends ApiTestCase
         $this->assertEquals('1210.00', $updated['total']);
     }
 
-    public function testUpdateNonDraftRejected(): void
+    public function testUpdateNonEditableRejected(): void
     {
         $this->login();
         $companyId = $this->getFirstCompanyId();
 
-        // Create and issue to make it non-draft
-        $series = $this->createDocumentSeries($companyId);
-        $created = $this->createDraftInvoice($companyId, $series['id'], withReceiver: true);
-        $this->apiPost('/api/v1/invoices/' . $created['id'] . '/issue', [], ['X-Company' => $companyId]);
+        // Cancel the invoice — Invoice::isEditable() returns false for CANCELLED.
+        // (Issued invoices remain editable until they've been uploaded to ANAF.)
+        $created = $this->createDraftInvoice($companyId);
+        $this->apiPost('/api/v1/invoices/' . $created['id'] . '/cancel', [
+            'reason' => 'Test setup',
+        ], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(200);
 
-        // Try to update the now-issued invoice
         $this->apiPut('/api/v1/invoices/' . $created['id'], [
             'notes' => 'Should fail',
         ], ['X-Company' => $companyId]);

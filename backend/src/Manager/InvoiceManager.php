@@ -620,11 +620,12 @@ class InvoiceManager
         });
 
         $isRefund = $invoice->getParentDocument() !== null;
+        $isNegativeTotal = bccomp($invoice->getTotal(), '0', 2) < 0;
         $previousStatus = $invoice->getStatus();
         $newStatus = $isRefund ? DocumentStatus::REFUND : DocumentStatus::ISSUED;
         $invoice->setStatus($newStatus);
 
-        // Mark parent invoice as refunded and auto-settle the storno
+        // Mark parent invoice as refunded
         if ($isRefund) {
             $parent = $invoice->getParentDocument();
             $parentPrevStatus = $parent->getStatus();
@@ -639,12 +640,16 @@ class InvoiceManager
                 'refundInvoiceId' => $invoice->getId()?->toRfc4122(),
             ]);
             $parent->addEvent($parentEvent);
+        }
 
-            // Auto-mark storno/credit note as settled — no payment to collect
-            $parentPaymentMethod = $parent->getPaymentMethod();
+        // Auto-settle storno / credit notes / any negative-total invoice — no payment to collect
+        if ($isRefund || $isNegativeTotal) {
             $invoice->setAmountPaid($invoice->getTotal());
             $invoice->setPaidAt(new \DateTimeImmutable());
-            $invoice->setPaymentMethod($parentPaymentMethod);
+
+            if ($isRefund) {
+                $invoice->setPaymentMethod($invoice->getParentDocument()->getPaymentMethod());
+            }
 
             $settlementEvent = new DocumentEvent();
             $settlementEvent->setNewStatus($newStatus);
@@ -652,7 +657,7 @@ class InvoiceManager
             $settlementEvent->setMetadata([
                 'action' => 'payment_recorded',
                 'amount' => $invoice->getTotal(),
-                'paymentMethod' => $parentPaymentMethod,
+                'paymentMethod' => $invoice->getPaymentMethod(),
                 'amountPaid' => $invoice->getAmountPaid(),
                 'balance' => $invoice->getBalance(),
                 'auto' => true,

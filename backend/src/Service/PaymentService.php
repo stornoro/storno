@@ -131,10 +131,21 @@ class PaymentService
 
     public function recalculateInvoicePaymentStatus(Invoice $invoice): void
     {
+        $total = $invoice->getTotal();
+
+        // Negative-total invoices (refunds/credit notes) auto-settle at issuance
+        // and don't accept payment rows, so recalc must not consult sumByInvoice
+        // here — it would zero out amountPaid and leave paidAt null.
+        if (bccomp($total, '0', 2) < 0) {
+            $invoice->setAmountPaid($total);
+            if ($invoice->getPaidAt() === null) {
+                $invoice->setPaidAt(new \DateTimeImmutable());
+            }
+            return;
+        }
+
         $totalPaid = $this->paymentRepository->sumByInvoice($invoice);
         $invoice->setAmountPaid($totalPaid);
-
-        $total = $invoice->getTotal();
 
         if (bccomp($totalPaid, $total, 2) >= 0) {
             // Fully paid — set paidAt and paymentMethod
