@@ -88,6 +88,42 @@ const formCategoryOptions = computed(() => [
   ...(categoriesStore.items ?? []).map(c => ({ value: c.id, label: c.name })),
 ])
 
+// Quick-create category from inside the product form so users don't have to
+// jump to /settings/product-categories. Auto-selects the new category on save.
+const newCategoryModalOpen = ref(false)
+const newCategorySaving = ref(false)
+const newCategory = ref<{ name: string, color: string | null }>({ name: '', color: null })
+const categoryPalette = [
+  '#1e40af', '#0284c7', '#16a34a', '#d97706',
+  '#dc2626', '#7c3aed', '#0891b2', '#db2777',
+  '#475569', '#84cc16', '#f59e0b', '#ec4899',
+]
+
+function openNewCategory() {
+  newCategory.value = { name: '', color: null }
+  newCategoryModalOpen.value = true
+}
+
+async function saveNewCategory() {
+  const name = newCategory.value.name.trim()
+  if (!name) return
+  newCategorySaving.value = true
+  const created = await categoriesStore.createCategory({
+    name,
+    color: newCategory.value.color,
+    sortOrder: categoriesStore.items.length,
+  })
+  newCategorySaving.value = false
+  if (created) {
+    form.value.categoryId = created.id
+    newCategoryModalOpen.value = false
+    toast.add({ title: $t('productCategories.createSuccess'), color: 'success' })
+  }
+  else if (categoriesStore.error) {
+    toast.add({ title: categoriesStore.error, color: 'error' })
+  }
+}
+
 // ── NC Code search ──────────────────────────────────────────────────
 const ncCodeSearchTerm = ref('')
 const ncCodeSearchResults = ref<{ label: string, value: string }[]>([])
@@ -700,12 +736,21 @@ onMounted(() => {
         </div>
 
         <UFormField :label="$t('products.category')">
-          <USelectMenu
-            v-model="selectedCategoryId"
-            :items="formCategoryOptions"
-            value-key="value"
-            class="w-full"
-          />
+          <div class="flex items-center gap-2">
+            <USelectMenu
+              v-model="selectedCategoryId"
+              :items="formCategoryOptions"
+              value-key="value"
+              class="w-full"
+            />
+            <UButton
+              icon="i-lucide-plus"
+              variant="soft"
+              color="neutral"
+              :title="$t('productCategories.add')"
+              @click="openNewCategory"
+            />
+          </div>
         </UFormField>
 
         <!-- Price + Currency row -->
@@ -907,6 +952,54 @@ onMounted(() => {
       <div class="flex justify-end gap-2">
         <UButton variant="ghost" @click="deleteModalOpen = false">{{ $t('common.cancel') }}</UButton>
         <UButton color="error" :loading="deleteLoading" @click="confirmDelete">{{ $t('common.delete') }}</UButton>
+      </div>
+    </template>
+  </UModal>
+
+  <!-- Quick-create category modal — opened from the product form's category picker -->
+  <UModal v-model:open="newCategoryModalOpen">
+    <template #header>
+      <h3 class="font-semibold">{{ $t('productCategories.add') }}</h3>
+    </template>
+    <template #body>
+      <div class="space-y-4">
+        <UFormField :label="$t('productCategories.name')" required>
+          <UInput v-model="newCategory.name" :placeholder="$t('productCategories.namePlaceholder')" autofocus />
+        </UFormField>
+        <UFormField :label="$t('productCategories.color')">
+          <div class="space-y-3">
+            <div class="flex items-center gap-2">
+              <UInput v-model="newCategory.color" placeholder="#1e40af" class="flex-1 font-mono" />
+              <UButton
+                v-if="newCategory.color"
+                icon="i-lucide-x"
+                size="xs"
+                variant="ghost"
+                @click="newCategory.color = null"
+              />
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="hex in categoryPalette"
+                :key="hex"
+                type="button"
+                class="size-7 rounded-full border-2 transition"
+                :class="newCategory.color === hex ? 'border-(--ui-text) scale-110' : 'border-transparent hover:scale-110'"
+                :style="{ backgroundColor: hex }"
+                :aria-label="hex"
+                @click="newCategory.color = hex"
+              />
+            </div>
+          </div>
+        </UFormField>
+      </div>
+    </template>
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <UButton variant="ghost" @click="newCategoryModalOpen = false">{{ $t('common.cancel') }}</UButton>
+        <UButton :loading="newCategorySaving" :disabled="!newCategory.name.trim()" @click="saveNewCategory">
+          {{ $t('common.save') }}
+        </UButton>
       </div>
     </template>
   </UModal>
