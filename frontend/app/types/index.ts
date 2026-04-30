@@ -344,6 +344,7 @@ export interface Product {
   usage: string
   ncCode: string | null
   cpvCode: string | null
+  category?: { id: string, name: string, color: string | null } | null
   source: string
   lastSyncedAt: string | null
   createdAt: string

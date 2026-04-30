@@ -75,6 +75,12 @@ const form = ref({
   usage: 'both',
   ncCode: null as string | null,
   cpvCode: null as string | null,
+  categoryId: null as string | null,
+})
+
+const selectedCategoryId = computed({
+  get: () => form.value.categoryId ?? '',
+  set: (v: string) => { form.value.categoryId = v || null },
 })
 
 // ── NC Code search ──────────────────────────────────────────────────
@@ -262,6 +268,7 @@ const allColumnDefs = [
   { accessorKey: 'vatRate', header: $t('products.vatRate'), _always: true },
   { accessorKey: 'unitOfMeasure', header: $t('products.unitOfMeasure'), _toggle: 'unitOfMeasure' },
   { accessorKey: 'usage', header: $t('products.usage'), _always: true },
+  { accessorKey: 'category', header: $t('products.category'), _toggle: 'category' },
   { accessorKey: 'isService', header: $t('products.isService'), _always: true },
   { id: 'actions', header: $t('common.actions'), _always: true },
 ]
@@ -306,6 +313,7 @@ function openCreate() {
     usage: 'both',
     ncCode: null,
     cpvCode: null,
+    categoryId: null,
   }
   ncCodeSearchTerm.value = ''
   ncCodeSearchResults.value = []
@@ -329,6 +337,7 @@ function openEdit(product: Product) {
     usage: product.usage ?? 'both',
     ncCode: product.ncCode ?? null,
     cpvCode: product.cpvCode ?? null,
+    categoryId: product.category?.id ?? null,
   }
   ncCodeSearchTerm.value = ''
   cpvCodeSearchTerm.value = ''
@@ -374,6 +383,7 @@ async function onSave() {
     usage: form.value.usage,
     ncCode: form.value.ncCode || null,
     cpvCode: form.value.cpvCode || null,
+    categoryId: form.value.categoryId,
   }
 
   if (editingProduct.value) {
@@ -596,6 +606,18 @@ onMounted(() => {
         <template #usage-cell="{ row }">
           <span class="text-sm text-muted">{{ $t(`products.usageOptions.${row.original.usage}`) }}</span>
         </template>
+        <template #category-cell="{ row }">
+          <UBadge
+            v-if="row.original.category"
+            variant="subtle"
+            size="sm"
+            :style="row.original.category.color ? { backgroundColor: row.original.category.color + '22', color: row.original.category.color } : undefined"
+            :color="row.original.category.color ? undefined : 'neutral'"
+          >
+            {{ row.original.category.name }}
+          </UBadge>
+          <span v-else class="text-xs text-muted">-</span>
+        </template>
         <template #isService-cell="{ row }">
           <UBadge
             :color="row.original.isService ? 'info' : 'neutral'"
@@ -671,6 +693,15 @@ onMounted(() => {
             </div>
           </UFormField>
         </div>
+
+        <UFormField :label="$t('products.category')">
+          <USelectMenu
+            v-model="selectedCategoryId"
+            :items="[{ label: $t('products.noCategory'), value: '' }, ...(categoriesStore.items ?? []).map(c => ({ label: c.name, value: c.id }))]"
+            value-key="value"
+            class="w-full"
+          />
+        </UFormField>
 
         <!-- Price + Currency row -->
         <div class="grid grid-cols-3 gap-3">
