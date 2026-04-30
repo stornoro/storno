@@ -79,9 +79,14 @@ const form = ref({
 })
 
 const selectedCategoryId = computed({
-  get: () => form.value.categoryId ?? '',
-  set: (v: string) => { form.value.categoryId = v || null },
+  get: () => form.value.categoryId ?? 'none',
+  set: (v: string) => { form.value.categoryId = v === 'none' ? null : v },
 })
+
+const formCategoryOptions = computed(() => [
+  { value: 'none', label: $t('products.noCategory') },
+  ...(categoriesStore.items ?? []).map(c => ({ value: c.id, label: c.name })),
+])
 
 // ── NC Code search ──────────────────────────────────────────────────
 const ncCodeSearchTerm = ref('')
@@ -697,7 +702,7 @@ onMounted(() => {
         <UFormField :label="$t('products.category')">
           <USelectMenu
             v-model="selectedCategoryId"
-            :items="[{ label: $t('products.noCategory'), value: '' }, ...(categoriesStore.items ?? []).map(c => ({ label: c.name, value: c.id }))]"
+            :items="formCategoryOptions"
             value-key="value"
             class="w-full"
           />
