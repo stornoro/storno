@@ -1466,6 +1466,8 @@ export default defineI18nLocale(async () => {
         categoryNone: 'Fara categorie',
       },
       noProductsDesc: 'Adauga produse si servicii pentru a le folosi in facturi si proforma.',
+      category: 'Categorie',
+      noCategory: 'Fara categorie',
       name: 'Denumire',
       namePlaceholder: 'Ex: Servicii consultanta IT',
       code: 'Cod produs',
