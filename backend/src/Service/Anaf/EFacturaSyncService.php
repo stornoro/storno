@@ -38,6 +38,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use App\Exception\AnafRateLimitException;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 class EFacturaSyncService
 {
@@ -72,6 +73,7 @@ class EFacturaSyncService
         private readonly DocumentSeriesManager $documentSeriesManager,
         private readonly ManagerRegistry $managerRegistry,
         private readonly WebhookDispatcher $webhookDispatcher,
+        private readonly TranslatorInterface $translator,
     ) {
         $this->entityManager = $entityManager;
     }
@@ -1147,13 +1149,9 @@ class EFacturaSyncService
             $users = $this->membershipRepository->findActiveUsersByCompany($company);
             $companyName = $company->getName() ?? '—';
 
-            // Build a title that always identifies the company. Multi-company users
-            // glance at notifications and need to know "for which company" first.
-            $title = $companyName;
+            $titleKey = 'notification.efactura.new_documents.title';
+            $titleParams = ['company' => $companyName];
 
-            // Single document: name the counterparty + amount + currency. This is
-            // the high-value case for B2B users — they want to know what arrived
-            // at a glance without opening the app.
             if ($count === 1 && !empty($summaries[0])) {
                 $s = $summaries[0];
                 $direction = $s['direction'] === 'incoming' ? 'incoming' : 'outgoing';
@@ -1162,9 +1160,6 @@ class EFacturaSyncService
                     : ($s['receiverName'] ?: '—');
                 $amount = $this->formatAmount($s['total'], $s['currency']);
                 $number = $s['number'] ?: '#?';
-                $message = $direction === 'incoming'
-                    ? sprintf('You received an invoice from %s · %s', $counterparty, $amount)
-                    : sprintf('You sent an invoice to %s · %s', $counterparty, $amount);
 
                 $messageKey = $direction === 'incoming'
                     ? 'notification.efactura.new_incoming.message'
@@ -1176,22 +1171,11 @@ class EFacturaSyncService
                     'amount' => $amount,
                 ];
             } else {
-                // Multiple documents: surface the total per direction so the user
-                // knows the overall shape before tapping in.
                 $byDir = ['incoming' => 0, 'outgoing' => 0];
                 foreach ($summaries as $s) {
                     $key = $s['direction'] === 'outgoing' ? 'outgoing' : 'incoming';
                     $byDir[$key]++;
                 }
-                $parts = [];
-                if ($byDir['incoming'] > 0) {
-                    $parts[] = $byDir['incoming'] . ' incoming';
-                }
-                if ($byDir['outgoing'] > 0) {
-                    $parts[] = $byDir['outgoing'] . ' outgoing';
-                }
-                $breakdown = $parts ? ' (' . implode(', ', $parts) . ')' : '';
-                $message = sprintf('You have %d new documents%s', $count, $breakdown);
 
                 $messageKey = 'notification.efactura.new_documents_multi.message';
                 $messageParams = [
@@ -1203,6 +1187,10 @@ class EFacturaSyncService
             }
 
             foreach ($users as $user) {
+                $locale = $user->getLocale() ?? 'ro';
+                $title = $this->translator->trans($titleKey, $this->prefixParams($titleParams), 'notifications', $locale);
+                $message = $this->translator->trans($messageKey, $this->prefixParams($messageParams), 'notifications', $locale);
+
                 $this->notificationService->createNotification(
                     $user,
                     'efactura.new_documents',
@@ -1212,8 +1200,8 @@ class EFacturaSyncService
                         'companyId' => $company->getId()->toRfc4122(),
                         'companyName' => $companyName,
                         'count' => $count,
-                        'titleKey' => 'notification.efactura.new_documents.title',
-                        'titleParams' => ['company' => $companyName],
+                        'titleKey' => $titleKey,
+                        'titleParams' => $titleParams,
                         'messageKey' => $messageKey,
                         'messageParams' => $messageParams,
                         'invoices' => $summaries,
@@ -1226,6 +1214,19 @@ class EFacturaSyncService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, string>
+     */
+    private function prefixParams(array $params): array
+    {
+        $prefixed = [];
+        foreach ($params as $k => $v) {
+            $prefixed['%' . $k . '%'] = (string) $v;
+        }
+        return $prefixed;
     }
 
     private function formatAmount(string $total, string $currency): string
@@ -1453,11 +1454,9 @@ class EFacturaSyncService
             $companyName = $company->getName() ?? '—';
             $errorCount = count($userErrors);
             $firstError = $userErrors[0] ?? 'Unknown error';
-            $title = sprintf('%s — e-Factura sync error', $companyName);
-            $message = $errorCount === 1
-                ? sprintf('%s — %s', $companyName, $firstError)
-                : sprintf('%s — %d sync errors. First: %s', $companyName, $errorCount, $firstError);
 
+            $titleKey = MessageKey::TITLE_SYNC_ERROR;
+            $titleParams = ['company' => $companyName];
             $messageKey = $errorCount === 1 ? MessageKey::MSG_SYNC_ERROR_SINGLE : MessageKey::MSG_SYNC_ERROR_MULTIPLE;
             $messageParams = [
                 'company' => $companyName,
@@ -1467,6 +1466,10 @@ class EFacturaSyncService
             ];
 
             foreach ($users as $user) {
+                $locale = $user->getLocale() ?? 'ro';
+                $title = $this->translator->trans($titleKey, $this->prefixParams($titleParams), 'notifications', $locale);
+                $message = $this->translator->trans($messageKey, $this->prefixParams($messageParams), 'notifications', $locale);
+
                 $this->notificationService->createNotification(
                     $user,
                     'sync.error',
@@ -1476,8 +1479,8 @@ class EFacturaSyncService
                         'companyId' => $company->getId()->toRfc4122(),
                         'companyName' => $companyName,
                         'errors' => array_slice($userErrors, 0, 5),
-                        'titleKey' => MessageKey::TITLE_SYNC_ERROR,
-                        'titleParams' => ['company' => $companyName],
+                        'titleKey' => $titleKey,
+                        'titleParams' => $titleParams,
                         'messageKey' => $messageKey,
                         'messageParams' => $messageParams,
                     ],

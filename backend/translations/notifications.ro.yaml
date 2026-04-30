@@ -27,7 +27,7 @@ notification:
     message: 'Tokenul ANAF (%token%) nu a putut fi reinnoit automat. Re-autorizeaza manual.'
   anaf_deadline:
     title: '%company% — termen ANAF expira maine'
-    message: 'Factura %number% trebuie trimisa la ANAF pana maine (%date%)'
+    message: 'Trimite factura %number% la ANAF pana maine. Emisa pe %date%.'
   anaf_missing_token:
     title: '%company% — conecteaza-te la SPV pentru ANAF'
     message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza-te la SPV pana pe %deadline% pentru a evita amenzile.'
@@ -39,16 +39,16 @@ notification:
     message: 'Backupul tau este gata pentru descarcare.'
   restore_completed:
     title: 'Restaurare finalizata'
-    message: 'Backupul a fost restaurat cu succes.'
+    message: 'Ai restaurat cu succes datele companiei %name%.'
   payment_received:
     title: '%company% — plata inregistrata'
-    message: 'Plata de %amount% %currency% inregistrata pentru factura %number%'
+    message: 'Ai primit %amount% %currency% pentru factura %number%'
   invoice_validated:
     title: '%company% — factura validata ANAF'
-    message: 'Factura %number% · %amount% a fost validata de ANAF'
+    message: 'ANAF ti-a validat factura %number% · %amount%'
   invoice_rejected:
     title: '%company% — factura respinsa ANAF'
-    message: 'Factura %number% · %amount% a fost respinsa de ANAF: %error%'
+    message: 'ANAF ti-a respins factura %number% · %amount%: %error%'
   sync_error:
     title: '%company% — eroare sincronizare e-Factura'
     single: '%company% — %error%'

@@ -27,7 +27,7 @@ notification:
     message: 'The ANAF token (%token%) could not be renewed automatically. Please re-authorize manually.'
   anaf_deadline:
     title: '%company% — ANAF deadline expires tomorrow'
-    message: 'Invoice %number% must be submitted to ANAF by tomorrow (%date%)'
+    message: 'Submit invoice %number% to ANAF by tomorrow. Issued on %date%.'
   anaf_missing_token:
     title: '%company% — connect SPV to submit to ANAF'
     message: 'Invoice %number% issued on %date% cannot be submitted to ANAF — no SPV token is configured. Connect SPV by %deadline% to avoid penalties.'
@@ -39,16 +39,16 @@ notification:
     message: 'Your backup is ready for download.'
   restore_completed:
     title: 'Restore completed'
-    message: 'Your backup has been restored successfully.'
+    message: 'You successfully restored data for %name%.'
   payment_received:
     title: '%company% — payment received'
-    message: 'Payment of %amount% %currency% received for invoice %number%'
+    message: 'You received %amount% %currency% for invoice %number%'
   invoice_validated:
     title: '%company% — invoice validated by ANAF'
-    message: 'Invoice %number% · %amount% has been validated by ANAF'
+    message: 'ANAF validated your invoice %number% · %amount%'
   invoice_rejected:
     title: '%company% — invoice rejected by ANAF'
-    message: 'Invoice %number% · %amount% was rejected by ANAF: %error%'
+    message: 'ANAF rejected your invoice %number% · %amount%: %error%'
   sync_error:
     title: '%company% — e-Factura sync error'
     single: '%company% — %error%'
