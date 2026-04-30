@@ -93,6 +93,12 @@ class NotificationController extends AbstractController
             'readAt' => $n->isRead() ? $n->getUpdatedAt()?->format('c') : null,
             'sentAt' => $n->getSentAt()?->format('c'),
             'createdAt' => $n->getCreatedAt()?->format('c'),
+            'push' => [
+                'attempted' => $n->isPushAttempted(),
+                'sentAt' => $n->getPushSentAt()?->format('c'),
+                'error' => $n->getPushError(),
+                'skippedReason' => $n->getPushSkippedReason(),
+            ],
         ];
     }
 }

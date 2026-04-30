@@ -40,6 +40,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 50)]
     private string $timezone = 'Europe/Bucharest';
 
+    #[ORM\Column(options: ['default' => true])]
+    private bool $respectQuietHours = true;
+
     #[ORM\Column]
     private array $roles = [];
 
@@ -215,6 +218,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setTimezone(string $timezone): static
     {
         $this->timezone = $timezone;
+
+        return $this;
+    }
+
+    public function isRespectQuietHours(): bool
+    {
+        return $this->respectQuietHours;
+    }
+
+    public function setRespectQuietHours(bool $respectQuietHours): static
+    {
+        $this->respectQuietHours = $respectQuietHours;
 
         return $this;
     }

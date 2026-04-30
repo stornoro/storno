@@ -45,6 +45,12 @@ export default defineI18nLocale(async () => {
       markAllRead: 'Mark all as read',
       empty: 'No notifications',
       seeDetails: 'see details',
+      push: {
+        delivered: 'Push delivered',
+        failed: 'Push failed: {error}',
+        skippedQuietHours: 'Push muted (quiet hours)',
+        skippedNoDevices: 'No registered devices',
+      },
     },
 
     // ── Keyboard shortcuts ────────────────────────────────────────
@@ -2065,6 +2071,7 @@ export default defineI18nLocale(async () => {
     syncLog: 'Sync log',
     syncComplete: 'Sync complete',
     syncError: 'Sync error',
+    activateSync: 'Activate sync',
     tokenInvalid: 'Invalid ANAF token',
     lastSync: 'Last sync',
     nextSync: 'Next sync',
@@ -2254,6 +2261,8 @@ export default defineI18nLocale(async () => {
       setPasswordHint: 'Your account uses Google authentication. You will be verified by email before setting a password.',
       phone: 'Phone number',
       phoneDescription: 'Used for WhatsApp and SMS notifications',
+      timezone: 'Timezone',
+      timezoneDescription: 'Used to schedule reminders and silence push notifications during quiet hours.',
       updateSuccess: 'Profile updated successfully',
       updateError: 'Error updating profile',
     },
@@ -2937,6 +2946,10 @@ export default defineI18nLocale(async () => {
   notificationPreferences: {
     title: 'Notification preferences',
     description: 'Choose which notifications you want to receive and on which channels.',
+    quietHours: {
+      title: 'Quiet hours (22:00 – 08:00)',
+      description: 'Silence push notifications overnight in your timezone. The notification still appears in the bell next time you open the app.',
+    },
     linkTelegram: 'Link Telegram',
     unlinkTelegram: 'Unlink Telegram',
     telegramLinked: 'Telegram linked',
@@ -2971,7 +2984,6 @@ export default defineI18nLocale(async () => {
         expired: 'Proforma expired',
       },
       sync: {
-        completed: 'Sync completed',
         error: 'Sync error',
       },
       efactura: {
@@ -4093,10 +4105,10 @@ export default defineI18nLocale(async () => {
     'notification.invoice_rejected.title': '{company} — invoice rejected by ANAF',
     'notification.sync_error.title': '{company} — e-Factura sync error',
     'notification.new_documents.title': '{company} — new e-Factura documents',
-    'notification.efactura.new_documents.title': '{company} — e-Factura',
-    'notification.efactura.new_incoming.message': 'Incoming {number} from {counterparty} · {amount}',
-    'notification.efactura.new_outgoing.message': 'Outgoing {number} to {counterparty} · {amount}',
-    'notification.efactura.new_documents_multi.message': '{count} new documents ({incoming} incoming, {outgoing} outgoing)',
+    'notification.efactura.new_documents.title': '{company}',
+    'notification.efactura.new_incoming.message': 'You received an invoice from {counterparty} · {amount}',
+    'notification.efactura.new_outgoing.message': 'You sent an invoice to {counterparty} · {amount}',
+    'notification.efactura.new_documents_multi.message': 'You have {count} new documents ({incoming} incoming, {outgoing} outgoing)',
     'notification.token_expiring.title': '{token} — ANAF token expiring',
     'notification.token_refresh_failed.title': '{token} — ANAF token refresh failed',
     'notification.export_ready.title': 'ZIP export ready',

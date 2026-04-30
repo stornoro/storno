@@ -76,6 +76,7 @@ export interface User {
   phone: string | null
   locale: string
   timezone: string
+  respectQuietHours?: boolean
   roles: string[]
   active: boolean
   emailVerified: boolean

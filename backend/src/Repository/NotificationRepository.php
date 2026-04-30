@@ -82,6 +82,65 @@ class NotificationRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
+    /**
+     * Delete read notifications older than {readMaxAgeDays} and any notification
+     * older than {unreadMaxAgeDays}. Returns the number of rows deleted.
+     */
+    public function deleteOlderThan(int $readMaxAgeDays, int $unreadMaxAgeDays): int
+    {
+        $now = new \DateTimeImmutable();
+        $readCutoff = $now->modify(sprintf('-%d days', $readMaxAgeDays));
+        $hardCutoff = $now->modify(sprintf('-%d days', $unreadMaxAgeDays));
+
+        $deleted = (int) $this->createQueryBuilder('n')
+            ->delete()
+            ->where('n.isRead = true AND n.sentAt < :readCutoff')
+            ->orWhere('n.sentAt < :hardCutoff')
+            ->setParameter('readCutoff', $readCutoff)
+            ->setParameter('hardCutoff', $hardCutoff)
+            ->getQuery()
+            ->execute();
+
+        return $deleted;
+    }
+
+    /**
+     * For each user with more than {maxPerUser} notifications, delete the oldest
+     * rows above the cap. Returns the total number of rows deleted.
+     *
+     * Uses raw SQL because Doctrine ORM's DQL doesn't support correlated subqueries
+     * in DELETE on MySQL.
+     */
+    public function deletePerUserOverflow(int $maxPerUser): int
+    {
+        $conn = $this->getEntityManager()->getConnection();
+
+        // Find user_ids whose notification count exceeds the cap.
+        $rows = $conn->fetchAllAssociative(
+            'SELECT user_id, COUNT(id) AS c FROM notification GROUP BY user_id HAVING c > :max',
+            ['max' => $maxPerUser],
+        );
+
+        $totalDeleted = 0;
+        foreach ($rows as $row) {
+            $userId = $row['user_id'];
+            $count = (int) $row['c'];
+            $excess = $count - $maxPerUser;
+            if ($excess <= 0) {
+                continue;
+            }
+
+            // Delete the {excess} oldest rows for this user.
+            $deleted = $conn->executeStatement(
+                'DELETE FROM notification WHERE user_id = :user ORDER BY sent_at ASC LIMIT ' . $excess,
+                ['user' => $userId],
+            );
+            $totalDeleted += (int) $deleted;
+        }
+
+        return $totalDeleted;
+    }
+
     //    public function findOneBySomeField($value): ?Notification
     //    {
     //        return $this->createQueryBuilder('n')

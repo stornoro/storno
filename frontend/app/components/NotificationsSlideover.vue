@@ -102,6 +102,34 @@ function onDownload(notification: BackendNotification) {
   const filename = notification.data?.filename || 'export.zip'
   downloadExport(url, filename)
 }
+
+// Push delivery status — small line under each notification when relevant.
+// Hidden when the row was never expected to push (no `push` payload, or push
+// wasn't attempted and there's no skip reason).
+function pushStatusLabel(n: BackendNotification): string | null {
+  const p = n.push
+  if (!p) return null
+  if (p.skippedReason === 'quiet_hours') return $t('notifications.push.skippedQuietHours')
+  if (p.skippedReason === 'no_devices') return $t('notifications.push.skippedNoDevices')
+  if (!p.attempted) return null
+  if (p.sentAt) return $t('notifications.push.delivered')
+  if (p.error) return $t('notifications.push.failed', { error: p.error })
+  return null
+}
+
+function pushStatusIcon(n: BackendNotification): string {
+  const p = n.push
+  if (p?.sentAt) return 'i-lucide-check-circle-2'
+  if (p?.skippedReason) return 'i-lucide-moon'
+  return 'i-lucide-alert-triangle'
+}
+
+function pushStatusClass(n: BackendNotification): string {
+  const p = n.push
+  if (p?.sentAt) return 'text-success'
+  if (p?.skippedReason) return 'text-(--ui-text-muted)'
+  return 'text-warning'
+}
 </script>
 
 <template>
@@ -147,6 +175,10 @@ function onDownload(notification: BackendNotification) {
             </time>
           </p>
           <p class="text-(--ui-text-dimmed) mt-0.5">{{ resolvedMessage(n) }}</p>
+          <p v-if="pushStatusLabel(n)" class="text-xs mt-0.5 flex items-center gap-1" :class="pushStatusClass(n)">
+            <UIcon :name="pushStatusIcon(n)" class="size-3" />
+            {{ pushStatusLabel(n) }}
+          </p>
           <div class="flex items-center gap-2 mt-1.5">
             <UButton
               v-if="n.type === 'export_ready' && n.data?.downloadUrl"
