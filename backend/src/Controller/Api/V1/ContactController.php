@@ -49,8 +49,9 @@ class ContactController extends AbstractController
             return $this->json(['error' => 'Invalid email address.'], Response::HTTP_BAD_REQUEST);
         }
 
-        // Verify Turnstile token
-        if (!$turnstileToken || !$this->verifyTurnstile($turnstileToken, $request->getClientIp())) {
+        // Verify Turnstile token. When no secret is configured (dev / preview),
+        // verifyTurnstile() short-circuits to true, so an empty token is fine.
+        if (!$this->verifyTurnstile($turnstileToken, $request->getClientIp())) {
             return $this->json(['error' => 'Turnstile verification failed.'], Response::HTTP_FORBIDDEN);
         }
 
@@ -84,6 +85,10 @@ class ContactController extends AbstractController
         if (!$this->turnstileSecretKey) {
             // No secret key configured — skip verification in dev
             return true;
+        }
+        if (!$token) {
+            // Secret is configured but the client didn't send a token.
+            return false;
         }
 
         try {
