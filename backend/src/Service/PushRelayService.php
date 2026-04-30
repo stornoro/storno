@@ -18,10 +18,17 @@ class PushRelayService
         return $this->pushRelayUrl !== '';
     }
 
-    public function send(string $token, string $title, string $body, array $data = [], ?int $badge = null): void
+    /**
+     * Send a push notification through the relay.
+     *
+     * Returns null on success, or a short error string when the relay rejected the
+     * request or the call itself blew up. The caller persists this on the
+     * `Notification` row so users / support can debug why a push didn't arrive.
+     */
+    public function send(string $token, string $title, string $body, array $data = [], ?int $badge = null): ?string
     {
         if (!$this->isEnabled()) {
-            return;
+            return 'relay_disabled';
         }
 
         try {
@@ -53,15 +60,20 @@ class PushRelayService
 
             $statusCode = $response->getStatusCode();
             if ($statusCode >= 400) {
+                $body = $response->getContent(false);
                 $this->logger->error('Push relay returned error.', [
                     'status' => $statusCode,
-                    'body' => $response->getContent(false),
+                    'body' => $body,
                 ]);
+                return sprintf('relay_%d: %s', $statusCode, mb_substr($body, 0, 200));
             }
+
+            return null;
         } catch (\Throwable $e) {
             $this->logger->error('Failed to send push notification via relay.', [
                 'error' => $e->getMessage(),
             ]);
+            return mb_substr($e->getMessage(), 0, 200);
         }
     }
 

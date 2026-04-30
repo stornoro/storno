@@ -65,9 +65,35 @@ const formState = reactive({
   lastName: authStore.user?.lastName || '',
   phone: authStore.user?.phone || '',
   email: authStore.user?.email || '',
+  timezone: authStore.user?.timezone || 'Europe/Bucharest',
   currentPassword: '',
   newPassword: '',
 })
+
+const timezoneOptions = (() => {
+  // Use the runtime list when available; otherwise fall back to a curated short list.
+  // Browsers since Chrome 76 / Safari 14 expose Intl.supportedValuesOf, so this is widely supported.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fn = (Intl as any).supportedValuesOf as ((key: string) => string[]) | undefined
+    const list = typeof fn === 'function' ? fn('timeZone') : []
+    if (list?.length) return list.map(z => ({ label: z, value: z }))
+  }
+  catch { /* fall through */ }
+  return [
+    'Europe/Bucharest',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Paris',
+    'Europe/Madrid',
+    'Europe/Rome',
+    'Europe/Athens',
+    'Europe/Istanbul',
+    'UTC',
+    'America/New_York',
+    'America/Los_Angeles',
+  ].map(z => ({ label: z, value: z }))
+})()
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'
@@ -136,6 +162,7 @@ async function onSubmit() {
       firstName: formState.firstName,
       lastName: formState.lastName,
       phone: formState.phone || null,
+      timezone: formState.timezone,
     }
 
     if (userHasPassword.value && formState.currentPassword && formState.newPassword) {
@@ -152,6 +179,7 @@ async function onSubmit() {
       authStore.user.firstName = formState.firstName
       authStore.user.lastName = formState.lastName
       authStore.user.phone = formState.phone || null
+      authStore.user.timezone = formState.timezone
       if (payload.newPassword) {
         authStore.user.hasPassword = true
       }
@@ -272,6 +300,7 @@ async function onRegenerateBackupCodes() {
 
 onMounted(() => {
   if (authStore.user) {
+    formState.timezone = authStore.user.timezone || 'Europe/Bucharest'
     formState.firstName = authStore.user.firstName || ''
     formState.lastName = authStore.user.lastName || ''
     formState.phone = authStore.user.phone || ''
@@ -353,6 +382,20 @@ onMounted(() => {
           :items="languageOptions"
           value-key="value"
           @update:model-value="onLanguageChange"
+        />
+      </UFormField>
+      <USeparator />
+      <UFormField
+        :label="$t('settings.profile.timezone')"
+        :description="$t('settings.profile.timezoneDescription')"
+        class="flex max-sm:flex-col justify-between items-start gap-4"
+      >
+        <USelectMenu
+          v-model="formState.timezone"
+          :items="timezoneOptions"
+          value-key="value"
+          searchable
+          class="w-72"
         />
       </UFormField>
     </UPageCard>

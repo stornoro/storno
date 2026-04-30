@@ -60,6 +60,7 @@ class UserController extends AbstractController
             'phone' => $user->getPhone(),
             'locale' => $user->getLocale(),
             'timezone' => $user->getTimezone(),
+            'respectQuietHours' => $user->isRespectQuietHours(),
             'roles' => $user->getRoles(),
             'active' => $user->isActive(),
             'emailVerified' => $user->isEmailVerified(),
@@ -146,6 +147,9 @@ class UserController extends AbstractController
         }
         if (isset($data['timezone'])) {
             $user->setTimezone($data['timezone']);
+        }
+        if (isset($data['respectQuietHours'])) {
+            $user->setRespectQuietHours((bool) $data['respectQuietHours']);
         }
         if (isset($data['preferences'])) {
             $user->setPreferences($data['preferences']);

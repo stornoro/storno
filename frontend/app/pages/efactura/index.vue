@@ -6,9 +6,21 @@
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
-          <UButton v-if="activeTab === 'sync'" icon="i-lucide-refresh-cw" :loading="syncing" :disabled="!syncStore.canSync" @click="triggerManualSync">
-            {{ $t('efactura.syncNow') }}
-          </UButton>
+          <template v-if="activeTab === 'sync'">
+            <UButton
+              v-if="showActivateSync"
+              icon="i-lucide-power"
+              color="warning"
+              variant="soft"
+              :loading="activatingSync"
+              @click="activateSync"
+            >
+              {{ $t('efactura.activateSync') }}
+            </UButton>
+            <UButton icon="i-lucide-refresh-cw" :loading="syncing" :disabled="!syncStore.canSync" @click="triggerManualSync">
+              {{ $t('efactura.syncNow') }}
+            </UButton>
+          </template>
         </template>
       </UDashboardNavbar>
     </template>
@@ -71,7 +83,6 @@
         :title="$t('efactura.tokenInvalid')"
         :description="syncStore.tokenError"
       />
-
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <template v-if="syncStore.loading && !syncStore.syncStatus">
           <UCard v-for="i in 3" :key="i">
@@ -100,10 +111,20 @@
           </UCard>
           <UCard>
             <div class="text-sm text-muted">{{ $t('efactura.tokenStatus') }}</div>
-            <div class="mt-2">
+            <div class="mt-2 flex items-center justify-between gap-2">
               <UBadge :color="syncStore.hasValidToken ? 'success' : 'error'" variant="subtle">
                 {{ syncStore.hasValidToken ? $t('common.valid') : $t('common.invalid') }}
               </UBadge>
+              <UButton
+                v-if="!syncStore.hasValidToken && companyStore.currentCompanyId"
+                icon="i-lucide-link"
+                size="xs"
+                color="error"
+                variant="soft"
+                :to="`/companies/${companyStore.currentCompanyId}/anaf`"
+              >
+                {{ $t('companies.connectAnaf') }}
+              </UButton>
             </div>
             <p v-if="syncStore.tokenError" class="text-xs text-error mt-2">
               {{ syncStore.tokenError }}
@@ -387,6 +408,53 @@ function statusDotColor(status: string): string {
 
 async function triggerManualSync() {
   await syncStore.triggerSync()
+}
+
+const activatingSync = ref(false)
+const showActivateSync = computed(() =>
+  !syncStore.loading && syncStore.syncStatus !== null && !syncStore.isSyncEnabled,
+)
+
+async function activateSync() {
+  const companyId = companyStore.currentCompanyId
+  if (!companyId) return
+  activatingSync.value = true
+  const { post } = useApi()
+  try {
+    const response = await post<{ syncEnabled: boolean }>(`/v1/companies/${companyId}/toggle-sync`)
+    const company = companyStore.companies.find(c => c.id === companyId)
+    if (company) company.syncEnabled = response.syncEnabled
+    if (response.syncEnabled) {
+      useToast().add({ title: $t('companies.syncEnabledSuccess'), color: 'success' })
+      await syncStore.fetchStatus()
+    }
+  }
+  catch (err: any) {
+    const messageKey = err?.data?.messageKey
+    const message = err?.data?.error
+      ? translateApiError(err.data.error)
+      : $t('companies.toggleSyncError')
+    if (messageKey === 'error.sync.enable_no_token') {
+      useToast().add({
+        title: message,
+        color: 'error',
+        actions: [
+          {
+            label: $t('companies.connectAnaf'),
+            color: 'error',
+            variant: 'solid',
+            onClick: () => navigateTo(`/companies/${companyId}/anaf`),
+          },
+        ],
+      })
+    }
+    else {
+      useToast().add({ title: message, color: 'error' })
+    }
+  }
+  finally {
+    activatingSync.value = false
+  }
 }
 
 // Rejected invoices slideover

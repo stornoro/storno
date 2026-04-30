@@ -150,6 +150,7 @@ const exactMap: Record<string, string> = {
   'Company not found at ANAF.': 'Compania nu a fost gasita la ANAF.',
   'ANAF lookup failed.': 'Cautarea ANAF a esuat.',
   'CUI not found in ANAF.': 'CUI-ul nu a fost gasit in ANAF.',
+  'Cannot enable sync without a valid ANAF token. Please connect to ANAF first.': 'Sincronizarea nu poate fi activata fara un token ANAF valid. Conectati-va mai intai la ANAF.',
 
   // ── Import / Export ──────────────────────────────────────────────
   'Import has already been completed.': 'Importul a fost deja finalizat.',

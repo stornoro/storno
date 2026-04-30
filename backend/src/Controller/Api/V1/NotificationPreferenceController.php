@@ -22,7 +22,6 @@ class NotificationPreferenceController extends AbstractController
         'invoice.overdue',
         'proforma.expiring_soon',
         'proforma.expired',
-        'sync.completed',
         'sync.error',
         'efactura.new_documents',
         'token.expiring_soon',

@@ -8,7 +8,6 @@ final class MessageKey
     const TITLE_INVOICE_VALIDATED = 'notification.invoice_validated.title';
     const TITLE_INVOICE_REJECTED = 'notification.invoice_rejected.title';
     const TITLE_SYNC_ERROR = 'notification.sync_error.title';
-    const TITLE_NEW_DOCUMENTS = 'notification.new_documents.title';
     const TITLE_TOKEN_EXPIRING = 'notification.token_expiring.title';
     const TITLE_TOKEN_EXPIRING_NO_REFRESH = 'notification.token_expiring_no_refresh.title';
     const TITLE_TOKEN_REFRESH_FAILED = 'notification.token_refresh_failed.title';
@@ -24,7 +23,6 @@ final class MessageKey
     const MSG_INVOICE_REJECTED = 'notification.invoice_rejected.message';
     const MSG_SYNC_ERROR_SINGLE = 'notification.sync_error.single';
     const MSG_SYNC_ERROR_MULTIPLE = 'notification.sync_error.multiple';
-    const MSG_NEW_DOCUMENTS = 'notification.new_documents.message';
     const MSG_TOKEN_EXPIRING = 'notification.token_expiring.message';
     const MSG_TOKEN_EXPIRING_NO_REFRESH = 'notification.token_expiring_no_refresh.message';
     const MSG_TOKEN_REFRESH_FAILED = 'notification.token_refresh_failed.message';

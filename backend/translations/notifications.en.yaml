@@ -48,17 +48,17 @@ notification:
     message: 'Invoice %number% · %amount% has been validated by ANAF'
   invoice_rejected:
     title: '%company% — invoice rejected by ANAF'
-    message: 'Invoice %number% · %amount% was rejected: %error%'
+    message: 'Invoice %number% · %amount% was rejected by ANAF: %error%'
   sync_error:
     title: '%company% — e-Factura sync error'
     single: '%company% — %error%'
     multiple: '%company% — %count% sync errors. First: %first_error%'
   efactura:
     new_documents:
-      title: '%company% — e-Factura'
+      title: '%company%'
     new_incoming:
-      message: 'Incoming %number% from %counterparty% · %amount%'
+      message: 'You received an invoice from %counterparty% · %amount%'
     new_outgoing:
-      message: 'Outgoing %number% to %counterparty% · %amount%'
+      message: 'You sent an invoice to %counterparty% · %amount%'
     new_documents_multi:
-      message: '%count% new documents (%incoming% incoming, %outgoing% outgoing)'
+      message: 'You have %count% new documents (%incoming% incoming, %outgoing% outgoing)'

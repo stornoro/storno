@@ -45,6 +45,12 @@ export default defineI18nLocale(async () => {
       markAllRead: 'Marcheaza citite',
       empty: 'Nicio notificare',
       seeDetails: 'vezi detalii',
+      push: {
+        delivered: 'Notificare push livrata',
+        failed: 'Notificare push esuata: {error}',
+        skippedQuietHours: 'Push silentios (orele de liniste)',
+        skippedNoDevices: 'Niciun dispozitiv inregistrat',
+      },
     },
 
     // ── Keyboard shortcuts ────────────────────────────────────────
@@ -2064,6 +2070,7 @@ export default defineI18nLocale(async () => {
       syncLog: 'Jurnal sincronizare',
       syncComplete: 'Sincronizare finalizata',
       syncError: 'Eroare la sincronizare',
+      activateSync: 'Activeaza sincronizarea',
       tokenInvalid: 'Token ANAF invalid',
       lastSync: 'Ultima sincronizare',
       nextSync: 'Urmatoarea sincronizare',
@@ -2253,6 +2260,8 @@ export default defineI18nLocale(async () => {
         setPasswordHint: 'Contul tau foloseste autentificarea cu Google. Vei fi verificat prin email inainte de setarea parolei.',
         phone: 'Numar de telefon',
         phoneDescription: 'Folosit pentru notificari WhatsApp si SMS',
+        timezone: 'Fus orar',
+        timezoneDescription: 'Folosit pentru programarea memento-urilor si pentru orele de liniste ale notificarilor push.',
         updateSuccess: 'Profil actualizat cu succes',
         updateError: 'Eroare la actualizarea profilului',
       },
@@ -2936,6 +2945,10 @@ export default defineI18nLocale(async () => {
     notificationPreferences: {
       title: 'Preferinte notificari',
       description: 'Alege ce notificari doresti sa primesti si pe ce canale.',
+      quietHours: {
+        title: 'Ore de liniste (22:00 – 08:00)',
+        description: 'Nu trimite notificari push in timpul noptii (in fusul tau orar). Notificarea apare in continuare in clopotelul aplicatiei la urmatoarea deschidere.',
+      },
       linkTelegram: 'Conecteaza Telegram',
       unlinkTelegram: 'Deconecteaza Telegram',
       telegramLinked: 'Telegram conectat',
@@ -2970,7 +2983,6 @@ export default defineI18nLocale(async () => {
           expired: 'Proforma expirata',
         },
         sync: {
-          completed: 'Sincronizare finalizata',
           error: 'Eroare sincronizare',
         },
         efactura: {
@@ -4092,10 +4104,10 @@ export default defineI18nLocale(async () => {
     'notification.invoice_rejected.title': '{company} — factură respinsă ANAF',
     'notification.sync_error.title': '{company} — eroare sincronizare e-Factura',
     'notification.new_documents.title': '{company} — documente noi e-Factura',
-    'notification.efactura.new_documents.title': '{company} — e-Factura',
-    'notification.efactura.new_incoming.message': 'Primită {number} de la {counterparty} · {amount}',
-    'notification.efactura.new_outgoing.message': 'Emisă {number} către {counterparty} · {amount}',
-    'notification.efactura.new_documents_multi.message': '{count} documente noi ({incoming} primite, {outgoing} emise)',
+    'notification.efactura.new_documents.title': '{company}',
+    'notification.efactura.new_incoming.message': 'Ai primit o factură de la {counterparty} · {amount}',
+    'notification.efactura.new_outgoing.message': 'Ai emis o factură către {counterparty} · {amount}',
+    'notification.efactura.new_documents_multi.message': 'Ai {count} documente noi ({incoming} primite, {outgoing} emise)',
     'notification.token_expiring.title': '{token} — token ANAF expiră',
     'notification.token_refresh_failed.title': '{token} — eroare reînnoire token ANAF',
     'notification.export_ready.title': 'Export ZIP disponibil',

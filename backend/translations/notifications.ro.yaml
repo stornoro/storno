@@ -3,10 +3,10 @@
 notification:
   invoice_due_soon:
     title: '%company% — factura scadenta in curand'
-    message: 'Factura %number% scade in 3 zile (%date%)'
+    message: 'Factura %number% este scadenta in 3 zile (%date%)'
   invoice_due_today:
     title: '%company% — factura scadenta astazi'
-    message: 'Factura %number% scade astazi'
+    message: 'Factura %number% este scadenta astazi'
   invoice_overdue:
     title: '%company% — factura restanta'
     message: 'Factura %number% este scadenta din %date%'
@@ -29,8 +29,8 @@ notification:
     title: '%company% — termen ANAF expira maine'
     message: 'Factura %number% trebuie trimisa la ANAF pana maine (%date%)'
   anaf_missing_token:
-    title: '%company% — conecteaza SPV pentru ANAF'
-    message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza SPV pana pe %deadline% pentru a evita amenzile.'
+    title: '%company% — conecteaza-te la SPV pentru ANAF'
+    message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza-te la SPV pana pe %deadline% pentru a evita amenzile.'
   export_ready:
     title: 'Export finalizat'
     message: 'Exportul tau este gata pentru descarcare.'
@@ -48,17 +48,17 @@ notification:
     message: 'Factura %number% · %amount% a fost validata de ANAF'
   invoice_rejected:
     title: '%company% — factura respinsa ANAF'
-    message: 'Factura %number% · %amount% respinsa: %error%'
+    message: 'Factura %number% · %amount% a fost respinsa de ANAF: %error%'
   sync_error:
     title: '%company% — eroare sincronizare e-Factura'
     single: '%company% — %error%'
-    multiple: '%company% — %count% erori sincronizare. Prima: %first_error%'
+    multiple: '%company% — %count% erori de sincronizare. Prima: %first_error%'
   efactura:
     new_documents:
-      title: '%company% — e-Factura'
+      title: '%company%'
     new_incoming:
-      message: 'Primita %number% de la %counterparty% · %amount%'
+      message: 'Ai primit o factura de la %counterparty% · %amount%'
     new_outgoing:
-      message: 'Emisa %number% catre %counterparty% · %amount%'
+      message: 'Ai emis o factura catre %counterparty% · %amount%'
     new_documents_multi:
-      message: '%count% documente noi (%incoming% primite, %outgoing% emise)'
+      message: 'Ai %count% documente noi (%incoming% primite, %outgoing% emise)'

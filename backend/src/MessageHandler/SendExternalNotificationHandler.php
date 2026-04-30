@@ -107,7 +107,32 @@ class SendExternalNotificationHandler
         }
 
         if ($preference?->isPushEnabled()) {
+            $notificationId = $message->getData()['notificationId'] ?? null;
+            $notification = $notificationId
+                ? $this->notificationRepository->find($notificationId)
+                : null;
+
+            if ($this->isInQuietHours($user)) {
+                if ($notification) {
+                    $notification->setPushSkippedReason('quiet_hours');
+                    $this->entityManager->flush();
+                }
+                $this->logger->info('Push skipped — quiet hours.', [
+                    'userId' => (string) $user->getId(),
+                    'timezone' => $user->getTimezone(),
+                ]);
+                return;
+            }
+
             $devices = $this->userDeviceRepository->findBy(['user' => $user]);
+            if (empty($devices)) {
+                if ($notification) {
+                    $notification->setPushSkippedReason('no_devices');
+                    $this->entityManager->flush();
+                }
+                return;
+            }
+
             // Snapshot of unread count for the iOS app icon badge. Includes
             // the notification we just created (createNotification flushed
             // before dispatching this message).
@@ -135,9 +160,33 @@ class SendExternalNotificationHandler
                     body: $pushBody,
                     data: $message->getData(),
                     badge: $badge,
+                    notificationId: $notificationId,
                 ));
             }
         }
+    }
+
+    /**
+     * Quiet hours: 22:00–07:59 in the user's timezone.
+     *
+     * Only consults `respectQuietHours` on the user; hours are fixed for now
+     * to keep the data model simple.
+     */
+    private function isInQuietHours(User $user): bool
+    {
+        if (!$user->isRespectQuietHours()) {
+            return false;
+        }
+
+        try {
+            $now = new \DateTimeImmutable('now', new \DateTimeZone($user->getTimezone()));
+        } catch (\Throwable) {
+            // Fall back to UTC if the stored TZ is bogus — better to deliver than to silently drop.
+            return false;
+        }
+
+        $hour = (int) $now->format('G');
+        return $hour >= 22 || $hour < 8;
     }
 
     /**

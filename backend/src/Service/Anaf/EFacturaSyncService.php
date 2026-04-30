@@ -1149,7 +1149,7 @@ class EFacturaSyncService
 
             // Build a title that always identifies the company. Multi-company users
             // glance at notifications and need to know "for which company" first.
-            $title = sprintf('%s — e-Factura', $companyName);
+            $title = $companyName;
 
             // Single document: name the counterparty + amount + currency. This is
             // the high-value case for B2B users — they want to know what arrived
@@ -1163,8 +1163,8 @@ class EFacturaSyncService
                 $amount = $this->formatAmount($s['total'], $s['currency']);
                 $number = $s['number'] ?: '#?';
                 $message = $direction === 'incoming'
-                    ? sprintf('Incoming %s from %s · %s', $number, $counterparty, $amount)
-                    : sprintf('Outgoing %s to %s · %s', $number, $counterparty, $amount);
+                    ? sprintf('You received an invoice from %s · %s', $counterparty, $amount)
+                    : sprintf('You sent an invoice to %s · %s', $counterparty, $amount);
 
                 $messageKey = $direction === 'incoming'
                     ? 'notification.efactura.new_incoming.message'
@@ -1191,7 +1191,7 @@ class EFacturaSyncService
                     $parts[] = $byDir['outgoing'] . ' outgoing';
                 }
                 $breakdown = $parts ? ' (' . implode(', ', $parts) . ')' : '';
-                $message = sprintf('%d new documents received%s', $count, $breakdown);
+                $message = sprintf('You have %d new documents%s', $count, $breakdown);
 
                 $messageKey = 'notification.efactura.new_documents_multi.message';
                 $messageParams = [

@@ -11,6 +11,12 @@ export interface BackendNotification {
   sentAt: string
   isRead: boolean
   data: Record<string, any>
+  push?: {
+    attempted: boolean
+    sentAt: string | null
+    error: string | null
+    skippedReason: string | null
+  }
 }
 
 /**

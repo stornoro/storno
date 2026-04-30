@@ -27,6 +27,33 @@ const telegramStatus = ref<TelegramStatus | null>(null)
 const telegramLinking = ref(false)
 const telegramUnlinking = ref(false)
 
+const authStore = useAuthStore()
+const { patch } = useApi()
+const respectQuietHours = ref<boolean>(authStore.user?.respectQuietHours ?? true)
+const quietHoursSaving = ref(false)
+
+watch(() => authStore.user?.respectQuietHours, (v) => {
+  if (typeof v === 'boolean') respectQuietHours.value = v
+})
+
+async function toggleQuietHours(value: boolean) {
+  const previous = respectQuietHours.value
+  respectQuietHours.value = value
+  quietHoursSaving.value = true
+  try {
+    await patch('/v1/me', { respectQuietHours: value })
+    if (authStore.user) authStore.user.respectQuietHours = value
+    useToast().add({ title: $t('notificationPreferences.saveSuccess'), color: 'success' })
+  }
+  catch {
+    respectQuietHours.value = previous
+    useToast().add({ title: $t('notificationPreferences.saveError'), color: 'error' })
+  }
+  finally {
+    quietHoursSaving.value = false
+  }
+}
+
 const categories = [
   {
     key: 'invoices',
@@ -41,7 +68,7 @@ const categories = [
   {
     key: 'sync',
     label: $t('notificationPreferences.categories.sync'),
-    events: ['sync.completed', 'sync.error', 'efactura.new_documents'],
+    events: ['sync.error', 'efactura.new_documents'],
   },
   {
     key: 'tokens',
@@ -171,6 +198,26 @@ onMounted(() => {
         class="w-fit lg:ms-auto"
         @click="savePreferences"
       />
+    </UPageCard>
+
+    <UPageCard variant="subtle" class="mb-8">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <div class="text-sm font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-moon" class="size-4 text-(--ui-text-muted)" />
+            {{ $t('notificationPreferences.quietHours.title') }}
+          </div>
+          <p class="text-xs text-(--ui-text-muted) mt-1">
+            {{ $t('notificationPreferences.quietHours.description') }}
+          </p>
+        </div>
+        <USwitch
+          :model-value="respectQuietHours"
+          :loading="quietHoursSaving"
+          size="md"
+          @update:model-value="toggleQuietHours"
+        />
+      </div>
     </UPageCard>
 
     <!-- Telegram linking -->

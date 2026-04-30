@@ -53,6 +53,18 @@ class Notification
     #[ORM\Column]
     private bool $emailSent = false;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $pushAttempted = false;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $pushSentAt = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $pushError = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $pushSkippedReason = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -191,6 +203,54 @@ class Notification
     public function setEmailSent(bool $emailSent): static
     {
         $this->emailSent = $emailSent;
+
+        return $this;
+    }
+
+    public function isPushAttempted(): bool
+    {
+        return $this->pushAttempted;
+    }
+
+    public function setPushAttempted(bool $pushAttempted): static
+    {
+        $this->pushAttempted = $pushAttempted;
+
+        return $this;
+    }
+
+    public function getPushSentAt(): ?\DateTimeImmutable
+    {
+        return $this->pushSentAt;
+    }
+
+    public function setPushSentAt(?\DateTimeImmutable $pushSentAt): static
+    {
+        $this->pushSentAt = $pushSentAt;
+
+        return $this;
+    }
+
+    public function getPushError(): ?string
+    {
+        return $this->pushError;
+    }
+
+    public function setPushError(?string $pushError): static
+    {
+        $this->pushError = $pushError;
+
+        return $this;
+    }
+
+    public function getPushSkippedReason(): ?string
+    {
+        return $this->pushSkippedReason;
+    }
+
+    public function setPushSkippedReason(?string $pushSkippedReason): static
+    {
+        $this->pushSkippedReason = $pushSkippedReason;
 
         return $this;
     }
