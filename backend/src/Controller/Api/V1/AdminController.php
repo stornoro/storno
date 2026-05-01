@@ -2,18 +2,21 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\AppVersionOverride;
 use App\Entity\AuditLog;
 use App\Entity\EmailLog;
 use App\Entity\Organization;
 use App\Entity\User;
 use App\Message\SendEmailConfirmationMessage;
 use App\Constants\Pagination;
+use App\Repository\AppVersionOverrideRepository;
 use App\Repository\CompanyRepository;
 use App\Repository\EmailLogRepository;
 use App\Repository\OrganizationRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminMetricsService;
 use App\Service\LicenseManager;
+use App\Service\VersionGateService;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
@@ -620,6 +623,154 @@ class AdminController extends AbstractController
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
+        ]);
+    }
+
+    /**
+     * List the version-gate metadata for every supported platform: the
+     * deployed YAML defaults, the DB override (if any), and the merged
+     * effective values that drive /api/v1/version. Used by the admin
+     * "version gate" page to render the kill-switch table.
+     */
+    #[Route('/version-overrides', methods: ['GET'])]
+    public function listVersionOverrides(VersionGateService $gate, AppVersionOverrideRepository $repo): JsonResponse
+    {
+        $overrides = $repo->findAllIndexed();
+        $platforms = ['ios', 'android', 'huawei'];
+
+        $out = [];
+        foreach ($platforms as $platform) {
+            $defaults = $gate->defaultConfigFor($platform);
+            if ($defaults === null) {
+                continue;
+            }
+            $effective = $gate->effectiveConfigFor($platform);
+            $override = $overrides[$platform] ?? null;
+
+            $out[] = [
+                'platform' => $platform,
+                'defaults' => $defaults,
+                'effective' => $effective,
+                'override' => $override === null ? null : [
+                    'minOverride' => $override->getMinOverride(),
+                    'latestOverride' => $override->getLatestOverride(),
+                    'storeUrlOverride' => $override->getStoreUrlOverride(),
+                    'releaseNotesUrlOverride' => $override->getReleaseNotesUrlOverride(),
+                    'messageOverride' => $override->getMessageOverride(),
+                    'updatedAt' => $override->getUpdatedAt()->format('c'),
+                    'updatedBy' => $override->getUpdatedBy()?->getEmail(),
+                    'hasOverride' => $override->hasAnyOverride(),
+                ],
+            ];
+        }
+
+        return $this->json(['platforms' => $out]);
+    }
+
+    /**
+     * Upsert the override row for a platform. Each field in the request
+     * body is treated independently: present-and-non-null sets the
+     * override, present-and-null clears it, absent leaves it as-is.
+     * Audit-logged so we can reconstruct who flipped the kill switch
+     * and when.
+     */
+    #[Route('/version-overrides/{platform}', methods: ['PUT'], requirements: ['platform' => 'ios|android|huawei'])]
+    public function updateVersionOverride(
+        string $platform,
+        Request $request,
+        AppVersionOverrideRepository $repo,
+    ): JsonResponse {
+        $payload = json_decode($request->getContent(), true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Invalid JSON body.'], 400);
+        }
+
+        /** @var User $admin */
+        $admin = $this->getUser();
+
+        $override = $repo->findByPlatform($platform);
+        if ($override === null) {
+            $override = new AppVersionOverride($platform);
+        }
+
+        $previous = [
+            'min' => $override->getMinOverride(),
+            'latest' => $override->getLatestOverride(),
+            'storeUrl' => $override->getStoreUrlOverride(),
+            'releaseNotesUrl' => $override->getReleaseNotesUrlOverride(),
+            'message' => $override->getMessageOverride(),
+        ];
+
+        if (array_key_exists('minOverride', $payload)) {
+            $override->setMinOverride(is_string($payload['minOverride']) ? $payload['minOverride'] : null);
+        }
+        if (array_key_exists('latestOverride', $payload)) {
+            $override->setLatestOverride(is_string($payload['latestOverride']) ? $payload['latestOverride'] : null);
+        }
+        if (array_key_exists('storeUrlOverride', $payload)) {
+            $override->setStoreUrlOverride(is_string($payload['storeUrlOverride']) ? $payload['storeUrlOverride'] : null);
+        }
+        if (array_key_exists('releaseNotesUrlOverride', $payload)) {
+            $override->setReleaseNotesUrlOverride(
+                is_string($payload['releaseNotesUrlOverride']) ? $payload['releaseNotesUrlOverride'] : null,
+            );
+        }
+        if (array_key_exists('messageOverride', $payload)) {
+            $value = $payload['messageOverride'];
+            if (!is_array($value)) {
+                $value = null;
+            } else {
+                // Filter out non-string values; keep only locale → string pairs.
+                $value = array_filter(
+                    $value,
+                    static fn ($v, $k) => is_string($k) && is_string($v) && $v !== '',
+                    ARRAY_FILTER_USE_BOTH,
+                );
+                if ($value === []) {
+                    $value = null;
+                }
+            }
+            $override->setMessageOverride($value);
+        }
+
+        $override->setUpdatedBy($admin);
+        $override->touch();
+
+        $this->entityManager->persist($override);
+
+        $auditLog = new AuditLog();
+        $auditLog->setAction('update');
+        $auditLog->setEntityType('AppVersionOverride');
+        $auditLog->setEntityId($platform);
+        $auditLog->setChanges([
+            'before' => $previous,
+            'after' => [
+                'min' => $override->getMinOverride(),
+                'latest' => $override->getLatestOverride(),
+                'storeUrl' => $override->getStoreUrlOverride(),
+                'releaseNotesUrl' => $override->getReleaseNotesUrlOverride(),
+                'message' => $override->getMessageOverride(),
+            ],
+        ]);
+        $auditLog->setUser($admin);
+        $auditLog->setIpAddress($request->getClientIp());
+        $auditLog->setUserAgent(substr((string) $request->headers->get('User-Agent'), 0, 500));
+        $this->entityManager->persist($auditLog);
+
+        $this->entityManager->flush();
+
+        return $this->json([
+            'platform' => $platform,
+            'override' => [
+                'minOverride' => $override->getMinOverride(),
+                'latestOverride' => $override->getLatestOverride(),
+                'storeUrlOverride' => $override->getStoreUrlOverride(),
+                'releaseNotesUrlOverride' => $override->getReleaseNotesUrlOverride(),
+                'messageOverride' => $override->getMessageOverride(),
+                'updatedAt' => $override->getUpdatedAt()->format('c'),
+                'updatedBy' => $admin->getEmail(),
+                'hasOverride' => $override->hasAnyOverride(),
+            ],
         ]);
     }
 

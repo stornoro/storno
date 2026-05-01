@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Repository\AppVersionOverrideRepository;
+
 /**
  * Computes the upgrade tier a client should be placed in based on its
  * platform and reported version. The contract returned to the client:
@@ -15,6 +17,11 @@ namespace App\Service;
  *
  * The fourth tier exists so unauthenticated /version probes (no version
  * passed) get a deterministic shape without forcing a "recommended" outcome.
+ *
+ * Effective metadata is computed by merging DB-stored overrides
+ * (admin-controlled, runtime-mutable) on top of config/version.yaml
+ * defaults. Each field is overridden independently so admins can flip
+ * just `min` for a critical update and leave `latest`/`storeUrl` alone.
  */
 final class VersionGateService
 {
@@ -26,8 +33,10 @@ final class VersionGateService
     /**
      * @param array<string, mixed> $versionMetadata
      */
-    public function __construct(private readonly array $versionMetadata)
-    {
+    public function __construct(
+        private readonly array $versionMetadata,
+        private readonly ?AppVersionOverrideRepository $overrideRepository = null,
+    ) {
     }
 
     /**
@@ -42,12 +51,11 @@ final class VersionGateService
      */
     public function evaluate(string $platform, ?string $clientVersion): ?array
     {
-        $platforms = $this->versionMetadata['mobile'] ?? [];
-        if (!isset($platforms[$platform]) || !is_array($platforms[$platform])) {
+        $config = $this->effectiveConfigFor($platform);
+        if ($config === null) {
             return null;
         }
 
-        $config = $platforms[$platform];
         $latest = (string) ($config['latest'] ?? '0.0.0');
         $min = (string) ($config['min'] ?? '0.0.0');
 
@@ -59,6 +67,62 @@ final class VersionGateService
             'releaseNotesUrl' => isset($config['releaseNotesUrl']) ? (string) $config['releaseNotesUrl'] : null,
             'message' => $this->normalizeMessage($config['message'] ?? null),
         ];
+    }
+
+    /**
+     * Returns the merged metadata for a platform — YAML defaults with
+     * any DB overrides applied. Used by both the gate evaluator and the
+     * admin endpoint that reports the current effective state.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function effectiveConfigFor(string $platform): ?array
+    {
+        $platforms = $this->versionMetadata['mobile'] ?? [];
+        if (!isset($platforms[$platform]) || !is_array($platforms[$platform])) {
+            return null;
+        }
+
+        $config = $platforms[$platform];
+
+        if ($this->overrideRepository === null) {
+            return $config;
+        }
+
+        $override = $this->overrideRepository->findByPlatform($platform);
+        if ($override === null) {
+            return $config;
+        }
+
+        if ($override->getMinOverride() !== null) {
+            $config['min'] = $override->getMinOverride();
+        }
+        if ($override->getLatestOverride() !== null) {
+            $config['latest'] = $override->getLatestOverride();
+        }
+        if ($override->getStoreUrlOverride() !== null) {
+            $config['storeUrl'] = $override->getStoreUrlOverride();
+        }
+        if ($override->getReleaseNotesUrlOverride() !== null) {
+            $config['releaseNotesUrl'] = $override->getReleaseNotesUrlOverride();
+        }
+        if ($override->getMessageOverride() !== null) {
+            $config['message'] = $override->getMessageOverride();
+        }
+
+        return $config;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function defaultConfigFor(string $platform): ?array
+    {
+        $platforms = $this->versionMetadata['mobile'] ?? [];
+        if (!isset($platforms[$platform]) || !is_array($platforms[$platform])) {
+            return null;
+        }
+        return $platforms[$platform];
     }
 
     private function resolveTier(?string $clientVersion, string $min, string $latest): string
