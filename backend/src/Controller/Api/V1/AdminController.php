@@ -584,11 +584,15 @@ class AdminController extends AbstractController
         );
 
         $offset = ($page - 1) * $limit;
+        // `user` is reserved across SQL dialects, so let DBAL quote it the
+        // way the active platform expects (backticks on MySQL, double quotes
+        // on Postgres). Hard-coding either form 500's on the other engine.
+        $userTable = $connection->getDatabasePlatform()->quoteSingleIdentifier('user');
         $rows = $connection->fetchAllAssociative(
             "SELECT t.id, t.user_id, t.company_id, t.event, t.properties, t.platform, t.app_version, t.created_at,
                     u.email AS user_email, u.first_name AS user_first_name, u.last_name AS user_last_name
              FROM telemetry_event t
-             LEFT JOIN \"user\" u ON u.id = t.user_id
+             LEFT JOIN {$userTable} u ON u.id = t.user_id
              {$whereClause}
              ORDER BY t.created_at DESC
              LIMIT {$limit} OFFSET {$offset}",

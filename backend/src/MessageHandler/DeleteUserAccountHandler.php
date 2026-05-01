@@ -99,8 +99,11 @@ class DeleteUserAccountHandler
             $conn->executeStatement('UPDATE product SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
             $conn->executeStatement('UPDATE supplier SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
 
-            // 4. Hard-delete the user
-            $conn->executeStatement('DELETE FROM "user" WHERE id = ?', [$userId]);
+            // 4. Hard-delete the user. `user` is reserved on both MySQL and
+            // Postgres, so let DBAL quote it the way the active platform
+            // expects (backticks on MySQL, double quotes on Postgres).
+            $userTable = $conn->getDatabasePlatform()->quoteSingleIdentifier('user');
+            $conn->executeStatement("DELETE FROM {$userTable} WHERE id = ?", [$userId]);
 
             $this->logger->info('DeleteUserAccount: Cascade deletion completed.', ['userId' => $userId]);
         } finally {
