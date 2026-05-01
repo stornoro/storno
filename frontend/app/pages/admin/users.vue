@@ -43,6 +43,16 @@
         <span class="text-sm text-muted">{{ formatDate(row.original.createdAt) }}</span>
       </template>
 
+      <template #lastConnectedAt-cell="{ row }">
+        <span
+          class="text-sm"
+          :class="row.original.lastConnectedAt ? 'text-muted' : 'text-(--ui-text-dimmed) italic'"
+          :title="row.original.lastConnectedAt ?? ''"
+        >
+          {{ formatLastLogin(row.original.lastConnectedAt) }}
+        </span>
+      </template>
+
       <template #actions-cell="{ row }">
         <UDropdownMenu :items="getActions(row.original)">
           <UButton icon="i-lucide-ellipsis-vertical" variant="ghost" size="sm" />
@@ -76,6 +86,7 @@ const columns = [
   { accessorKey: 'roles', header: $t('admin.roles') },
   { accessorKey: 'emailVerified', header: 'Email' },
   { accessorKey: 'active', header: $t('common.status') },
+  { accessorKey: 'lastConnectedAt', header: $t('admin.lastLogin') },
   { accessorKey: 'createdAt', header: $t('common.createdAt') },
   { accessorKey: 'actions', header: $t('common.actions') },
 ]
@@ -99,6 +110,26 @@ function formatRoles(roles: string[]): string {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
+  return new Date(iso).toLocaleDateString(intlLocale)
+}
+
+/**
+ * Last login is more useful as a relative hint ("3 days ago") for recent
+ * activity and as an absolute date for older logins. Below ~24h we render
+ * "today" / "yesterday" so admins can spot suspicious churn at a glance.
+ */
+function formatLastLogin(iso: string | null): string {
+  if (!iso) return $t('admin.neverLoggedIn')
+  const then = new Date(iso).getTime()
+  const now = Date.now()
+  const minutes = Math.round((now - then) / 60000)
+
+  if (minutes < 1) return $t('admin.justNow')
+  if (minutes < 60) return $t('admin.minutesAgo', { n: minutes })
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return $t('admin.hoursAgo', { n: hours })
+  const days = Math.round(hours / 24)
+  if (days < 7) return $t('admin.daysAgo', { n: days })
   return new Date(iso).toLocaleDateString(intlLocale)
 }
 
