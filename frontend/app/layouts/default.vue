@@ -267,6 +267,7 @@ const links = computed(() => {
       { label: $t('admin.auditLogs'), to: '/admin/audit-logs', onSelect: close },
       { label: $t('admin.emailLogs'), to: '/admin/email-logs', onSelect: close },
       { label: $t('admin.telemetry'), to: '/admin/telemetry', onSelect: close },
+      { label: $t('admin.versionGate.title'), to: '/admin/version-gate', onSelect: close },
     ],
   }] : []
 
