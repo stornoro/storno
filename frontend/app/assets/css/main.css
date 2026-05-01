@@ -6,6 +6,17 @@
   --font-sans: 'Public Sans', sans-serif;
 }
 
+/* ── Form input placeholders ────────────────────────────────────────── */
+/* Nuxt UI 4 maps `placeholder:text-dimmed` to `--ui-text-dimmed`, which
+   defaults to neutral-500 in dark mode. With our `neutral: 'zinc'` palette
+   that resolves to zinc-500 (~55% L) and against the dark form surface
+   the placeholder hint became almost invisible. Bump to neutral-400 in
+   dark mode for sufficient contrast (still distinct from real input text
+   in textColor). Light mode keeps the upstream default. */
+.dark {
+  --ui-text-dimmed: var(--ui-color-neutral-400);
+}
+
 /* ── XML syntax highlighting ────────────────────────────────────────── */
 .xml-tag { color: var(--ui-text-muted); }
 .xml-tag-name { color: var(--ui-primary); font-weight: 500; }
