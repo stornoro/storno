@@ -2844,6 +2844,8 @@ export default defineI18nLocale(async () => {
         clearAll: 'Sterge toate override-urile',
         savedTitle: 'Override salvat',
         savedBody: 'Gate versiune {platform} actualizat.',
+        notifyAffected: 'Notifica utilizatorii afectati prin push',
+        notifyAffectedHelp: 'Utilizatorii activi pe platforma cu versiune veche vor primi o notificare in-app si push localizata cand salvezi. Debifeaza pentru corectii silentioase (greseli de tastare, rollback-uri).',
       },
     },
 

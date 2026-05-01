@@ -2845,6 +2845,8 @@ export default defineI18nLocale(async () => {
       clearAll: 'Clear all overrides',
       savedTitle: 'Override saved',
       savedBody: '{platform} version gate updated.',
+      notifyAffected: 'Notify affected users via push',
+      notifyAffectedHelp: 'Active users on the platform with a stale version receive a localized in-app + push notification when you save. Untick for silent corrections (typos, rollbacks).',
     },
   },
 

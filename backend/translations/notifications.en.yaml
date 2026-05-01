@@ -62,3 +62,8 @@ notification:
       message: 'You sent an invoice to %counterparty% · %amount%'
     new_documents_multi:
       message: 'You have %count% new documents (%incoming% incoming, %outgoing% outgoing)'
+  version_gate:
+    blocking_title: 'Critical update required'
+    blocking_body: 'Your app version (%current%) is no longer supported. Update to %latest% to keep using Storno.ro.'
+    recommended_title: 'New version available'
+    recommended_body: 'A newer version is available. You are on %current% — update to %latest% for new features and fixes.'

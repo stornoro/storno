@@ -31,6 +31,18 @@
           :description="$t('admin.versionGate.killSwitchWarningBody')"
         />
 
+        <UCard>
+          <div class="flex items-start gap-3">
+            <UCheckbox v-model="notifyAffected" :ui="{ root: 'mt-0.5' }" />
+            <div class="flex-1">
+              <div class="text-sm font-medium">{{ $t('admin.versionGate.notifyAffected') }}</div>
+              <div class="text-xs text-muted mt-0.5">
+                {{ $t('admin.versionGate.notifyAffectedHelp') }}
+              </div>
+            </div>
+          </div>
+        </UCard>
+
         <UCard v-for="row in platforms" :key="row.platform">
           <template #header>
             <div class="flex items-center justify-between">
@@ -166,6 +178,7 @@ const loading = ref(true)
 const saving = ref<string | null>(null)
 const platforms = ref<PlatformRow[]>([])
 const drafts = ref<Record<string, Draft>>({})
+const notifyAffected = ref(true)
 
 function emptyDraft(): Draft {
   return {
@@ -252,6 +265,7 @@ async function save(platform: string) {
       storeUrlOverride: draft.storeUrlOverride.trim() || null,
       releaseNotesUrlOverride: draft.releaseNotesUrlOverride.trim() || null,
       messageOverride: Object.keys(message).length ? message : null,
+      notify: notifyAffected.value,
     }
     const { put } = useApi()
     await put(`/v1/admin/version-overrides/${platform}`, body)

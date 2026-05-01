@@ -4,6 +4,7 @@ namespace App\Controller\Api\V1;
 
 use App\Entity\AppVersionOverride;
 use App\Entity\AuditLog;
+use App\Message\BroadcastVersionGateMessage;
 use App\Entity\EmailLog;
 use App\Entity\Organization;
 use App\Entity\User;
@@ -738,6 +739,12 @@ class AdminController extends AbstractController
 
         $this->entityManager->persist($override);
 
+        // Optional fan-out — admin can untick the checkbox on the version-gate
+        // page to silently fix a typo or roll back without renotifying. The
+        // dispatch happens after flush() below so the handler reads the
+        // freshly-persisted override values.
+        $shouldNotify = isset($payload['notify']) && $payload['notify'] === true;
+
         $auditLog = new AuditLog();
         $auditLog->setAction('update');
         $auditLog->setEntityType('AppVersionOverride');
@@ -759,8 +766,16 @@ class AdminController extends AbstractController
 
         $this->entityManager->flush();
 
+        if ($shouldNotify) {
+            $this->messageBus->dispatch(new BroadcastVersionGateMessage(
+                platform: $platform,
+                triggeredByUserId: (string) $admin->getId(),
+            ));
+        }
+
         return $this->json([
             'platform' => $platform,
+            'notified' => $shouldNotify,
             'override' => [
                 'minOverride' => $override->getMinOverride(),
                 'latestOverride' => $override->getLatestOverride(),
