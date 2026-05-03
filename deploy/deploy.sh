@@ -15,7 +15,8 @@ set -euo pipefail
 #   Run migrations:     ./deploy.sh --migrate
 #   Rollback a service: ./deploy.sh --rollback backend
 #
-# Services: backend, frontend, docs
+# Services: backend, frontend
+# (docs lives in its own repo and deploys via PM2 + webhook — see stornoro/docs)
 #
 # The --build flag forces building images from source (no GitHub/ghcr.io needed).
 # Without --build, it tries to pull pre-built images first, falling back to build.
@@ -35,13 +36,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NGINX_DIR="/etc/nginx/sites-enabled"
 
-ALL_SERVICES=(backend frontend docs)
+ALL_SERVICES=(backend frontend)
 
 # Service config: main_port:backup_port:internal_port:health_path
 declare -A SVC_CONFIG=(
     [backend]="8900:8910:80:/health"
     [frontend]="8901:8911:3000:/"
-    [docs]="8903:8913:3000:/"
 )
 
 # ── Colors ─────────────────────────────────────────────────────────
@@ -155,7 +155,6 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 declare -A SVC_DIR=(
     [backend]="$PROJECT_ROOT/backend"
     [frontend]="$PROJECT_ROOT/frontend"
-    [docs]="$PROJECT_ROOT/docs"
 )
 
 # ── Helper: build from local directory ───────────────────────────
