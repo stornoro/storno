@@ -4,6 +4,7 @@ namespace App\MessageHandler;
 
 use App\Entity\Notification as NotificationEntity;
 use App\Message\SendPushNotificationMessage;
+use App\Repository\UserDeviceRepository;
 use App\Service\PushRelayService;
 use Doctrine\ORM\EntityManagerInterface;
 use Kreait\Firebase\Contract\Messaging;
@@ -21,6 +22,7 @@ class SendPushNotificationHandler
         private readonly LoggerInterface $logger,
         private readonly PushRelayService $pushRelayService,
         private readonly EntityManagerInterface $entityManager,
+        private readonly UserDeviceRepository $userDeviceRepository,
         private readonly ?Messaging $messaging = null,
         private readonly ?string $firebaseCredentials = '',
     ) {}
@@ -57,7 +59,41 @@ class SendPushNotificationHandler
             $error = 'not_configured';
         }
 
+        // Dead-token cleanup: when FCM tells us the token will never deliver
+        // again (app uninstalled, token rotated), drop the UserDevice row so
+        // we stop dispatching to it. Without this every future notification
+        // round burns a relay round-trip + an FCM call per dead device.
+        if ($this->isDeadTokenError($error)) {
+            $this->forgetDevice($token);
+        }
+
         $this->recordResult($message->getNotificationId(), $error);
+    }
+
+    private function isDeadTokenError(?string $error): bool
+    {
+        if ($error === null) {
+            return false;
+        }
+        // Relay surfaces a stable code; the kreait direct path uses the
+        // 'fcm_invalid_token:' prefix from sendViaFcm() below.
+        return $error === PushRelayService::ERROR_TOKEN_UNREGISTERED
+            || str_starts_with($error, 'fcm_invalid_token:');
+    }
+
+    private function forgetDevice(string $token): void
+    {
+        $device = $this->userDeviceRepository->findByToken($token);
+        if ($device === null) {
+            return;
+        }
+        $this->logger->info('Removing dead push token after FCM unregistered response.', [
+            'userDeviceId' => (string) $device->getId(),
+            'platform' => $device->getPlatform(),
+            'tokenPrefix' => substr($token, 0, 20) . '...',
+        ]);
+        $this->entityManager->remove($device);
+        $this->entityManager->flush();
     }
 
     /**
