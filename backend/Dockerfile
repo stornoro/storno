@@ -11,7 +11,12 @@ COPY . .
 RUN composer dump-autoload --optimize
 
 # ── Stage 2: Compile unified Java service ────────────────────────
-FROM eclipse-temurin:17-jdk-alpine AS java-build
+# eclipse-temurin:17-jdk-alpine is published amd64-only — switching to
+# alpine:3.19 + apk's openjdk17 package, which is built for amd64 + arm64.
+# Same Alpine family as every other stage, so cross-stage glibc / musl
+# compatibility is preserved. javac/java come from /usr/lib/jvm.
+FROM alpine:3.19 AS java-build
+RUN apk add --no-cache openjdk17
 
 WORKDIR /build
 COPY resources/validator/ROeFacturaValidator.jar validator/

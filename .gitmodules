@@ -1,0 +1,6 @@
+[submodule "docs"]
+	path = docs
+	url = https://github.com/stornoro/docs.git
+[submodule "storno-cli"]
+	path = storno-cli
+	url = https://github.com/stornoro/storno-cli.git
