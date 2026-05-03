@@ -90,25 +90,12 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── Docs (VitePress SSR) — optional ─────────────────────────────
-  # The docs site is published at https://docs.storno.ro and doesn't
-  # need to run alongside a self-hosted Storno instance. The image is
-  # also amd64-only right now, so pulling it on arm64 hosts blocks
-  # the entire stack. Behind the "docs" profile so it's opt-in:
-  #   docker compose --profile local-db --profile docs up -d
-  docs:
-    image: ghcr.io/stornoro/docs:latest
-    restart: unless-stopped
-    ports:
-      - "${DOCS_PORT:-8903}:3000"
-    networks:
-      - storno
-    profiles: ["docs"]
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+  # ── Docs ─────────────────────────────────────────────────────────
+  # The docs site (https://docs.storno.ro) lives in its own repository
+  # (stornoro/docs). It is deployed on the host via PM2 + a webhook
+  # listener, exactly like landing — no Docker image required. Self-
+  # hosted users can read the docs at the public URL above.
+  # See stornoro/docs/{deploy.sh,webhook-server.cjs,ecosystem.config.cjs}.
 
   # ── MySQL (optional — only needed if not using external DATABASE_URL) ──
   db:
