@@ -7,6 +7,14 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class PushRelayService
 {
+    /**
+     * Stable error prefix returned when FCM signals the device token is no
+     * longer valid (uninstalled app, regenerated token, etc.). The handler
+     * uses this to delete the dead UserDevice row so we stop hammering it
+     * on every notification.
+     */
+    public const ERROR_TOKEN_UNREGISTERED = 'relay_token_unregistered';
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
@@ -65,6 +73,9 @@ class PushRelayService
                     'status' => $statusCode,
                     'body' => $body,
                 ]);
+                if (self::isDeadTokenResponse($body)) {
+                    return self::ERROR_TOKEN_UNREGISTERED;
+                }
                 return sprintf('relay_%d: %s', $statusCode, mb_substr($body, 0, 200));
             }
 
@@ -75,6 +86,22 @@ class PushRelayService
             ]);
             return mb_substr($e->getMessage(), 0, 200);
         }
+    }
+
+    /**
+     * True when the relay's error body indicates FCM rejected the token as
+     * permanently dead (app uninstalled, token rotated, project mismatch).
+     * The signal lives at error.details[].errorCode === "UNREGISTERED" in
+     * the modern v1 response, or as the literal "NotRegistered" string in
+     * legacy responses. Substring match against the raw body keeps this
+     * robust to relay wrapping the FCM error inside its own JSON envelope.
+     */
+    private static function isDeadTokenResponse(string $body): bool
+    {
+        return str_contains($body, '"UNREGISTERED"')
+            || str_contains($body, '"NotRegistered"')
+            || str_contains($body, 'errorCode\":\"UNREGISTERED')
+            || str_contains($body, 'message\":\"NotRegistered');
     }
 
     /**
