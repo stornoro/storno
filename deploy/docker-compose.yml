@@ -93,8 +93,8 @@ services:
   # ── Docs ─────────────────────────────────────────────────────────
   # The docs site (https://docs.storno.ro) lives in its own repository
   # (stornoro/docs). It is deployed on the host via PM2 + a webhook
-  # listener, exactly like landing — no Docker image required. Self-
-  # hosted users can read the docs at the public URL above.
+  # listener — no Docker image required. Self-hosted users can read
+  # the docs at the public URL above.
   # See stornoro/docs/{deploy.sh,webhook-server.cjs,ecosystem.config.cjs}.
 
   # ── MySQL (optional — only needed if not using external DATABASE_URL) ──
