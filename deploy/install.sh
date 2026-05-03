@@ -84,6 +84,23 @@ if [ "${docker_major}" -lt "${MIN_DOCKER_MAJOR}" ] 2>/dev/null; then
   warn "Docker v${docker_major} detected. Docker v${MIN_DOCKER_MAJOR}+ is recommended."
 fi
 
+# ── Architecture check ────────────────────────────────────────────
+# Storno currently publishes linux/amd64 and linux/arm64 images. Anything
+# else (e.g. armv7 on a Raspberry Pi 3) won't pull. Fail fast with a clear
+# message rather than letting the user hit a confusing "no matching
+# manifest" error halfway through step 5.
+HOST_ARCH=$(docker info --format '{{.Architecture}}' 2>/dev/null || uname -m)
+case "${HOST_ARCH}" in
+  x86_64|amd64|arm64|aarch64)
+    ok "Architecture: ${HOST_ARCH} (supported)"
+    ;;
+  *)
+    error "Architecture '${HOST_ARCH}' is not currently supported by Storno's published images.
+  Supported: linux/amd64 (x86_64), linux/arm64 (aarch64).
+  Open an issue if you need this platform: https://github.com/stornoro/storno/issues"
+    ;;
+esac
+
 # ══════════════════════════════════════════════════════════════════
 # 2. CREATE INSTALLATION DIRECTORY
 # ══════════════════════════════════════════════════════════════════
@@ -285,14 +302,41 @@ step "[5/6] Pulling images and starting services..."
 DC="docker compose -f ${STORNO_DIR}/docker-compose.yml --env-file ${STORNO_DIR}/.env"
 
 info "Pulling images (this may take a few minutes on first run)..."
-if ! ${DC} --profile local-db pull; then
-  warn "Some images could not be pulled. Attempting to continue..."
+# Capture pull output so we can show it on failure but stay tidy on success.
+PULL_LOG=$(mktemp)
+if ${DC} --profile local-db pull 2>&1 | tee "${PULL_LOG}"; then
+  ok "Images pulled"
+else
+  echo ""
+  if grep -q "no matching manifest" "${PULL_LOG}" 2>/dev/null; then
+    error "Image pull failed — your platform (${HOST_ARCH}) is not in the published manifests.
+  Storno currently publishes linux/amd64 and linux/arm64. If you're on neither, open an issue.
+  Full output captured in: ${PULL_LOG}"
+  fi
+  error "Image pull failed. See output above for details. Full log: ${PULL_LOG}"
 fi
-ok "Images pulled"
+rm -f "${PULL_LOG}"
 
 info "Starting containers..."
-${DC} --profile local-db up -d
-ok "Containers started"
+if ! ${DC} --profile local-db up -d; then
+  error "\`docker compose up -d\` failed. Logs:
+$(${DC} --profile local-db logs --tail 50 2>&1 | sed 's/^/    /')"
+fi
+
+# Compose can return 0 even when not every service is actually running
+# (e.g. a transient pull failure inside up). Verify explicitly so we
+# don't claim success when nothing is on.
+sleep 2
+EXPECTED=$(${DC} --profile local-db config --services | wc -l | tr -d ' ')
+RUNNING=$(${DC} --profile local-db ps --services --filter status=running | wc -l | tr -d ' ')
+if [ "${RUNNING}" -lt "${EXPECTED}" ]; then
+  error "Only ${RUNNING}/${EXPECTED} services are running. Status:
+$(${DC} --profile local-db ps 2>&1 | sed 's/^/    /')
+
+  Logs from failing containers:
+$(${DC} --profile local-db logs --tail 30 2>&1 | tail -60 | sed 's/^/    /')"
+fi
+ok "All ${RUNNING} containers started"
 
 # ── Wait for DB ──────────────────────────────────────────────────
 info "Waiting for MySQL to be ready..."
