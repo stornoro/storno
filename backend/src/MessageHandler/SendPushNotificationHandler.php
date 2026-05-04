@@ -44,6 +44,7 @@ class SendPushNotificationHandler
                 $message->getBody(),
                 $message->getData(),
                 $message->getBadge(),
+                $message->isSilent(),
             );
         } elseif ($this->messaging && !empty($this->firebaseCredentials)) {
             // Path 2: Direct FCM via kreait (only used when no relay is configured
@@ -129,19 +130,36 @@ class SendPushNotificationHandler
     private function sendViaFcm(SendPushNotificationMessage $message, string $token): ?string
     {
         try {
-            $cloudMessage = CloudMessage::withTarget('token', $token)
-                ->withNotification(Notification::create($message->getTitle(), $message->getBody()));
+            $cloudMessage = CloudMessage::withTarget('token', $token);
+
+            // Silent badge-update pushes have no banner — skip withNotification
+            // and use a content-available APNs payload so iOS just refreshes
+            // the app icon badge.
+            if ($message->isSilent()) {
+                $cloudMessage = $cloudMessage->withApnsConfig([
+                    'headers' => [
+                        'apns-push-type' => 'background',
+                        'apns-priority' => '5',
+                    ],
+                    'payload' => ['aps' => [
+                        'content-available' => 1,
+                        'badge' => $message->getBadge() ?? 0,
+                    ]],
+                ]);
+            } else {
+                $cloudMessage = $cloudMessage->withNotification(Notification::create($message->getTitle(), $message->getBody()));
+
+                if ($message->getBadge() !== null) {
+                    $cloudMessage = $cloudMessage->withApnsConfig([
+                        'payload' => ['aps' => ['badge' => $message->getBadge(), 'sound' => 'default']],
+                    ]);
+                }
+            }
 
             if (!empty($message->getData())) {
                 // FCM requires all data values to be strings — encode nested
                 // arrays/objects as JSON so the mobile client can parse them.
                 $cloudMessage = $cloudMessage->withData(PushRelayService::stringifyData($message->getData()));
-            }
-
-            if ($message->getBadge() !== null) {
-                $cloudMessage = $cloudMessage->withApnsConfig([
-                    'payload' => ['aps' => ['badge' => $message->getBadge(), 'sound' => 'default']],
-                ]);
             }
 
             $this->messaging->send($cloudMessage);

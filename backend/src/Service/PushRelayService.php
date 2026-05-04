@@ -33,34 +33,57 @@ class PushRelayService
      * request or the call itself blew up. The caller persists this on the
      * `Notification` row so users / support can debug why a push didn't arrive.
      */
-    public function send(string $token, string $title, string $body, array $data = [], ?int $badge = null): ?string
+    public function send(string $token, string $title, string $body, array $data = [], ?int $badge = null, bool $silent = false): ?string
     {
         if (!$this->isEnabled()) {
             return 'relay_disabled';
         }
 
         try {
-            $aps = ['sound' => 'default'];
-            if ($badge !== null) {
-                $aps['badge'] = $badge;
-            }
-
-            $payload = [
-                'token' => $token,
-                'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                ],
-                'data' => !empty($data) ? self::stringifyData($data) : new \stdClass(),
-                'android' => [
-                    'priority' => 'high',
-                ],
-                'apns' => [
-                    'payload' => [
-                        'aps' => $aps,
+            // Silent (background) push — used to refresh the iOS app icon
+            // badge without showing a banner. APNs needs `content-available`
+            // and the `background` push-type header; omitting `notification`
+            // prevents iOS from rendering an empty banner.
+            if ($silent) {
+                $payload = [
+                    'token' => $token,
+                    'data' => !empty($data) ? self::stringifyData($data) : new \stdClass(),
+                    'apns' => [
+                        'headers' => [
+                            'apns-push-type' => 'background',
+                            'apns-priority' => '5',
+                        ],
+                        'payload' => [
+                            'aps' => [
+                                'content-available' => 1,
+                                'badge' => $badge ?? 0,
+                            ],
+                        ],
                     ],
-                ],
-            ];
+                ];
+            } else {
+                $aps = ['sound' => 'default'];
+                if ($badge !== null) {
+                    $aps['badge'] = $badge;
+                }
+
+                $payload = [
+                    'token' => $token,
+                    'notification' => [
+                        'title' => $title,
+                        'body' => $body,
+                    ],
+                    'data' => !empty($data) ? self::stringifyData($data) : new \stdClass(),
+                    'android' => [
+                        'priority' => 'high',
+                    ],
+                    'apns' => [
+                        'payload' => [
+                            'aps' => $aps,
+                        ],
+                    ],
+                ];
+            }
 
             $response = $this->httpClient->request('POST', rtrim($this->pushRelayUrl, '/') . '/api/v1/push/send', [
                 'json' => $payload,
