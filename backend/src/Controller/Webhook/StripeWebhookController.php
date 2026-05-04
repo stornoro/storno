@@ -292,31 +292,58 @@ class StripeWebhookController extends AbstractController
             return; // Skip zero-amount invoices (e.g. trial start)
         }
 
-        // Resolve plan name, interval, and buyer company from subscription
-        $planName = $org->getPlan() ?: 'starter'; // use org's synced plan as primary source
-        $interval = 'month'; // fallback
+        // Resolve plan name, interval, and buyer company.
+        //
+        // Read price + interval from the invoice payload first — the line item
+        // already carries the price object and `recurring.interval`, so we get
+        // the right values without an extra API call. Falling back to
+        // `$org->getPlan()` is unsafe at this point: for a brand-new
+        // subscription, `customer.subscription.created` may not have updated
+        // the org plan yet (different webhook), so the org would still read
+        // as 'freemium' even though the buyer just paid for Business.
+        $planName = null;
+        $interval = null;
         $buyerCompanyId = null;
         $subscriptionId = $stripeInvoice->subscription ?? null;
+
+        $invoiceLine = $stripeInvoice->lines->data[0] ?? null;
+        $priceId = $invoiceLine->price->id ?? null;
+        if ($priceId) {
+            $planName = $this->stripeService->resolvePlanFromPriceId($priceId);
+            $interval = $invoiceLine->price->recurring->interval ?? null;
+        }
 
         if ($subscriptionId) {
             try {
                 $subscription = Subscription::retrieve($subscriptionId);
-                $priceId = $subscription->items->data[0]->price->id ?? null;
-                if ($priceId) {
-                    $resolved = $this->stripeService->resolvePlanFromPriceId($priceId);
-                    if ($resolved) {
-                        $planName = $resolved;
+                if (!$priceId) {
+                    $priceId = $subscription->items->data[0]->price->id ?? null;
+                    if ($priceId) {
+                        $planName = $this->stripeService->resolvePlanFromPriceId($priceId);
+                        $interval = $subscription->items->data[0]->price->recurring->interval ?? null;
                     }
-                    $interval = $subscription->items->data[0]->price->recurring->interval ?? 'month';
                 }
-                // Extract buyer company ID from subscription metadata
                 $buyerCompanyId = $subscription->metadata->company_id ?? null;
             } catch (\Exception $e) {
-                $this->logger->warning('Could not resolve plan from subscription', [
+                $this->logger->warning('Could not retrieve subscription for billing invoice', [
                     'subscription_id' => $subscriptionId,
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        // Only fall back to the org's plan if Stripe gave us nothing. Log so
+        // the billing-invoice description mismatch is traceable when it happens.
+        if (!$planName) {
+            $this->logger->warning('Falling back to org plan for billing invoice description', [
+                'organization' => (string) $org->getId(),
+                'stripe_invoice_id' => $stripeInvoice->id ?? null,
+                'price_id' => $priceId,
+            ]);
+            $planName = $org->getPlan() ?: 'starter';
+        }
+        if (!$interval) {
+            $interval = 'month';
         }
 
         $this->billingInvoiceService->createSubscriptionInvoice(
