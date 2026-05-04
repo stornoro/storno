@@ -202,26 +202,30 @@ const createForm = reactive({
   periodType: 'monthly',
 })
 
+// Two visual groups: auto-populated (system fills numbers from invoices) vs
+// manual (user fills the form). USelectMenu renders Item[][] as separated groups.
 const createTypeOptions = [
-  { label: '── Auto-populate ──', value: '', disabled: true },
-  { label: 'D394 - Declaratie informativa livr/achiz', value: 'd394' },
-  { label: 'D300 - Decont TVA', value: 'd300' },
-  { label: 'D390 - Declaratie recapitulativa VIES', value: 'd390' },
-  { label: 'D392 - Operatiuni intracomunitare', value: 'd392' },
-  { label: 'D393 - VIES servicii', value: 'd393' },
-  { label: '── Manual ──', value: '', disabled: true },
-  { label: 'D100 - Obligatii plata buget de stat', value: 'd100' },
-  { label: 'D101 - Impozit pe profit', value: 'd101' },
-  { label: 'D106 - Declaratie informativa dividende actionari', value: 'd106' },
-  { label: 'D112 - Declaratie unica (CAS/CASS)', value: 'd112' },
-  { label: 'D120 - Decont accize', value: 'd120' },
-  { label: 'D130 - Decont impozit titei productie interna', value: 'd130' },
-  { label: 'D180 - Nota de certificare (consultant fiscal)', value: 'd180' },
-  { label: 'D205 - Informativa retineri la sursa', value: 'd205' },
-  { label: 'D208 - Declaratie informativa transferuri imobiliare', value: 'd208' },
-  { label: 'D212 - Declaratie unica PF', value: 'd212' },
-  { label: 'D301 - Decont special TVA', value: 'd301' },
-  { label: 'D311 - Declaratie TVA colectat (cod anulat)', value: 'd311' },
+  [
+    { label: 'D394 - Declaratie informativa livr/achiz', value: 'd394' },
+    { label: 'D300 - Decont TVA', value: 'd300' },
+    { label: 'D390 - Declaratie recapitulativa VIES', value: 'd390' },
+    { label: 'D392 - Operatiuni intracomunitare', value: 'd392' },
+    { label: 'D393 - VIES servicii', value: 'd393' },
+  ],
+  [
+    { label: 'D100 - Obligatii plata buget de stat', value: 'd100' },
+    { label: 'D101 - Impozit pe profit', value: 'd101' },
+    { label: 'D106 - Declaratie informativa dividende actionari', value: 'd106' },
+    { label: 'D112 - Declaratie unica (CAS/CASS)', value: 'd112' },
+    { label: 'D120 - Decont accize', value: 'd120' },
+    { label: 'D130 - Decont impozit titei productie interna', value: 'd130' },
+    { label: 'D180 - Nota de certificare (consultant fiscal)', value: 'd180' },
+    { label: 'D205 - Informativa retineri la sursa', value: 'd205' },
+    { label: 'D208 - Declaratie informativa transferuri imobiliare', value: 'd208' },
+    { label: 'D212 - Declaratie unica PF', value: 'd212' },
+    { label: 'D301 - Decont special TVA', value: 'd301' },
+    { label: 'D311 - Declaratie TVA colectat (cod anulat)', value: 'd311' },
+  ],
 ]
 
 async function onCreate() {
