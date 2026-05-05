@@ -2774,6 +2774,8 @@ export default defineI18nLocale(async () => {
       impersonateUser: 'Impersoneaza utilizator',
       lastLogin: 'Ultima conectare',
       neverLoggedIn: 'Niciodata',
+      recentActivity: 'Activitate recenta',
+      systemActor: 'Sistem',
       justNow: 'acum',
       minutesAgo: 'acum {n} min',
       hoursAgo: 'acum {n} h',

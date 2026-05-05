@@ -160,20 +160,27 @@ class AdminController extends AbstractController
         $search = $request->query->get('search');
 
         $qb = $this->organizationRepository->createQueryBuilder('o')
-            ->leftJoin('o.memberships', 'm')->addSelect('m')
-            ->leftJoin('o.companies', 'c')->addSelect('c')
             ->orderBy('o.createdAt', 'DESC');
 
         if ($search) {
-            $qb->andWhere('o.name LIKE :search')
+            $qb->andWhere('o.name LIKE :search OR o.slug LIKE :search')
                 ->setParameter('search', '%' . $search . '%');
         }
 
-        $total = (int) $this->organizationRepository->createQueryBuilder('o2')
-            ->select('COUNT(o2.id)')
-            ->getQuery()
-            ->getSingleScalarResult();
+        // Count must reuse the filtered builder, otherwise pagination shows
+        // the wrong total when the user is searching. Clone before
+        // setFirstResult so the count query stays unpaginated; reset orderBy
+        // because COUNT(...) doesn't allow ORDER BY against an aggregate.
+        $countQb = (clone $qb)
+            ->select('COUNT(o.id)')
+            ->resetDQLPart('orderBy');
+        $total = (int) $countQb->getQuery()->getSingleScalarResult();
 
+        // No fetch-join here on purpose: combining setFirstResult/setMaxResults
+        // with collection joins makes Doctrine paginate by SQL row, not by
+        // root entity, which silently truncates pages. The serializer below
+        // only reads ->count() on each collection — Doctrine lazy-loads those
+        // counts as cheap COUNT(*) queries, not full hydrations.
         $organizations = $qb
             ->setFirstResult(($page - 1) * $limit)
             ->setMaxResults($limit)

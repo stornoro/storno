@@ -18,11 +18,11 @@
 
     <UDashboardToolbar class="mb-4">
       <template #right>
-        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-64" />
+        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-64" @update:model-value="onSearchInput" />
       </template>
     </UDashboardToolbar>
 
-    <UTable :data="filteredOrgs" :columns="columns" :loading="loading">
+    <UTable :data="organizations" :columns="columns" :loading="loading">
       <template #name-cell="{ row }">
         <NuxtLink :to="`/admin/organizations/${row.original.id}`" class="text-primary hover:underline font-medium">
           {{ row.original.name }}
@@ -52,8 +52,15 @@
       </template>
     </UTable>
 
-    <div v-if="!loading && !filteredOrgs.length" class="text-center py-8 text-muted">
+    <div v-if="!loading && !organizations.length" class="text-center py-8 text-muted">
       {{ $t('common.noData') }}
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
+      <span class="text-sm text-muted">
+        {{ $t('common.showing') }} {{ organizations.length }} {{ $t('common.of') }} {{ total }}
+      </span>
+      <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
     </div>
 
     <!-- Suspend / Reactivate confirmation modal -->
@@ -96,6 +103,9 @@ const toast = useToast()
 const organizations = ref<any[]>([])
 const search = ref('')
 const loading = ref(true)
+const page = ref(1)
+const total = ref(0)
+const limit = ref(PAGINATION.DEFAULT_LIMIT)
 const confirmModalOpen = ref(false)
 const selectedOrg = ref<any>(null)
 const toggling = ref(false)
@@ -125,11 +135,28 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(intlLocale)
 }
 
-const filteredOrgs = computed(() => {
-  if (!search.value) return organizations.value
-  const q = search.value.toLowerCase()
-  return organizations.value.filter(o => o.name?.toLowerCase().includes(q))
-})
+async function fetchOrgs() {
+  loading.value = true
+  try {
+    const { get } = useApi()
+    const params: Record<string, any> = { page: page.value, limit: limit.value }
+    if (search.value) params.search = search.value
+    const data = await get<any>('/v1/admin/organizations', params)
+    organizations.value = data.data || []
+    total.value = data.total || 0
+  } catch {
+    // Not authorized or error
+  } finally {
+    loading.value = false
+  }
+}
+
+const onSearchInput = useDebounceFn(() => {
+  page.value = 1
+  fetchOrgs()
+}, 300)
+
+watch(page, () => fetchOrgs())
 
 function getActions(org: any) {
   return [[
@@ -170,15 +197,5 @@ async function confirmToggleActive() {
   }
 }
 
-onMounted(async () => {
-  try {
-    const { get } = useApi()
-    const data = await get<any>('/v1/admin/organizations')
-    organizations.value = data.data || data
-  } catch {
-    // Not authorized or error
-  } finally {
-    loading.value = false
-  }
-})
+onMounted(() => fetchOrgs())
 </script>
