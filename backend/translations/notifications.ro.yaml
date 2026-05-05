@@ -2,19 +2,19 @@
 
 notification:
   invoice_due_soon:
-    title: '%company% — factura scadenta in curand'
+    title: '%company%'
     message: 'Factura %number% este scadenta in 3 zile (%date%)'
   invoice_due_today:
-    title: '%company% — factura scadenta astazi'
+    title: '%company%'
     message: 'Factura %number% este scadenta astazi'
   invoice_overdue:
-    title: '%company% — factura restanta'
+    title: '%company%'
     message: 'Factura %number% este scadenta din %date%'
   proforma_expiring_soon:
-    title: '%company% — proforma expira in curand'
+    title: '%company%'
     message: 'Proforma %number% expira in 3 zile (%date%)'
   proforma_expired:
-    title: '%company% — proforma expirata'
+    title: '%company%'
     message: 'Proforma %number% a expirat pe %date%'
   token_expiring:
     title: '%token% — token ANAF expira'
@@ -26,10 +26,10 @@ notification:
     title: '%token% — eroare reinnoire token ANAF'
     message: 'Tokenul ANAF (%token%) nu a putut fi reinnoit automat. Re-autorizeaza manual.'
   anaf_deadline:
-    title: '%company% — termen ANAF expira maine'
+    title: '%company%'
     message: 'Trimite factura %number% la ANAF pana maine. Emisa pe %date%.'
   anaf_missing_token:
-    title: '%company% — conecteaza-te la SPV pentru ANAF'
+    title: '%company%'
     message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza-te la SPV pana pe %deadline% pentru a evita amenzile.'
   export_ready:
     title: 'Export finalizat'
@@ -41,16 +41,16 @@ notification:
     title: 'Restaurare finalizata'
     message: 'Ai restaurat cu succes datele companiei %name%.'
   payment_received:
-    title: '%company% — plata inregistrata'
+    title: '%company%'
     message: 'Ai primit %amount% %currency% pentru factura %number%'
   invoice_validated:
-    title: '%company% — factura validata ANAF'
+    title: '%company%'
     message: 'ANAF ti-a validat factura %number% · %amount%'
   invoice_rejected:
-    title: '%company% — factura respinsa ANAF'
+    title: '%company%'
     message: 'ANAF ti-a respins factura %number% · %amount%: %error%'
   sync_error:
-    title: '%company% — eroare sincronizare e-Factura'
+    title: '%company%'
     single: '%company% — %error%'
     multiple: '%company% — %count% erori de sincronizare. Prima: %first_error%'
   efactura:
