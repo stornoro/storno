@@ -46,6 +46,30 @@
         <div class="text-muted text-center py-4">{{ $t('admin.manageOrganizations') }}</div>
       </UCard>
     </div>
+
+    <UCard class="mt-4">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold">{{ $t('admin.recentActivity') }}</h3>
+          <UButton variant="ghost" size="sm" to="/admin/audit-logs">{{ $t('common.viewAll') }}</UButton>
+        </div>
+      </template>
+      <div v-if="recentLoading" class="text-muted text-center py-4">{{ $t('common.loading') }}</div>
+      <div v-else-if="!recent.length" class="text-muted text-center py-4">{{ $t('common.noData') }}</div>
+      <ul v-else class="divide-y divide-default">
+        <li v-for="log in recent" :key="log.id" class="flex items-center gap-3 py-3 text-sm">
+          <UBadge :color="actionColor(log.action)" variant="subtle" size="xs" class="shrink-0 uppercase">
+            {{ log.action }}
+          </UBadge>
+          <span class="font-medium truncate">{{ shortEntityType(log.entityType) }}</span>
+          <span class="text-muted truncate font-mono text-xs">{{ log.entityId }}</span>
+          <span class="ml-auto text-muted text-xs whitespace-nowrap">
+            {{ log.user?.email || $t('admin.systemActor') }}
+            · {{ formatRelative(log.createdAt) }}
+          </span>
+        </li>
+      </ul>
+    </UCard>
     </template>
   </UDashboardPanel>
 </template>
@@ -54,16 +78,54 @@
 definePageMeta({ middleware: 'auth' })
 
 const { t: $t } = useI18n()
+const intlLocale = useIntlLocale()
 
 const stats = ref({ users: 0, organizations: 0, companies: 0 })
+const recent = ref<any[]>([])
+const recentLoading = ref(true)
+
+function actionColor(action: string): string {
+  switch (action) {
+    case 'create': return 'success'
+    case 'update': return 'info'
+    case 'delete': return 'error'
+    case 'impersonate': return 'warning'
+    default: return 'neutral'
+  }
+}
+
+function shortEntityType(type: string): string {
+  const idx = type.lastIndexOf('\\')
+  return idx >= 0 ? type.substring(idx + 1) : type
+}
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return '-'
+  const then = new Date(iso).getTime()
+  const minutes = Math.round((Date.now() - then) / 60000)
+  if (minutes < 1) return $t('admin.justNow')
+  if (minutes < 60) return $t('admin.minutesAgo', { n: minutes })
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return $t('admin.hoursAgo', { n: hours })
+  const days = Math.round(hours / 24)
+  if (days < 7) return $t('admin.daysAgo', { n: days })
+  return new Date(iso).toLocaleDateString(intlLocale)
+}
 
 onMounted(async () => {
+  const { get } = useApi()
   try {
-    const { get } = useApi()
-    const data = await get<any>('/v1/admin/stats')
-    stats.value = data
+    stats.value = await get<any>('/v1/admin/stats')
   } catch {
     // Admin stats not available
+  }
+  try {
+    const data = await get<any>('/v1/admin/audit-logs', { page: 1, limit: 8 })
+    recent.value = data.data || []
+  } catch {
+    // Audit logs not available
+  } finally {
+    recentLoading.value = false
   }
 })
 </script>

@@ -18,11 +18,11 @@
 
     <UDashboardToolbar class="mb-4">
       <template #right>
-        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-64" />
+        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-64" @update:model-value="onSearchInput" />
       </template>
     </UDashboardToolbar>
 
-    <UTable :data="filteredUsers" :columns="columns" :loading="loading">
+    <UTable :data="users" :columns="columns" :loading="loading">
       <template #active-cell="{ row }">
         <UBadge :color="row.original.active ? 'success' : 'error'" variant="subtle" size="sm">
           {{ row.original.active ? $t('common.active') : $t('common.inactive') }}
@@ -60,8 +60,15 @@
       </template>
     </UTable>
 
-    <div v-if="!loading && !filteredUsers.length" class="text-center py-8 text-muted">
+    <div v-if="!loading && !users.length" class="text-center py-8 text-muted">
       {{ $t('common.noData') }}
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
+      <span class="text-sm text-muted">
+        {{ $t('common.showing') }} {{ users.length }} {{ $t('common.of') }} {{ total }}
+      </span>
+      <UPagination v-model:page="page" :total="total" :items-per-page="limit" />
     </div>
     </template>
   </UDashboardPanel>
@@ -78,6 +85,9 @@ const authStore = useAuthStore()
 const users = ref<any[]>([])
 const search = ref('')
 const loading = ref(true)
+const page = ref(1)
+const total = ref(0)
+const limit = ref(PAGINATION.DEFAULT_LIMIT)
 
 const columns = [
   { accessorKey: 'email', header: $t('common.email') },
@@ -91,15 +101,28 @@ const columns = [
   { accessorKey: 'actions', header: $t('common.actions') },
 ]
 
-const filteredUsers = computed(() => {
-  if (!search.value) return users.value
-  const q = search.value.toLowerCase()
-  return users.value.filter(u =>
-    u.email?.toLowerCase().includes(q)
-    || u.firstName?.toLowerCase().includes(q)
-    || u.lastName?.toLowerCase().includes(q),
-  )
-})
+async function fetchUsers() {
+  loading.value = true
+  try {
+    const { get } = useApi()
+    const params: Record<string, any> = { page: page.value, limit: limit.value }
+    if (search.value) params.search = search.value
+    const data = await get<any>('/v1/admin/users', params)
+    users.value = data.data || []
+    total.value = data.total || 0
+  } catch {
+    // Not authorized or error
+  } finally {
+    loading.value = false
+  }
+}
+
+const onSearchInput = useDebounceFn(() => {
+  page.value = 1
+  fetchUsers()
+}, 300)
+
+watch(page, () => fetchUsers())
 
 function formatRoles(roles: string[]): string {
   return roles
@@ -212,15 +235,5 @@ async function impersonateUser(user: any) {
   }
 }
 
-onMounted(async () => {
-  try {
-    const { get } = useApi()
-    const data = await get<any>('/v1/admin/users')
-    users.value = data.data || data
-  } catch {
-    // Not authorized or error
-  } finally {
-    loading.value = false
-  }
-})
+onMounted(() => fetchUsers())
 </script>
