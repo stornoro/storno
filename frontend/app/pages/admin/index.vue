@@ -34,7 +34,16 @@
             <UButton variant="ghost" size="sm" to="/admin/users">{{ $t('common.viewAll') }}</UButton>
           </div>
         </template>
-        <div class="text-muted text-center py-4">{{ $t('admin.manageUsers') }}</div>
+        <div v-if="usersLoading" class="text-muted text-center py-4">{{ $t('common.loading') }}</div>
+        <div v-else-if="!recentUsers.length" class="text-muted text-center py-4">{{ $t('common.noData') }}</div>
+        <ul v-else class="divide-y divide-default">
+          <li v-for="u in recentUsers" :key="u.id" class="flex items-center gap-3 py-2.5 text-sm">
+            <NuxtLink :to="`/admin/users`" class="font-medium truncate text-primary hover:underline">{{ u.email }}</NuxtLink>
+            <span v-if="u.firstName || u.lastName" class="text-muted truncate">{{ [u.firstName, u.lastName].filter(Boolean).join(' ') }}</span>
+            <UBadge v-if="!u.emailVerified" color="warning" variant="subtle" size="xs">{{ $t('admin.unverified') }}</UBadge>
+            <span class="ml-auto text-muted text-xs whitespace-nowrap">{{ formatRelative(u.createdAt) }}</span>
+          </li>
+        </ul>
       </UCard>
       <UCard>
         <template #header>
@@ -43,7 +52,15 @@
             <UButton variant="ghost" size="sm" to="/admin/organizations">{{ $t('common.viewAll') }}</UButton>
           </div>
         </template>
-        <div class="text-muted text-center py-4">{{ $t('admin.manageOrganizations') }}</div>
+        <div v-if="orgsLoading" class="text-muted text-center py-4">{{ $t('common.loading') }}</div>
+        <div v-else-if="!recentOrgs.length" class="text-muted text-center py-4">{{ $t('common.noData') }}</div>
+        <ul v-else class="divide-y divide-default">
+          <li v-for="o in recentOrgs" :key="o.id" class="flex items-center gap-3 py-2.5 text-sm">
+            <NuxtLink :to="`/admin/organizations/${o.id}`" class="font-medium truncate text-primary hover:underline">{{ o.name }}</NuxtLink>
+            <UBadge :color="planColor(o.plan)" variant="subtle" size="xs">{{ o.plan }}</UBadge>
+            <span class="ml-auto text-muted text-xs whitespace-nowrap">{{ formatRelative(o.createdAt) }}</span>
+          </li>
+        </ul>
       </UCard>
     </div>
 
@@ -83,6 +100,10 @@ const intlLocale = useIntlLocale()
 const stats = ref({ users: 0, organizations: 0, companies: 0 })
 const recent = ref<any[]>([])
 const recentLoading = ref(true)
+const recentUsers = ref<any[]>([])
+const usersLoading = ref(true)
+const recentOrgs = ref<any[]>([])
+const orgsLoading = ref(true)
 
 function actionColor(action: string): string {
   switch (action) {
@@ -92,6 +113,17 @@ function actionColor(action: string): string {
     case 'impersonate': return 'warning'
     default: return 'neutral'
   }
+}
+
+function planColor(plan: string): string {
+  const colors: Record<string, string> = {
+    freemium: 'neutral',
+    free: 'neutral',
+    starter: 'info',
+    professional: 'success',
+    business: 'warning',
+  }
+  return colors[plan] || 'neutral'
 }
 
 function shortEntityType(type: string): string {
@@ -114,18 +146,23 @@ function formatRelative(iso: string | null): string {
 
 onMounted(async () => {
   const { get } = useApi()
-  try {
-    stats.value = await get<any>('/v1/admin/stats')
-  } catch {
-    // Admin stats not available
-  }
-  try {
-    const data = await get<any>('/v1/admin/audit-logs', { page: 1, limit: 8 })
-    recent.value = data.data || []
-  } catch {
-    // Audit logs not available
-  } finally {
-    recentLoading.value = false
-  }
+  // Fire all four admin lookups in parallel — they're independent and the
+  // page is already rendered, so blocking one card behind another just adds
+  // perceived latency.
+  await Promise.all([
+    get<any>('/v1/admin/stats').then((d) => { stats.value = d }).catch(() => {}),
+    get<any>('/v1/admin/audit-logs', { page: 1, limit: 8 })
+      .then((d) => { recent.value = d.data || [] })
+      .catch(() => {})
+      .finally(() => { recentLoading.value = false }),
+    get<any>('/v1/admin/users', { page: 1, limit: 5 })
+      .then((d) => { recentUsers.value = d.data || [] })
+      .catch(() => {})
+      .finally(() => { usersLoading.value = false }),
+    get<any>('/v1/admin/organizations', { page: 1, limit: 5 })
+      .then((d) => { recentOrgs.value = d.data || [] })
+      .catch(() => {})
+      .finally(() => { orgsLoading.value = false }),
+  ])
 })
 </script>
