@@ -719,9 +719,9 @@ const createError = ref<string | null>(null)
 const showUpgrade = ref(false)
 const createState = reactive({ cif: '' })
 
-const createSchema = z.object({
+const createSchema = computed(() => z.object({
   cif: z.string().min(2, $t('validation.cifMin')).max(20, $t('validation.cifFormat')),
-})
+}))
 
 // ── Registry search ──────────────────────────────────────────────
 const { results: registryResults, loading: registryLoading, onRegistrySearch, clear: clearRegistry } = useRegistrySearch()

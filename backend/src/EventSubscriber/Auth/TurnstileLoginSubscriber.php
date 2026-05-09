@@ -11,6 +11,8 @@ use Symfony\Component\Security\Http\Event\CheckPassportEvent;
 
 class TurnstileLoginSubscriber implements EventSubscriberInterface
 {
+    private const CAPTCHA_REMAINING_THRESHOLD = 3;
+
     public function __construct(
         private readonly TurnstileVerifier $turnstileVerifier,
         private readonly RequestStack $requestStack,
@@ -31,28 +33,30 @@ class TurnstileLoginSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Only intercept the json_login endpoint
         if ($request->getPathInfo() !== '/api/auth') {
             return;
         }
 
-        // Rate limit by IP
+        $userAgent = $request->headers->get('User-Agent', '');
+        $isMobile = str_contains($userAgent, 'Expo/') || str_contains($userAgent, 'okhttp/');
+
         $limiter = $this->loginLimiter->create($request->getClientIp());
+
+        if (!$isMobile) {
+            // Peek without consuming — once budget is low, gate behind captcha
+            // before the rate limit triggers a hard lockout.
+            $peek = $limiter->consume(0);
+            if ($peek->getRemainingTokens() <= self::CAPTCHA_REMAINING_THRESHOLD) {
+                $data = json_decode($request->getContent(), true);
+                $token = $data['turnstileToken'] ?? '';
+                if (!$this->turnstileVerifier->verify($token, $request->getClientIp())) {
+                    throw new CustomUserMessageAuthenticationException('captcha_required');
+                }
+            }
+        }
+
         if (!$limiter->consume()->isAccepted()) {
             throw new CustomUserMessageAuthenticationException('Too many requests.');
-        }
-
-        // Skip Turnstile for mobile app requests (WebView widget cannot verify on native origins)
-        $userAgent = $request->headers->get('User-Agent', '');
-        if (str_contains($userAgent, 'Expo/') || str_contains($userAgent, 'okhttp/')) {
-            return;
-        }
-
-        $data = json_decode($request->getContent(), true);
-        $turnstileToken = $data['turnstileToken'] ?? '';
-
-        if (!$this->turnstileVerifier->verify($turnstileToken, $request->getClientIp())) {
-            throw new CustomUserMessageAuthenticationException('Captcha verification failed.');
         }
     }
 }

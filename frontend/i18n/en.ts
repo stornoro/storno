@@ -227,6 +227,7 @@ export default defineI18nLocale(async () => {
       loginTitle: 'Log in',
       loginDescription: 'Enter your credentials to continue',
       loginError: 'Incorrect email or password',
+      captchaRequired: 'Confirm you are not a robot to continue.',
       emailNotConfirmed: 'Email address has not been confirmed. Check your inbox.',
       checkEmail: 'Check your email',
       checkEmailDesc: 'We sent a confirmation email to your address. Click the link in the email to activate your account.',

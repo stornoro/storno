@@ -51,14 +51,14 @@ const mfaRegenerateModalOpen = ref(false)
 const mfaRegeneratePassword = ref('')
 const mfaRegenerating = ref(false)
 
-const schema = z.object({
+const schema = computed(() => z.object({
   firstName: z.string().min(2, $t('validation.nameMin')),
   lastName: z.string().min(2, $t('validation.nameMin')),
   phone: z.string().optional().or(z.literal('')),
   email: z.string().email($t('validation.emailInvalid')),
   currentPassword: z.string().optional(),
   newPassword: z.string().min(8, $t('validation.passwordMin')).optional().or(z.literal('')),
-})
+}))
 
 const formState = reactive({
   firstName: authStore.user?.firstName || '',

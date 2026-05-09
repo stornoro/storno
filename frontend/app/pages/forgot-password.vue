@@ -50,9 +50,9 @@ const state = reactive({
   email: '',
 })
 
-const schema = z.object({
-  email: z.string({ required_error: 'Adresa de email este obligatorie' }).email('Adresa de email nu este valida'),
-})
+const schema = computed(() => z.object({
+  email: z.string({ required_error: $t('validation.required') }).email($t('validation.emailInvalid')),
+}))
 
 const fetchFn = useRequestFetch()
 

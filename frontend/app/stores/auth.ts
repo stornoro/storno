@@ -59,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
   const impersonator = computed(() => user.value?.impersonator ?? null)
 
   // ── Actions ────────────────────────────────────────────────────────
-  async function login(email: string, password: string, turnstileToken?: string): Promise<boolean | 'mfa_required'> {
+  async function login(email: string, password: string, turnstileToken?: string): Promise<boolean | 'mfa_required' | 'captcha_required'> {
     const apiBase = useApiBase()
     const fetchFn = useRequestFetch()
     loading.value = true
@@ -95,7 +95,12 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     }
     catch (err: any) {
-      error.value = (err?.data?.message ?? err?.data?.error) ? translateApiError(err.data.message ?? err.data.error) : 'Autentificarea a esuat.'
+      const raw = err?.data?.message ?? err?.data?.error ?? ''
+      if (raw === 'captcha_required') {
+        error.value = null
+        return 'captcha_required'
+      }
+      error.value = raw ? translateApiError(raw) : 'Autentificarea a esuat.'
       return false
     }
     finally {

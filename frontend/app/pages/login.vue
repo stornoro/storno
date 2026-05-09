@@ -55,9 +55,9 @@
         </UFormField>
       </div>
 
-      <NuxtTurnstile ref="turnstileRef" v-model="turnstileToken" />
+      <NuxtTurnstile v-if="captchaRequired" ref="turnstileRef" v-model="turnstileToken" />
 
-      <UButton type="submit" :loading="loading" :disabled="!turnstileToken" size="xl" block :ui="{ base: 'rounded-xl justify-center font-semibold' }">
+      <UButton type="submit" :loading="loading" :disabled="captchaRequired && !turnstileToken" size="xl" block :ui="{ base: 'rounded-xl justify-center font-semibold' }">
         {{ $t('auth.login') }}
       </UButton>
     </UForm>
@@ -112,16 +112,17 @@ const loading = ref(false)
 const showPassword = ref(false)
 const turnstileToken = ref('')
 const turnstileRef = ref()
+const captchaRequired = ref(false)
 
 const state = reactive({
   email: '',
   password: '',
 })
 
-const schema = z.object({
-  email: z.string({ required_error: 'Adresa de email este obligatorie' }).email('Adresa de email nu este valida'),
-  password: z.string({ required_error: 'Parola este obligatorie' }).min(6, 'Parola trebuie sa aiba cel putin 6 caractere'),
-})
+const schema = computed(() => z.object({
+  email: z.string({ required_error: $t('validation.required') }).email($t('validation.emailInvalid')),
+  password: z.string({ required_error: $t('validation.required') }).min(6, $t('validation.passwordMin')),
+}))
 
 const config = useRuntimeConfig()
 
@@ -166,16 +167,26 @@ async function onSubmit() {
       await navigateTo({ path: '/mfa-verify', query: redirect ? { redirect } : undefined })
     } else if (result === true) {
       await navigateTo(await resolvePostLogin())
+    } else if (result === 'captcha_required') {
+      captchaRequired.value = true
+      turnstileToken.value = ''
+      await nextTick()
+      turnstileRef.value?.reset()
+      useToast().add({ title: $t('auth.captchaRequired'), color: 'warning' })
     } else if (authStore.error === 'login.mail.not_confirmed') {
       await navigateTo({ path: '/confirm-email', query: { email: state.email } })
     } else {
-      turnstileRef.value?.reset()
-      turnstileToken.value = ''
+      if (captchaRequired.value) {
+        turnstileRef.value?.reset()
+        turnstileToken.value = ''
+      }
       useToast().add({ title: authStore.error || $t('auth.loginError'), color: 'error' })
     }
   } catch {
-    turnstileRef.value?.reset()
-    turnstileToken.value = ''
+    if (captchaRequired.value) {
+      turnstileRef.value?.reset()
+      turnstileToken.value = ''
+    }
     useToast().add({ title: $t('auth.loginError'), color: 'error' })
   } finally {
     loading.value = false
