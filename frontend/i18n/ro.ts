@@ -227,6 +227,7 @@ export default defineI18nLocale(async () => {
       loginTitle: 'Autentificare',
       loginDescription: 'Introdu datele de autentificare pentru a continua',
       loginError: 'Email sau parola incorecta',
+      captchaRequired: 'Confirma ca nu esti robot pentru a continua.',
       emailNotConfirmed: 'Adresa de email nu a fost confirmata. Verifica-ti inbox-ul.',
       checkEmail: 'Verifica-ti email-ul',
       checkEmailDesc: 'Am trimis un email de confirmare la adresa ta. Acceseaza linkul din email pentru a-ti activa contul.',
