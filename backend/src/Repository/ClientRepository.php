@@ -49,10 +49,10 @@ class ClientRepository extends ServiceEntityRepository
      * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool, distinctCountries: string[]}
      */
     private const CLIENT_SORT_MAP = [
-        'recent'         => 'dedup.group_created_at DESC',
-        'mostInvoiced'   => 'invoiceTotal DESC, dedup.group_created_at DESC',
-        'mostInvoices'   => 'invoiceCount DESC, dedup.group_created_at DESC',
-        'recentActivity' => 'lastInvoiceDate DESC, dedup.group_created_at DESC',
+        'recent'         => 'c.created_at DESC',
+        'mostInvoiced'   => 'invoiceTotal DESC, c.created_at DESC',
+        'mostInvoices'   => 'invoiceCount DESC, c.created_at DESC',
+        'recentActivity' => 'lastInvoiceDate DESC, c.created_at DESC',
         'name'           => 'c.name ASC',
     ];
 
@@ -93,8 +93,8 @@ class ClientRepository extends ServiceEntityRepository
         $hasInvoicesClause = '';
         if (!empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true)) {
             $hasInvoicesClause = $filters['hasInvoices'] === 'active'
-                ? ' WHERE COALESCE(s.invoice_count, 0) > 0'
-                : ' WHERE COALESCE(s.invoice_count, 0) = 0';
+                ? ' AND COALESCE(s.invoice_count, 0) > 0'
+                : ' AND COALESCE(s.invoice_count, 0) = 0';
         }
 
         $sortKey = is_string($filters['sort'] ?? null) ? $filters['sort'] : 'recent';
@@ -110,9 +110,8 @@ class ClientRepository extends ServiceEntityRepository
             ['companyId' => $companyId],
         );
 
-        // Pagination must happen AFTER JOINing with invoice stats so we can sort
-        // by metrics and apply the hasInvoices filter. The dedup CTE collapses
-        // duplicate clients to a single representative per (cui|cnp) group.
+        // Stats are aggregated per client_id (FK) — not per receiver_cif — so
+        // multiple contacts under the same VAT each get their own counts.
         $sql = "
             SELECT
                 c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
@@ -120,24 +119,19 @@ class ClientRepository extends ServiceEntityRepository
                 COALESCE(s.invoice_count, 0) AS invoiceCount,
                 COALESCE(s.invoice_total, 0) AS invoiceTotal,
                 s.last_invoice_date AS lastInvoiceDate,
-                dedup.group_created_at AS groupCreatedAt
-            FROM (
-                SELECT MIN(c.id) AS id, MAX(c.created_at) AS group_created_at
-                FROM client c
-                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
-                $innerWhere
-                GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
-            ) dedup
-            INNER JOIN client c ON c.id = dedup.id
+                c.created_at AS groupCreatedAt
+            FROM client c
             LEFT JOIN (
-                SELECT receiver_cif AS cif,
+                SELECT client_id,
                        COUNT(*) AS invoice_count,
                        SUM($convertTotalSql) AS invoice_total,
                        MAX(issue_date) AS last_invoice_date
                 FROM invoice
-                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing'
-                GROUP BY receiver_cif
-            ) s ON s.cif = COALESCE(c.cui, c.cnp)
+                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing' AND client_id IS NOT NULL
+                GROUP BY client_id
+            ) s ON s.client_id = c.id
+            WHERE c.company_id = :companyId AND c.deleted_at IS NULL
+            $innerWhere
             $hasInvoicesClause
             ORDER BY $orderBy
             LIMIT :pageLimit OFFSET :pageOffset
@@ -167,21 +161,16 @@ class ClientRepository extends ServiceEntityRepository
 
         $countSql = "
             SELECT COUNT(*) FROM (
-                SELECT dedup.id, COALESCE(s.invoice_count, 0) AS invoice_count
-                FROM (
-                    SELECT MIN(c.id) AS id
-                    FROM client c
-                    WHERE c.company_id = :companyId AND c.deleted_at IS NULL
-                    $innerWhere
-                    GROUP BY COALESCE(c.cui, c.cnp, CAST(c.id AS CHAR))
-                ) dedup
-                INNER JOIN client c ON c.id = dedup.id
+                SELECT c.id, COALESCE(s.invoice_count, 0) AS invoice_count
+                FROM client c
                 LEFT JOIN (
-                    SELECT receiver_cif AS cif, COUNT(*) AS invoice_count
+                    SELECT client_id, COUNT(*) AS invoice_count
                     FROM invoice
-                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing'
-                    GROUP BY receiver_cif
-                ) s ON s.cif = COALESCE(c.cui, c.cnp)
+                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing' AND client_id IS NOT NULL
+                    GROUP BY client_id
+                ) s ON s.client_id = c.id
+                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
+                $innerWhere
                 $hasInvoicesClause
             ) grouped
         ";
