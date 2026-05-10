@@ -8,7 +8,7 @@ use App\Entity\OrganizationMembership;
 use App\Entity\User;
 use App\Enum\EmailStatus;
 use App\Enum\OrganizationRole;
-use App\Message\SendDunningEmailMessage;
+use App\Message\SendFeatureHighlightDripMessage;
 use App\Service\LifecycleEmailGate;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -19,9 +19,9 @@ use Symfony\Component\Mime\Email;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
-class SendDunningEmailHandler
+class SendFeatureHighlightDripHandler
 {
-    private const CATEGORY = 'dunning';
+    private const CATEGORY = 'feature_drip';
     private const FROM_NAME = 'Florin de la Storno';
     private const REPLY_TO = 'contact@storno.ro';
 
@@ -35,62 +35,64 @@ class SendDunningEmailHandler
         private readonly ?MailerInterface $mailer = null,
     ) {}
 
-    public function __invoke(SendDunningEmailMessage $message): void
+    public function __invoke(SendFeatureHighlightDripMessage $message): void
     {
         $org = $this->entityManager->getRepository(Organization::class)->find($message->organizationId);
         if (!$org) {
-            $this->logger->warning('Organization not found for dunning email.', [
+            $this->logger->warning('Organization not found for feature-drip email.', [
                 'organizationId' => $message->organizationId,
-                'attempt' => $message->attempt,
+                'feature' => $message->feature,
             ]);
             return;
         }
 
         $owner = $this->findOwner($org);
         if (!$owner) {
-            $this->logger->warning('No active owner found for dunning email.', [
+            $this->logger->warning('No active owner found for feature-drip email.', [
                 'organizationId' => $message->organizationId,
             ]);
             return;
         }
 
-        $logEntry = $this->initLog($owner->getEmail(), $owner);
+        $logEntry = $this->initLog($owner->getEmail(), $owner, $message->feature);
 
         if (!$this->gate->canSend($owner->getEmail(), self::CATEGORY, $owner)) {
-            $this->logger->info('Dunning email suppressed by gate.', [
+            $this->logger->info('Feature-drip email suppressed by gate.', [
                 'organizationId' => $message->organizationId,
-                'attempt' => $message->attempt,
+                'feature' => $message->feature,
             ]);
             $this->finalizeLog($logEntry, EmailStatus::SENT, 'skipped_gate');
             return;
         }
 
         if (!$this->mailer) {
-            $this->logger->warning('Mailer not configured, skipping dunning email.', [
+            $this->logger->warning('Mailer not configured, skipping feature-drip email.', [
                 'organizationId' => $message->organizationId,
-                'attempt' => $message->attempt,
             ]);
             $this->finalizeLog($logEntry, EmailStatus::FAILED, null, 'Mailer not configured');
             return;
         }
 
         $locale = $owner->getLocale();
-        $billingUrl = sprintf('%s/settings/billing', rtrim($this->frontendUrl, '/'));
+        $baseUrl = rtrim($this->frontendUrl, '/');
         $firstName = $owner->getFirstName() ? ' ' . $owner->getFirstName() : '';
-        $params = [
-            '%firstName%' => $firstName,
-            '%orgName%' => $org->getName(),
-            '%billingUrl%' => $billingUrl,
-        ];
+        $feature = $message->feature;
 
-        $attemptKey = match ($message->attempt) {
-            1 => 'attempt1',
-            2 => 'attempt2',
-            default => 'attempt3',
-        };
-
-        $subject = $this->translator->trans('dunning.' . $attemptKey . '_subject', $params, 'emails', $locale);
-        $body = $this->translator->trans('dunning.' . $attemptKey . '_body', $params, 'emails', $locale);
+        $subject = $this->translator->trans(
+            sprintf('lifecycle.feature_drip.%s.subject', $feature),
+            [],
+            'emails',
+            $locale,
+        );
+        $body = $this->translator->trans(
+            sprintf('lifecycle.feature_drip.%s.body', $feature),
+            [
+                '%firstName%' => $firstName,
+                '%baseUrl%' => $baseUrl,
+            ],
+            'emails',
+            $locale,
+        );
 
         $logEntry->setSubject($subject);
 
@@ -106,17 +108,16 @@ class SendDunningEmailHandler
             $this->mailer->send($email);
 
             $this->finalizeLog($logEntry, EmailStatus::SENT);
-            $this->logger->info('Dunning email sent.', [
+            $this->logger->info('Feature-drip email sent.', [
                 'organizationId' => $message->organizationId,
-                'attempt' => $message->attempt,
+                'feature' => $feature,
                 'email' => $owner->getEmail(),
             ]);
         } catch (\Throwable $e) {
             $this->finalizeLog($logEntry, EmailStatus::FAILED, null, $e->getMessage());
-            $this->logger->error('Failed to send dunning email.', [
+            $this->logger->error('Failed to send feature-drip email.', [
                 'organizationId' => $message->organizationId,
-                'attempt' => $message->attempt,
-                'email' => $owner->getEmail(),
+                'feature' => $feature,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -133,7 +134,7 @@ class SendDunningEmailHandler
         return $membership?->getUser();
     }
 
-    private function initLog(string $toEmail, ?User $user): EmailLog
+    private function initLog(string $toEmail, ?User $user, string $feature): EmailLog
     {
         $log = new EmailLog();
         $log->setToEmail($toEmail);
@@ -141,6 +142,7 @@ class SendDunningEmailHandler
         $log->setSubject('');
         $log->setStatus(EmailStatus::SENT);
         $log->setSentBy($user);
+        $log->setTemplateUsed($feature);
         $this->entityManager->persist($log);
 
         return $log;

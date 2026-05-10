@@ -796,6 +796,88 @@ class AdminController extends AbstractController
         ]);
     }
 
+    #[Route('/email-log', methods: ['GET'])]
+    public function lifecycleEmailLog(Request $request): JsonResponse
+    {
+        $page = $request->query->getInt('page', 1);
+        $limit = min($request->query->getInt('limit', 25), 100);
+        $category = $request->query->get('category');
+        $recipientEmail = $request->query->get('recipientEmail');
+        $userId = $request->query->get('userId');
+        $organizationId = $request->query->get('organizationId');
+        $dateFrom = $request->query->get('dateFrom');
+        $dateTo = $request->query->get('dateTo');
+        $status = $request->query->get('status');
+
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('el', 'u')
+            ->from(EmailLog::class, 'el')
+            ->leftJoin('el.sentBy', 'u')
+            ->orderBy('el.sentAt', 'DESC');
+
+        if ($category !== null) {
+            $qb->andWhere('el.category = :category')->setParameter('category', $category);
+        }
+
+        if ($recipientEmail !== null) {
+            $qb->andWhere('el.toEmail LIKE :recipientEmail')->setParameter('recipientEmail', '%' . $recipientEmail . '%');
+        }
+
+        if ($userId !== null) {
+            try {
+                $userUuid = Uuid::fromString($userId);
+                $qb->andWhere('u.id = :userId')->setParameter('userId', $userUuid);
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($dateFrom !== null) {
+            $qb->andWhere('el.sentAt >= :dateFrom')->setParameter('dateFrom', new \DateTimeImmutable($dateFrom));
+        }
+
+        if ($dateTo !== null) {
+            $qb->andWhere('el.sentAt <= :dateTo')->setParameter('dateTo', new \DateTimeImmutable($dateTo));
+        }
+
+        if ($status !== null) {
+            $statusEnum = \App\Enum\EmailStatus::tryFrom($status);
+            if ($statusEnum !== null) {
+                $qb->andWhere('el.status = :status')->setParameter('status', $statusEnum);
+            }
+        }
+
+        $total = (int) (clone $qb)->select('COUNT(el.id)')->resetDQLPart('orderBy')->getQuery()->getSingleScalarResult();
+
+        $logs = $qb
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+
+        $data = array_map(fn (EmailLog $log) => [
+            'id' => (string) $log->getId(),
+            'category' => $log->getCategory(),
+            'recipientEmail' => $log->getToEmail(),
+            'subject' => $log->getSubject(),
+            'status' => $log->getStatus()->value,
+            'templateUsed' => $log->getTemplateUsed(),
+            'errorMessage' => $log->getErrorMessage(),
+            'fromEmail' => $log->getFromEmail(),
+            'sentBy' => $log->getSentBy() ? [
+                'id' => (string) $log->getSentBy()->getId(),
+                'email' => $log->getSentBy()->getEmail(),
+            ] : null,
+            'sentAt' => $log->getSentAt()?->format('c'),
+        ], $logs);
+
+        return $this->json([
+            'data' => $data,
+            'total' => $total,
+            'page' => $page,
+            'limit' => $limit,
+        ]);
+    }
+
     private function serializeUser(User $u): array
     {
         return [

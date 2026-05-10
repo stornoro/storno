@@ -67,6 +67,16 @@
     <UCard class="mt-4">
       <template #header>
         <div class="flex items-center justify-between">
+          <h3 class="font-semibold">{{ $t('admin.emailLog.title') }}</h3>
+          <UButton variant="ghost" size="sm" to="/admin/email-log">{{ $t('common.viewAll') }}</UButton>
+        </div>
+      </template>
+      <p class="text-sm text-muted">{{ $t('admin.emailLog.description') }}</p>
+    </UCard>
+
+    <UCard class="mt-4">
+      <template #header>
+        <div class="flex items-center justify-between">
           <h3 class="font-semibold">{{ $t('admin.recentActivity') }}</h3>
           <UButton variant="ghost" size="sm" to="/admin/audit-logs">{{ $t('common.viewAll') }}</UButton>
         </div>

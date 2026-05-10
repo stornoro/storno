@@ -5,7 +5,7 @@ namespace App\MessageHandler;
 use App\Entity\EmailLog;
 use App\Entity\User;
 use App\Enum\EmailStatus;
-use App\Message\SendReEngagementEmailMessage;
+use App\Message\SendAccountWithoutLoginReminderMessage;
 use App\Service\LifecycleEmailGate;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -16,9 +16,9 @@ use Symfony\Component\Mime\Email;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
-class SendReEngagementEmailHandler
+class SendAccountWithoutLoginReminderHandler
 {
-    private const CATEGORY = 're_engagement';
+    private const CATEGORY = 'account_without_login';
     private const FROM_NAME = 'Florin de la Storno';
     private const REPLY_TO = 'contact@storno.ro';
 
@@ -32,36 +32,36 @@ class SendReEngagementEmailHandler
         private readonly ?MailerInterface $mailer = null,
     ) {}
 
-    public function __invoke(SendReEngagementEmailMessage $message): void
+    public function __invoke(SendAccountWithoutLoginReminderMessage $message): void
     {
         $user = $this->entityManager->getRepository(User::class)->find($message->userId);
         if (!$user) {
-            $this->logger->warning('User not found for re-engagement email.', ['userId' => $message->userId]);
+            $this->logger->warning('User not found for account-without-login reminder.', ['userId' => $message->userId]);
             return;
         }
 
-        $logEntry = $this->initLog($user->getEmail(), null, $user);
+        $logEntry = $this->initLog($user->getEmail(), $user);
 
         if (!$this->gate->canSend($user->getEmail(), self::CATEGORY, $user)) {
-            $this->logger->info('Re-engagement email suppressed by gate.', ['userId' => $message->userId]);
+            $this->logger->info('Account-without-login reminder suppressed by gate.', ['userId' => $message->userId]);
             $this->finalizeLog($logEntry, EmailStatus::SENT, 'skipped_gate');
             return;
         }
 
         if (!$this->mailer) {
-            $this->logger->warning('Mailer not configured, skipping re-engagement email.', ['userId' => $message->userId]);
+            $this->logger->warning('Mailer not configured, skipping account-without-login reminder.', ['userId' => $message->userId]);
             $this->finalizeLog($logEntry, EmailStatus::FAILED, null, 'Mailer not configured');
             return;
         }
 
         $locale = $user->getLocale();
-        $baseUrl = rtrim($this->frontendUrl, '/');
+        $loginUrl = rtrim($this->frontendUrl, '/');
         $firstName = $user->getFirstName() ? ' ' . $user->getFirstName() : '';
 
-        $subject = $this->translator->trans('lifecycle.re_engagement.subject', [], 'emails', $locale);
-        $body = $this->translator->trans('lifecycle.re_engagement.body', [
+        $subject = $this->translator->trans('lifecycle.account_without_login.subject', [], 'emails', $locale);
+        $body = $this->translator->trans('lifecycle.account_without_login.body', [
             '%firstName%' => $firstName,
-            '%baseUrl%' => $baseUrl,
+            '%loginUrl%' => $loginUrl,
         ], 'emails', $locale);
 
         $logEntry->setSubject($subject);
@@ -78,21 +78,20 @@ class SendReEngagementEmailHandler
             $this->mailer->send($email);
 
             $this->finalizeLog($logEntry, EmailStatus::SENT);
-            $this->logger->info('Re-engagement email sent.', [
+            $this->logger->info('Account-without-login reminder sent.', [
                 'userId' => $message->userId,
                 'email' => $user->getEmail(),
             ]);
         } catch (\Throwable $e) {
             $this->finalizeLog($logEntry, EmailStatus::FAILED, null, $e->getMessage());
-            $this->logger->error('Failed to send re-engagement email.', [
+            $this->logger->error('Failed to send account-without-login reminder.', [
                 'userId' => $message->userId,
-                'email' => $user->getEmail(),
                 'error' => $e->getMessage(),
             ]);
         }
     }
 
-    private function initLog(string $toEmail, ?string $variant, ?User $user): EmailLog
+    private function initLog(string $toEmail, ?User $user): EmailLog
     {
         $log = new EmailLog();
         $log->setToEmail($toEmail);

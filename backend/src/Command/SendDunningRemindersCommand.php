@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Entity\Organization;
 use App\Message\SendDunningEmailMessage;
+use App\Service\EditionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -31,6 +32,7 @@ class SendDunningRemindersCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $bus,
+        private readonly EditionService $editionService,
     ) {
         parent::__construct();
     }
@@ -43,6 +45,12 @@ class SendDunningRemindersCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
+
+        if (!$this->editionService->isSaas()) {
+            $io->note('Skipping — not SaaS edition.');
+            return Command::SUCCESS;
+        }
+
         $dryRun = $input->getOption('dry-run');
         $now = new \DateTimeImmutable();
         $dispatched = 0;

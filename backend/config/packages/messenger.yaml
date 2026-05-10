@@ -33,3 +33,11 @@ when@prod:
                 'App\Message\ProcessTrialBalanceMessage': async
                 'App\Message\ProcessTelemetryBatchMessage': async
                 'App\Message\ValidateViesMessage': async
+                'App\Message\SendAccountWithoutLoginReminderMessage': async
+                'App\Message\SendFirstCompanyCreatedEmailMessage': async
+                'App\Message\SendFirstInvoiceCreatedEmailMessage': async
+                'App\Message\SendTrialEndedEmailMessage': async
+                'App\Message\SendFeatureHighlightDripMessage': async
+                'App\Message\SendReEngagementEmailMessage': async
+                'App\Message\SendTrialExpirationMessage': async
+                'App\Message\SendDunningEmailMessage': async
