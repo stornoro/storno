@@ -599,27 +599,18 @@ class ClientController extends AbstractController
 
         if ($company) {
             $clientId = (string) $client->getId();
-            $cif = $client->getCui() ?? $client->getCnp();
 
-            if ($cif) {
-                $page = $request->query->getInt('page', 1);
-                $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
-                $result = $this->invoiceRepository->findByCifPaginated($company, $cif, $page, $limit, InvoiceDirection::OUTGOING);
-                $invoiceHistory = $result['data'] ?? [];
-                $invoiceTotal = $result['total'] ?? 0;
-                $invoiceCount = $invoiceTotal;
-            } else {
-                // Fallback to client FK if no identification number
-                $result = $this->invoiceRepository->findByCompanyPaginated(
-                    $company,
-                    ['clientId' => $clientId],
-                    1,
-                    50,
-                );
-                $invoiceHistory = $result['data'] ?? [];
-                $invoiceTotal = $result['total'] ?? 0;
-                $invoiceCount = $invoiceTotal;
-            }
+            $page = $request->query->getInt('page', 1);
+            $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
+            $result = $this->invoiceRepository->findByCompanyPaginated(
+                $company,
+                ['clientId' => $clientId, 'direction' => InvoiceDirection::OUTGOING->value],
+                $page,
+                $limit,
+            );
+            $invoiceHistory = $result['data'] ?? [];
+            $invoiceTotal = $result['total'] ?? 0;
+            $invoiceCount = $invoiceTotal;
 
             $deliveryNoteHistory = $this->deliveryNoteRepository->findRecentByClient($company, $clientId, 5);
             $deliveryNoteCount = $this->deliveryNoteRepository->countByClient($company, $clientId);
