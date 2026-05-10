@@ -17,6 +17,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'idx_emaillog_company_sent', columns: ['company_id', 'sent_at'])]
 #[ORM\Index(name: 'idx_emaillog_invoice_sent', columns: ['invoice_id', 'sent_at'])]
 #[ORM\Index(name: 'idx_emaillog_ses_msg_id', columns: ['ses_message_id'])]
+#[ORM\Index(name: 'idx_emaillog_category_sent', columns: ['category', 'sent_at'])]
+#[ORM\Index(name: 'idx_emaillog_sent_by_sent', columns: ['sent_by_id', 'sent_at'])]
 class EmailLog
 {
     #[ORM\Id]

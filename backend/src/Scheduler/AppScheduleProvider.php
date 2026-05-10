@@ -48,6 +48,15 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // Monthly audit log purge — 1st of month
             ->add(RecurringMessage::cron('0 4 1 * *', new RunCommandMessage('app:audit-log:purge')))
             // Monthly EU VAT rates refresh from GitHub — 1st of month
-            ->add(RecurringMessage::cron('0 5 1 * *', new RunCommandMessage('app:vat-rates:sync')));
+            ->add(RecurringMessage::cron('0 5 1 * *', new RunCommandMessage('app:vat-rates:sync')))
+            // Lifecycle emails — SaaS only; all commands self-gate via EditionService
+            ->add(RecurringMessage::cron('0 10 * * 1', new RunCommandMessage('app:lifecycle:re-engagement-emails')))
+            ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:billing:trial-expiration-reminders')))
+            ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:billing:dunning-reminders')))
+            ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:lifecycle:account-without-login-reminder')))
+            ->add(RecurringMessage::cron('0 * * * *', new RunCommandMessage('app:lifecycle:first-company-created-email')))
+            ->add(RecurringMessage::cron('0 * * * *', new RunCommandMessage('app:lifecycle:first-invoice-created-email')))
+            ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:lifecycle:trial-ended-email')))
+            ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:lifecycle:feature-highlight-drip')));
     }
 }

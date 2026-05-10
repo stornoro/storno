@@ -93,6 +93,48 @@ re_engagement:
   subject: "We miss you — what's new on Storno.ro"
   body: "Hi%firstName%,\n\nWe have not seen you on Storno.ro for a while and wanted to let you know about what we have added recently:\n\n- Improved e-Invoice ANAF synchronization\n- Advanced CSV and PDF export\n- Detailed statistics and reports\n- Notifications for overdue invoices\n\nCome back and check out all the updates:\n%baseUrl%\n\nIf you have questions or suggestions, write to us at contact@storno.ro.\n\nThe Storno.ro Team"
 
+lifecycle:
+  re_engagement:
+    subject: "How's it going? Come back to Storno"
+    body: "Hi%firstName%,\n\nHaven't seen you in a while, so I figured I'd reach out directly.\n\nIn the meantime, we've shipped a few things I think you'll like:\n\n- e-Invoice sync every 30 minutes (down from 12 hours)\n- Fast company lookup by CIF, right inside the app\n- Improved CSV export for your accountant\n- Mobile push notifications for invoices coming due\n\nStorno is built by founders, for founders — every update comes from real feedback from users like you.\n\nCome take a look:\n%baseUrl%\n\nIf you have questions or want to tell me what's missing, just reply to this email.\n\n— Florin from Storno"
+
+  account_without_login:
+    subject: 'Your Storno account is waiting — got two minutes?'
+    body: "Hi%firstName%,\n\nYou created your Storno account but haven't logged in yet. I get it — life is busy.\n\nHere's what's waiting for you the first time you log in:\n\n1. Connect your company to ANAF and e-Invoices sync automatically\n2. Issue your first invoice in under 2 minutes\n3. Give your accountant access with a single click\n\nYour 14-day trial is active and running — it'd be a shame to let it slip by unused.\n\nLog in now:\n%loginUrl%\n\nIf you need help or want someone to walk you through it, just reply to this email.\n\n— Florin from Storno"
+
+  first_company_created:
+    subject: "You added your first company — let's issue your first invoice"
+    body: "Hi%firstName%,\n\nNice work — you've added \"%orgName%\" to Storno!\n\nThe natural next step is to issue your first invoice. It takes under 2 minutes:\n\n1. Click \"New invoice\"\n2. Add the client (or look them up by CIF)\n3. Add the product or service\n4. Send it or download the PDF\n\nIf you're billing with e-Invoice, connect your company to ANAF under Settings > ANAF and invoices will be sent automatically.\n\nYou've got 14 days of trial left — let's put them to good use:\n%baseUrl%\n\n— Florin from Storno"
+
+  first_invoice_created:
+    subject: 'First invoice issued — it gets easier from here'
+    body: "Hi%firstName%,\n\nYou've issued your first invoice through Storno for \"%orgName%\". Seriously, well done.\n\nNow that you've got the hang of it, a few things that'll come in handy:\n\n- You can email the invoice straight to the client from inside the app\n- You can turn on automatic submission to ANAF for e-Invoice\n- You can add your accountant as a user so they pull invoices themselves\n- The mobile app works identically to the web version\n\nIf you have questions about any of these, just reply directly.\n\n%baseUrl%\n\n— Florin from Storno"
+
+  trial_ended:
+    1d:
+      subject: 'Your trial just ended — what now?'
+      body: "Hi%firstName%,\n\nYour trial for \"%orgName%\" ended yesterday.\n\nI know 14 days fly by. If you got to test things out and Storno is a fit, plans start at 19 RON/month on Starter — less than a Netflix subscription.\n\nIf not, tell me what was missing and I'll see what I can do.\n\nSubscribe and keep your access:\n%billingUrl%\n\n— Florin from Storno"
+    7d:
+      subject: "A week since your trial ended — still interested?"
+      body: "Hi%firstName%,\n\nIt's been a week since the trial for \"%orgName%\" ended.\n\nIf you haven't found time to subscribe, I totally get it. But if you're using Storno and want to keep going, plans start at 19 RON/month — pay by card, cancel anytime.\n\nIf you've moved to another solution, no hard feelings — but I'd love to hear why, so I can make things better.\n\nReply to this email or subscribe directly:\n%billingUrl%\n\n— Florin from Storno"
+    30d:
+      subject: 'A month since your trial ended — last time I write'
+      body: "Hi%firstName%,\n\nIt's been a month since the trial for \"%orgName%\" ended and I don't want to clog up your inbox for no reason.\n\nIf you want to come back to Storno, you're welcome anytime. Plans start at 19 RON/month and activation is instant:\n%billingUrl%\n\nIf not, I won't write about this again. All the best with the business!\n\n— Florin from Storno"
+
+  feature_drip:
+    efactura:
+      subject: 'e-Invoice is mandatory — how Storno handles it automatically'
+      body: "Hi%firstName%,\n\nIf you bill other businesses, e-Invoice is mandatory — and submitting manually on SPV takes time and invites mistakes.\n\nIn Storno, you connect your company to ANAF once and from then on invoices go to SPV automatically. No more refreshing, no more checking if it went through.\n\nHow to turn it on:\n1. Open Companies and pick the company\n2. Click the ANAF tab and connect your token\n3. Enable automatic submission\n\nDone. Storno takes care of the rest.\n\n%baseUrl%/companies\n\n— Florin from Storno"
+    anaf_lookup:
+      subject: 'Looking up companies by CIF? Storno does it for you'
+      body: "Hi%firstName%,\n\nWhen you add a new client in Storno, you don't have to type in company details by hand.\n\nYou enter the CIF and Storno pulls it automatically from the ANAF database: company name, address, VAT status.\n\nIt saves you time and eliminates transcription errors — especially when you're billing new companies.\n\nTry it from here:\n%baseUrl%/clients\n\n— Florin from Storno"
+    contabil_user:
+      subject: 'Your accountant can pull invoices straight from Storno'
+      body: "Hi%firstName%,\n\nIf you're still sending your accountant invoices over email or WhatsApp, there's a better way.\n\nYou can add your accountant as a user in Storno with view-only access. They log in directly, download what they need, and you stop being interrupted.\n\nReal benefits:\n- No more sending invoices manually\n- Your accountant sees the full ledger\n- Fewer transcription errors in their accounting software\n\nAdd a user now:\n%baseUrl%/settings/team\n\n— Florin from Storno"
+    mobile_app:
+      subject: 'The Storno mobile app — issue invoices from your phone'
+      body: "Hi%firstName%,\n\nIf you haven't tried the Storno mobile app yet, it's worth two minutes.\n\nIt does exactly what the web version does: invoices, e-Invoice, clients, reports. Works on iOS and Android.\n\nEspecially handy when you're at the client's and want to send the invoice on the spot, or when you want to check a payment quickly.\n\nDownload from the App Store or Google Play:\nhttps://storno.ro/mobile-app\n\n— Florin from Storno"
+
 notifications:
   # Base template
   sent_via: 'Sent via'

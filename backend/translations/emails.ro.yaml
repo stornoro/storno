@@ -93,6 +93,48 @@ re_engagement:
   subject: 'Ne este dor de tine — ce e nou pe Storno.ro'
   body: "Buna%firstName%,\n\nNu te-am mai vazut pe Storno.ro de ceva vreme si ne-am gandit sa te informam despre ce am adaugat recent:\n\n- Sincronizare imbunatatita cu e-Factura ANAF\n- Export avansat CSV si PDF\n- Statistici si rapoarte detaliate\n- Notificari pentru facturi scadente\n\nRevino si verifica toate noutatile:\n%baseUrl%\n\nDaca ai intrebari sau sugestii, scrie-ne la contact@storno.ro.\n\nEchipa Storno.ro"
 
+lifecycle:
+  re_engagement:
+    subject: 'Ce mai faci? Hai inapoi pe Storno'
+    body: "Salut%firstName%,\n\nNu te-am mai vazut de ceva vreme si m-am gandit sa-ti scriu direct.\n\nIntre timp, am adaugat cateva lucruri care cred ca o sa-ti placa:\n\n- Sincronizare e-Factura la 30 de minute (in loc de 12 ore)\n- Cautare rapida dupa CIF direct din aplicatie\n- Export CSV imbunatatit pentru contabil\n- Notificari push pe mobil pentru facturi scadente\n\nStorno e construit de antreprenori, pentru antreprenori — si fiecare update vine din feedback real de la utilizatori ca tine.\n\nRevino sa arunci un ochi:\n%baseUrl%\n\nDaca ai intrebari sau vrei sa-mi spui ce lipseste, raspunde direct la acest email.\n\n— Florin de la Storno"
+
+  account_without_login:
+    subject: 'Contul tau Storno te asteapta — intri doua minute?'
+    body: "Salut%firstName%,\n\nTi-ai creat contul pe Storno dar nu l-ai deschis inca. Inteleg — viata e agitata.\n\nIata ce te asteapta cand intri prima data:\n\n1. Conectezi firma la ANAF si facturile e-Factura se sincronizeaza automat\n2. Emiti prima factura in mai putin de 2 minute\n3. Contabilul tau poate primi acces cu un singur click\n\nPlanul de proba de 14 zile e activ si ruleaza — ar fi pacat sa-l pierzi fara sa il folosesti.\n\nIntra acum:\n%loginUrl%\n\nDaca ai nevoie de ajutor sau vrei sa-ti arate cineva cum functioneaza, raspunde la acest email.\n\n— Florin de la Storno"
+
+  first_company_created:
+    subject: 'Ai adaugat prima firma — hai sa emitem prima factura'
+    body: "Salut%firstName%,\n\nFelicitari — ai adaugat \"%orgName%\" in Storno!\n\nUrmatorul pas natural e sa emiti prima factura. Dureaza mai putin de 2 minute:\n\n1. Apasa pe \"Factura noua\"\n2. Adauga clientul (sau cauta-l dupa CIF)\n3. Adauga produsul sau serviciul\n4. Trimite sau descarca PDF-ul\n\nDaca facturezi cu e-Factura, conecteaza firma la ANAF din Setari > ANAF si facturile se trimit automat.\n\nMai ai 14 zile de proba — hai sa le folosim bine:\n%baseUrl%\n\n— Florin de la Storno"
+
+  first_invoice_created:
+    subject: 'Prima factura emisa — acum e mai simplu'
+    body: "Salut%firstName%,\n\nAi emis prima factura prin Storno pentru \"%orgName%\". Serios, bine facut.\n\nAcum ca ai prins gustul, cateva lucruri care-ti vor fi utile:\n\n- Poti trimite factura direct pe email clientului din aplicatie\n- Poti activa trimiterea automata catre ANAF pentru e-Factura\n- Poti adauga contabilul ca utilizator ca sa-si ia el facturile\n- Aplicatia mobila functioneaza identic cu versiunea web\n\nDaca ai intrebari despre oricare din ele, scrie-mi direct.\n\n%baseUrl%\n\n— Florin de la Storno"
+
+  trial_ended:
+    1d:
+      subject: 'Perioada de proba s-a terminat — ce facem mai departe?'
+      body: "Salut%firstName%,\n\nPerioada de proba pentru \"%orgName%\" s-a incheiat ieri.\n\nStiu ca 14 zile trec repede. Daca ai apucat sa testezi si Storno ti se potriveste, abonamentul porneste de la 19 RON/luna pe planul Starter — mai putin decat un abonament la Netflix.\n\nDaca nu, spune-mi ce a lipsit si incerc sa rezolv.\n\nAboneaza-te si pastreaza accesul:\n%billingUrl%\n\n— Florin de la Storno"
+    7d:
+      subject: 'O saptamana de cand s-a terminat proba — mai esti interesat?'
+      body: "Salut%firstName%,\n\nA trecut o saptamana de cand proba pentru \"%orgName%\" s-a terminat.\n\nDaca nu ai gasit timp sa te abonezi, inteleg complet. Dar daca folosesti Storno si vrei sa continui, abonamentul porneste de la 19 RON/luna — plata cu cardul, anulare oricand.\n\nDaca ai trecut la alta solutie, nu e nicio problema — dar mi-ar placea sa stiu de ce, ca sa pot imbunatati lucrurile.\n\nRaspunde la acest email sau aboneaza-te direct:\n%billingUrl%\n\n— Florin de la Storno"
+    30d:
+      subject: 'O luna de la expirarea probei — ultima data cand iti scriu'
+      body: "Salut%firstName%,\n\nA trecut o luna de cand proba pentru \"%orgName%\" s-a incheiat si nu vreau sa iti ocup inbox-ul inutil.\n\nDaca vrei sa revii la Storno, esti binevenit oricand. Abonamentul porneste de la 19 RON/luna si activarea e imediata:\n%billingUrl%\n\nDaca nu, nu-ti mai scriu despre asta. Mult succes cu businessul!\n\n— Florin de la Storno"
+
+  feature_drip:
+    efactura:
+      subject: 'e-Factura obligatorie — cum te ajuta Storno sa o rezolvi automat'
+      body: "Salut%firstName%,\n\nDaca facturezi catre firme, e-Factura e obligatorie — si trimiterea manuala pe SPV ia timp si creste riscul de erori.\n\nIn Storno, conectezi firma la ANAF o singura data si de atunci facturile se trimit automat la SPV. Nu mai dai refresh, nu mai verifici daca a plecat.\n\nCum activezi:\n1. Intra la Companii si selecteaza firma\n2. Apasa pe tab-ul ANAF si conecteaza-ti tokenul\n3. Activeaza trimiterea automata\n\nGata. Storno face restul.\n\n%baseUrl%/companies\n\n— Florin de la Storno"
+    anaf_lookup:
+      subject: 'Cauti firme dupa CIF? Storno il cauta pentru tine'
+      body: "Salut%firstName%,\n\nCand adaugi un client nou in Storno, nu trebuie sa completezi manual datele firmei.\n\nScrii CIF-ul si Storno extrage automat din baza de date ANAF: denumirea firmei, adresa, statusul de platitor de TVA.\n\nEconomisesti timp si elimini erorile de transcriere — mai ales cand facturezi catre firme noi.\n\nIncearca de aici:\n%baseUrl%/clients\n\n— Florin de la Storno"
+    contabil_user:
+      subject: 'Contabilul tau poate lua facturile direct din Storno'
+      body: "Salut%firstName%,\n\nDaca inca trimiți facturile contabilului pe email sau WhatsApp, exista o cale mai buna.\n\nPoti adauga contabilul ca utilizator in Storno cu acces de vizualizare. El intra direct, descarca ce are nevoie, si tu nu mai esti deranjat.\n\nBeneficii concrete:\n- Nu mai trimiti facturi manual\n- Contabilul vede jurnalul complet\n- Reduce erorile de transcriere in programul de contabilitate\n\nAdauga un utilizator acum:\n%baseUrl%/settings/team\n\n— Florin de la Storno"
+    mobile_app:
+      subject: 'Aplicatia mobila Storno — emite facturi din telefon'
+      body: "Salut%firstName%,\n\nDaca nu ai incercat inca aplicatia mobila Storno, merita doua minute.\n\nFace exact ce face versiunea web: facturi, e-Factura, clienti, rapoarte. Functioneaza pe iOS si Android.\n\nUtila mai ales cand esti la client si vrei sa trimiti factura pe loc, sau cand vrei sa verifici rapid o plata.\n\nDescarca din App Store sau Google Play:\nhttps://storno.ro/mobile-app\n\n— Florin de la Storno"
+
 notifications:
   sent_via: 'Trimis prin'
   unsubscribe: 'Dezaboneaza-te'
