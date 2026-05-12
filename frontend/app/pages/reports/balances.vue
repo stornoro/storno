@@ -45,6 +45,18 @@
         <!-- KPI indicators -->
         <ReportsBalanceIndicators :indicators="report.indicators" />
 
+        <!-- Financial ratio sections -->
+        <div class="space-y-6">
+          <ReportsBalanceLiquidityCard v-if="report.liquidity?.hasData" :data="report.liquidity" />
+          <ReportsBalanceSolvencyCard v-if="report.solvency?.hasData" :data="report.solvency" />
+          <ReportsBalanceProfitabilityRatiosCard v-if="report.profitabilityRatios?.hasData" :data="report.profitabilityRatios" />
+          <ReportsBalanceEfficiencyCard v-if="report.efficiency?.hasData" :data="report.efficiency" />
+          <ReportsBalanceFiscalCard v-if="report.fiscal?.hasData" :data="report.fiscal" />
+          <ReportsBalanceCashflowCard v-if="report.cashflow?.hasData" :data="report.cashflow" />
+          <ReportsBalanceAgingCard v-if="report.aging" :data="report.aging" />
+          <ReportsBalanceConcentrationCard v-if="report.concentration" :data="report.concentration" />
+        </div>
+
         <!-- Evolution chart -->
         <ReportsBalanceEvolutionChart :data="report.monthlyEvolution" />
 
