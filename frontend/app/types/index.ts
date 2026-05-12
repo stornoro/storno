@@ -1616,6 +1616,141 @@ export interface BalanceYoyComparison {
   changes: { revenue: number; expenses: number; profit: number }
 }
 
+export type RatioStatus = 'normal' | 'warning' | 'critical' | 'na'
+
+export interface RatioValue {
+  value: number | null
+  status: RatioStatus
+}
+
+export interface AmountValue {
+  value: string | null
+  status: RatioStatus
+}
+
+export interface BalanceSheet {
+  hasData: boolean
+  currentAssets: string
+  fixedAssets: string
+  totalAssets: string
+  inventory: string
+  receivables: string
+  cash: string
+  bank: string
+  securities: string
+  currentLiabilities: string
+  longTermDebt: string
+  totalLiabilities: string
+  supplierDebts: string
+  salaryDebts: string
+  taxDebts: string
+  vatPayable: string
+  shortTermDebt: string
+  equity: string
+  depreciation: string
+  interestExpense: string
+  cogs: string
+  servicesExpense: string
+}
+
+export interface BalanceLiquidity {
+  hasData: boolean
+  currentRatio?: RatioValue
+  quickRatio?: RatioValue
+  cashRatio?: RatioValue
+  workingCapital?: AmountValue
+  workingCapitalLongTerm?: AmountValue
+  workingCapitalRequirement?: AmountValue
+  netCash?: AmountValue
+}
+
+export interface BalanceSolvency {
+  hasData: boolean
+  debtToEquity?: RatioValue
+  financialAutonomy?: RatioValue
+  debtRatio?: RatioValue
+  generalSolvency?: RatioValue
+  interestCoverage?: RatioValue
+}
+
+export interface BalanceProfitabilityRatios {
+  hasData: boolean
+  grossMargin?: RatioValue
+  operatingMargin?: RatioValue
+  ebitdaMargin?: RatioValue
+  netMargin?: RatioValue
+  returnOnAssets?: RatioValue
+  returnOnEquity?: RatioValue
+  returnOnCapitalEmployed?: RatioValue
+  ebit?: string
+  ebitda?: string
+}
+
+export interface BalanceEfficiency {
+  hasData: boolean
+  assetTurnover?: RatioValue
+  fixedAssetTurnover?: RatioValue
+  inventoryTurnover?: RatioValue
+  inventoryDays?: RatioValue
+  dso?: RatioValue
+  dpo?: RatioValue
+  cashConversionCycle?: RatioValue
+}
+
+export interface BalanceFiscal {
+  hasData: boolean
+  vatPayable?: AmountValue
+  salaryDebts?: AmountValue
+  stateTaxDebts?: AmountValue
+  microThreshold?: {
+    isMicro: boolean
+    plafonEur: number
+    plafonRon: string
+    revenueEur: string
+    usagePercent: number
+    status: RatioStatus
+  }
+  vatThreshold?: {
+    isVatPayer: boolean
+    plafonRon: string
+    usagePercent: number
+    status: RatioStatus
+  }
+}
+
+export interface BalanceCashflow {
+  hasData: boolean
+  cashRunwayMonths?: RatioValue
+  monthlyBurnRate?: AmountValue
+  breakEvenRevenue?: AmountValue
+  breakEvenMonths?: RatioValue
+  contributionRatePercent?: number
+  operatingLeverage?: RatioValue
+}
+
+export interface BalanceAgingBucket {
+  range: '0-30' | '31-60' | '61-90' | '90+'
+  amount: string
+}
+
+export interface BalanceAging {
+  buckets: BalanceAgingBucket[]
+  totalUnpaid: string
+  totalCount: number
+  countOver90: number
+  percentOver90: number
+  overdueStatus: RatioStatus
+  estimatedProvision: string
+}
+
+export interface BalanceClientConcentration {
+  top5SharePercent: number
+  top10SharePercent: number
+  top5Status: RatioStatus
+  topClients: Array<{ name: string; revenue: string; percent: number }>
+  totalRevenue: string
+}
+
 export interface BalanceAnalysisReport {
   year: number
   balances: TrialBalance[]
@@ -1624,6 +1759,15 @@ export interface BalanceAnalysisReport {
   profitability: BalanceProfitability
   topExpenses: BalanceTopExpense[]
   yoyComparison: BalanceYoyComparison
+  balanceSheet: BalanceSheet
+  liquidity: BalanceLiquidity
+  solvency: BalanceSolvency
+  profitabilityRatios: BalanceProfitabilityRatios
+  efficiency: BalanceEfficiency
+  fiscal: BalanceFiscal
+  cashflow: BalanceCashflow
+  aging: BalanceAging
+  concentration: BalanceClientConcentration
 }
 
 // ── Tax Declarations ──────────────────────────────────────────────
