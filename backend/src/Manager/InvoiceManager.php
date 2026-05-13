@@ -206,6 +206,8 @@ class InvoiceManager
         $invoice->setPayeeName($data['payeeName'] ?? null);
         $invoice->setPayeeIdentifier($data['payeeIdentifier'] ?? null);
         $invoice->setPayeeLegalRegistrationIdentifier($data['payeeLegalRegistrationIdentifier'] ?? null);
+        $invoice->setPayeeBankAccount($data['payeeBankAccount'] ?? null);
+        $invoice->setPayeeBankName($data['payeeBankName'] ?? null);
 
         if (isset($data['language'])) {
             $invoice->setLanguage($data['language']);
@@ -431,6 +433,12 @@ class InvoiceManager
         }
         if (array_key_exists('payeeLegalRegistrationIdentifier', $data)) {
             $invoice->setPayeeLegalRegistrationIdentifier($data['payeeLegalRegistrationIdentifier']);
+        }
+        if (array_key_exists('payeeBankAccount', $data)) {
+            $invoice->setPayeeBankAccount($data['payeeBankAccount']);
+        }
+        if (array_key_exists('payeeBankName', $data)) {
+            $invoice->setPayeeBankName($data['payeeBankName']);
         }
 
         // UBL extensions

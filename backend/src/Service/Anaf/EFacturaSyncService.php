@@ -584,6 +584,14 @@ class EFacturaSyncService
             $invoice->setSupplier($supplier);
         }
 
+        // Snapshot payee bank info from PaymentMeans so the QR-pay flow has
+        // the IBAN that was on the invoice, not whatever the supplier record
+        // happens to hold today.
+        if ($direction === InvoiceDirection::INCOMING && $parsed->seller?->bankAccount) {
+            $invoice->setPayeeBankAccount($parsed->seller->bankAccount);
+            $invoice->setPayeeBankName($parsed->seller->bankName);
+        }
+
         // INCOMING: snapshot the buyer (our company) from the XML so the detail page
         // can show all parsed fields (address, bank, contact info, ...).
         if ($direction === InvoiceDirection::INCOMING && $parsed->buyer) {

@@ -642,6 +642,8 @@ export interface Invoice {
   payeeName: string | null
   payeeIdentifier: string | null
   payeeLegalRegistrationIdentifier: string | null
+  payeeBankAccount: string | null
+  payeeBankName: string | null
   buyerSnapshot: BuyerSnapshot | null
   lines: InvoiceLine[]
   client: Client | null
