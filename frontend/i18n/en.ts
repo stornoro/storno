@@ -222,6 +222,23 @@ export default defineI18nLocale(async () => {
       noneEligible: 'No items eligible for this action',
     },
 
+    qrPay: {
+      action: 'Pay with QR',
+      title: 'Quick pay with QR code',
+      scanInstruction: 'Scan the code with your banking app to pre-fill the payment.',
+      beneficiary: 'Beneficiary',
+      iban: 'IBAN',
+      amount: 'Amount',
+      invoiceOne: 'Invoice',
+      invoiceMany: '{count} invoices',
+      differentSuppliers: 'Select invoices from the same supplier to pay with a single QR.',
+      differentCurrencies: 'Selected invoices have different currencies. Select invoices with matching currency.',
+      noIban: 'No selected supplier has an IBAN configured.',
+      unavailable: 'QR code cannot be generated (missing IBAN or valid amounts).',
+      ibanCopied: 'IBAN copied to clipboard',
+      ibanCopyFailed: 'Could not copy IBAN',
+    },
+
     // ── Auth ──────────────────────────────────────────────────────
     auth: {
       login: 'Log in',

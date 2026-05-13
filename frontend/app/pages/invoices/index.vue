@@ -422,6 +422,7 @@ const cancelConfirmOpen = ref(false)
 const stornoConfirmOpen = ref(false)
 const markPaidConfirmOpen = ref(false)
 const markUnpaidConfirmOpen = ref(false)
+const qrPayModalOpen = ref(false)
 
 const eligibleForFinalize = computed(() =>
   invoicesStore.items.filter(i => selectedIds.value.includes(i.id) && i.status === 'draft' && i.direction === 'outgoing'),
@@ -461,6 +462,46 @@ const eligibleForMarkUnpaid = computed(() =>
     && Number(i.total) >= 0,
   ),
 )
+
+const selectedIncomingUnpaid = computed(() =>
+  invoicesStore.items.filter(i =>
+    selectedIds.value.includes(i.id)
+    && i.direction === 'incoming'
+    && !['draft', 'cancelled'].includes(i.status)
+    && Number(i.balance || 0) > 0,
+  ),
+)
+
+const qrPayWithIban = computed(() =>
+  selectedIncomingUnpaid.value.filter(i => isValidIban(i.supplier?.bankAccount)),
+)
+
+const qrPaySupplierIds = computed(() => {
+  const ids = new Set<string>()
+  for (const inv of qrPayWithIban.value) {
+    if (inv.supplier?.id) ids.add(inv.supplier.id)
+  }
+  return ids
+})
+
+const qrPayMixedCurrency = computed(() => {
+  const currencies = new Set(qrPayWithIban.value.map(i => i.currency))
+  return currencies.size > 1
+})
+
+const qrPayDisabled = computed(() =>
+  qrPayWithIban.value.length === 0
+  || qrPaySupplierIds.value.size > 1
+  || qrPayMixedCurrency.value,
+)
+
+const qrPayTooltip = computed(() => {
+  if (selectedIncomingUnpaid.value.length === 0) return ''
+  if (qrPayWithIban.value.length === 0) return $t('qrPay.noIban')
+  if (qrPaySupplierIds.value.size > 1) return $t('qrPay.differentSuppliers')
+  if (qrPayMixedCurrency.value) return $t('qrPay.differentCurrencies')
+  return ''
+})
 
 async function handleBulkFinalize() {
   finalizeConfirmOpen.value = false
@@ -1013,6 +1054,17 @@ onUnmounted(() => {
       <SharedTableBulkBar :count="selectionCount" :loading="bulkLoading" @clear="clearSelection">
         <template #actions>
           <UButton v-if="can(P.INVOICE_ISSUE) && eligibleForFinalize.length > 0" :label="`${$t('bulk.finalize')} (${eligibleForFinalize.length})`" icon="i-lucide-file-check" color="primary" variant="soft" size="sm" @click="finalizeConfirmOpen = true" />
+          <UTooltip v-if="selectedIncomingUnpaid.length > 0" :text="qrPayTooltip" :disabled="!qrPayTooltip">
+            <UButton
+              :label="`${$t('qrPay.action')} (${qrPayDisabled ? selectedIncomingUnpaid.length : qrPayWithIban.length})`"
+              icon="i-lucide-qr-code"
+              color="primary"
+              variant="soft"
+              size="sm"
+              :disabled="qrPayDisabled"
+              @click="qrPayModalOpen = true"
+            />
+          </UTooltip>
           <UButton :label="$t('bulk.export')" icon="i-lucide-archive" variant="soft" size="sm" :loading="bulkLoading" @click="handleBulkExportZip" />
           <UButton v-if="can(P.PAYMENT_CREATE) && eligibleForMarkPaid.length > 0" :label="`${$t('bulk.markPaid')} (${eligibleForMarkPaid.length})`" icon="i-lucide-banknote" color="success" variant="soft" size="sm" @click="markPaidConfirmOpen = true" />
           <UButton v-if="can(P.PAYMENT_CREATE) && eligibleForMarkUnpaid.length > 0" :label="`${$t('bulk.markUnpaid')} (${eligibleForMarkUnpaid.length})`" icon="i-lucide-banknote-x" color="warning" variant="soft" size="sm" @click="markUnpaidConfirmOpen = true" />
@@ -1273,6 +1325,9 @@ onUnmounted(() => {
           </div>
         </template>
       </UModal>
+
+      <!-- QR Pay Modal -->
+      <InvoicesQrPayModal v-model:open="qrPayModalOpen" :invoices="qrPayWithIban" />
 
       <!-- Bulk Mark Unpaid Confirm -->
       <UModal v-model:open="markUnpaidConfirmOpen">
