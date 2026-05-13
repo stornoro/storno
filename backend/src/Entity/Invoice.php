@@ -381,6 +381,14 @@ class Invoice
     #[Groups(['invoice:detail'])]
     private ?string $payeeLegalRegistrationIdentifier = null;
 
+    #[ORM\Column(length: 34, nullable: true)]
+    #[Groups(['invoice:list', 'invoice:detail'])]
+    private ?string $payeeBankAccount = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['invoice:list', 'invoice:detail'])]
+    private ?string $payeeBankName = null;
+
     #[ORM\Column(type: Types::JSON, nullable: true)]
     #[Groups(['invoice:detail'])]
     private ?array $ublExtensions = null;
@@ -1512,6 +1520,30 @@ class Invoice
     public function setPayeeLegalRegistrationIdentifier(?string $payeeLegalRegistrationIdentifier): static
     {
         $this->payeeLegalRegistrationIdentifier = $payeeLegalRegistrationIdentifier;
+
+        return $this;
+    }
+
+    public function getPayeeBankAccount(): ?string
+    {
+        return $this->payeeBankAccount;
+    }
+
+    public function setPayeeBankAccount(?string $payeeBankAccount): static
+    {
+        $this->payeeBankAccount = $payeeBankAccount;
+
+        return $this;
+    }
+
+    public function getPayeeBankName(): ?string
+    {
+        return $this->payeeBankName;
+    }
+
+    public function setPayeeBankName(?string $payeeBankName): static
+    {
+        $this->payeeBankName = $payeeBankName;
 
         return $this;
     }

@@ -472,8 +472,12 @@ const selectedIncomingUnpaid = computed(() =>
   ),
 )
 
+function invoicePayIban(inv: typeof selectedIncomingUnpaid.value[number]) {
+  return inv.payeeBankAccount || inv.supplier?.bankAccount || null
+}
+
 const qrPayWithIban = computed(() =>
-  selectedIncomingUnpaid.value.filter(i => isValidIban(i.supplier?.bankAccount)),
+  selectedIncomingUnpaid.value.filter(i => isValidIban(invoicePayIban(i))),
 )
 
 const qrPaySupplierIds = computed(() => {

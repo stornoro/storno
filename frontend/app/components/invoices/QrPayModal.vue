@@ -14,7 +14,9 @@ const intlLocale = useIntlLocale()
 
 const supplier = computed(() => props.invoices[0]?.supplier ?? null)
 const supplierName = computed(() => supplier.value?.name || props.invoices[0]?.senderName || '')
-const iban = computed(() => normalizeIban(supplier.value?.bankAccount))
+const iban = computed(() => normalizeIban(
+  props.invoices[0]?.payeeBankAccount || supplier.value?.bankAccount || '',
+))
 const currency = computed(() => props.invoices[0]?.currency || 'RON')
 
 const totalAmount = computed(() => {
