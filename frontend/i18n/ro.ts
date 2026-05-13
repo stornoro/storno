@@ -222,6 +222,23 @@ export default defineI18nLocale(async () => {
       noneEligible: 'Niciun element eligibil pentru aceasta actiune',
     },
 
+    qrPay: {
+      action: 'Plateste cu QR',
+      title: 'Plata rapida cu cod QR',
+      scanInstruction: 'Scaneaza codul cu aplicatia bancii pentru a precompleta plata.',
+      beneficiary: 'Beneficiar',
+      iban: 'IBAN',
+      amount: 'Suma',
+      invoiceOne: 'Factura',
+      invoiceMany: '{count} facturi',
+      differentSuppliers: 'Selecteaza facturi de la acelasi furnizor pentru a plati cu un singur QR.',
+      differentCurrencies: 'Facturile selectate au valute diferite. Selecteaza facturi cu aceeasi valuta.',
+      noIban: 'Niciun furnizor selectat nu are IBAN configurat.',
+      unavailable: 'Codul QR nu poate fi generat (lipsesc IBAN sau sume valide).',
+      ibanCopied: 'IBAN copiat in clipboard',
+      ibanCopyFailed: 'Nu am putut copia IBAN-ul',
+    },
+
     // ── Auth ──────────────────────────────────────────────────────
     auth: {
       login: 'Autentificare',
