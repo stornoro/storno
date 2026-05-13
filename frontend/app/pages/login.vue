@@ -102,7 +102,12 @@ import { z } from 'zod'
 definePageMeta({ layout: 'auth', middleware: 'guest' })
 
 const { t: $t } = useI18n()
-useHead({ title: $t('auth.login') })
+const origin = useRequestURL().origin
+useHead({
+  title: $t('auth.login'),
+  link: [{ rel: 'canonical', href: `${origin}/login` }],
+  meta: [{ name: 'robots', content: 'noindex, follow' }],
+})
 const authStore = useAuthStore()
 const googleOneTap = useGoogleOneTap()
 const passkey = usePasskey()
