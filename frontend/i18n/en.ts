@@ -47,7 +47,7 @@ export default defineI18nLocale(async () => {
       seeDetails: 'see details',
       push: {
         delivered: 'Push delivered',
-        failed: 'Push failed: {error}',
+        failed: 'Not delivered to device',
         skippedQuietHours: 'Push muted (quiet hours)',
         skippedNoDevices: 'No registered devices',
       },
