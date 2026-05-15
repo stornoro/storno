@@ -113,7 +113,7 @@ function pushStatusLabel(n: BackendNotification): string | null {
   if (p.skippedReason === 'no_devices') return $t('notifications.push.skippedNoDevices')
   if (!p.attempted) return null
   if (p.sentAt) return $t('notifications.push.delivered')
-  if (p.error) return $t('notifications.push.failed', { error: p.error })
+  if (p.error) return $t('notifications.push.failed')
   return null
 }
 

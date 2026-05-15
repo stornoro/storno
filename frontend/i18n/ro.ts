@@ -47,7 +47,7 @@ export default defineI18nLocale(async () => {
       seeDetails: 'vezi detalii',
       push: {
         delivered: 'Notificare push livrata',
-        failed: 'Notificare push esuata: {error}',
+        failed: 'Nu a putut fi livrata pe telefon',
         skippedQuietHours: 'Push silentios (orele de liniste)',
         skippedNoDevices: 'Niciun dispozitiv inregistrat',
       },
