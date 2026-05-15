@@ -106,6 +106,7 @@ class SendTrialEndedEmailHandler
                 ->text($body);
 
             $email->getHeaders()->addTextHeader('X-Storno-Email-Category', self::CATEGORY);
+            $email->getHeaders()->addTextHeader('X-Storno-Email-Tracked', 'true');
             $this->mailer->send($email);
 
             $this->finalizeLog($logEntry, EmailStatus::SENT);
