@@ -751,7 +751,7 @@ class Company
             'saga' => [
                 'accountCash' => '5311',
                 'accountBank' => '5121',
-                'accountCard' => '5125',
+                'accountCard' => '5125.2',
                 'accountClients' => '4111',
                 'accountSuppliers' => '4011',
             ],

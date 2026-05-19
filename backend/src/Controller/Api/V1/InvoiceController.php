@@ -1339,7 +1339,7 @@ class InvoiceController extends AbstractController
         }
 
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::OUTGOING);
-        $xml = $this->sagaXmlExportService->generateReceiptsXml($payments);
+        $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $this->resolveSagaAccountMap($request, $company));
 
         $filename = $this->buildSagaFilename('I', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
 
@@ -1362,7 +1362,7 @@ class InvoiceController extends AbstractController
         }
 
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::INCOMING);
-        $xml = $this->sagaXmlExportService->generatePaymentsXml($payments);
+        $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $this->resolveSagaAccountMap($request, $company));
 
         $filename = $this->buildSagaFilename('P', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
 
@@ -1753,6 +1753,27 @@ class InvoiceController extends AbstractController
      * Start/end are the min/max of the given date on the exported set; if the set is empty,
      * both fall back to today.
      */
+    /**
+     * Build the SAGA cash/bank/card account map: company stored settings,
+     * overridden by per-request query params (`accountCash`, `accountBank`,
+     * `accountCard`) so the caller can pick the right analytic at export time.
+     *
+     * @return array{cash?: string, bank_transfer?: string, card?: string}
+     */
+    private function resolveSagaAccountMap(Request $request, \App\Entity\Company $company): array
+    {
+        $settings = $company->getExportSettingsWithDefaults();
+        $saga = $settings['saga'] ?? [];
+
+        $pairs = [
+            'cash' => trim((string) $request->query->get('accountCash', $saga['accountCash'] ?? '')),
+            'bank_transfer' => trim((string) $request->query->get('accountBank', $saga['accountBank'] ?? '')),
+            'card' => trim((string) $request->query->get('accountCard', $saga['accountCard'] ?? '')),
+        ];
+
+        return array_filter($pairs, static fn ($v) => $v !== '');
+    }
+
     private function buildSagaFilename(string $prefix, \App\Entity\Company $company, array $docs, callable $dateExtractor): string
     {
         $countryPrefix = $company->getCountry() ?: 'RO';

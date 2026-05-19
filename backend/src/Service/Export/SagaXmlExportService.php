@@ -255,15 +255,16 @@ class SagaXmlExportService
             $explicatie = $payment->getNotes()
                 ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
 
-            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($payment->getPaymentMethod()));
+            $method = $payment->getPaymentMethod();
+            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($method));
             $this->addElement($dom, $node, 'Data', $paymentDate);
             $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
             $this->addElement($dom, $node, 'Suma', $payment->getAmount());
-            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($payment->getPaymentMethod(), $accountMap));
+            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($method, $accountMap));
             $this->addElement($dom, $node, 'Explicatie', $explicatie);
             $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
             $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
-            $this->addElement($dom, $node, 'CodFiscal', $invoice?->getReceiverCif() ?? '');
+            $this->addElement($dom, $node, 'CodFiscal', $this->codFiscalForReceipt($method, $invoice?->getReceiverCif()));
 
             $root->appendChild($node);
         }
@@ -293,15 +294,16 @@ class SagaXmlExportService
             $explicatie = $payment->getNotes()
                 ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
 
-            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($payment->getPaymentMethod()));
+            $method = $payment->getPaymentMethod();
+            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($method));
             $this->addElement($dom, $node, 'Data', $paymentDate);
             $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
             $this->addElement($dom, $node, 'Suma', $payment->getAmount());
-            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($payment->getPaymentMethod(), $accountMap));
+            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($method, $accountMap));
             $this->addElement($dom, $node, 'Explicatie', $explicatie);
             $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
             $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
-            $this->addElement($dom, $node, 'CodFiscal', $invoice?->getSenderCif() ?? '');
+            $this->addElement($dom, $node, 'CodFiscal', $this->codFiscalForReceipt($method, $invoice?->getSenderCif()));
 
             $root->appendChild($node);
         }
@@ -480,10 +482,10 @@ class SagaXmlExportService
         $defaults = [
             'cash' => '5311',
             'bank_transfer' => '5121',
-            'card' => '5125',
+            'card' => '5125.2',
         ];
 
-        $merged = array_merge($defaults, $accountMap);
+        $merged = array_merge($defaults, array_filter($accountMap, static fn ($v) => $v !== null && $v !== ''));
 
         return $merged[$method] ?? $merged['bank_transfer'];
     }
@@ -496,5 +498,41 @@ class SagaXmlExportService
             'bank_transfer' => 'OP',
             default => 'OP',
         };
+    }
+
+    /**
+     * CodFiscal pollution check for SAGA receipts/payments.
+     *
+     * SAGA matches partners by CIF, but only recognises Romanian CIFs.
+     * For card flows it goes through a merchant aggregator so the partner
+     * CIF must stay empty, otherwise the line is rejected.
+     */
+    private function codFiscalForReceipt(string $method, ?string $cif): string
+    {
+        if ($method === 'card') {
+            return '';
+        }
+
+        return $this->sanitizeRoCodFiscal($cif);
+    }
+
+    private function sanitizeRoCodFiscal(?string $cif): string
+    {
+        if ($cif === null) {
+            return '';
+        }
+
+        $trimmed = trim($cif);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        // Strip RO prefix if present, allow only digits (Romanian CIF/CUI format).
+        $normalized = preg_replace('/^RO/i', '', $trimmed) ?? '';
+        if (!preg_match('/^[0-9]{2,10}$/', $normalized)) {
+            return '';
+        }
+
+        return $normalized;
     }
 }
