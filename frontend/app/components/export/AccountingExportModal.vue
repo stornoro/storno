@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const { t: $t } = useI18n()
 const intlLocale = useIntlLocale()
-const { apiFetch, post } = useApi()
+const { apiFetch, get } = useApi()
 const toast = useToast()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -43,6 +43,45 @@ const sagaOptions = reactive({
   exportBnr: false,
 })
 
+// SAGA chart-of-accounts overrides, editable per export and pre-filled from
+// the stored company defaults via /accounting-export/settings.
+const sagaAccounts = reactive({
+  cash: '',
+  bank: '',
+  card: '',
+  clients: '',
+  suppliers: '',
+})
+
+interface ExportSettingsResponse {
+  saga?: Partial<{
+    accountCash: string
+    accountBank: string
+    accountCard: string
+    accountClients: string
+    accountSuppliers: string
+  }>
+}
+
+async function loadSagaAccountDefaults() {
+  try {
+    const data = await get<ExportSettingsResponse>('/v1/accounting-export/settings')
+    const s = data?.saga ?? {}
+    sagaAccounts.cash = s.accountCash ?? ''
+    sagaAccounts.bank = s.accountBank ?? ''
+    sagaAccounts.card = s.accountCard ?? ''
+    sagaAccounts.clients = s.accountClients ?? ''
+    sagaAccounts.suppliers = s.accountSuppliers ?? ''
+  }
+  catch {
+    // Stored settings missing; let user fill in at export time.
+  }
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) loadSagaAccountDefaults()
+})
+
 const winmentorOptions = reactive({
   includeCancelled: false,
   includeDiscount: false,
@@ -68,15 +107,28 @@ async function handleExport() {
 
   exporting.value = true
   try {
+    const options: Record<string, unknown> = selectedTarget.value === 'saga'
+      ? {
+          ...sagaOptions,
+          accounts: {
+            cash: sagaAccounts.cash.trim(),
+            bank: sagaAccounts.bank.trim(),
+            card: sagaAccounts.card.trim(),
+            clients: sagaAccounts.clients.trim(),
+            suppliers: sagaAccounts.suppliers.trim(),
+          },
+        }
+      : selectedTarget.value === 'winmentor'
+        ? { ...winmentorOptions }
+        : { ...cielOptions }
+
     const blob = await apiFetch<Blob>('/v1/accounting-export/zip', {
       method: 'POST',
       body: {
         target: selectedTarget.value,
         dateFrom,
         dateTo,
-        options: selectedTarget.value === 'saga' ? sagaOptions
-          : selectedTarget.value === 'winmentor' ? winmentorOptions
-            : cielOptions,
+        options,
       },
       responseType: 'blob',
     })
@@ -174,6 +226,28 @@ const settingsOpen = ref(false)
             <div class="flex items-center justify-between">
               <span class="text-sm">{{ $t('accountingExport.sagaExportBnr') }}</span>
               <USwitch v-model="sagaOptions.exportBnr" />
+            </div>
+
+            <div class="pt-3 border-t border-(--ui-border)">
+              <p class="text-sm font-medium mb-1">{{ $t('accountingExport.sagaAccountsTitle') }}</p>
+              <p class="text-xs text-(--ui-text-muted) mb-3">{{ $t('accountingExport.sagaAccountsHelp') }}</p>
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField :label="$t('accountingExport.sagaAccountCash')">
+                  <UInput v-model="sagaAccounts.cash" placeholder="5311" class="w-full" />
+                </UFormField>
+                <UFormField :label="$t('accountingExport.sagaAccountBank')">
+                  <UInput v-model="sagaAccounts.bank" placeholder="5121" class="w-full" />
+                </UFormField>
+                <UFormField :label="$t('accountingExport.sagaAccountCard')">
+                  <UInput v-model="sagaAccounts.card" placeholder="5125.2" class="w-full" />
+                </UFormField>
+                <UFormField v-if="sagaOptions.exportAccounts" :label="$t('accountingExport.sagaAccountClients')">
+                  <UInput v-model="sagaAccounts.clients" placeholder="4111" class="w-full" />
+                </UFormField>
+                <UFormField v-if="sagaOptions.exportAccounts" :label="$t('accountingExport.sagaAccountSuppliers')">
+                  <UInput v-model="sagaAccounts.suppliers" placeholder="4011" class="w-full" />
+                </UFormField>
+              </div>
             </div>
           </div>
 

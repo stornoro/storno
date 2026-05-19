@@ -3495,6 +3495,8 @@ export default defineI18nLocale(async () => {
     sagaAccountCard: 'Card account',
     sagaAccountClients: 'Clients account',
     sagaAccountSuppliers: 'Suppliers account',
+    sagaAccountsTitle: 'Chart of accounts (per-export override)',
+    sagaAccountsHelp: 'Pre-filled from settings; edit just for this export. SAGA requires the leaf analytic for cards (e.g. 5125.2).',
 
     // WinMentor settings
     winmentorBankName: 'Bank name',

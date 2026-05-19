@@ -104,18 +104,25 @@ class AccountingExportController extends AbstractController
         $exportAccounts = $options['exportAccounts'] ?? true;
         $exportBnr = !empty($options['exportBnr']);
 
-        // Build account map from company settings
+        // Build account map: stored settings, overridden by per-export options.accounts.
         $settings = $company->getExportSettingsWithDefaults();
         $sagaSettings = $settings['saga'] ?? [];
+        $overrides = is_array($options['accounts'] ?? null) ? $options['accounts'] : [];
+        $accountCash = trim((string) ($overrides['cash'] ?? $sagaSettings['accountCash'] ?? ''));
+        $accountBank = trim((string) ($overrides['bank'] ?? $sagaSettings['accountBank'] ?? ''));
+        $accountCard = trim((string) ($overrides['card'] ?? $sagaSettings['accountCard'] ?? ''));
+        $accountClients = trim((string) ($overrides['clients'] ?? $sagaSettings['accountClients'] ?? '4111'));
+        $accountSuppliers = trim((string) ($overrides['suppliers'] ?? $sagaSettings['accountSuppliers'] ?? '4011'));
+
         $accountMap = [];
-        if (!empty($sagaSettings['accountCash'])) {
-            $accountMap['cash'] = $sagaSettings['accountCash'];
+        if ($accountCash !== '') {
+            $accountMap['cash'] = $accountCash;
         }
-        if (!empty($sagaSettings['accountBank'])) {
-            $accountMap['bank_transfer'] = $sagaSettings['accountBank'];
+        if ($accountBank !== '') {
+            $accountMap['bank_transfer'] = $accountBank;
         }
-        if (!empty($sagaSettings['accountCard'])) {
-            $accountMap['card'] = $sagaSettings['accountCard'];
+        if ($accountCard !== '') {
+            $accountMap['card'] = $accountCard;
         }
 
         // Master data — always full list
@@ -162,11 +169,11 @@ class AccountingExportController extends AbstractController
         if ($exportAccounts) {
             $files["conturi_cli_{$dateSuffix}.xml"] = $this->sagaXmlExportService->generateClientAccountsXml(
                 $clients,
-                $sagaSettings['accountClients'] ?? '4111',
+                $accountClients !== '' ? $accountClients : '4111',
             );
             $files["conturi_frn_{$dateSuffix}.xml"] = $this->sagaXmlExportService->generateSupplierAccountsXml(
                 $suppliers,
-                $sagaSettings['accountSuppliers'] ?? '4011',
+                $accountSuppliers !== '' ? $accountSuppliers : '4011',
             );
         }
 

@@ -3494,6 +3494,8 @@ export default defineI18nLocale(async () => {
       sagaAccountCard: 'Cont card',
       sagaAccountClients: 'Cont clienti',
       sagaAccountSuppliers: 'Cont furnizori',
+      sagaAccountsTitle: 'Conturi contabile (suprascriere export)',
+      sagaAccountsHelp: 'Completate din setari, poti modifica doar pentru acest export. Pentru carduri SAGA cere analiticul (ex. 5125.2).',
 
       // WinMentor settings
       winmentorBankName: 'Denumire banca',

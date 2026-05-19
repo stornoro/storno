@@ -23,7 +23,6 @@
             <UInput
               v-model="sagaForm.accountCash"
               placeholder="5311"
-              type="number"
               class="w-full"
             />
           </UFormField>
@@ -31,15 +30,13 @@
             <UInput
               v-model="sagaForm.accountBank"
               placeholder="5121"
-              type="number"
               class="w-full"
             />
           </UFormField>
           <UFormField :label="$t('accountingExport.sagaAccountCard')">
             <UInput
               v-model="sagaForm.accountCard"
-              placeholder="5125"
-              type="number"
+              placeholder="5125.2"
               class="w-full"
             />
           </UFormField>
@@ -47,7 +44,6 @@
             <UInput
               v-model="sagaForm.accountClients"
               placeholder="4111"
-              type="number"
               class="w-full"
             />
           </UFormField>
@@ -55,7 +51,6 @@
             <UInput
               v-model="sagaForm.accountSuppliers"
               placeholder="4011"
-              type="number"
               class="w-full"
             />
           </UFormField>
