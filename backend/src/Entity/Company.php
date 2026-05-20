@@ -754,6 +754,7 @@ class Company
                 'accountCard' => '5125.2',
                 'accountClients' => '4111',
                 'accountSuppliers' => '4011',
+                'currencyAccounts' => [],
             ],
             'winmentor' => [
                 'bankName' => '',

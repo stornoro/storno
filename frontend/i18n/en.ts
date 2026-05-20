@@ -3497,6 +3497,10 @@ export default defineI18nLocale(async () => {
     sagaAccountSuppliers: 'Suppliers account',
     sagaAccountsTitle: 'Chart of accounts (per-export override)',
     sagaAccountsHelp: 'Pre-filled from settings; edit just for this export. SAGA requires the leaf analytic for cards (e.g. 5125.2).',
+    sagaCurrencyAccountsTitle: 'Foreign-currency accounts',
+    sagaCurrencyAccountsHelp: 'Separate accounts for receipts/payments in foreign currencies. Each currency emits its own SAGA files (inc_*_USD.xml, plt_*_USD.xml). RON uses the accounts above.',
+    sagaCurrencyAccountsAdd: 'Add currency',
+    sagaCurrencyCode: 'Currency',
 
     // WinMentor settings
     winmentorBankName: 'Bank name',

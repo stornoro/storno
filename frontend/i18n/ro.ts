@@ -3496,6 +3496,10 @@ export default defineI18nLocale(async () => {
       sagaAccountSuppliers: 'Cont furnizori',
       sagaAccountsTitle: 'Conturi contabile (suprascriere export)',
       sagaAccountsHelp: 'Completate din setari, poti modifica doar pentru acest export. Pentru carduri SAGA cere analiticul (ex. 5125.2).',
+      sagaCurrencyAccountsTitle: 'Conturi pentru valute straine',
+      sagaCurrencyAccountsHelp: 'Conturi separate pentru incasari/plati in valuta. Fiecare valuta genereaza fisiere SAGA proprii (inc_*_USD.xml, plt_*_USD.xml). RON foloseste conturile de mai sus.',
+      sagaCurrencyAccountsAdd: 'Adauga valuta',
+      sagaCurrencyCode: 'Valuta',
 
       // WinMentor settings
       winmentorBankName: 'Denumire banca',

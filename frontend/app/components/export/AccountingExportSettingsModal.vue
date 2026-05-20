@@ -54,6 +54,44 @@
               class="w-full"
             />
           </UFormField>
+
+          <div class="pt-3 border-t border-(--ui-border)">
+            <div class="flex items-center justify-between mb-1">
+              <p class="text-sm font-medium">{{ $t('accountingExport.sagaCurrencyAccountsTitle') }}</p>
+              <UButton
+                :label="$t('accountingExport.sagaCurrencyAccountsAdd')"
+                icon="i-lucide-plus"
+                size="xs"
+                variant="ghost"
+                type="button"
+                @click="addCurrencyRow"
+              />
+            </div>
+            <p class="text-xs text-(--ui-text-muted) mb-3">{{ $t('accountingExport.sagaCurrencyAccountsHelp') }}</p>
+            <div v-for="(row, i) in sagaCurrencyRows" :key="i" class="grid grid-cols-12 gap-2 mb-2 items-end">
+              <UFormField :label="$t('accountingExport.sagaCurrencyCode')" class="col-span-2">
+                <UInput v-model="row.currency" placeholder="USD" class="w-full" :maxlength="3" />
+              </UFormField>
+              <UFormField :label="$t('accountingExport.sagaAccountCash')" class="col-span-3">
+                <UInput v-model="row.cash" placeholder="5314" class="w-full" />
+              </UFormField>
+              <UFormField :label="$t('accountingExport.sagaAccountBank')" class="col-span-3">
+                <UInput v-model="row.bank" placeholder="5124" class="w-full" />
+              </UFormField>
+              <UFormField :label="$t('accountingExport.sagaAccountCard')" class="col-span-3">
+                <UInput v-model="row.card" placeholder="5125.1" class="w-full" />
+              </UFormField>
+              <UButton
+                icon="i-lucide-trash-2"
+                size="xs"
+                variant="ghost"
+                color="error"
+                type="button"
+                class="col-span-1 mb-1"
+                @click="removeCurrencyRow(i)"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- WinMentor settings -->
@@ -128,6 +166,14 @@ interface SagaSettings {
   accountCard: string
   accountClients: string
   accountSuppliers: string
+  currencyAccounts: Record<string, { cash?: string, bank?: string, card?: string } | undefined>
+}
+
+interface CurrencyAccountRow {
+  currency: string
+  cash: string
+  bank: string
+  card: string
 }
 
 interface WinmentorSettings {
@@ -137,7 +183,9 @@ interface WinmentorSettings {
 }
 
 interface ExportSettings {
-  saga?: Partial<SagaSettings>
+  saga?: Partial<Omit<SagaSettings, 'currencyAccounts'>> & {
+    currencyAccounts?: Record<string, { cash?: string, bank?: string, card?: string } | undefined>
+  }
   winmentor?: Partial<WinmentorSettings>
   ciel?: Record<string, never>
 }
@@ -165,7 +213,18 @@ const sagaForm = ref<SagaSettings>({
   accountCard: '',
   accountClients: '',
   accountSuppliers: '',
+  currencyAccounts: {},
 })
+
+const sagaCurrencyRows = ref<CurrencyAccountRow[]>([])
+
+function addCurrencyRow() {
+  sagaCurrencyRows.value.push({ currency: '', cash: '', bank: '', card: '' })
+}
+
+function removeCurrencyRow(i: number) {
+  sagaCurrencyRows.value.splice(i, 1)
+}
 
 const winmentorForm = ref<WinmentorSettings>({
   bankName: '',
@@ -179,13 +238,23 @@ async function fetchSettings() {
     const data = await get<ExportSettings>('/v1/accounting-export/settings')
 
     if (data.saga) {
+      const ca = data.saga.currencyAccounts && typeof data.saga.currencyAccounts === 'object' && !Array.isArray(data.saga.currencyAccounts)
+        ? data.saga.currencyAccounts
+        : {}
       sagaForm.value = {
         accountCash: data.saga.accountCash ?? '',
         accountBank: data.saga.accountBank ?? '',
         accountCard: data.saga.accountCard ?? '',
         accountClients: data.saga.accountClients ?? '',
         accountSuppliers: data.saga.accountSuppliers ?? '',
+        currencyAccounts: ca,
       }
+      sagaCurrencyRows.value = Object.entries(ca).map(([currency, accounts]) => ({
+        currency,
+        cash: accounts?.cash ?? '',
+        bank: accounts?.bank ?? '',
+        card: accounts?.card ?? '',
+      }))
     }
 
     if (data.winmentor) {
@@ -210,7 +279,17 @@ async function onSave() {
     const payload: ExportSettings = {}
 
     if (props.target === 'saga') {
-      payload.saga = { ...sagaForm.value }
+      const currencyAccounts: Record<string, { cash: string, bank: string, card: string }> = {}
+      for (const row of sagaCurrencyRows.value) {
+        const code = row.currency.trim().toUpperCase()
+        if (!code || code === 'RON') continue
+        currencyAccounts[code] = {
+          cash: row.cash.trim(),
+          bank: row.bank.trim(),
+          card: row.card.trim(),
+        }
+      }
+      payload.saga = { ...sagaForm.value, currencyAccounts }
     }
     else if (props.target === 'winmentor') {
       payload.winmentor = { ...winmentorForm.value }

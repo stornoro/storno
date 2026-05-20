@@ -1339,9 +1339,10 @@ class InvoiceController extends AbstractController
         }
 
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::OUTGOING);
-        $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $this->resolveSagaAccountMap($request, $company));
+        [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
+        $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $accountMap);
 
-        $filename = $this->buildSagaFilename('I', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
+        $filename = $this->buildSagaFilename('I', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1362,9 +1363,10 @@ class InvoiceController extends AbstractController
         }
 
         $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::INCOMING);
-        $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $this->resolveSagaAccountMap($request, $company));
+        [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
+        $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $accountMap);
 
-        $filename = $this->buildSagaFilename('P', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
+        $filename = $this->buildSagaFilename('P', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1760,21 +1762,53 @@ class InvoiceController extends AbstractController
      *
      * @return array{cash?: string, bank_transfer?: string, card?: string}
      */
-    private function resolveSagaAccountMap(Request $request, \App\Entity\Company $company): array
+    private function resolveSagaAccountMap(Request $request, \App\Entity\Company $company, ?string $currency = null): array
     {
         $settings = $company->getExportSettingsWithDefaults();
         $saga = $settings['saga'] ?? [];
 
+        $cash = $saga['accountCash'] ?? '';
+        $bank = $saga['accountBank'] ?? '';
+        $card = $saga['accountCard'] ?? '';
+
+        if ($currency !== null && strtoupper($currency) !== 'RON') {
+            $overrides = is_array($saga['currencyAccounts'] ?? null) ? $saga['currencyAccounts'] : [];
+            $perCurrency = is_array($overrides[strtoupper($currency)] ?? null) ? $overrides[strtoupper($currency)] : [];
+            $cash = $perCurrency['cash'] ?? $cash;
+            $bank = $perCurrency['bank'] ?? $bank;
+            $card = $perCurrency['card'] ?? $card;
+        }
+
         $pairs = [
-            'cash' => trim((string) $request->query->get('accountCash', $saga['accountCash'] ?? '')),
-            'bank_transfer' => trim((string) $request->query->get('accountBank', $saga['accountBank'] ?? '')),
-            'card' => trim((string) $request->query->get('accountCard', $saga['accountCard'] ?? '')),
+            'cash' => trim((string) $request->query->get('accountCash', $cash)),
+            'bank_transfer' => trim((string) $request->query->get('accountBank', $bank)),
+            'card' => trim((string) $request->query->get('accountCard', $card)),
         ];
 
         return array_filter($pairs, static fn ($v) => $v !== '');
     }
 
-    private function buildSagaFilename(string $prefix, \App\Entity\Company $company, array $docs, callable $dateExtractor): string
+    /**
+     * @param \App\Entity\Payment[] $payments
+     * @return array{0: \App\Entity\Payment[], 1: array<string,string>, 2: ?string}
+     */
+    private function filterPaymentsByCurrency(Request $request, \App\Entity\Company $company, array $payments): array
+    {
+        $requested = $request->query->get('currency');
+        $currency = $requested !== null ? strtoupper(trim((string) $requested)) : null;
+
+        if ($currency !== null && $currency !== '') {
+            $filtered = array_values(array_filter(
+                $payments,
+                static fn (\App\Entity\Payment $p) => strtoupper($p->getCurrency() ?: 'RON') === $currency,
+            ));
+            return [$filtered, $this->resolveSagaAccountMap($request, $company, $currency), $currency];
+        }
+
+        return [$payments, $this->resolveSagaAccountMap($request, $company), null];
+    }
+
+    private function buildSagaFilename(string $prefix, \App\Entity\Company $company, array $docs, callable $dateExtractor, ?string $currencyTag = null): string
     {
         $countryPrefix = $company->getCountry() ?: 'RO';
         $countMode = count($docs) === 1 ? 'single' : 'multiple';
@@ -1798,14 +1832,17 @@ class InvoiceController extends AbstractController
         $start ??= $fallback;
         $end ??= $fallback;
 
+        $suffix = $currencyTag !== null && $currencyTag !== '' ? '_' . $currencyTag : '';
+
         return sprintf(
-            '%s_%s%d_%s_%s_%s.xml',
+            '%s_%s%d_%s_%s_%s%s.xml',
             $prefix,
             $countryPrefix,
             $company->getCif(),
             $countMode,
             $start->format('d_m_Y'),
             $end->format('d_m_Y'),
+            $suffix,
         );
     }
 
