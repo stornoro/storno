@@ -114,16 +114,20 @@ class AccountingExportController extends AbstractController
         $accountClients = trim((string) ($overrides['clients'] ?? $sagaSettings['accountClients'] ?? '4111'));
         $accountSuppliers = trim((string) ($overrides['suppliers'] ?? $sagaSettings['accountSuppliers'] ?? '4011'));
 
-        $accountMap = [];
+        $ronAccountMap = [];
         if ($accountCash !== '') {
-            $accountMap['cash'] = $accountCash;
+            $ronAccountMap['cash'] = $accountCash;
         }
         if ($accountBank !== '') {
-            $accountMap['bank_transfer'] = $accountBank;
+            $ronAccountMap['bank_transfer'] = $accountBank;
         }
         if ($accountCard !== '') {
-            $accountMap['card'] = $accountCard;
+            $ronAccountMap['card'] = $accountCard;
         }
+
+        $storedCurrencyAccounts = is_array($sagaSettings['currencyAccounts'] ?? null) ? $sagaSettings['currencyAccounts'] : [];
+        $overrideCurrencyAccounts = is_array($options['currencyAccounts'] ?? null) ? $options['currencyAccounts'] : [];
+        $currencyAccounts = array_replace_recursive($storedCurrencyAccounts, $overrideCurrencyAccounts);
 
         // Master data — always full list
         $clients = $this->clientRepository->findAllByCompany($company);
@@ -161,9 +165,14 @@ class AccountingExportController extends AbstractController
             "frn_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateSuppliersXml($suppliers),
             "art_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateProductsXml($products),
             "F_{$cif}_multiple_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateInvoicesXml($invoices, $company, $includeDiscount),
-            "inc_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateReceiptsXml($receipts, $accountMap),
-            "plt_{$dateSuffix}.xml" => $this->sagaXmlExportService->generatePaymentsXml($payments, $accountMap),
         ];
+
+        foreach ($this->splitByCurrency($receipts, $ronAccountMap, $currencyAccounts) as $suffix => [$group, $map]) {
+            $files["inc_{$dateSuffix}{$suffix}.xml"] = $this->sagaXmlExportService->generateReceiptsXml($group, $map);
+        }
+        foreach ($this->splitByCurrency($payments, $ronAccountMap, $currencyAccounts) as $suffix => [$group, $map]) {
+            $files["plt_{$dateSuffix}{$suffix}.xml"] = $this->sagaXmlExportService->generatePaymentsXml($group, $map);
+        }
 
         // Conditionally include account assignment files
         if ($exportAccounts) {
@@ -203,5 +212,49 @@ class AccountingExportController extends AbstractController
         ]);
 
         return $response;
+    }
+
+    /**
+     * @param \App\Entity\Payment[] $payments
+     * @return array<string, array{0: \App\Entity\Payment[], 1: array<string,string>}>
+     */
+    private function splitByCurrency(array $payments, array $ronAccountMap, array $currencyAccounts): array
+    {
+        $byCurrency = [];
+        foreach ($payments as $p) {
+            $byCurrency[strtoupper($p->getCurrency() ?: 'RON')][] = $p;
+        }
+
+        if (empty($byCurrency)) {
+            return ['' => [[], $ronAccountMap]];
+        }
+
+        if (count($byCurrency) === 1 && array_key_exists('RON', $byCurrency)) {
+            return ['' => [$byCurrency['RON'], $ronAccountMap]];
+        }
+
+        $out = [];
+        foreach ($byCurrency as $currency => $group) {
+            $suffix = '_' . $currency;
+            $out[$suffix] = [$group, $this->buildAccountMap($currency, $ronAccountMap, $currencyAccounts)];
+        }
+        ksort($out);
+        return $out;
+    }
+
+    private function buildAccountMap(string $currency, array $ronAccountMap, array $currencyAccounts): array
+    {
+        if ($currency === 'RON') {
+            return $ronAccountMap;
+        }
+        $override = $currencyAccounts[$currency] ?? [];
+        $map = $ronAccountMap;
+        foreach (['cash' => 'cash', 'bank' => 'bank_transfer', 'card' => 'card'] as $optKey => $methodKey) {
+            $v = trim((string) ($override[$optKey] ?? ''));
+            if ($v !== '') {
+                $map[$methodKey] = $v;
+            }
+        }
+        return $map;
     }
 }
