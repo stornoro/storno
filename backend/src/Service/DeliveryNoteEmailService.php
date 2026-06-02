@@ -29,6 +29,8 @@ class DeliveryNoteEmailService
         private readonly EmailUnsubscribeService $emailUnsubscribeService,
         private readonly EmailUnsubscribeRepository $emailUnsubscribeRepository,
         private readonly string $mailFrom,
+        private readonly WhiteLabelResolver $whiteLabelResolver,
+        private readonly OrgMailer $orgMailer,
     ) {}
 
     public function send(
@@ -99,6 +101,9 @@ class DeliveryNoteEmailService
                 'total' => $deliveryNote->getTotal() ?? '0.00',
                 'currency' => $deliveryNote->getCurrency() ?? 'RON',
                 'unsubscribeUrl' => $unsubscribeUrl,
+                'hideBranding' => $deliveryNote->getCompany()?->getOrganization()
+                    ? $this->whiteLabelResolver->shouldHideBranding($deliveryNote->getCompany()->getOrganization())
+                    : false,
             ]);
 
             $email = (new Email())
@@ -141,9 +146,9 @@ class DeliveryNoteEmailService
             $email->getHeaders()->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
 
             $this->sesMessageIdListener->reset();
-            $this->mailer->send($email);
+            $usedCustomSender = $this->orgMailer->send($deliveryNote->getCompany()?->getOrganization(), $email, $companyName);
 
-            $messageId = $this->sesMessageIdListener->getLastMessageId();
+            $messageId = $usedCustomSender ? null : $this->sesMessageIdListener->getLastMessageId();
             if ($messageId) {
                 $emailLog->setSesMessageId(trim($messageId, '<> '));
             }

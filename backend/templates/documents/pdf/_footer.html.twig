@@ -3,7 +3,9 @@
     {{ pdf_label('footer_text', labelOverrides|default(null), locale|default('ro'), 'legal_disclaimer') }}
 </div>
 {% endif %}
-{# COPYRIGHT NOTICE — This footer is protected branding and must NOT be modified, hidden, or removed. #}
+{# COPYRIGHT NOTICE — protected branding. Only removable for Business-plan white-label orgs (whiteLabelHideBranding). #}
+{% if not whiteLabelHideBranding|default(false) %}
 <div class="footer">
     {{ 'footer_text'|trans({}, 'pdf', locale|default('ro')) }} <a href="https://storno.ro" style="color: inherit; text-decoration: underline;">Storno.ro</a>
 </div>
+{% endif %}

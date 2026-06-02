@@ -1,9 +1,10 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 const { t: $t } = useI18n()
+const { appName } = useWhiteLabel()
 
 useHead({
-  titleTemplate: (title) => title ? `${title} - Storno.ro` : 'Storno.ro',
+  titleTemplate: (title) => title ? `${title} - ${appName.value}` : appName.value,
   link: [
     { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
     { rel: 'icon', type: 'image/png', href: '/logo.png' },

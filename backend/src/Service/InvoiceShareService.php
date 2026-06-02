@@ -18,6 +18,7 @@ class InvoiceShareService
         private readonly InvoiceShareTokenRepository $shareTokenRepository,
         private readonly StripeConnectAccountRepository $connectAccountRepository,
         private readonly string $frontendUrl,
+        private readonly FrontendUrlResolver $frontendUrlResolver,
     ) {}
 
     public function createShareToken(
@@ -49,7 +50,9 @@ class InvoiceShareService
 
     public function getShareUrl(InvoiceShareToken $token): string
     {
-        return sprintf('%s/share/%s', rtrim($this->frontendUrl, '/'), $token->getToken());
+        $base = $this->frontendUrlResolver->resolve($token->getCompany()?->getOrganization());
+
+        return sprintf('%s/share/%s', $base, $token->getToken());
     }
 
     public function revokeAllForInvoice(Invoice $invoice): int

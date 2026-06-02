@@ -24,6 +24,7 @@ class StripeConnectService
         private readonly string $stripeSecretKey,
         private readonly string $stripeConnectWebhookSecret,
         private readonly string $frontendUrl,
+        private readonly FrontendUrlResolver $frontendUrlResolver,
         private readonly float $platformFeePercent = 0,
     ) {
         Stripe::setApiKey($this->stripeSecretKey);
@@ -162,8 +163,8 @@ class StripeConnectService
                 ],
                 'quantity' => 1,
             ]],
-            'success_url' => $this->frontendUrl . '/share/' . $shareToken->getToken() . '?payment=success',
-            'cancel_url' => $this->frontendUrl . '/share/' . $shareToken->getToken() . '?payment=canceled',
+            'success_url' => $this->frontendUrlResolver->resolve($company->getOrganization()) . '/share/' . $shareToken->getToken() . '?payment=success',
+            'cancel_url' => $this->frontendUrlResolver->resolve($company->getOrganization()) . '/share/' . $shareToken->getToken() . '?payment=canceled',
             'metadata' => [
                 'invoice_id' => (string) $invoice->getId(),
                 'share_token' => $shareToken->getToken(),
