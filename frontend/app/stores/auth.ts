@@ -214,6 +214,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       const { applyFromUser } = useThemePreferences()
       applyFromUser(response)
+      useWhiteLabel().applyFromUser(response)
       return true
     }
     catch (err: any) {
@@ -249,6 +250,7 @@ export const useAuthStore = defineStore('auth', () => {
             }
             const { applyFromUser } = useThemePreferences()
             applyFromUser(retryResponse)
+            useWhiteLabel().applyFromUser(retryResponse)
             return true
           }
         }
@@ -406,6 +408,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearMfa()
     const { reset } = useThemePreferences()
     reset()
+    useWhiteLabel().reset()
 
     // Reset company store and all company-scoped stores
     // so stale data from the previous user is never shown

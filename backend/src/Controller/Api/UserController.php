@@ -11,6 +11,7 @@ use App\Security\OrganizationContext;
 use App\Security\RolePermissionMap;
 use App\Service\LicenseManager;
 use App\Service\MfaService;
+use App\Service\WhiteLabelResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -43,6 +44,7 @@ class UserController extends AbstractController
         private readonly JWTEncoderInterface $jwtEncoder,
         private readonly UserRepository $userRepository,
         private readonly MfaService $mfaService,
+        private readonly WhiteLabelResolver $whiteLabelResolver,
     ) {}
 
     #[Route('/me', name: 'app_api_user', methods: ['GET'])]
@@ -78,6 +80,7 @@ class UserController extends AbstractController
                 'name' => $org->getName(),
                 'slug' => $org->getSlug(),
                 'createdAt' => $org->getCreatedAt()?->format('c'),
+                'whiteLabel' => $this->whiteLabelResolver->resolve($org),
             ];
             $data['plan'] = $this->licenseManager->getPlanStatus($org);
         }

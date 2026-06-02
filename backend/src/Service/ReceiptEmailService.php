@@ -29,6 +29,8 @@ class ReceiptEmailService
         private readonly EmailUnsubscribeService $emailUnsubscribeService,
         private readonly EmailUnsubscribeRepository $emailUnsubscribeRepository,
         private readonly string $mailFrom,
+        private readonly WhiteLabelResolver $whiteLabelResolver,
+        private readonly OrgMailer $orgMailer,
     ) {}
 
     public function send(
@@ -100,6 +102,9 @@ class ReceiptEmailService
                 'currency' => $receipt->getCurrency() ?? 'RON',
                 'paymentMethod' => $receipt->getPaymentMethod(),
                 'unsubscribeUrl' => $unsubscribeUrl,
+                'hideBranding' => $receipt->getCompany()?->getOrganization()
+                    ? $this->whiteLabelResolver->shouldHideBranding($receipt->getCompany()->getOrganization())
+                    : false,
             ]);
 
             $email = (new Email())
@@ -142,9 +147,9 @@ class ReceiptEmailService
             $email->getHeaders()->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
 
             $this->sesMessageIdListener->reset();
-            $this->mailer->send($email);
+            $usedCustomSender = $this->orgMailer->send($receipt->getCompany()?->getOrganization(), $email, $companyName);
 
-            $messageId = $this->sesMessageIdListener->getLastMessageId();
+            $messageId = $usedCustomSender ? null : $this->sesMessageIdListener->getLastMessageId();
             if ($messageId) {
                 $emailLog->setSesMessageId(trim($messageId, '<> '));
             }

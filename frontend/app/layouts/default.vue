@@ -10,6 +10,7 @@ function truthy<T>(value: T): value is Exclude<T, false | null | undefined | 0 |
 const authStore = useAuthStore()
 const companyStore = useCompanyStore()
 const { can } = usePermissions()
+const { logoSrc, appName } = useWhiteLabel()
 const { isModuleEnabled, MODULE_KEYS } = useModules()
 const open = ref(false)
 
@@ -138,6 +139,16 @@ const links = computed(() => {
     can(P.SETTINGS_VIEW) && {
       label: $t('pdfTemplates.title'),
       to: '/settings/pdf-templates',
+      onSelect: close,
+    },
+    can(P.SETTINGS_VIEW) && authStore.plan?.features?.whiteLabel && {
+      label: $t('whiteLabel.title'),
+      to: '/settings/white-label',
+      onSelect: close,
+    },
+    can(P.SETTINGS_VIEW) && authStore.plan?.features?.whiteLabel && {
+      label: $t('emailSender.title'),
+      to: '/settings/email-sender',
       onSelect: close,
     },
     can(P.COMPANY_EDIT) && {
@@ -372,7 +383,7 @@ const searchGroups = computed(() => [{
           tooltip
         >
           <template #api-docs-leading>
-            <img src="/logo.png" alt="Storno.ro" class="h-4 w-auto shrink-0" />
+            <img :src="logoSrc" :alt="appName" class="h-4 w-auto shrink-0" />
           </template>
         </UNavigationMenu>
       </template>

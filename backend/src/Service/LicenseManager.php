@@ -52,6 +52,7 @@ class LicenseManager
             'exchangeRates' => true,
             'webhooks' => false,
             'selfHostingLicense' => false,
+            'whiteLabel' => false,
             'prioritySupport' => false,
         ],
         self::PLAN_EXPIRED => [
@@ -76,6 +77,7 @@ class LicenseManager
             'exchangeRates' => true,
             'webhooks' => false,
             'selfHostingLicense' => false,
+            'whiteLabel' => false,
             'prioritySupport' => false,
         ],
         self::PLAN_STARTER => [
@@ -100,6 +102,7 @@ class LicenseManager
             'exchangeRates' => true,
             'webhooks' => false,
             'selfHostingLicense' => false,
+            'whiteLabel' => false,
             'prioritySupport' => false,
         ],
         self::PLAN_PROFESSIONAL => [
@@ -124,6 +127,7 @@ class LicenseManager
             'exchangeRates' => true,
             'webhooks' => true,
             'selfHostingLicense' => false,
+            'whiteLabel' => false,
             'prioritySupport' => false,
         ],
         self::PLAN_BUSINESS => [
@@ -148,6 +152,7 @@ class LicenseManager
             'exchangeRates' => true,
             'webhooks' => true,
             'selfHostingLicense' => true,
+            'whiteLabel' => true,
             'prioritySupport' => true,
         ],
     ];
@@ -317,6 +322,11 @@ class LicenseManager
     public function canUseExchangeRates(Organization $org): bool
     {
         return $this->getFeatures($org)['exchangeRates'];
+    }
+
+    public function canUseWhiteLabel(Organization $org): bool
+    {
+        return $this->getFeatures($org)['whiteLabel'] ?? false;
     }
 
     public function getMaxInvoicesPerMonth(Organization $org): int
@@ -509,6 +519,7 @@ class LicenseManager
                     'plan.feature.unlimitedCompaniesUsers',
                     'plan.feature.efacturaSync1h',
                     'plan.feature.realtimeNotifications',
+                    'plan.feature.whiteLabel',
                     'plan.feature.selfHostingLicense',
                     'plan.feature.prioritySupport',
                 ],

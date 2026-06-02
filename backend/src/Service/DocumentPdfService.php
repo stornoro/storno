@@ -63,6 +63,7 @@ class DocumentPdfService
         private readonly EuVatRateService $euVatRateService,
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
+        private readonly WhiteLabelResolver $whiteLabelResolver,
         private readonly LoggerInterface $logger,
         private readonly string $projectDir,
     ) {}
@@ -307,6 +308,10 @@ class DocumentPdfService
         } else {
             $context['invoiceBankAccounts'] = [];
         }
+
+        $context['whiteLabelHideBranding'] = ($company instanceof Company && $company->getOrganization())
+            ? $this->whiteLabelResolver->shouldHideBranding($company->getOrganization())
+            : false;
 
         return $this->twig->render($templatePath, $context);
     }

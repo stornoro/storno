@@ -37,6 +37,8 @@ class InvoiceEmailService
         private readonly InvoiceRepository $invoiceRepository,
         private readonly string $mailFrom,
         private readonly string $frontendUrl,
+        private readonly WhiteLabelResolver $whiteLabelResolver,
+        private readonly OrgMailer $orgMailer,
     ) {}
 
     public function send(
@@ -123,6 +125,9 @@ class InvoiceEmailService
                 'currency' => $invoice->getCurrency() ?? 'RON',
                 'invoiceUrl' => $invoiceUrl,
                 'unsubscribeUrl' => $unsubscribeUrl,
+                'hideBranding' => $invoice->getCompany()?->getOrganization()
+                    ? $this->whiteLabelResolver->shouldHideBranding($invoice->getCompany()->getOrganization())
+                    : false,
             ]);
 
             $email = (new Email())
@@ -169,10 +174,10 @@ class InvoiceEmailService
             $email->getHeaders()->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
 
             $this->sesMessageIdListener->reset();
-            $this->mailer->send($email);
+            $usedCustomSender = $this->orgMailer->send($invoice->getCompany()?->getOrganization(), $email, $companyName);
 
-            // Capture SES Message-ID via the event listener
-            $messageId = $this->sesMessageIdListener->getLastMessageId();
+            // Capture SES Message-ID via the event listener (platform sender only)
+            $messageId = $usedCustomSender ? null : $this->sesMessageIdListener->getLastMessageId();
             if ($messageId) {
                 $emailLog->setSesMessageId(trim($messageId, '<> '));
             }
