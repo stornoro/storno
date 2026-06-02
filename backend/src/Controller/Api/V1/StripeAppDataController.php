@@ -207,7 +207,7 @@ class StripeAppDataController extends AbstractController
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        // Find the parent Storno invoice
+        // Find the parent Storno invoice (the e-Factura issued for the original Stripe invoice)
         $parentKey = 'stripe_app_' . $stripeInvoiceId;
         $parentInvoice = $this->invoiceRepository->findOneBy([
             'idempotencyKey' => $parentKey,
@@ -221,50 +221,38 @@ class StripeAppDataController extends AbstractController
             ], Response::HTTP_NOT_FOUND);
         }
 
+        // Reverse the original invoice (negative quantities), in its own series.
+        // A partial Stripe refund reverses a proportional part of the original.
         $refundAmount = $refund->amount / 100;
-        $currency = strtoupper($refund->currency ?? $parentInvoice->getCurrency());
-
-        $creditNoteData = [
-            'documentType' => DocumentType::CREDIT_NOTE->value,
-            'parentDocumentId' => $parentInvoice->getId()->toRfc4122(),
-            'idempotencyKey' => $idempotencyKey,
-            'currency' => $currency,
-            'lines' => [
-                [
-                    'description' => 'Storno - Rambursare ' . $stripeRefundId,
-                    'quantity' => 1,
-                    'unitPrice' => (string) round(-abs($refundAmount) / 1.19, 2),
-                    'vatRate' => '19',
-                    'unitOfMeasure' => 'buc',
-                ],
-            ],
-        ];
-
-        if ($parentInvoice->getClient()) {
-            $creditNoteData['clientId'] = $parentInvoice->getClient()->getId()->toRfc4122();
-        } else {
-            $creditNoteData['receiverName'] = $parentInvoice->getReceiverName() ?? 'Client';
-            $creditNoteData['receiverCif'] = $parentInvoice->getReceiverCif();
+        $parentTotal = abs((float) $parentInvoice->getTotal());
+        $ratio = null;
+        if ($parentTotal > 0 && $refundAmount + 0.005 < $parentTotal) {
+            $ratio = bcdiv((string) $refundAmount, (string) $parentTotal, 6);
         }
 
         try {
-            $creditNote = $this->invoiceManager->create($appToken->getCompany(), $creditNoteData, $appToken->getUser());
+            $storno = $this->invoiceManager->createStorno(
+                $parentInvoice,
+                $appToken->getUser(),
+                $ratio,
+                $idempotencyKey,
+            );
 
             if ($appToken->isAutoMode()) {
                 try {
-                    $this->invoiceManager->issue($creditNote, $appToken->getUser());
-                    $this->invoiceManager->submitToAnaf($creditNote, $appToken->getUser());
+                    $this->invoiceManager->issue($storno, $appToken->getUser());
+                    $this->invoiceManager->submitToAnaf($storno, $appToken->getUser());
                 } catch (\Exception $e) {
-                    $this->logger->warning('Stripe App: auto-submit credit note failed', [
-                        'creditNoteId' => $creditNote->getId()->toRfc4122(),
+                    $this->logger->warning('Stripe App: auto-submit storno failed', [
+                        'stornoId' => $storno->getId()->toRfc4122(),
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
 
-            return $this->json($this->serializeInvoice($creditNote), Response::HTTP_CREATED);
+            return $this->json($this->serializeInvoice($storno), Response::HTTP_CREATED);
         } catch (\Exception $e) {
-            $this->logger->error('Stripe App: credit note creation failed', [
+            $this->logger->error('Stripe App: storno creation failed', [
                 'stripeRefundId' => $stripeRefundId,
                 'error' => $e->getMessage(),
             ]);

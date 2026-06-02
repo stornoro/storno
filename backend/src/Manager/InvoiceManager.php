@@ -862,6 +862,148 @@ class InvoiceManager
     }
 
     /**
+     * Build a storno (reversal) of an outgoing invoice: a negative-quantity copy
+     * of the original, in the original's series and document type, carrying the
+     * same per-line VAT rates and buyer identity. Pass $ratio (0,1] to reverse a
+     * proportional part of the original (partial refund); null reverses in full.
+     */
+    public function createStorno(
+        Invoice $invoice,
+        User $user,
+        ?string $ratio = null,
+        ?string $idempotencyKey = null,
+    ): Invoice {
+        $storno = new Invoice();
+        $storno->setCompany($invoice->getCompany());
+        $storno->setClient($invoice->getClient());
+        $storno->setCurrency($invoice->getCurrency());
+        $storno->setSenderName($invoice->getSenderName());
+        $storno->setSenderCif($invoice->getSenderCif());
+
+        $parentSnapshot = $invoice->getBuyerSnapshot();
+        $storno->setBuyerSnapshot($parentSnapshot);
+        if ($parentSnapshot) {
+            $storno->setReceiverName($parentSnapshot['name'] ?? $invoice->getReceiverName());
+            $storno->setReceiverCif($parentSnapshot['cui'] ?? $parentSnapshot['cnp'] ?? $invoice->getReceiverCif());
+        } else {
+            $storno->setReceiverName($invoice->getReceiverName());
+            $storno->setReceiverCif($invoice->getReceiverCif());
+        }
+
+        $storno->setParentDocument($invoice);
+        $storno->setDocumentSeries($invoice->getDocumentSeries());
+        $storno->setStatus(DocumentStatus::DRAFT);
+        $storno->setDirection(InvoiceDirection::OUTGOING);
+        $storno->setDocumentType($invoice->getDocumentType());
+        $storno->setIssueDate(new \DateTime());
+
+        $originalNumber = $invoice->getNumber() ?? (string) $invoice->getId();
+        $originalDate = $invoice->getIssueDate()?->format('d.m.Y') ?? '';
+        $storno->setNotes(sprintf('Storno factura #%s din %s', $originalNumber, $originalDate));
+
+        $storno->setPaymentTerms($invoice->getPaymentTerms());
+        $storno->setDeliveryLocation($invoice->getDeliveryLocation());
+        $storno->setProjectReference($invoice->getProjectReference());
+        $storno->setTvaLaIncasare($invoice->isTvaLaIncasare());
+        $storno->setPlatitorTva($invoice->isPlatitorTva());
+        $storno->setPlataOnline($invoice->isPlataOnline());
+        $storno->setOrderNumber($invoice->getOrderNumber());
+        $storno->setContractNumber($invoice->getContractNumber());
+        $storno->setBuyerReference($invoice->getBuyerReference());
+        $storno->setBusinessProcessType($invoice->getBusinessProcessType());
+        $storno->setPayeeName($invoice->getPayeeName());
+        $storno->setPayeeIdentifier($invoice->getPayeeIdentifier());
+        $storno->setPayeeLegalRegistrationIdentifier($invoice->getPayeeLegalRegistrationIdentifier());
+
+        $origExtensions = $invoice->getUblExtensions();
+        if ($origExtensions) {
+            $stornoExtensions = [];
+            foreach (['invoicePeriod', 'delivery', 'additionalDocumentReferences'] as $key) {
+                if (!empty($origExtensions[$key])) {
+                    $stornoExtensions[$key] = $origExtensions[$key];
+                }
+            }
+            if ($stornoExtensions) {
+                $storno->setUblExtensions($stornoExtensions);
+            }
+        }
+
+        if ($idempotencyKey !== null) {
+            $storno->setIdempotencyKey($idempotencyKey);
+        }
+
+        $storno->setNumber('DRAFT-' . substr(Uuid::v7()->toRfc4122(), 0, 8));
+
+        $position = 1;
+        foreach ($invoice->getLines() as $originalLine) {
+            $stornoLine = new InvoiceLine();
+            $stornoLine->setPosition($position++);
+            $stornoLine->setDescription($originalLine->getDescription() ?? '');
+
+            $negatedQty = bcmul($originalLine->getQuantity(), '-1', 4);
+            if ($ratio !== null) {
+                $negatedQty = bcmul($negatedQty, $ratio, 4);
+            }
+            $stornoLine->setQuantity($negatedQty);
+            $stornoLine->setUnitOfMeasure($originalLine->getUnitOfMeasure());
+            $stornoLine->setUnitPrice($originalLine->getUnitPrice());
+            $stornoLine->setVatRate($originalLine->getVatRate());
+            $stornoLine->setVatCategoryCode($originalLine->getVatCategoryCode());
+            $stornoLine->setDiscount($originalLine->getDiscount());
+            $stornoLine->setDiscountPercent($originalLine->getDiscountPercent());
+            $stornoLine->setVatIncluded($originalLine->isVatIncluded());
+            $stornoLine->setProductCode($originalLine->getProductCode());
+
+            $qty = (float) $negatedQty;
+            $price = (float) $stornoLine->getUnitPrice();
+            $discount = (float) $stornoLine->getDiscount();
+
+            if ($stornoLine->isVatIncluded()) {
+                $vatRate = (float) $stornoLine->getVatRate();
+                $grossTotal = ($qty * $price) - $discount;
+                $lineNet = $grossTotal / (1 + $vatRate / 100);
+                $vatAmount = $grossTotal - $lineNet;
+            } else {
+                $lineNet = ($qty * $price) - $discount;
+                $vatAmount = $lineNet * ((float) $stornoLine->getVatRate() / 100);
+            }
+
+            $stornoLine->setLineTotal(number_format($lineNet, 2, '.', ''));
+            $stornoLine->setVatAmount(number_format($vatAmount, 2, '.', ''));
+
+            $storno->addLine($stornoLine);
+        }
+
+        $subtotal = '0.00';
+        $vatTotal = '0.00';
+        $discountTotal = '0.00';
+        foreach ($storno->getLines() as $line) {
+            $subtotal = bcadd($subtotal, $line->getLineTotal(), 2);
+            $vatTotal = bcadd($vatTotal, $line->getVatAmount(), 2);
+            $discountTotal = bcadd($discountTotal, $line->getDiscount(), 2);
+        }
+        $storno->setSubtotal($subtotal);
+        $storno->setVatTotal($vatTotal);
+        $storno->setDiscount($discountTotal);
+        $storno->setTotal(bcadd($subtotal, $vatTotal, 2));
+
+        $event = new DocumentEvent();
+        $event->setNewStatus(DocumentStatus::DRAFT);
+        $event->setCreatedBy($user);
+        $event->setMetadata([
+            'action' => 'storno_created',
+            'originalInvoiceId' => (string) $invoice->getId(),
+            'originalInvoiceNumber' => $originalNumber,
+        ]);
+        $storno->addEvent($event);
+
+        $this->entityManager->persist($storno);
+        $this->entityManager->flush();
+
+        return $storno;
+    }
+
+    /**
      * Auto-apply reverse charge or OSS VAT rules to invoice lines.
      * Only called when the caller opts in via autoApplyVatRules: true.
      */
