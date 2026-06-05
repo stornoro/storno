@@ -66,60 +66,43 @@ class StripeAppDataController extends AbstractController
     }
 
     /**
-     * Returns invoices linked to a Stripe subscription (all billing cycles).
-     * The idempotency key for subscription invoices is stripe_app_{stripeInvoiceId}
-     * for each cycle, so we search by subscription-scoped idempotency pattern
-     * via the subscription metadata on the invoice.
+     * Batch lookup: maps Stripe invoice IDs to their linked Storno invoices
+     * (or null), scoped to the token's company.
      *
-     * In practice: Stripe subscription invoices each have a unique invoice ID;
-     * we accept a comma-separated list of Stripe invoice IDs as a query param
-     * and return the matched Storno invoices.
+     * Used by the subscription viewport: the UI extension lists the
+     * subscription's billing cycles client-side (it alone holds merchant Stripe
+     * credentials) and posts the resulting invoice IDs here to discover which
+     * cycles already have an e-Factura. The backend never calls Stripe — a
+     * Marketplace install is not a Connect connected account, so server-side
+     * Stripe calls for merchant data fail.
      */
-    #[Route('/subscriptions/{stripeSubscriptionId}/invoices', name: 'stripe_app_subscription_invoices', methods: ['GET'])]
-    public function subscriptionInvoices(string $stripeSubscriptionId, Request $request): JsonResponse
+    #[Route('/invoices/links', name: 'stripe_app_invoice_links', methods: ['POST'])]
+    public function invoiceLinks(Request $request): JsonResponse
     {
         $appToken = $this->resolveAppToken($request);
         if (!$appToken) {
             return $this->unauthorized();
         }
 
-        // Fetch the subscription from Stripe to get its invoice list
-        $stripe = $this->makeStripeClient($appToken);
-
-        try {
-            $stripeInvoices = $stripe->invoices->all([
-                'subscription' => $stripeSubscriptionId,
-                'limit' => 20,
-            ], ['stripe_account' => $appToken->getStripeAccountId()]);
-        } catch (\Exception $e) {
-            $this->logger->warning('Stripe App: failed to fetch subscription invoices', [
-                'subscriptionId' => $stripeSubscriptionId,
-                'error' => $e->getMessage(),
-            ]);
-
-            return $this->json(['error' => 'not_found', 'message' => 'Subscription not found'], Response::HTTP_NOT_FOUND);
+        $data = json_decode($request->getContent(), true);
+        $stripeInvoiceIds = $data['stripeInvoiceIds'] ?? [];
+        if (!is_array($stripeInvoiceIds)) {
+            $stripeInvoiceIds = [];
         }
 
-        $results = [];
-        foreach ($stripeInvoices->data as $stripeInvoice) {
-            $idempotencyKey = 'stripe_app_' . $stripeInvoice->id;
+        $links = [];
+        foreach ($stripeInvoiceIds as $stripeInvoiceId) {
+            if (!is_string($stripeInvoiceId) || $stripeInvoiceId === '') {
+                continue;
+            }
             $invoice = $this->invoiceRepository->findOneBy([
-                'idempotencyKey' => $idempotencyKey,
+                'idempotencyKey' => 'stripe_app_' . $stripeInvoiceId,
                 'company' => $appToken->getCompany(),
             ]);
-
-            $results[] = [
-                'stripeInvoiceId' => $stripeInvoice->id,
-                'stripePeriodStart' => $stripeInvoice->period_start ? date('Y-m-d', $stripeInvoice->period_start) : null,
-                'stripePeriodEnd' => $stripeInvoice->period_end ? date('Y-m-d', $stripeInvoice->period_end) : null,
-                'stripeAmount' => $stripeInvoice->total / 100,
-                'stripeCurrency' => strtoupper($stripeInvoice->currency),
-                'stripeStatus' => $stripeInvoice->status,
-                'stornoInvoice' => $invoice ? $this->serializeInvoice($invoice) : null,
-            ];
+            $links[$stripeInvoiceId] = $invoice ? $this->serializeInvoice($invoice) : null;
         }
 
-        return $this->json(['invoices' => $results]);
+        return $this->json(['links' => $links]);
     }
 
     /**
@@ -165,40 +148,56 @@ class StripeAppDataController extends AbstractController
             return $this->json($this->serializeInvoice($existing), Response::HTTP_OK);
         }
 
-        $stripe = $this->makeStripeClient($appToken);
+        // The UI extension holds the merchant Stripe credentials, so it sends the
+        // parent Stripe invoice id and the refund amount directly. The backend
+        // resolves via Stripe only as a legacy fallback (which fails for
+        // Marketplace installs — a platform key can't read a non-connected
+        // account), so a missing parent invoice id is the normal modern path.
+        $data = json_decode($request->getContent(), true) ?? [];
+        $stripeInvoiceId = $data['stripeInvoiceId'] ?? null;
+        $refundAmount = isset($data['refundAmount']) && is_numeric($data['refundAmount'])
+            ? (float) $data['refundAmount']
+            : null;
 
-        try {
-            $refund = $stripe->refunds->retrieve($stripeRefundId, [], [
-                'stripe_account' => $appToken->getStripeAccountId(),
-            ]);
-        } catch (\Exception $e) {
-            return $this->json([
-                'error' => 'not_found',
-                'message' => 'Refund not found on Stripe',
-            ], Response::HTTP_NOT_FOUND);
+        if (!$stripeInvoiceId) {
+            $stripe = $this->makeStripeClient($appToken);
+
+            try {
+                $refund = $stripe->refunds->retrieve($stripeRefundId, [], [
+                    'stripe_account' => $appToken->getStripeAccountId(),
+                ]);
+            } catch (\Exception $e) {
+                return $this->json([
+                    'error' => 'not_found',
+                    'message' => 'Refund not found on Stripe',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            // The refund must be linked to a charge which in turn has an invoice
+            $chargeId = $refund->charge;
+            if (!$chargeId) {
+                return $this->json([
+                    'error' => 'invalid_request',
+                    'message' => 'Refund is not linked to a charge',
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            try {
+                $charge = $stripe->charges->retrieve((string) $chargeId, ['expand' => ['invoice']], [
+                    'stripe_account' => $appToken->getStripeAccountId(),
+                ]);
+            } catch (\Exception $e) {
+                return $this->json([
+                    'error' => 'not_found',
+                    'message' => 'Charge not found on Stripe',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $stripeInvoiceId = is_object($charge->invoice) ? $charge->invoice->id : $charge->invoice;
+            if ($refundAmount === null) {
+                $refundAmount = $refund->amount / 100;
+            }
         }
-
-        // The refund must be linked to a charge which in turn has an invoice
-        $chargeId = $refund->charge;
-        if (!$chargeId) {
-            return $this->json([
-                'error' => 'invalid_request',
-                'message' => 'Refund is not linked to a charge',
-            ], Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
-
-        try {
-            $charge = $stripe->charges->retrieve((string) $chargeId, ['expand' => ['invoice']], [
-                'stripe_account' => $appToken->getStripeAccountId(),
-            ]);
-        } catch (\Exception $e) {
-            return $this->json([
-                'error' => 'not_found',
-                'message' => 'Charge not found on Stripe',
-            ], Response::HTTP_NOT_FOUND);
-        }
-
-        $stripeInvoiceId = is_object($charge->invoice) ? $charge->invoice->id : $charge->invoice;
 
         if (!$stripeInvoiceId) {
             return $this->json([
@@ -223,10 +222,9 @@ class StripeAppDataController extends AbstractController
 
         // Reverse the original invoice (negative quantities), in its own series.
         // A partial Stripe refund reverses a proportional part of the original.
-        $refundAmount = $refund->amount / 100;
         $parentTotal = abs((float) $parentInvoice->getTotal());
         $ratio = null;
-        if ($parentTotal > 0 && $refundAmount + 0.005 < $parentTotal) {
+        if ($refundAmount !== null && $parentTotal > 0 && $refundAmount + 0.005 < $parentTotal) {
             $ratio = bcdiv((string) $refundAmount, (string) $parentTotal, 6);
         }
 
@@ -290,8 +288,16 @@ class StripeAppDataController extends AbstractController
             return $this->json($this->serializeInvoice($existing), Response::HTTP_OK);
         }
 
+        // The UI extension posts the full Stripe invoice object (fetched
+        // client-side with merchant credentials). Fall back to the legacy
+        // server-side fetch only when it's absent — see createFromStripe().
+        $data = json_decode($request->getContent(), true) ?? [];
+        $stripeInvoice = $data['stripeInvoice'] ?? null;
+
         try {
-            $invoice = $invoiceService->createFromStripeInvoiceId($appToken, $stripeInvoiceId);
+            $invoice = is_array($stripeInvoice)
+                ? $invoiceService->createFromStripeInvoice($appToken, $stripeInvoice)
+                : $invoiceService->createFromStripeInvoiceId($appToken, $stripeInvoiceId);
 
             return $this->json($this->serializeInvoice($invoice), Response::HTTP_CREATED);
         } catch (\Exception $e) {
