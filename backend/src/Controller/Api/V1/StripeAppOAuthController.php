@@ -348,15 +348,23 @@ class StripeAppOAuthController extends AbstractController
             return $this->json(['error' => 'unauthorized', 'message' => 'Session expired. Please reconnect from Settings.', 'messageKey' => MessageKey::ERR_SESSION_EXPIRED], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $stripeInvoiceId = $data['stripeInvoiceId'] ?? null;
+        $data = json_decode($request->getContent(), true) ?? [];
+        // The UI extension is the only party authenticated against the merchant's
+        // Stripe account, so it fetches the invoice client-side and posts the full
+        // object here. The backend must NOT call Stripe for merchant data: a
+        // Marketplace install is not a Connect connected account, so a platform
+        // key + stripe_account header fails (the cause of the prior 500).
+        $stripeInvoice = $data['stripeInvoice'] ?? null;
+        $stripeInvoiceId = $data['stripeInvoiceId'] ?? (is_array($stripeInvoice) ? ($stripeInvoice['id'] ?? null) : null);
 
-        if (!$stripeInvoiceId) {
-            return $this->json(['error' => 'invalid_request', 'message' => 'stripeInvoiceId is required'], Response::HTTP_BAD_REQUEST);
+        if (!is_array($stripeInvoice) && !$stripeInvoiceId) {
+            return $this->json(['error' => 'invalid_request', 'message' => 'stripeInvoice payload is required'], Response::HTTP_BAD_REQUEST);
         }
 
         try {
-            $invoice = $invoiceService->createFromStripeInvoiceId($appToken, $stripeInvoiceId);
+            $invoice = is_array($stripeInvoice)
+                ? $invoiceService->createFromStripeInvoice($appToken, $stripeInvoice)
+                : $invoiceService->createFromStripeInvoiceId($appToken, $stripeInvoiceId);
 
             return $this->json([
                 'id' => $invoice->getId()->toRfc4122(),
