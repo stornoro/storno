@@ -127,110 +127,119 @@ class SagaXmlExportService
     }
 
     /**
-     * SAGA Facturi: root <Facturi>, children <Factura>
+     * SAGA Facturi: root <Facturi>, children <Factura>.
+     *
+     * Streamed with XMLWriter (constant memory, no DOM tree) — large invoice
+     * sets used to build a full DOMDocument before serialising, which was the
+     * bottleneck of the accounting export.
      *
      * @param Invoice[] $invoices
      */
     public function generateInvoicesXml(array $invoices, Company $company, bool $includeDiscount = false): string
     {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
+        $w = new \XMLWriter();
+        $w->openMemory();
+        $w->setIndent(true);
+        $w->setIndentString('  ');
+        $w->startDocument('1.0', 'UTF-8');
 
-        $root = $dom->createElement('Facturi');
-        $dom->appendChild($root);
+        $w->startElement('Facturi');
 
         foreach ($invoices as $invoice) {
-            $facturaNode = $dom->createElement('Factura');
+            $w->startElement('Factura');
 
             // ── Antet ──
-            $antetNode = $dom->createElement('Antet');
+            $w->startElement('Antet');
 
             // Furnizor (company)
-            $this->addElement($dom, $antetNode, 'FurnizorNume', $company->getName() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorCIF', (string) $company->getCif());
-            $this->addElement($dom, $antetNode, 'FurnizorNrRegCom', $company->getRegistrationNumber() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorCapital', '');
-            $this->addElement($dom, $antetNode, 'FurnizorTara', $company->getCountry() ?? 'RO');
-            $this->addElement($dom, $antetNode, 'FurnizorLocalitate', $company->getCity() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorJudet', $company->getState() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorAdresa', $company->getAddress() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorTelefon', $company->getPhone() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorMail', $company->getEmail() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorBanca', $company->getBankName() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorIBAN', $company->getBankAccount() ?? '');
-            $this->addElement($dom, $antetNode, 'FurnizorInformatiiSuplimentare', '');
+            $this->writeEl($w, 'FurnizorNume', $company->getName() ?? '');
+            $this->writeEl($w, 'FurnizorCIF', (string) $company->getCif());
+            $this->writeEl($w, 'FurnizorNrRegCom', $company->getRegistrationNumber() ?? '');
+            $this->writeEl($w, 'FurnizorCapital', '');
+            $this->writeEl($w, 'FurnizorTara', $company->getCountry() ?? 'RO');
+            $this->writeEl($w, 'FurnizorLocalitate', $company->getCity() ?? '');
+            $this->writeEl($w, 'FurnizorJudet', $company->getState() ?? '');
+            $this->writeEl($w, 'FurnizorAdresa', $company->getAddress() ?? '');
+            $this->writeEl($w, 'FurnizorTelefon', $company->getPhone() ?? '');
+            $this->writeEl($w, 'FurnizorMail', $company->getEmail() ?? '');
+            $this->writeEl($w, 'FurnizorBanca', $company->getBankName() ?? '');
+            $this->writeEl($w, 'FurnizorIBAN', $company->getBankAccount() ?? '');
+            $this->writeEl($w, 'FurnizorInformatiiSuplimentare', '');
 
             // Client — read from buyer snapshot (frozen at issue time) to
             // avoid showing the wrong details if the linked client is later
             // edited or re-linked.
             $buyer = $this->resolveBuyer($invoice);
-            $this->addElement($dom, $antetNode, 'ClientNume', $invoice->getReceiverName() ?? ($buyer['name'] ?? ''));
-            $this->addElement($dom, $antetNode, 'ClientInformatiiSuplimentare', '');
-            $this->addElement($dom, $antetNode, 'ClientCIF', $invoice->getReceiverCif() ?? ($buyer['cui'] ?? ''));
-            $this->addElement($dom, $antetNode, 'ClientNrRegCom', $buyer['registrationNumber'] ?? '');
+            $this->writeEl($w, 'ClientNume', $invoice->getReceiverName() ?? ($buyer['name'] ?? ''));
+            $this->writeEl($w, 'ClientInformatiiSuplimentare', '');
+            $this->writeEl($w, 'ClientCIF', $invoice->getReceiverCif() ?? ($buyer['cui'] ?? ''));
+            $this->writeEl($w, 'ClientNrRegCom', $buyer['registrationNumber'] ?? '');
             $clientCountry = $buyer['country'] ?? 'RO';
-            $this->addElement($dom, $antetNode, 'ClientJudet', $clientCountry === 'RO' ? ($buyer['county'] ?? '') : '');
-            $this->addElement($dom, $antetNode, 'ClientTara', $clientCountry);
-            $this->addElement($dom, $antetNode, 'ClientLocalitate', $buyer['city'] ?? '');
-            $this->addElement($dom, $antetNode, 'ClientAdresa', $buyer['address'] ?? '');
-            $this->addElement($dom, $antetNode, 'ClientBanca', $buyer['bankName'] ?? '');
-            $this->addElement($dom, $antetNode, 'ClientIBAN', $buyer['bankAccount'] ?? '');
-            $this->addElement($dom, $antetNode, 'ClientTelefon', $buyer['phone'] ?? '');
-            $this->addElement($dom, $antetNode, 'ClientMail', $buyer['email'] ?? '');
+            $this->writeEl($w, 'ClientJudet', $clientCountry === 'RO' ? ($buyer['county'] ?? '') : '');
+            $this->writeEl($w, 'ClientTara', $clientCountry);
+            $this->writeEl($w, 'ClientLocalitate', $buyer['city'] ?? '');
+            $this->writeEl($w, 'ClientAdresa', $buyer['address'] ?? '');
+            $this->writeEl($w, 'ClientBanca', $buyer['bankName'] ?? '');
+            $this->writeEl($w, 'ClientIBAN', $buyer['bankAccount'] ?? '');
+            $this->writeEl($w, 'ClientTelefon', $buyer['phone'] ?? '');
+            $this->writeEl($w, 'ClientMail', $buyer['email'] ?? '');
 
             // Factura metadata
-            $this->addElement($dom, $antetNode, 'FacturaNumar', $invoice->getNumber() ?? '');
-            $this->addElement($dom, $antetNode, 'FacturaData', $invoice->getIssueDate()?->format('d.m.Y') ?? '');
-            $this->addElement($dom, $antetNode, 'FacturaScadenta', $invoice->getDueDate()?->format('d.m.Y') ?? '');
-            $this->addElement($dom, $antetNode, 'FacturaTaxareInversa', $this->isReverseCharge($invoice) ? 'Da' : 'Nu');
-            $this->addElement($dom, $antetNode, 'FacturaTVAIncasare', $invoice->isTvaLaIncasare() ? 'Da' : 'Nu');
-            $this->addElement($dom, $antetNode, 'FacturaTip', $this->getSagaInvoiceType($invoice));
-            $this->addElement($dom, $antetNode, 'FacturaInformatiiSuplimentare', '');
-            $this->addElement($dom, $antetNode, 'FacturaMoneda', $invoice->getCurrency());
-            $this->addElement($dom, $antetNode, 'FacturaGreutate', '0.000');
+            $this->writeEl($w, 'FacturaNumar', $invoice->getNumber() ?? '');
+            $this->writeEl($w, 'FacturaData', $invoice->getIssueDate()?->format('d.m.Y') ?? '');
+            $this->writeEl($w, 'FacturaScadenta', $invoice->getDueDate()?->format('d.m.Y') ?? '');
+            $this->writeEl($w, 'FacturaTaxareInversa', $this->isReverseCharge($invoice) ? 'Da' : 'Nu');
+            $this->writeEl($w, 'FacturaTVAIncasare', $invoice->isTvaLaIncasare() ? 'Da' : 'Nu');
+            $this->writeEl($w, 'FacturaTip', $this->getSagaInvoiceType($invoice));
+            $this->writeEl($w, 'FacturaInformatiiSuplimentare', '');
+            $this->writeEl($w, 'FacturaMoneda', $invoice->getCurrency());
+            $this->writeEl($w, 'FacturaGreutate', '0.000');
 
             // Discount at invoice level (optional)
             if ($includeDiscount && bccomp($invoice->getDiscount(), '0', 2) > 0) {
-                $this->addElement($dom, $antetNode, 'FacturaDiscount', $invoice->getDiscount());
+                $this->writeEl($w, 'FacturaDiscount', $invoice->getDiscount());
             }
 
-            $facturaNode->appendChild($antetNode);
+            $w->endElement(); // Antet
 
             // ── Detalii > Continut ──
-            $detaliiNode = $dom->createElement('Detalii');
-            $continutNode = $dom->createElement('Continut');
+            $w->startElement('Detalii');
+            $w->startElement('Continut');
 
             $lineIndex = 0;
             foreach ($invoice->getLines() as $line) {
                 $lineIndex++;
-                $linieNode = $dom->createElement('Linie');
+                $w->startElement('Linie');
 
-                $this->addElement($dom, $linieNode, 'LinieNrCrt', (string) $lineIndex);
-                $this->addElement($dom, $linieNode, 'Descriere', $line->getDescription() ?? '');
-                $this->addElement($dom, $linieNode, 'CodArticolFurnizor', $line->getProductCode() ?? '');
-                $this->addElement($dom, $linieNode, 'CodArticolClient', $line->getBuyerItemIdentification() ?? '');
-                $this->addElement($dom, $linieNode, 'CodBare', $line->getStandardItemIdentification() ?? '');
-                $this->addElement($dom, $linieNode, 'InformatiiSuplimentare', $line->getLineNote() ?? '');
-                $this->addElement($dom, $linieNode, 'UM', $line->getUnitOfMeasure());
-                $this->addElement($dom, $linieNode, 'Cantitate', $line->getQuantity());
-                $this->addElement($dom, $linieNode, 'Pret', $line->getUnitPrice());
-                $this->addElement($dom, $linieNode, 'Valoare', $line->getLineTotal());
-                $this->addElement($dom, $linieNode, 'ProcTVA', $line->getVatRate());
-                $this->addElement($dom, $linieNode, 'TVA', $line->getVatAmount());
+                $this->writeEl($w, 'LinieNrCrt', (string) $lineIndex);
+                $this->writeEl($w, 'Descriere', $line->getDescription() ?? '');
+                $this->writeEl($w, 'CodArticolFurnizor', $line->getProductCode() ?? '');
+                $this->writeEl($w, 'CodArticolClient', $line->getBuyerItemIdentification() ?? '');
+                $this->writeEl($w, 'CodBare', $line->getStandardItemIdentification() ?? '');
+                $this->writeEl($w, 'InformatiiSuplimentare', $line->getLineNote() ?? '');
+                $this->writeEl($w, 'UM', $line->getUnitOfMeasure());
+                $this->writeEl($w, 'Cantitate', $line->getQuantity());
+                $this->writeEl($w, 'Pret', $line->getUnitPrice());
+                $this->writeEl($w, 'Valoare', $line->getLineTotal());
+                $this->writeEl($w, 'ProcTVA', $line->getVatRate());
+                $this->writeEl($w, 'TVA', $line->getVatAmount());
 
-                $continutNode->appendChild($linieNode);
+                $w->endElement(); // Linie
             }
 
-            $detaliiNode->appendChild($continutNode);
-            $facturaNode->appendChild($detaliiNode);
+            $w->endElement(); // Continut
+            $w->endElement(); // Detalii
 
             // FacturaID at <Factura> level, after </Detalii>
-            $this->addElement($dom, $facturaNode, 'FacturaID', preg_replace('/[^0-9]/', '', $invoice->getNumber() ?? ''));
+            $this->writeEl($w, 'FacturaID', preg_replace('/[^0-9]/', '', $invoice->getNumber() ?? ''));
 
-            $root->appendChild($facturaNode);
+            $w->endElement(); // Factura
         }
 
-        return $dom->saveXML();
+        $w->endElement(); // Facturi
+        $w->endDocument();
+
+        return $w->outputMemory();
     }
 
     /**
@@ -397,6 +406,23 @@ class SagaXmlExportService
         $element = $dom->createElement($name);
         $element->appendChild($dom->createTextNode($value));
         $parent->appendChild($element);
+    }
+
+    /**
+     * Write a leaf element via XMLWriter, matching DOMDocument byte-for-byte:
+     * escape only & < > (a DOM text node leaves quotes raw, unlike
+     * XMLWriter::text()), and always emit <Name></Name> for empty values
+     * rather than a self-closing <Name/>.
+     */
+    private function writeEl(\XMLWriter $w, string $name, string $value): void
+    {
+        $w->startElement($name);
+        if ($value === '') {
+            $w->text('');
+        } else {
+            $w->writeRaw(str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $value));
+        }
+        $w->endElement();
     }
 
     private function isReverseCharge(Invoice $invoice): bool
