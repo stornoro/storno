@@ -129,11 +129,6 @@ class AccountingExportController extends AbstractController
         $overrideCurrencyAccounts = is_array($options['currencyAccounts'] ?? null) ? $options['currencyAccounts'] : [];
         $currencyAccounts = array_replace_recursive($storedCurrencyAccounts, $overrideCurrencyAccounts);
 
-        // Master data — always full list
-        $clients = $this->clientRepository->findAllByCompany($company);
-        $suppliers = $this->supplierRepository->findAllByCompany($company);
-        $products = $this->productRepository->findAllByCompany($company);
-
         // Time-series — filtered by date range
         $invoiceFilters = ['direction' => 'outgoing', 'excludeCancelled' => true];
         if ($dateFrom) {
@@ -156,6 +151,18 @@ class AccountingExportController extends AbstractController
             $dateFrom,
             $dateTo,
         );
+
+        // Master data. With a date range, scope partners to those referenced by the
+        // in-range documents so the import matches the period; otherwise full list.
+        // Products have no reference on invoice lines, so always the full nomenclature.
+        $products = $this->productRepository->findAllByCompany($company);
+        if ($dateFrom || $dateTo) {
+            $clients = $this->collectClients($invoices, $receipts);
+            $suppliers = $this->collectSuppliers($payments);
+        } else {
+            $clients = $this->clientRepository->findAllByCompany($company);
+            $suppliers = $this->supplierRepository->findAllByCompany($company);
+        }
 
         // Generate SAGA XML files
         $dateSuffix = date('d_m_Y');
@@ -212,6 +219,51 @@ class AccountingExportController extends AbstractController
         ]);
 
         return $response;
+    }
+
+    /**
+     * Distinct clients referenced by the in-range sales invoices and receipts.
+     *
+     * @param \App\Entity\Invoice[] $invoices
+     * @param \App\Entity\Payment[] $receipts
+     * @return \App\Entity\Client[]
+     */
+    private function collectClients(array $invoices, array $receipts): array
+    {
+        $clients = [];
+        foreach ($invoices as $invoice) {
+            $client = $invoice->getClient();
+            if ($client) {
+                $clients[(string) $client->getId()] = $client;
+            }
+        }
+        foreach ($receipts as $receipt) {
+            $client = $receipt->getInvoice()?->getClient();
+            if ($client) {
+                $clients[(string) $client->getId()] = $client;
+            }
+        }
+
+        return array_values($clients);
+    }
+
+    /**
+     * Distinct suppliers referenced by the in-range outgoing payments.
+     *
+     * @param \App\Entity\Payment[] $payments
+     * @return \App\Entity\Supplier[]
+     */
+    private function collectSuppliers(array $payments): array
+    {
+        $suppliers = [];
+        foreach ($payments as $payment) {
+            $supplier = $payment->getInvoice()?->getSupplier();
+            if ($supplier) {
+                $suppliers[(string) $supplier->getId()] = $supplier;
+            }
+        }
+
+        return array_values($suppliers);
     }
 
     /**
