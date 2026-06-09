@@ -37,6 +37,16 @@ export function usePeriodSelector(defaultPreset: PresetKey = 'currentMonth') {
     { label: t('period.custom'), value: 'custom' as PresetKey },
   ])
 
+  // Format a Date using its local calendar components. Using toISOString() here
+  // would shift the day in positive-UTC offsets (e.g. RO local midnight is the
+  // previous day in UTC), pushing every preset boundary back by one day.
+  function fmt(date: Date): string {
+    const yy = date.getFullYear()
+    const mo = String(date.getMonth() + 1).padStart(2, '0')
+    const da = String(date.getDate()).padStart(2, '0')
+    return `${yy}-${mo}-${da}`
+  }
+
   function resolveRange(): DateRange {
     const now = new Date()
     const y = now.getFullYear()
@@ -45,13 +55,13 @@ export function usePeriodSelector(defaultPreset: PresetKey = 'currentMonth') {
 
     switch (selectedPreset.value) {
       case 'today': {
-        const iso = now.toISOString().slice(0, 10)
+        const iso = fmt(now)
         return { dateFrom: iso, dateTo: iso }
       }
       case 'yesterday': {
         const yd = new Date(now)
         yd.setDate(yd.getDate() - 1)
-        const iso = yd.toISOString().slice(0, 10)
+        const iso = fmt(yd)
         return { dateFrom: iso, dateTo: iso }
       }
       case 'currentWeek': {
@@ -60,24 +70,24 @@ export function usePeriodSelector(defaultPreset: PresetKey = 'currentMonth') {
         monday.setDate(monday.getDate() - ((d + 6) % 7))
         const sunday = new Date(monday)
         sunday.setDate(sunday.getDate() + 6)
-        return { dateFrom: monday.toISOString().slice(0, 10), dateTo: sunday.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(monday), dateTo: fmt(sunday) }
       }
       case 'lastWeek': {
         const monday = new Date(now)
         monday.setDate(monday.getDate() - ((d + 6) % 7) - 7)
         const sunday = new Date(monday)
         sunday.setDate(sunday.getDate() + 6)
-        return { dateFrom: monday.toISOString().slice(0, 10), dateTo: sunday.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(monday), dateTo: fmt(sunday) }
       }
       case 'currentMonth': {
         const from = new Date(y, m, 1)
         const to = new Date(y, m + 1, 0)
-        return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(from), dateTo: fmt(to) }
       }
       case 'lastMonth': {
         const from = new Date(y, m - 1, 1)
         const to = new Date(y, m, 0)
-        return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(from), dateTo: fmt(to) }
       }
       case 'currentYear':
         return { dateFrom: `${y}-01-01`, dateTo: `${y}-12-31` }
@@ -86,12 +96,12 @@ export function usePeriodSelector(defaultPreset: PresetKey = 'currentMonth') {
       case 'last7Days': {
         const from = new Date(now)
         from.setDate(from.getDate() - 6)
-        return { dateFrom: from.toISOString().slice(0, 10), dateTo: now.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(from), dateTo: fmt(now) }
       }
       case 'last30Days': {
         const from = new Date(now)
         from.setDate(from.getDate() - 29)
-        return { dateFrom: from.toISOString().slice(0, 10), dateTo: now.toISOString().slice(0, 10) }
+        return { dateFrom: fmt(from), dateTo: fmt(now) }
       }
       case 'custom':
         return { dateFrom: customDateFrom.value, dateTo: customDateTo.value }

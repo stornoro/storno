@@ -189,10 +189,12 @@ const intlLocale = useIntlLocale()
 const ledger = ref<CashRegisterLedger | null>(null)
 const loading = ref(false)
 
-// Default range: this month so far
+// Default range: this month so far. Format from local components — toISOString()
+// would shift the boundary back a day in positive-UTC offsets.
 const now = new Date()
-const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-const today = now.toISOString().slice(0, 10)
+const fmtLocal = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const startOfMonth = fmtLocal(new Date(now.getFullYear(), now.getMonth(), 1))
+const today = fmtLocal(now)
 const from = ref(startOfMonth)
 const to = ref(today)
 

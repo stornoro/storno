@@ -141,12 +141,14 @@ async function runEfacturaExport(direction: 'outgoing' | 'incoming') {
   const { apiFetch } = useApi()
   efacturaExportingKey.value = direction
   try {
-    // Default to current month
+    // Default to current month. Format from local components — toISOString()
+    // would shift the boundary back a day in positive-UTC offsets.
     const now = new Date()
     const y = now.getFullYear()
     const m = now.getMonth()
-    const dateFrom = new Date(y, m, 1).toISOString().slice(0, 10)
-    const dateTo = new Date(y, m + 1, 0).toISOString().slice(0, 10)
+    const fmt = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const dateFrom = fmt(new Date(y, m, 1))
+    const dateTo = fmt(new Date(y, m + 1, 0))
 
     const blob = await apiFetch<Blob>('/v1/invoices/export/efactura-zip', {
       method: 'POST',

@@ -248,15 +248,18 @@ class InvoiceRepository extends ServiceEntityRepository
         }
     }
 
-    public function findByCompanyFiltered(Company $company, array $filters = [], int $limit = 500): array
+    public function findByCompanyFiltered(Company $company, array $filters = [], ?int $limit = 500): array
     {
         $qb = $this->createQueryBuilder('i')
             ->leftJoin('i.lines', 'il')->addSelect('il')
             ->leftJoin('i.client', 'c')->addSelect('c')
             ->where('i.company = :company')
             ->setParameter('company', $company)
-            ->orderBy('i.issueDate', 'DESC')
-            ->setMaxResults($limit);
+            ->orderBy('i.issueDate', 'DESC');
+
+        if ($limit !== null) {
+            $qb->setMaxResults($limit);
+        }
 
         if (isset($filters['type'])) {
             $qb->andWhere('i.documentType = :type')

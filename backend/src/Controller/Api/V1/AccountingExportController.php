@@ -137,7 +137,8 @@ class AccountingExportController extends AbstractController
         if ($dateTo) {
             $invoiceFilters['dateTo'] = $dateTo;
         }
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $invoiceFilters);
+        // No limit: an accounting export must contain every invoice in range.
+        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $invoiceFilters, null);
 
         $receipts = $this->paymentRepository->findByCompanyAndDirectionFiltered(
             $company,
