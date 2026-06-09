@@ -1290,7 +1290,8 @@ class InvoiceController extends AbstractController
         $filters = $request->query->all();
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
+        // No limit: exports must contain every invoice in range, not a page.
+        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
 
         $csv = $this->csvExportService->generate($invoices);
 
@@ -1315,7 +1316,8 @@ class InvoiceController extends AbstractController
         $filters = $request->query->all();
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
+        // No limit: exports must contain every invoice in range, not a page.
+        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
 
         $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
 
@@ -1443,7 +1445,8 @@ class InvoiceController extends AbstractController
             $filters['dateTo'] = $dateTo;
         }
 
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters);
+        // No limit: exports must contain every invoice in range, not a page.
+        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
 
         if (empty($invoices)) {
             return $this->json(['error' => 'No invoices found for the selected period.', 'messageKey' => MessageKey::ERR_NO_INVOICES_FOR_PERIOD], Response::HTTP_NOT_FOUND);
