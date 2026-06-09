@@ -13,10 +13,13 @@ use App\Security\Permission;
 use App\Service\Export\SagaXmlExportService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use ZipStream\ZipStream;
 
 #[Route('/api/v1/accounting-export')]
 class AccountingExportController extends AbstractController
@@ -199,25 +202,29 @@ class AccountingExportController extends AbstractController
             $files["curs_bnr_{$dateSuffix}.xml"] = $this->sagaXmlExportService->generateBnrRatesXml();
         }
 
-        // Bundle into ZIP
-        $tmpFile = tempnam(sys_get_temp_dir(), 'saga_export_');
-        $zip = new \ZipArchive();
-        $zip->open($tmpFile, \ZipArchive::OVERWRITE);
+        // Stream the ZIP straight to the client (ZipStream → php://output):
+        // no temp file and no full-archive copy held in memory.
+        $downloadName = sprintf('saga-export_%s_%s.zip', $cif, $dateSuffix);
 
-        foreach ($files as $filename => $content) {
-            $zip->addFromString($filename, $content);
-        }
+        $response = new StreamedResponse(function () use ($files): void {
+            $zip = new ZipStream(
+                sendHttpHeaders: false,
+                defaultEnableZeroHeader: true,
+                flushOutput: true,
+            );
+            foreach ($files as $filename => $content) {
+                $zip->addFile(fileName: $filename, data: $content);
+            }
+            $zip->finish();
+        });
 
-        $zip->close();
-
-        $zipContent = file_get_contents($tmpFile);
-        @unlink($tmpFile);
-
-        $response = new Response($zipContent, 200, [
-            'Content-Type' => 'application/zip',
-            'Content-Disposition' => sprintf('attachment; filename="saga-export_%s_%s.zip"', $cif, $dateSuffix),
-            'Content-Length' => strlen($zipContent),
-        ]);
+        $response->headers->set('Content-Type', 'application/zip');
+        $response->headers->set('Content-Disposition', $response->headers->makeDisposition(
+            HeaderUtils::DISPOSITION_ATTACHMENT,
+            $downloadName,
+        ));
+        // Disable proxy/FastCGI buffering so bytes reach the client as written.
+        $response->headers->set('X-Accel-Buffering', 'no');
 
         return $response;
     }
