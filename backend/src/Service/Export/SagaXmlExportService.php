@@ -28,10 +28,10 @@ class SagaXmlExportService
         $root = $dom->createElement('Clienti');
         $dom->appendChild($root);
 
-        foreach ($clients as $index => $client) {
+        foreach ($clients as $client) {
             $node = $dom->createElement('Linie');
 
-            $this->addElement($dom, $node, 'Cod', $client->getClientCode() ?: (string) ($index + 1));
+            $this->addElement($dom, $node, 'Cod', $this->resolveClientCode($client));
             $this->addElement($dom, $node, 'Denumire', $client->getName() ?? '');
             $this->addElement($dom, $node, 'Cod_fiscal', $client->getVatCode() ?: ($client->getCui() ?? ''));
             $this->addElement($dom, $node, 'Reg_com', $client->getRegistrationNumber() ?? '');
@@ -406,6 +406,29 @@ class SagaXmlExportService
         $element = $dom->createElement($name);
         $element->appendChild($dom->createTextNode($value));
         $parent->appendChild($element);
+    }
+
+    /**
+     * Resolve the SAGA partner code for a client. Prefers the imported client
+     * code, then the fiscal code (VAT/CUI), then the client's stable UUID.
+     * Never falls back to the row index: that was unstable across exports and
+     * could collide with another client's real code (duplicate <Cod> merges
+     * partners on import). An empty string is treated as "no value" so a
+     * literal "0" code is still honoured.
+     */
+    private function resolveClientCode(Client $client): string
+    {
+        $code = $client->getClientCode();
+        if ($code !== null && $code !== '') {
+            return $code;
+        }
+
+        $cif = $client->getVatCode() ?: ($client->getCui() ?? '');
+        if ($cif !== '') {
+            return $cif;
+        }
+
+        return $client->getId()?->toRfc4122() ?? '';
     }
 
     /**
