@@ -1554,6 +1554,7 @@ export interface PdfTemplateConfig {
   fontFamily: string | null
   showLogo: boolean
   showBankInfo: boolean
+  showVatInRon: boolean
   bankDisplaySection: 'supplier' | 'payment' | 'both'
   bankDisplayMode: 'stacked' | 'inline'
   defaultNotes: string | null

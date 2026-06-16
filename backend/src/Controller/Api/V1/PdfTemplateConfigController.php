@@ -86,6 +86,10 @@ class PdfTemplateConfigController extends AbstractController
             $config->setShowBankInfo((bool) $data['showBankInfo']);
         }
 
+        if (isset($data['showVatInRon'])) {
+            $config->setShowVatInRon((bool) $data['showVatInRon']);
+        }
+
         if (isset($data['bankDisplaySection'])) {
             $validSections = ['supplier', 'payment', 'both'];
             if (in_array($data['bankDisplaySection'], $validSections, true)) {
@@ -128,7 +132,7 @@ class PdfTemplateConfigController extends AbstractController
             if ($raw !== null && is_array($raw)) {
                 $allowedKeys = [
                     'invoice_title', 'proforma_title', 'credit_note_title', 'delivery_note_title', 'receipt_title',
-                    'date_label', 'due_date', 'subtotal', 'vat_label', 'discount_label', 'total', 'exchange_rate',
+                    'date_label', 'due_date', 'subtotal', 'vat_label', 'discount_label', 'total', 'exchange_rate', 'vat_in_ron',
                     'payment_method', 'notes', 'payment_terms', 'bank_account', 'footer_text',
                     'supplier', 'supplier_cui', 'supplier_reg_number', 'supplier_address', 'supplier_county',
                     'supplier_country', 'supplier_phone', 'supplier_email', 'supplier_website',
@@ -201,6 +205,7 @@ class PdfTemplateConfigController extends AbstractController
             'fontFamily' => $config->getFontFamily(),
             'showLogo' => $config->isShowLogo(),
             'showBankInfo' => $config->isShowBankInfo(),
+            'showVatInRon' => $config->isShowVatInRon(),
             'bankDisplaySection' => $config->getBankDisplaySection(),
             'bankDisplayMode' => $config->getBankDisplayMode(),
             'defaultNotes' => $config->getDefaultNotes(),

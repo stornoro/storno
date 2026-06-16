@@ -244,6 +244,13 @@ class UblXmlGenerator
 
         // === Tax ===
 
+        // NOTE: cac:TaxExchangeRate is intentionally NOT emitted. CIUS-RO /
+        // EN16931 rule [UBL-CR-490] forbids it ("A UBL invoice should not
+        // include the TaxExchangeRate") — adding it makes ANAF reject the
+        // invoice. The document→RON rate stays implicit via the dual TaxTotal
+        // (TaxAmount in doc currency + TaxAmount in RON). Verified against the
+        // ROeFacturaValidator (DUKIntegrator) jar.
+
         // TaxTotal with VAT breakdown [BR-CO-18] [BR-S-01]
         $this->addTaxTotal($dom, $root, $invoice, $extensions);
 

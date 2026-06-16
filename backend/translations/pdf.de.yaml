@@ -26,6 +26,7 @@ vat_label: 'MwSt.'
 discount_label: 'Rabatt'
 total: 'GESAMT'
 exchange_rate: 'Wechselkurs'
+vat_in_ron: 'MwSt. in RON'
 
 # Bank
 bank_account: 'Bankkonto'

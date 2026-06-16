@@ -26,6 +26,7 @@ vat_label: 'TVA'
 discount_label: 'Discount'
 total: 'TOTAL'
 exchange_rate: 'Curs valutar'
+vat_in_ron: 'TVA în RON'
 
 # Bank
 bank_account: 'Cont bancar'

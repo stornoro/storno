@@ -12,6 +12,7 @@ use App\Enum\InvoiceDirection;
 use App\Repository\BankAccountRepository;
 use App\Repository\PdfTemplateConfigRepository;
 use App\Service\EuVatRateService;
+use App\Service\ExchangeRateService;
 use App\Service\Storage\OrganizationStorageResolver;
 use Knp\Snappy\Pdf;
 use League\Flysystem\FilesystemOperator;
@@ -61,6 +62,7 @@ class DocumentPdfService
         private readonly PdfTemplateConfigRepository $configRepository,
         private readonly BankAccountRepository $bankAccountRepository,
         private readonly EuVatRateService $euVatRateService,
+        private readonly ExchangeRateService $exchangeRateService,
         private readonly FilesystemOperator $defaultStorage,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly WhiteLabelResolver $whiteLabelResolver,
@@ -84,7 +86,7 @@ class DocumentPdfService
             'config' => $config,
             'logoDataUri' => $this->resolveLogoDataUri($invoice->getCompany(), $config),
             'locale' => $invoice->getLanguage(),
-        ]));
+        ], $this->computeVatInRon($invoice->getCurrency(), $invoice->getVatTotal(), $invoice->getExchangeRate())));
 
         return $this->convertToPdf($html);
     }
@@ -102,7 +104,7 @@ class DocumentPdfService
             'config' => $config,
             'logoDataUri' => $this->resolveLogoDataUri($proforma->getCompany(), $config),
             'locale' => $proforma->getLanguage(),
-        ]));
+        ], $this->computeVatInRon($proforma->getCurrency(), $proforma->getVatTotal(), $proforma->getExchangeRate())));
 
         return $this->convertToPdf($html);
     }
@@ -224,6 +226,9 @@ class DocumentPdfService
         if (isset($overrides['showBankInfo'])) {
             $config->setShowBankInfo((bool) $overrides['showBankInfo']);
         }
+        if (isset($overrides['showVatInRon'])) {
+            $config->setShowVatInRon((bool) $overrides['showVatInRon']);
+        }
         if (isset($overrides['bankDisplaySection'])) {
             $config->setBankDisplaySection($overrides['bankDisplaySection']);
         }
@@ -258,6 +263,41 @@ class DocumentPdfService
     public function getAvailableTemplates(): array
     {
         return self::AVAILABLE_TEMPLATES;
+    }
+
+    /**
+     * Compute the RON-equivalent VAT for a foreign-currency document so the PDF
+     * can satisfy Cod Fiscal art. 319 alin. (20) lit. j (VAT amount must be
+     * shown in lei). Mirrors the rate resolution used by the ANAF UBL XML
+     * (UblXmlGenerator::addTaxTotalInRon): the rate stored on the document wins,
+     * otherwise the live/last-good BNR rate. Uses bcmul on the raw VAT total —
+     * the same value shown on the PDF in document currency — so the lei figure
+     * is internally consistent with the displayed EUR/USD VAT and matches the
+     * XML TaxAmount(RON) for the common (no document-level allowance) case.
+     *
+     * Returns an empty array (no line rendered) for RON documents or when no
+     * rate is available.
+     *
+     * @return array{vatInRon?: string, vatInRonRate?: string}
+     */
+    private function computeVatInRon(string $currency, string $vatTotal, ?string $exchangeRate): array
+    {
+        if (strtoupper($currency) === 'RON') {
+            return [];
+        }
+
+        $rate = $exchangeRate !== null && $exchangeRate !== ''
+            ? (float) $exchangeRate
+            : $this->exchangeRateService->getRate($currency);
+
+        if ($rate === null || $rate <= 0) {
+            return [];
+        }
+
+        return [
+            'vatInRon' => bcmul($vatTotal, (string) $rate, 2),
+            'vatInRonRate' => rtrim(rtrim(number_format($rate, 4, '.', ''), '0'), '.'),
+        ];
     }
 
     public function isOutgoingInvoice(Invoice $invoice): bool
@@ -296,6 +336,7 @@ class DocumentPdfService
         $context['fontsDir'] = $this->projectDir . '/assets/fonts';
         $context['showLogo'] = $config->isShowLogo();
         $context['showBankInfo'] = $config->isShowBankInfo();
+        $context['showVatInRon'] = $config->isShowVatInRon();
         $context['customCss'] = $config->getCustomCss();
         $context['bankDisplaySection'] = $config->getBankDisplaySection();
         $context['bankDisplayMode'] = $config->getBankDisplayMode();

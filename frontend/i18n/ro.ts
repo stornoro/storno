@@ -3941,6 +3941,8 @@ export default defineI18nLocale(async () => {
       options: 'Optiuni',
       showLogo: 'Afiseaza logo-ul companiei',
       showBankInfo: 'Afiseaza informatii bancare',
+      showVatInRon: 'Afiseaza TVA in RON la facturile in valuta',
+      showVatInRonHint: 'Obligatoriu legal (Cod Fiscal art. 319 alin. 20 lit. j) pentru facturile in valuta emise de platitori de TVA din Romania.',
       bankDisplaySection: 'Sectiunea de afisare',
       bankDisplaySectionSupplier: 'Doar in detaliile furnizorului',
       bankDisplaySectionPayment: 'Doar in sectiunea de plata',
