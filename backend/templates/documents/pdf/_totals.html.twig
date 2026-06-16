@@ -11,7 +11,7 @@
     {% if showVatInRon|default(false) and vatInRon is defined and vatInRon and invoice.currency is defined and invoice.currency != 'RON' %}
     <div class="totals-row" style="font-size: 9px; color: #888;">
         <span>{{ pdf_label('vat_in_ron', labelOverrides|default(null), locale|default('ro')) }}:</span>
-        <span>{{ vatInRon|number_format(2, ',', '.') }} RON{% if vatInRonRate is defined and vatInRonRate %} ({{ pdf_label('exchange_rate', labelOverrides|default(null), locale|default('ro')) }} {{ vatInRonRate }} RON/{{ invoice.currency }}){% endif %}</span>
+        <span>{{ vatInRon|number_format(2, ',', '.') }} RON{% if vatInRonRate is defined and vatInRonRate %} ({{ pdf_label('exchange_rate', labelOverrides|default(null), locale|default('ro')) }} {{ vatInRonRate|number_format(4, ',', '.') }} RON/{{ invoice.currency }}){% endif %}</span>
     </div>
     {% endif %}
     {% endif %}

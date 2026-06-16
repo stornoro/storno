@@ -252,12 +252,18 @@ class DocumentPdfService
         }
 
         $sampleData = $this->buildSampleInvoiceData($company, $config);
+        $sampleInvoice = $sampleData['invoice'];
+        $vatInRonContext = $this->computeVatInRon(
+            $sampleInvoice->currency,
+            $sampleInvoice->vatTotal,
+            $sampleInvoice->exchangeRate,
+        );
 
         return $this->renderTemplate($config, 'invoice', array_merge($sampleData, [
             'config' => $config,
             'logoDataUri' => $this->resolveLogoDataUri($company, $config),
             'locale' => 'ro',
-        ]));
+        ], $vatInRonContext));
     }
 
     public function getAvailableTemplates(): array
@@ -296,7 +302,9 @@ class DocumentPdfService
 
         return [
             'vatInRon' => bcmul($vatTotal, (string) $rate, 2),
-            'vatInRonRate' => rtrim(rtrim(number_format($rate, 4, '.', ''), '0'), '.'),
+            // Machine-decimal string (dot, 4 places per BNR convention); the
+            // Twig template formats the separator for the document locale.
+            'vatInRonRate' => number_format($rate, 4, '.', ''),
         ];
     }
 
@@ -457,12 +465,16 @@ class DocumentPdfService
                 'number' => 'DEMO-0001',
                 'issueDate' => new \DateTimeImmutable(),
                 'dueDate' => new \DateTimeImmutable('+30 days'),
-                'currency' => $company->getDefaultCurrency(),
+                // Sample is rendered in EUR (with a representative BNR rate) so
+                // the preview demonstrates foreign-currency features — the VAT
+                // in RON line and the exchange-rate line — which are invisible
+                // on a RON document.
+                'currency' => 'EUR',
                 'subtotal' => '1500.00',
                 'vatTotal' => '285.00',
                 'discount' => '0.00',
                 'total' => '1785.00',
-                'exchangeRate' => null,
+                'exchangeRate' => '5.2353',
                 'notes' => null,
                 'paymentTerms' => null,
                 'paymentMethod' => null,
