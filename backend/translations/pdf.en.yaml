@@ -26,6 +26,7 @@ vat_label: 'VAT'
 discount_label: 'Discount'
 total: 'TOTAL'
 exchange_rate: 'Exchange rate'
+vat_in_ron: 'VAT in RON'
 
 # Bank
 bank_account: 'Bank account'

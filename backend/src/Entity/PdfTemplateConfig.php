@@ -43,6 +43,15 @@ class PdfTemplateConfig
     #[Groups(['pdf_config'])]
     private bool $showBankInfo = true;
 
+    /**
+     * Show the VAT amount converted to RON on foreign-currency invoices.
+     * Default ON — mandatory under Cod Fiscal art. 319 alin. (20) lit. j for
+     * RON-registered issuers; harmless (and hidden) for RON-only invoices.
+     */
+    #[ORM\Column(options: ['default' => true])]
+    #[Groups(['pdf_config'])]
+    private bool $showVatInRon = true;
+
     #[ORM\Column(length: 20)]
     #[Groups(['pdf_config'])]
     private string $bankDisplaySection = 'both';
@@ -153,6 +162,18 @@ class PdfTemplateConfig
     public function setShowBankInfo(bool $showBankInfo): static
     {
         $this->showBankInfo = $showBankInfo;
+
+        return $this;
+    }
+
+    public function isShowVatInRon(): bool
+    {
+        return $this->showVatInRon;
+    }
+
+    public function setShowVatInRon(bool $showVatInRon): static
+    {
+        $this->showVatInRon = $showVatInRon;
 
         return $this;
     }

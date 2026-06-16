@@ -3940,6 +3940,8 @@ export default defineI18nLocale(async () => {
     options: 'Options',
     showLogo: 'Show company logo',
     showBankInfo: 'Show bank information',
+    showVatInRon: 'Show VAT in RON on foreign-currency invoices',
+    showVatInRonHint: 'Legally required (Fiscal Code art. 319 (20) j) for foreign-currency invoices issued by Romanian VAT payers.',
     bankDisplaySection: 'Display section',
     bankDisplaySectionSupplier: 'Only in supplier details',
     bankDisplaySectionPayment: 'Only in payment section',

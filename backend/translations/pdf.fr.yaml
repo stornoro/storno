@@ -26,6 +26,7 @@ vat_label: 'TVA'
 discount_label: 'Remise'
 total: 'TOTAL'
 exchange_rate: 'Taux de change'
+vat_in_ron: 'TVA en RON'
 
 # Bank
 bank_account: 'Compte bancaire'

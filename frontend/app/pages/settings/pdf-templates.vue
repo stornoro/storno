@@ -21,6 +21,7 @@ const localColor = ref<string | null>(null)
 const localFont = ref<string | null>(null)
 const localShowLogo = ref(true)
 const localShowBankInfo = ref(true)
+const localShowVatInRon = ref(true)
 const localBankDisplaySection = ref<'supplier' | 'payment' | 'both'>('both')
 const localBankDisplayMode = ref<'stacked' | 'inline'>('stacked')
 const localDefaultNotes = ref<string | null>(null)
@@ -158,6 +159,7 @@ watch(config, (cfg) => {
     localFont.value = cfg.fontFamily
     localShowLogo.value = cfg.showLogo
     localShowBankInfo.value = cfg.showBankInfo
+    localShowVatInRon.value = cfg.showVatInRon ?? true
     localBankDisplaySection.value = cfg.bankDisplaySection ?? 'both'
     localBankDisplayMode.value = cfg.bankDisplayMode ?? 'stacked'
     localDefaultNotes.value = cfg.defaultNotes
@@ -175,6 +177,7 @@ function previewOverrides(): Partial<PdfTemplateConfig> {
     fontFamily: localFont.value,
     showLogo: localShowLogo.value,
     showBankInfo: localShowBankInfo.value,
+    showVatInRon: localShowVatInRon.value,
     bankDisplaySection: localBankDisplaySection.value,
     bankDisplayMode: localBankDisplayMode.value,
     defaultNotes: localDefaultNotes.value,
@@ -195,7 +198,7 @@ function requestPreview() {
 }
 
 watch(
-  [localSlug, localColor, localFont, localShowLogo, localShowBankInfo, localBankDisplaySection, localBankDisplayMode, localDefaultNotes, localDefaultPaymentTerms, localDefaultPaymentMethod, localLabelOverrides],
+  [localSlug, localColor, localFont, localShowLogo, localShowBankInfo, localShowVatInRon, localBankDisplaySection, localBankDisplayMode, localDefaultNotes, localDefaultPaymentTerms, localDefaultPaymentMethod, localLabelOverrides],
   () => requestPreview(),
   { deep: true },
 )
@@ -207,6 +210,7 @@ async function saveConfig() {
     fontFamily: localFont.value,
     showLogo: localShowLogo.value,
     showBankInfo: localShowBankInfo.value,
+    showVatInRon: localShowVatInRon.value,
     bankDisplaySection: localBankDisplaySection.value,
     bankDisplayMode: localBankDisplayMode.value,
     defaultNotes: localDefaultNotes.value,
@@ -417,6 +421,16 @@ onMounted(async () => {
               <div class="flex items-center justify-between">
                 <span class="text-sm">{{ $t('pdfTemplates.showBankInfo') }}</span>
                 <USwitch v-model="localShowBankInfo" />
+              </div>
+
+              <USeparator />
+
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex flex-col">
+                  <span class="text-sm">{{ $t('pdfTemplates.showVatInRon') }}</span>
+                  <span class="text-xs text-[var(--ui-text-muted)]">{{ $t('pdfTemplates.showVatInRonHint') }}</span>
+                </div>
+                <USwitch v-model="localShowVatInRon" />
               </div>
 
               <template v-if="localShowBankInfo">
