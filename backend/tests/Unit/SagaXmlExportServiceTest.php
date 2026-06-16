@@ -2,6 +2,7 @@
 
 namespace App\Tests\Unit;
 
+use App\Entity\Client;
 use App\Entity\Company;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
@@ -122,5 +123,59 @@ class SagaXmlExportServiceTest extends TestCase
 
         $xmlZero = $this->service->generateInvoicesXml([$this->makeInvoice('UEP2026000001', '380', '0')], $this->makeCompany(), true);
         $this->assertStringNotContainsString('<FacturaDiscount>', $xmlZero);
+    }
+
+    private function makeClient(?string $code, ?string $vat, ?string $cui): Client
+    {
+        $c = new Client();
+        $c->setName('Test Client');
+        $c->setCountry('RO');
+        $c->setClientCode($code);
+        $c->setVatCode($vat);
+        $c->setCui($cui);
+
+        return $c;
+    }
+
+    public function testClientCodPrefersImportedClientCode(): void
+    {
+        $xml = $this->service->generateClientsXml([$this->makeClient('12445', 'RO67469', '67469')]);
+        $this->assertStringContainsString('<Cod>12445</Cod>', $xml);
+    }
+
+    public function testClientCodFallsBackToFiscalCode(): void
+    {
+        $xml = $this->service->generateClientsXml([$this->makeClient(null, 'RO67469', '67469')]);
+        $this->assertStringContainsString('<Cod>RO67469</Cod>', $xml);
+    }
+
+    public function testClientCodFallsBackToUuidNotRowIndex(): void
+    {
+        $client = $this->makeClient(null, null, null);
+        $xml = $this->service->generateClientsXml([$client]);
+
+        // No imported code and no fiscal code → stable UUID, never the row index "1".
+        $this->assertStringContainsString('<Cod>' . $client->getId()->toRfc4122() . '</Cod>', $xml);
+        $this->assertStringNotContainsString('<Cod>1</Cod>', $xml);
+    }
+
+    public function testCodlessClientsGetDistinctCodes(): void
+    {
+        // Two clients with no code/CIF must not collide on Cod (the old row-index
+        // fallback produced 1, 2, ... which clashed with real imported codes).
+        $xml = $this->service->generateClientsXml([
+            $this->makeClient(null, null, null),
+            $this->makeClient(null, null, null),
+        ]);
+
+        preg_match_all('/<Cod>([^<]*)<\/Cod>/', $xml, $m);
+        $this->assertCount(2, $m[1]);
+        $this->assertNotSame($m[1][0], $m[1][1], 'Code-less clients must get distinct Cod values');
+    }
+
+    public function testLiteralZeroClientCodeHonoured(): void
+    {
+        $xml = $this->service->generateClientsXml([$this->makeClient('0', null, null)]);
+        $this->assertStringContainsString('<Cod>0</Cod>', $xml);
     }
 }
