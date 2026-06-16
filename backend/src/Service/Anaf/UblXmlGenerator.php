@@ -310,12 +310,12 @@ class UblXmlGenerator
 
         // Party name (BT-28) [BR-RO-L202 max 200 chars]
         $partyName = $dom->createElement('cac:PartyName');
-        $this->addElement($dom, $partyName, 'cbc:Name', $company->getName() ?? '');
+        $this->addElement($dom, $partyName, 'cbc:Name', $this->truncate($company->getName() ?? '', 200));
         $party->appendChild($partyName);
 
         // [BR-RO-081] Postal address — StreetName required [BR-RO-L151 max 150 chars]
         $postalAddress = $dom->createElement('cac:PostalAddress');
-        $this->addElement($dom, $postalAddress, 'cbc:StreetName', $company->getAddress() ?? '');
+        $this->addElement($dom, $postalAddress, 'cbc:StreetName', $this->truncate($company->getAddress() ?? '', 150));
 
         // [BR-RO-110] CountrySubentity must be ISO 3166-2:RO when country is RO
         $state = $company->getState() ?? '';
@@ -332,7 +332,7 @@ class UblXmlGenerator
         if ($state === 'RO-B') {
             $city = AddressNormalizer::normalizeBucharestSector($city);
         }
-        $this->addElement($dom, $postalAddress, 'cbc:CityName', $city);
+        $this->addElement($dom, $postalAddress, 'cbc:CityName', $this->truncate($city, 50));
         $this->addElement($dom, $postalAddress, 'cbc:CountrySubentity', $state);
 
         $country = $dom->createElement('cac:Country');
@@ -436,12 +436,12 @@ class UblXmlGenerator
 
         // Party name (BT-45) [BR-RO-L204 max 200 chars]
         $clientPartyName = $dom->createElement('cac:PartyName');
-        $this->addElement($dom, $clientPartyName, 'cbc:Name', $bName);
+        $this->addElement($dom, $clientPartyName, 'cbc:Name', $this->truncate($bName, 200));
         $clientPartyEl->appendChild($clientPartyName);
 
         // [BR-RO-082] Postal address — StreetName required [BR-RO-L152 max 150 chars]
         $clientAddress = $dom->createElement('cac:PostalAddress');
-        $this->addElement($dom, $clientAddress, 'cbc:StreetName', $bAddress);
+        $this->addElement($dom, $clientAddress, 'cbc:StreetName', $this->truncate($bAddress, 150));
 
         $clientCountryCode = $bCountry;
         $clientCounty = $bCounty;
@@ -462,7 +462,7 @@ class UblXmlGenerator
         if ($clientCounty === 'RO-B') {
             $clientCity = AddressNormalizer::normalizeBucharestSector($clientCity);
         }
-        $this->addElement($dom, $clientAddress, 'cbc:CityName', $clientCity);
+        $this->addElement($dom, $clientAddress, 'cbc:CityName', $this->truncate($clientCity, 50));
 
         // PostalZone must come before CountrySubentity per UBL 2.1 schema
         if ($bPostalCode) {
@@ -1084,6 +1084,18 @@ class UblXmlGenerator
     {
         $element = $dom->createElement($name, htmlspecialchars($value, ENT_XML1, 'UTF-8'));
         $parent->appendChild($element);
+    }
+
+    /**
+     * Truncate a value to the maximum length allowed by the CIUS-RO schematron
+     * length rules (e.g. [BR-RO-L050] buyer city BT-52 max 50, street max 150,
+     * party name max 200). Multibyte-safe; trims surrounding whitespace so a
+     * truncation never leaves a dangling partial space.
+     */
+    private function truncate(string $value, int $max): string
+    {
+        $value = trim($value);
+        return mb_strlen($value) > $max ? rtrim(mb_substr($value, 0, $max)) : $value;
     }
 
     /**
