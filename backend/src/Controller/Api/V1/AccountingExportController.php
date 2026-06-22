@@ -175,14 +175,16 @@ class AccountingExportController extends AbstractController
             "cli_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateClientsXml($clients),
             "frn_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateSuppliersXml($suppliers),
             "art_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateProductsXml($products),
-            "F_{$cif}_multiple_{$dateSuffix}.xml" => $this->sagaXmlExportService->generateInvoicesXml($invoices, $company, $includeDiscount),
+            'f_' . $this->sagaDateRange($invoices, fn (\App\Entity\Invoice $i) => $i->getIssueDate()) . '.xml' => $this->sagaXmlExportService->generateInvoicesXml($invoices, $company, $includeDiscount),
         ];
 
         foreach ($this->splitByCurrency($receipts, $ronAccountMap, $currencyAccounts) as $suffix => [$group, $map]) {
-            $files["inc_{$dateSuffix}{$suffix}.xml"] = $this->sagaXmlExportService->generateReceiptsXml($group, $map);
+            $range = $this->sagaDateRange($group, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
+            $files["i_{$range}{$suffix}.xml"] = $this->sagaXmlExportService->generateReceiptsXml($group, $map);
         }
         foreach ($this->splitByCurrency($payments, $ronAccountMap, $currencyAccounts) as $suffix => [$group, $map]) {
-            $files["plt_{$dateSuffix}{$suffix}.xml"] = $this->sagaXmlExportService->generatePaymentsXml($group, $map);
+            $range = $this->sagaDateRange($group, fn (\App\Entity\Payment $p) => $p->getPaymentDate());
+            $files["p_{$range}{$suffix}.xml"] = $this->sagaXmlExportService->generatePaymentsXml($group, $map);
         }
 
         // Conditionally include account assignment files
@@ -278,6 +280,38 @@ class AccountingExportController extends AbstractController
      * @param \App\Entity\Payment[] $payments
      * @return array<string, array{0: \App\Entity\Payment[], 1: array<string,string>}>
      */
+    /**
+     * Build the {start}_{end} date span (dd-mm-yyyy, dash-separated) used in
+     * SAGA import filenames, e.g. "01-01-2026_31-01-2026". Start/end are the
+     * min/max of the extracted date across the docs; an empty set falls back
+     * to today for both.
+     *
+     * @param object[] $docs
+     */
+    private function sagaDateRange(array $docs, callable $dateExtractor): string
+    {
+        $start = null;
+        $end = null;
+        foreach ($docs as $doc) {
+            $d = $dateExtractor($doc);
+            if (!$d instanceof \DateTimeInterface) {
+                continue;
+            }
+            if ($start === null || $d < $start) {
+                $start = $d;
+            }
+            if ($end === null || $d > $end) {
+                $end = $d;
+            }
+        }
+
+        $fallback = new \DateTimeImmutable('today');
+        $start ??= $fallback;
+        $end ??= $fallback;
+
+        return $start->format('d-m-Y') . '_' . $end->format('d-m-Y');
+    }
+
     private function splitByCurrency(array $payments, array $ronAccountMap, array $currencyAccounts): array
     {
         $byCurrency = [];
