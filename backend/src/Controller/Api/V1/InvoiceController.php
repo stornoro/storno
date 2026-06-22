@@ -1321,7 +1321,7 @@ class InvoiceController extends AbstractController
 
         $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
 
-        $filename = $this->buildSagaFilename('F', $company, $invoices, fn (Invoice $i) => $i->getIssueDate());
+        $filename = $this->buildSagaFilename('F', $invoices, fn (Invoice $i) => $i->getIssueDate());
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1345,7 +1345,7 @@ class InvoiceController extends AbstractController
         [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
         $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $accountMap);
 
-        $filename = $this->buildSagaFilename('I', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
+        $filename = $this->buildSagaFilename('I', $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1369,7 +1369,7 @@ class InvoiceController extends AbstractController
         [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
         $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $accountMap);
 
-        $filename = $this->buildSagaFilename('P', $company, $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
+        $filename = $this->buildSagaFilename('P', $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
 
         return new Response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
@@ -1755,9 +1755,10 @@ class InvoiceController extends AbstractController
     }
 
     /**
-     * Build a SAGA-C-compliant XML filename: {prefix}_{country}{cif}_{single|multiple}_{start}_{end}.xml.
-     * Start/end are the min/max of the given date on the exported set; if the set is empty,
-     * both fall back to today.
+     * Build the SAGA import XML filename: {prefix}_{start}_{end}[_{currency}].xml
+     * (e.g. i_01-01-2026_31-01-2026_RON.xml). The prefix is lowercased and dates
+     * are dd-mm-yyyy. Start/end are the min/max of the given date on the exported
+     * set; if the set is empty, both fall back to today.
      */
     /**
      * Build the SAGA cash/bank/card account map: company stored settings,
@@ -1812,11 +1813,8 @@ class InvoiceController extends AbstractController
         return [$payments, $this->resolveSagaAccountMap($request, $company), null];
     }
 
-    private function buildSagaFilename(string $prefix, \App\Entity\Company $company, array $docs, callable $dateExtractor, ?string $currencyTag = null): string
+    private function buildSagaFilename(string $prefix, array $docs, callable $dateExtractor, ?string $currencyTag = null): string
     {
-        $countryPrefix = $company->getCountry() ?: 'RO';
-        $countMode = count($docs) === 1 ? 'single' : 'multiple';
-
         $start = null;
         $end = null;
         foreach ($docs as $doc) {
@@ -1839,13 +1837,10 @@ class InvoiceController extends AbstractController
         $suffix = $currencyTag !== null && $currencyTag !== '' ? '_' . $currencyTag : '';
 
         return sprintf(
-            '%s_%s%d_%s_%s_%s%s.xml',
-            $prefix,
-            $countryPrefix,
-            $company->getCif(),
-            $countMode,
-            $start->format('d_m_Y'),
-            $end->format('d_m_Y'),
+            '%s_%s_%s%s.xml',
+            strtolower($prefix),
+            $start->format('d-m-Y'),
+            $end->format('d-m-Y'),
             $suffix,
         );
     }
