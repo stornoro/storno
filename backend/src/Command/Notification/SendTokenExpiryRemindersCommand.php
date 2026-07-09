@@ -16,7 +16,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsCommand(
     name: 'app:notifications:token-expiry',
-    description: 'Send reminders for ANAF tokens expiring within 7 days',
+    description: 'Send reminders for ANAF tokens that need manual re-authorization (no refresh token: 7 days; auto-refresh not succeeding: 2 days)',
 )]
 class SendTokenExpiryRemindersCommand extends Command
 {
@@ -40,11 +40,16 @@ class SendTokenExpiryRemindersCommand extends Command
         $dryRun = $input->getOption('dry-run');
 
         $threshold = new \DateTimeImmutable('+7 days');
+        // Tokens with a refresh token are renewed automatically once they are
+        // less than 5 days from expiry (app:anaf:refresh-tokens, every 12h).
+        // Only alert on those if they are still unrefreshed at 2 days — i.e.
+        // auto-refresh has been failing and manual re-authorization is needed.
+        $refreshableThreshold = new \DateTimeImmutable('+2 days');
         $now = new \DateTimeImmutable();
         $today = new \DateTimeImmutable('today');
         $sent = 0;
 
-        $refreshableTokens = $this->tokenRepository->findExpiringWithin($threshold);
+        $refreshableTokens = $this->tokenRepository->findExpiringWithin($refreshableThreshold);
         $nonRefreshableTokens = $this->tokenRepository->findExpiringWithoutRefreshToken($threshold);
         $allTokens = array_merge($refreshableTokens, $nonRefreshableTokens);
 
