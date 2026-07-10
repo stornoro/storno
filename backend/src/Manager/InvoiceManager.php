@@ -628,7 +628,7 @@ class InvoiceManager
         });
 
         $isRefund = $invoice->getParentDocument() !== null;
-        $isNegativeTotal = bccomp($invoice->getTotal(), '0', 2) < 0;
+        $isNonPositiveTotal = bccomp($invoice->getTotal(), '0', 2) <= 0;
         $previousStatus = $invoice->getStatus();
         $newStatus = $isRefund ? DocumentStatus::REFUND : DocumentStatus::ISSUED;
         $invoice->setStatus($newStatus);
@@ -650,8 +650,8 @@ class InvoiceManager
             $parent->addEvent($parentEvent);
         }
 
-        // Auto-settle storno / credit notes / any negative-total invoice — no payment to collect
-        if ($isRefund || $isNegativeTotal) {
+        // Auto-settle storno / credit notes / any zero- or negative-total invoice — no payment to collect
+        if ($isRefund || $isNonPositiveTotal) {
             $invoice->setAmountPaid($invoice->getTotal());
             $invoice->setPaidAt(new \DateTimeImmutable());
 

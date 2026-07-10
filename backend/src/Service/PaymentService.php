@@ -28,9 +28,9 @@ class PaymentService
 
         $balance = $invoice->getBalance();
 
-        // Negative invoices (refunds) are auto-settled — no payments needed
-        if (bccomp($invoice->getTotal(), '0', 2) < 0) {
-            throw new \DomainException('Refund invoices are automatically settled and do not accept payments.');
+        // Zero- and negative-total invoices (refunds) are auto-settled — no payments needed
+        if (bccomp($invoice->getTotal(), '0', 2) <= 0) {
+            throw new \DomainException('Invoices with a zero or negative total are automatically settled and do not accept payments.');
         }
 
         if (bccomp($amount, $balance, 2) > 0) {
@@ -133,10 +133,10 @@ class PaymentService
     {
         $total = $invoice->getTotal();
 
-        // Negative-total invoices (refunds/credit notes) auto-settle at issuance
-        // and don't accept payment rows, so recalc must not consult sumByInvoice
-        // here — it would zero out amountPaid and leave paidAt null.
-        if (bccomp($total, '0', 2) < 0) {
+        // Zero- and negative-total invoices (refunds/credit notes) auto-settle at
+        // issuance and don't accept payment rows, so recalc must not consult
+        // sumByInvoice here — it would zero out amountPaid and leave paidAt null.
+        if (bccomp($total, '0', 2) <= 0) {
             $invoice->setAmountPaid($total);
             if ($invoice->getPaidAt() === null) {
                 $invoice->setPaidAt(new \DateTimeImmutable());
