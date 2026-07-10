@@ -81,6 +81,16 @@ class EFacturaSyncService
     public function syncCompany(Company $company, ?int $daysOverride = null): SyncResult
     {
         $result = new SyncResult();
+
+        // Re-attach the company if a previous company's sync cleared the
+        // EntityManager (the sync command loads all companies upfront, and
+        // syncCompany ends with clear()). Persisting new invoices against a
+        // detached Company poisons every flush of this sync with
+        // "Unable to find entity identifier associated with the UnitOfWork".
+        if (!$this->entityManager->contains($company)) {
+            $company = $this->entityManager->find(Company::class, $company->getId()) ?? $company;
+        }
+
         $cif = (string) $company->getCif();
 
         $channel = self::CHANNEL_PREFIX . $company->getId()->toRfc4122();
@@ -423,7 +433,7 @@ class EFacturaSyncService
         } catch (AnafRateLimitException $e) {
             $result->addError("ANAF rate limit hit for message $messageId (retry after {$e->retryAfter}s)");
             if ($spvMessage) {
-                $spvMessage->setStatus('error');
+                // Keep status 'received' so the next sync retries the download
                 $spvMessage->setErrorMessage('ANAF rate limit: ' . $e->getMessage());
             }
             $this->logger->warning('ANAF rate limit hit during download, skipping message', [
@@ -448,7 +458,12 @@ class EFacturaSyncService
                 try {
                     $spvMessage = $this->entityManager->find(EFacturaMessage::class, $spvMessage->getId());
                     if ($spvMessage) {
-                        $spvMessage->setStatus('error');
+                        // Transient failures (ANAF daily download limit, network
+                        // hiccups) stay 'received' so the next sync retries them.
+                        // 'error' is terminal — the message is skipped forever.
+                        if (!$this->isTransientDownloadError($e->getMessage())) {
+                            $spvMessage->setStatus('error');
+                        }
                         $spvMessage->setErrorMessage(mb_substr($e->getMessage(), 0, 500));
                         $this->entityManager->flush();
                     }
@@ -1355,6 +1370,17 @@ class EFacturaSyncService
     }
 
     /**
+     * Errors that resolve on their own (ANAF's 10-downloads-per-day limit
+     * resets at midnight, network errors are momentary) — the message must
+     * stay retryable instead of being terminally marked 'error'.
+     */
+    private function isTransientDownloadError(string $error): bool
+    {
+        return str_contains($error, 'S-au facut deja')
+            || (bool) preg_match('/timeout|timed out|Connection refused|Connection reset|Could not resolve host|Idle timeout/i', $error);
+    }
+
+    /**
      * Reset the EntityManager after a DBAL/ORM exception (which closes it).
      */
     private function resetEntityManager(): void
@@ -1399,6 +1425,12 @@ class EFacturaSyncService
 
         // Rate limits — transient, will resolve on next sync
         if (str_contains($error, 'rate limit') || str_contains($error, 'Rate limit')) {
+            return null;
+        }
+
+        // ANAF daily download limit — message stays retryable and succeeds
+        // after the counter resets at midnight; nothing for the user to do
+        if (str_contains($error, 'S-au facut deja')) {
             return null;
         }
 
