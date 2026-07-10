@@ -531,6 +531,12 @@ class EFacturaSyncService
         if ($parsed->issueDate) {
             $invoice->setIssueDate(new \DateTime($parsed->issueDate));
         }
+
+        // Auto-settle credit notes and zero-total invoices — nothing to collect or pay
+        if (bccomp($parsed->total, '0', 2) <= 0) {
+            $invoice->setAmountPaid($parsed->total);
+            $invoice->setPaidAt($parsed->issueDate ? new \DateTimeImmutable($parsed->issueDate) : new \DateTimeImmutable());
+        }
         if ($parsed->dueDate) {
             $invoice->setDueDate(new \DateTime($parsed->dueDate));
         }
