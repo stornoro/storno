@@ -1176,6 +1176,10 @@ const moreActionsItems = computed(() => {
   // Edit
   if (invoice.value && invoice.value.status !== 'cancelled' && invoice.value.status !== 'sent_to_provider' && (!invoice.value.anafUploadId || invoice.value.status === 'rejected')) {
     editGroup.push({ label: $t('common.edit'), icon: 'i-lucide-pencil', onSelect: () => openEditSlideover() })
+    // Resync receiver data from the client profile (e.g. corrected CUI)
+    if (invoice.value.client) {
+      editGroup.push({ label: $t('invoices.syncClientData'), icon: 'i-lucide-refresh-cw', onSelect: () => syncClientData() })
+    }
   }
 
   // Copy
@@ -1453,6 +1457,25 @@ async function onEditSaved(_invoice: any, validation: any) {
   if (validation) {
     validationResult.value = validation
     autoValidated.value = true
+  }
+}
+
+async function syncClientData() {
+  try {
+    await apiPost(`/v1/invoices/${route.params.uuid}/sync-client`)
+    useToast().add({
+      title: $t('invoices.syncClientDataSuccess'),
+      color: 'success',
+      icon: 'i-lucide-check',
+    })
+    await refreshInvoiceData()
+  }
+  catch (e: any) {
+    useToast().add({
+      title: e?.data?.error || $t('invoices.syncClientDataError'),
+      color: 'error',
+      icon: 'i-lucide-x',
+    })
   }
 }
 

@@ -294,6 +294,7 @@ class ClientController extends AbstractController
         }
 
         $this->autoPopulateVatCodeFromCui($client);
+        $this->normalizeRomanianCuiVat($client);
         $this->autoValidateVies($client);
 
         $this->entityManager->persist($client);
@@ -540,6 +541,7 @@ class ClientController extends AbstractController
 
         // Re-validate VIES if vatCode, cui, or country changed
         if (array_key_exists('vatCode', $data) || array_key_exists('cui', $data) || array_key_exists('country', $data)) {
+            $this->normalizeRomanianCuiVat($client);
             $this->autoValidateVies($client);
         }
 
@@ -560,6 +562,33 @@ class ClientController extends AbstractController
             'client' => $client,
             'invoicesUpdated' => $invoicesUpdated,
         ], Response::HTTP_OK, [], ['groups' => ['client:detail']]);
+    }
+
+    /**
+     * Resync all unsent invoices with the client's current profile data.
+     * Unlike the automatic propagation on client edit (current month only), this also
+     * rewrites older invoices, as long as they were not uploaded to ANAF and are not
+     * cancelled. Receiver name/CIF, buyer snapshot, and VAT rules are refreshed; cached
+     * XML is invalidated so e-Factura submission regenerates it with the new data.
+     */
+    #[Route('/{uuid}/sync-invoices', methods: ['POST'])]
+    public function syncInvoices(string $uuid): JsonResponse
+    {
+        $client = $this->clientRepository->find(Uuid::fromString($uuid));
+        if (!$client) {
+            return $this->json(['error' => 'Client not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('CLIENT_EDIT', $client);
+
+        $company = $client->getCompany();
+        if (!$company) {
+            return $this->json(['error' => 'Client has no company.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $invoicesUpdated = $this->invoiceManager->propagateClientChanges($client, $company, currentMonthOnly: false);
+
+        return $this->json(['invoicesUpdated' => $invoicesUpdated]);
     }
 
     #[Route('/{uuid}', methods: ['DELETE'])]
@@ -690,6 +719,39 @@ class ClientController extends AbstractController
         }
 
         return true;
+    }
+
+    /**
+     * For Romanian clients, keep CUI and vatCode consistent: the CUI is stored without
+     * the RO prefix, and vatCode — when set — is always RO + CUI.
+     *
+     * Without this, updating a client whose vatCode is already set with an "RO"-prefixed
+     * CUI would store the prefix into the cui field (autoPopulateVatCodeFromCui returns
+     * early) and leave a stale vatCode from the previous CUI, producing an invalid
+     * "RORO..." buyer CompanyID in the e-Factura XML.
+     */
+    private function normalizeRomanianCuiVat(Client $client): void
+    {
+        if (($client->getCountry() ?? 'RO') !== 'RO') {
+            return;
+        }
+
+        $cui = $client->getCui();
+        if (!$cui) {
+            return;
+        }
+
+        $cui = strtoupper(trim($cui));
+        if (str_starts_with($cui, 'RO')) {
+            $cui = trim(substr($cui, 2));
+            if ($cui !== '') {
+                $client->setCui($cui);
+            }
+        }
+
+        if ($cui !== '' && $client->getVatCode() && strcasecmp($client->getVatCode(), 'RO' . $cui) !== 0) {
+            $client->setVatCode('RO' . $cui);
+        }
     }
 
     /**
