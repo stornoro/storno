@@ -137,8 +137,8 @@ class DashboardPreviousPeriodTest extends TestCase
             [['direction' => 'outgoing', 'cnt' => '10'], ['direction' => 'incoming', 'cnt' => '5']],
             // 2 status counts
             [['status' => 'paid', 'cnt' => '10']],
-            // 6 monthly totals
-            [],
+            // 6 monthly totals (chart window: daily buckets, prev + current period)
+            [['month' => '2026-04-15', 'direction' => 'outgoing', 'amount' => '500.00']],
             // 7 amountsByDirection – current
             [['direction' => 'outgoing', 'amount' => '5000.00'], ['direction' => 'incoming', 'amount' => '2000.00']],
             // 8 direction counts – previous
@@ -208,6 +208,73 @@ class DashboardPreviousPeriodTest extends TestCase
         $this->assertArrayHasKey('productCount', $pp);
         $this->assertSame(5,  $pp['clientCount']);
         $this->assertSame(9,  $pp['productCount']);
+
+        // Chart window: with a ≤31-day period the series is daily and covers the
+        // previous period too (2026-03-02 … 2026-04-30 = 60 zero-filled buckets),
+        // so the chart can show the selection vs "perioada anterioara".
+        $buckets = $data['monthlyTotals'];
+        $this->assertCount(60, $buckets);
+        $this->assertSame('2026-03-02', $buckets[0]['month']);
+        $this->assertSame('2026-04-30', $buckets[59]['month']);
+        // Query rows are merged into the zero-filled window
+        $apr15 = array_values(array_filter($buckets, fn ($b) => $b['month'] === '2026-04-15'))[0];
+        $this->assertSame('500.00', $apr15['outgoing']);
+        $this->assertSame('0.00', $apr15['incoming']);
+    }
+
+    /**
+     * Periods longer than a month keep monthly buckets, still spanning the
+     * previous period.
+     */
+    public function testChartUsesMonthlyBucketsForLongPeriods(): void
+    {
+        $invoiceRepo = $this->createMock(InvoiceRepository::class);
+        $qb          = $this->createMock(\Doctrine\ORM\QueryBuilder::class);
+        $query       = $this->createMock(\Doctrine\ORM\AbstractQuery::class);
+        $query->method('getResult')->willReturn([]);
+        $qb->method('where')->willReturnSelf();
+        $qb->method('andWhere')->willReturnSelf();
+        $qb->method('setParameter')->willReturnSelf();
+        $qb->method('orderBy')->willReturnSelf();
+        $qb->method('setMaxResults')->willReturnSelf();
+        $qb->method('getQuery')->willReturn($query);
+        $invoiceRepo->method('createQueryBuilder')->willReturn($qb);
+
+        $controller = new DashboardController(
+            $invoiceRepo,
+            $this->createMock(ClientRepository::class),
+            $this->createMock(ProductRepository::class),
+            $this->orgCtx,
+            $this->createMock(CompanyRepository::class),
+            $this->em,
+            $this->paymentService,
+            $this->exchangeRateService,
+        );
+        $controller->setContainer($this->createStubContainer());
+
+        $this->conn->method('fetchAllAssociative')->willReturnOnConsecutiveCalls(
+            [], // direction counts – current
+            [], // status counts
+            [['month' => '2024-03', 'direction' => 'incoming', 'amount' => '750.00']], // monthly totals
+            [], // amountsByDirection – current
+            [], // direction counts – previous
+            []  // amountsByDirection – previous
+        );
+        $this->conn->method('fetchAssociative')->willReturn(['total_amount' => '0.00', 'total_vat' => '0.00']);
+        $this->conn->method('fetchOne')->willReturn(0);
+
+        $request  = new Request(query: ['dateFrom' => '2024-01-01', 'dateTo' => '2024-12-31']);
+        $response = $controller->stats($request);
+        $data     = json_decode($response->getContent(), true);
+
+        // Span 365 days → monthly buckets; window covers the previous year too:
+        // prevFrom = 2022-12-31 → buckets 2022-12 … 2024-12 = 25.
+        $buckets = $data['monthlyTotals'];
+        $this->assertCount(25, $buckets);
+        $this->assertSame('2022-12', $buckets[0]['month']);
+        $this->assertSame('2024-12', $buckets[24]['month']);
+        $mar = array_values(array_filter($buckets, fn ($b) => $b['month'] === '2024-03'))[0];
+        $this->assertSame('750.00', $mar['incoming']);
     }
 
     /**

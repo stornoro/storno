@@ -64,6 +64,8 @@ export interface RecentActivityItem {
   senderName: string | null
   receiverName: string | null
   issueDate: string | null
+  dueDate?: string | null
+  amountPaid?: string
   syncedAt: string | null
   paidAt: string | null
 }

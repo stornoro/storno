@@ -13,20 +13,9 @@ const props = defineProps<{
 
 const { t: $t } = useI18n()
 
-const currentMonthAmount = computed(() => {
-  if (!props.monthlyData.length) return 0
-  const last = props.monthlyData[props.monthlyData.length - 1]
-  return Number(last?.incoming ?? 0)
-})
-
-// Calculate month-over-month change %
-const monthChange = computed(() => {
-  if (props.monthlyData.length < 2) return null
-  const current = Number(props.monthlyData[props.monthlyData.length - 1]?.incoming ?? 0)
-  const prev = Number(props.monthlyData[props.monthlyData.length - 2]?.incoming ?? 0)
-  if (prev === 0) return null
-  return Math.round(((current - prev) / prev) * 100)
-})
+// Incoming total for the selected period — matches the delta chip, which
+// compares the selected period against the previous one.
+const currentMonthAmount = computed(() => Number(props.incomingAmount || 0))
 
 // Status breakdown as expense categories
 const statusEntries = computed(() => {
@@ -87,32 +76,17 @@ function getBarColor(status: string): string {
         <USkeleton class="w-full h-4" />
       </template>
       <template v-else>
-        <!-- Current month indicator -->
-        <div class="flex items-center gap-1.5 mb-1">
-          <span class="w-2 h-2 rounded-full bg-success" />
-          <span class="text-xs text-(--ui-text-muted)">{{ $t('dashboard.cards.currentMonth') }}</span>
-        </div>
-
-        <!-- Big amount + change -->
+        <!-- Big amount -->
         <div class="flex items-baseline gap-2 mb-1">
           <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
             {{ formatMoney(currentMonthAmount) }}
           </span>
           <span class="text-sm text-(--ui-text-muted)">{{ currency ?? 'RON' }}</span>
-          <UBadge v-if="monthChange !== null" :color="monthChange > 0 ? 'error' : 'success'" variant="subtle" size="xs">
-            <UIcon :name="monthChange > 0 ? 'i-lucide-trending-up' : 'i-lucide-trending-down'" class="size-3 mr-0.5" />
-            {{ Math.abs(monthChange) }}%
-          </UBadge>
         </div>
 
         <!-- Delta vs previous period -->
-        <div v-if="delta" class="mb-1">
+        <div v-if="delta" class="mb-3">
           <DashboardStatDelta :delta="delta" :invert-semantic="true" />
-        </div>
-
-        <!-- Total label -->
-        <div class="flex items-center gap-1.5 mb-3">
-          <span class="text-xs text-(--ui-text-muted)">{{ $t('common.total') }}: {{ formatMoney(incomingAmount) }} {{ currency ?? 'RON' }}</span>
         </div>
 
         <!-- Description -->

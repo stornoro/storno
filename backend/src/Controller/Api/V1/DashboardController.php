@@ -150,17 +150,70 @@ class DashboardController extends AbstractController
             );
         }
 
-        // Monthly totals (last 12 months, grouped by direction, converted to default currency)
-        $monthlyRows = $conn->fetchAllAssociative(
-            "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month, direction, COALESCE(SUM($convertTotal), 0) AS amount
-             FROM invoice
-             WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . " AND issue_date >= (CURRENT_DATE - INTERVAL 12 MONTH)" . $dateFilter . "
-             GROUP BY month, direction
-             ORDER BY month",
-            $amountParams
-        );
+        // Resolve effective period bounds up front — the chart window and the
+        // previous-period comparison below both need them.
+        $today = new \DateTimeImmutable('today');
+        $effectiveFrom = $effectiveTo = $prevFrom = $prevTo = null;
+        $span = 0;
+        if ($hasDateFilter) {
+            $effectiveTo   = $dateTo   ? new \DateTimeImmutable($dateTo)   : $today;
+            $effectiveFrom = $dateFrom ? new \DateTimeImmutable($dateFrom) : $effectiveTo->modify('-30 days');
 
+            $span      = (int) $effectiveFrom->diff($effectiveTo)->days; // inclusive days − 1
+            $prevTo    = $effectiveFrom->modify('-1 day');
+            $prevFrom  = $prevTo->modify("-{$span} days");
+        }
+
+        // Chart series. When a period is selected the window covers the previous
+        // period too, so the chart shows the selection vs "perioada anterioara"
+        // instead of collapsing to a single bucket; granularity adapts to the
+        // period length (daily up to ~a month, monthly beyond). Without a period
+        // it stays the rolling last-12-months monthly view.
         $monthlyMap = [];
+        if ($hasDateFilter) {
+            $granularity  = $span <= 31 ? 'day' : 'month';
+            $bucketFormat = $granularity === 'day' ? '%Y-%m-%d' : '%Y-%m';
+            $chartParams  = [
+                'companyId' => $companyId,
+                'defaultCurrency' => $defaultCurrency,
+                'defaultRate' => $defaultRate,
+                'chartFrom' => $prevFrom->format('Y-m-d'),
+                'chartTo' => $effectiveTo->format('Y-m-d'),
+            ];
+            $monthlyRows = $conn->fetchAllAssociative(
+                "SELECT DATE_FORMAT(issue_date, '$bucketFormat') AS month, direction, COALESCE(SUM($convertTotal), 0) AS amount
+                 FROM invoice
+                 WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . " AND issue_date >= :chartFrom AND issue_date <= :chartTo
+                 GROUP BY month, direction
+                 ORDER BY month",
+                $chartParams
+            );
+
+            // Zero-fill every bucket in the window (capped at today so future
+            // days/months of an in-progress period don't drag the line to zero).
+            $fillEnd = min($effectiveTo, $today);
+            if ($granularity === 'day') {
+                for ($d = $prevFrom; $d <= $fillEnd; $d = $d->modify('+1 day')) {
+                    $key = $d->format('Y-m-d');
+                    $monthlyMap[$key] = ['month' => $key, 'incoming' => '0.00', 'outgoing' => '0.00'];
+                }
+            } else {
+                for ($d = $prevFrom->modify('first day of this month'); $d <= $fillEnd; $d = $d->modify('+1 month')) {
+                    $key = $d->format('Y-m');
+                    $monthlyMap[$key] = ['month' => $key, 'incoming' => '0.00', 'outgoing' => '0.00'];
+                }
+            }
+        } else {
+            $monthlyRows = $conn->fetchAllAssociative(
+                "SELECT DATE_FORMAT(issue_date, '%Y-%m') AS month, direction, COALESCE(SUM($convertTotal), 0) AS amount
+                 FROM invoice
+                 WHERE company_id = :companyId AND deleted_at IS NULL" . $activeFilter . " AND issue_date >= (CURRENT_DATE - INTERVAL 12 MONTH)
+                 GROUP BY month, direction
+                 ORDER BY month",
+                $amountParams
+            );
+        }
+
         foreach ($monthlyRows as $row) {
             $m = $row['month'];
             if (!isset($monthlyMap[$m])) {
@@ -172,6 +225,7 @@ class DashboardController extends AbstractController
                 $monthlyMap[$m]['outgoing'] = $row['amount'];
             }
         }
+        ksort($monthlyMap);
         $monthlyTotals = array_values($monthlyMap);
 
         // Amounts by direction (converted to default currency)
@@ -217,6 +271,8 @@ class DashboardController extends AbstractController
                 'senderName' => $inv->getSenderName(),
                 'receiverName' => $inv->getReceiverName(),
                 'issueDate' => $inv->getIssueDate()?->format('Y-m-d'),
+                'dueDate' => $inv->getDueDate()?->format('Y-m-d'),
+                'amountPaid' => $inv->getAmountPaid(),
                 'syncedAt' => $inv->getSyncedAt()?->format('c'),
                 'paidAt' => $inv->getPaidAt()?->format('c'),
             ];
@@ -226,17 +282,9 @@ class DashboardController extends AbstractController
         $paymentSummary = $this->paymentService->getPaymentSummary($company, $dateFrom, $dateTo, $defaultCurrency, $defaultRate, $fallbackRateSql);
 
         // Previous-period comparison — only when a date filter is active.
-        // Resolve effective bounds first (handle one-sided filters gracefully).
+        // Bounds were resolved above alongside the chart window.
         $previousPeriod = null;
         if ($hasDateFilter) {
-            $today = new \DateTimeImmutable('today');
-            $effectiveTo   = $dateTo   ? new \DateTimeImmutable($dateTo)   : $today;
-            $effectiveFrom = $dateFrom ? new \DateTimeImmutable($dateFrom)  : $effectiveTo->modify('-30 days');
-
-            $span      = (int) $effectiveFrom->diff($effectiveTo)->days; // inclusive days − 1
-            $prevTo    = $effectiveFrom->modify('-1 day');
-            $prevFrom  = $prevTo->modify("-{$span} days");
-
             $previousPeriod = $this->computePreviousPeriodStats(
                 $conn,
                 $companyId,
