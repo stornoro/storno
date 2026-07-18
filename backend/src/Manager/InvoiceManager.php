@@ -535,22 +535,19 @@ class InvoiceManager
      * Propagate client changes to all editable invoices for that client.
      * Updates receiver identity and reapplies VAT rules (reverse charge / OSS).
      *
+     * By default only touches invoices issued in the current month (automatic propagation
+     * on client edit). Pass $currentMonthOnly = false for an explicit resync that also
+     * rewrites older invoices not yet uploaded to ANAF.
+     *
      * @return int Number of invoices updated
      */
-    public function propagateClientChanges(\App\Entity\Client $client, Company $company): int
+    public function propagateClientChanges(\App\Entity\Client $client, Company $company, bool $currentMonthOnly = true): int
     {
-        $invoices = $this->invoiceRepository->findEditableByClient($company, $client);
+        $invoices = $this->invoiceRepository->findEditableByClient($company, $client, $currentMonthOnly);
         $count = 0;
 
         foreach ($invoices as $invoice) {
-            $invoice->setReceiverName($client->getName());
-            $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
-            $invoice->snapshotBuyer($client);
-
-            // Reapply VAT rules based on updated client data
-            $this->applyVatRules($invoice, $client, $company);
-            $this->recalculateTotals($invoice);
-            $invoice->setXmlPath(null);
+            $this->applyClientDataToInvoice($invoice, $client, $company);
             $count++;
         }
 
@@ -559,6 +556,45 @@ class InvoiceManager
         }
 
         return $count;
+    }
+
+    /**
+     * Resync a single invoice with its client's current profile data.
+     * Only allowed for invoices not yet uploaded to ANAF (or rejected) and not cancelled.
+     *
+     * @throws \DomainException when the invoice has no client or is not editable
+     */
+    public function syncInvoiceWithClient(Invoice $invoice): void
+    {
+        $client = $invoice->getClient();
+        $company = $invoice->getCompany();
+        if (!$client || !$company) {
+            throw new \DomainException('Invoice has no linked client.');
+        }
+
+        $blocked = [DocumentStatus::CANCELLED, DocumentStatus::SENT_TO_PROVIDER];
+        $isEditable = !\in_array($invoice->getStatus(), $blocked, true)
+            && ($invoice->getStatus() === DocumentStatus::REJECTED || $invoice->getAnafUploadId() === null);
+        if (!$isEditable) {
+            throw new \DomainException('Invoice was already submitted to ANAF and cannot be resynced.');
+        }
+
+        $this->applyClientDataToInvoice($invoice, $client, $company);
+        $this->entityManager->flush();
+    }
+
+    private function applyClientDataToInvoice(Invoice $invoice, \App\Entity\Client $client, Company $company): void
+    {
+        $invoice->setReceiverName($client->getName());
+        $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+        $invoice->snapshotBuyer($client);
+
+        // Reapply VAT rules based on updated client data
+        $this->applyVatRules($invoice, $client, $company);
+        $this->recalculateTotals($invoice);
+        // Invalidate cached files — both XML and PDF embed the buyer identity
+        $invoice->setXmlPath(null);
+        $invoice->setPdfPath(null);
     }
 
     public function delete(Invoice $invoice): void

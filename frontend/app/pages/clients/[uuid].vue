@@ -22,6 +22,9 @@
           {{ $t(`common.sources.${client.source}`, client.source) }}
         </UBadge>
         <div class="ml-auto flex gap-2">
+          <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" @click="showSyncModal = true">
+            {{ $t('clients.syncInvoices') }}
+          </UButton>
           <UButton icon="i-lucide-pencil" variant="soft" size="sm" @click="showEditModal = true">
             {{ $t('common.edit') }}
           </UButton>
@@ -282,6 +285,19 @@
     >
       <p class="text-sm text-(--ui-text-muted) mt-2">{{ $t('clients.deleteClientNote') }}</p>
     </SharedConfirmModal>
+
+    <!-- Sync Invoices Confirm Modal -->
+    <SharedConfirmModal
+      v-model:open="showSyncModal"
+      :title="$t('clients.syncInvoices')"
+      :description="$t('clients.syncInvoicesConfirm')"
+      icon="i-lucide-refresh-cw"
+      :confirm-label="$t('clients.syncInvoices')"
+      :loading="syncing"
+      @confirm="confirmSyncInvoices"
+    >
+      <p class="text-sm text-(--ui-text-muted) mt-2">{{ $t('clients.syncInvoicesNote') }}</p>
+    </SharedConfirmModal>
     </template>
   </UDashboardPanel>
 </template>
@@ -311,6 +327,8 @@ const activeDocTab = ref('invoices')
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const deleting = ref(false)
+const showSyncModal = ref(false)
+const syncing = ref(false)
 
 const countryLabel = computed(() => {
   if (!client.value?.country) return ''
@@ -413,6 +431,23 @@ async function onClientSaved() {
 
 function onDelete() {
   showDeleteModal.value = true
+}
+
+async function confirmSyncInvoices() {
+  syncing.value = true
+  try {
+    const { post } = useApi()
+    const response = await post<{ invoicesUpdated: number }>(`/v1/clients/${route.params.uuid}/sync-invoices`)
+    showSyncModal.value = false
+    toast.add({ title: $t('clients.syncInvoicesDone', response.invoicesUpdated ?? 0), color: 'success' })
+    await fetchClientData()
+  }
+  catch {
+    toast.add({ title: $t('clients.syncInvoicesError'), color: 'error' })
+  }
+  finally {
+    syncing.value = false
+  }
 }
 
 async function confirmDelete() {

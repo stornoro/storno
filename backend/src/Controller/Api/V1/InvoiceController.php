@@ -1006,6 +1006,31 @@ class InvoiceController extends AbstractController
         return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
     }
 
+    /**
+     * Resync a single invoice with its client's current profile data (name, CUI, VAT rules).
+     * Only allowed while the invoice has not been uploaded to ANAF (or was rejected).
+     */
+    #[Route('/invoices/{uuid}/sync-client', methods: ['POST'])]
+    public function syncClient(string $uuid): JsonResponse
+    {
+        $invoice = $this->findInvoice($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('INVOICE_EDIT', $invoice);
+
+        try {
+            $this->invoiceManager->syncInvoiceWithClient($invoice);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $this->notifyInvoiceChange($invoice, 'invoice.updated');
+
+        return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
+    }
+
     #[Route('/invoices/{uuid}/cancel-scheduled-email', methods: ['POST'])]
     public function cancelScheduledEmail(string $uuid): JsonResponse
     {

@@ -612,30 +612,34 @@ class InvoiceRepository extends ServiceEntityRepository
      * @return Invoice[]
      */
     /**
-     * Find all editable invoices linked to a specific client in the current month.
+     * Find all editable invoices linked to a specific client.
      * Editable = not cancelled, not sent_to_provider, and either rejected or not yet uploaded to ANAF.
-     * Only returns invoices with issueDate in the current calendar month — past months are considered closed.
+     *
+     * By default only returns invoices with issueDate in the current calendar month — past
+     * months are considered closed. Pass $currentMonthOnly = false to include older unsent
+     * invoices too (explicit client-data resync).
      *
      * @return Invoice[]
      */
-    public function findEditableByClient(Company $company, \App\Entity\Client $client): array
+    public function findEditableByClient(Company $company, \App\Entity\Client $client, bool $currentMonthOnly = true): array
     {
-        $monthStart = new \DateTime('first day of this month 00:00:00');
-
-        return $this->createQueryBuilder('i')
+        $qb = $this->createQueryBuilder('i')
             ->where('i.company = :company')
             ->andWhere('i.client = :client')
             ->andWhere('i.deletedAt IS NULL')
             ->andWhere('i.status NOT IN (:blocked)')
             ->andWhere('i.status = :rejected OR i.anafUploadId IS NULL')
-            ->andWhere('i.issueDate >= :monthStart')
             ->setParameter('company', $company)
             ->setParameter('client', $client)
             ->setParameter('blocked', [DocumentStatus::CANCELLED, DocumentStatus::SENT_TO_PROVIDER])
-            ->setParameter('rejected', DocumentStatus::REJECTED)
-            ->setParameter('monthStart', $monthStart)
-            ->getQuery()
-            ->getResult();
+            ->setParameter('rejected', DocumentStatus::REJECTED);
+
+        if ($currentMonthOnly) {
+            $qb->andWhere('i.issueDate >= :monthStart')
+                ->setParameter('monthStart', new \DateTime('first day of this month 00:00:00'));
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     /**
