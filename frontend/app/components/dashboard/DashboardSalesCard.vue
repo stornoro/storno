@@ -8,24 +8,33 @@ const props = defineProps<{
   currency?: string
   loading?: boolean
   delta?: DeltaResult
+  dateFrom?: string
+  dateTo?: string
 }>()
 
 const { t: $t } = useI18n()
 const intlLocale = useIntlLocale()
 
-const currentMonthAmount = computed(() => {
-  if (!props.monthlyData.length) return 0
-  const last = props.monthlyData[props.monthlyData.length - 1]
-  return Number(last?.outgoing ?? 0)
-})
+// Outgoing total for the selected period — matches the delta chip, which
+// compares the selected period against the previous one.
+const currentMonthAmount = computed(() => Number(props.amount || 0))
 
 const currentMonthCount = computed(() => props.invoiceCount)
 
+// Average over the elapsed days of the selected period (capped at today for
+// in-progress periods). Falls back to day-of-month when no period is known.
 const avgDailyValue = computed(() => {
-  const now = new Date()
-  const dayOfMonth = now.getDate()
-  if (dayOfMonth === 0) return 0
-  return Math.round(currentMonthAmount.value / dayOfMonth)
+  const today = new Date()
+  let days: number
+  if (props.dateFrom) {
+    const start = new Date(props.dateFrom)
+    const end = props.dateTo && new Date(props.dateTo) < today ? new Date(props.dateTo) : today
+    days = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
+  } else {
+    days = today.getDate()
+  }
+  if (days < 1) return 0
+  return Math.round(currentMonthAmount.value / days)
 })
 
 function formatMoney(amount: number | string) {
@@ -76,10 +85,11 @@ const sparklineLabels = computed(() => {
   const data = props.monthlyData
   if (data.length < 2) return []
 
+  // Buckets come as YYYY-MM (monthly) or YYYY-MM-DD (daily, for short periods).
   const formatMonth = (ym: string) => {
     const parts = ym.split('-')
     const month = Number(parts[1] ?? 1)
-    const day = 1
+    const day = Number(parts[2] ?? 1)
     const date = new Date(Number(parts[0]), month - 1, day)
     return new Intl.DateTimeFormat(intlLocale, { day: 'numeric', month: 'short' }).format(date)
   }

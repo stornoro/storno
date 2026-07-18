@@ -34,6 +34,10 @@ const unpaidInvoices = computed(() => {
 })
 
 const totalUnpaidAmount = computed(() => Number(props.outstandingAmount || 0))
+
+function toCollect(item: RecentActivityItem): number {
+  return Math.max(Number(item.total || 0) - Number(item.amountPaid || 0), 0)
+}
 </script>
 
 <template>
@@ -53,9 +57,6 @@ const totalUnpaidAmount = computed(() => Number(props.outstandingAmount || 0))
       </template>
       <template v-else>
         <div v-if="hasData" class="flex-1">
-          <!-- Period label -->
-          <div class="text-xs text-(--ui-text-muted) mb-1">{{ $t('dashboard.last12Months') }}</div>
-
           <!-- Big amount -->
           <div class="flex items-baseline gap-1.5 mb-4">
             <span class="text-3xl font-semibold text-(--ui-text) tabular-nums">
@@ -98,9 +99,11 @@ const totalUnpaidAmount = computed(() => Number(props.outstandingAmount || 0))
                     {{ formatMoney(item.total, item.currency) }}
                   </td>
                   <td class="py-2 px-1 text-right tabular-nums whitespace-nowrap text-(--ui-text)">
-                    {{ formatMoney(item.total, item.currency) }}
+                    {{ formatMoney(toCollect(item), item.currency) }}
                   </td>
-                  <td class="py-2 px-1 text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)" />
+                  <td class="py-2 px-1 text-right tabular-nums whitespace-nowrap text-(--ui-text-muted)">
+                    {{ formatDate(item.dueDate ?? null) }}
+                  </td>
                 </tr>
               </tbody>
             </table>

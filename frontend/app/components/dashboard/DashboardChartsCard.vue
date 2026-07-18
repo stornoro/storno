@@ -52,6 +52,7 @@ const props = defineProps<{
   data: MonthlyTotal[]
   currency?: string
   delta?: DeltaResult
+  amount?: string | number
 }>()
 
 const { t: $t } = useI18n()
@@ -67,21 +68,27 @@ const tabItems = computed(() => [
 
 const hasData = computed(() => props.data.length > 0)
 
-// Match DashboardSalesCard: latest month's outgoing in the company default currency.
-const currentMonthAmount = computed(() => {
-  if (!props.data.length) return 0
+// Outgoing total for the selected period — matches the delta chip, which
+// compares the selected period against the previous one.
+const headlineAmount = computed(() => {
+  if (props.amount !== undefined) return Number(props.amount)
   const last = props.data[props.data.length - 1]
   return Number(last?.outgoing ?? 0)
 })
 
 const formattedTotal = computed(() =>
-  new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(currentMonthAmount.value),
+  new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(headlineAmount.value),
 )
 
+// Buckets come as YYYY-MM (monthly) or YYYY-MM-DD (daily, for short periods).
 function formatMonth(ym: string): string {
   const parts = ym.split('-')
   const year = parts[0] ?? ''
   const month = parts[1] ?? '1'
+  if (parts.length === 3) {
+    const date = new Date(Number(year), Number(month) - 1, Number(parts[2]))
+    return new Intl.DateTimeFormat(intlLocale, { day: 'numeric', month: 'short' }).format(date)
+  }
   const date = new Date(Number(year), Number(month) - 1)
   const short = new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(date)
   return `${short} ${year.slice(2)}`

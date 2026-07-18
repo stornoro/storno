@@ -32,9 +32,9 @@ function formatMoney(amount: string | number) {
       </template>
       <template v-else>
         <div class="flex items-start gap-8">
-          <!-- Overdue (today) -->
+          <!-- Overdue -->
           <div>
-            <span class="text-xs text-(--ui-text-muted) block mb-1">{{ $t('dashboard.cards.today') }}</span>
+            <span class="text-xs text-(--ui-text-muted) block mb-1">{{ $t('dashboard.cards.overdue') }}</span>
             <div class="flex items-baseline gap-1">
               <span class="text-2xl font-semibold text-(--ui-text) tabular-nums">
                 {{ formatMoney(overdueAmount) }}
@@ -43,9 +43,9 @@ function formatMoney(amount: string | number) {
             </div>
           </div>
 
-          <!-- Outstanding (7 days) -->
+          <!-- Outstanding -->
           <div>
-            <span class="text-xs text-(--ui-text-muted) block mb-1">{{ $t('dashboard.cards.in7Days') }}</span>
+            <span class="text-xs text-(--ui-text-muted) block mb-1">{{ $t('dashboard.cards.toCollect') }}</span>
             <div class="flex items-baseline gap-1">
               <span class="text-2xl font-semibold text-(--ui-text) tabular-nums">
                 {{ formatMoney(outstandingAmount) }}

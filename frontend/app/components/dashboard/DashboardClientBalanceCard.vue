@@ -1,37 +1,53 @@
 <script setup lang="ts">
-import type { RecentActivityItem, DeltaResult } from '~/stores/dashboard'
-
 const props = defineProps<{
-  recentActivity: RecentActivityItem[]
-  currency?: string
   loading?: boolean
-  delta?: DeltaResult
 }>()
 
 const { t: $t } = useI18n()
 const intlLocale = useIntlLocale()
+const { get } = useApi()
 
-// Group by counterparty and sum amounts (top 5 clients)
-const topClients = computed(() => {
-  const clientMap = new Map<string, number>()
+interface OutstandingClient {
+  id: string
+  name: string
+  amount: string
+  invoiceCount: number
+}
 
-  for (const item of props.recentActivity) {
-    if (item.direction !== 'outgoing') continue
-    const name = item.receiverName || item.senderName || $t('common.unknown')
-    const current = clientMap.get(name) || 0
-    clientMap.set(name, current + Number(item.total || 0))
+interface OutstandingResponse {
+  currency: string
+  clients: OutstandingClient[]
+}
+
+const fetching = ref(false)
+const data = ref<OutstandingResponse | null>(null)
+
+async function fetchData() {
+  fetching.value = true
+  try {
+    data.value = await get<OutstandingResponse>('/v1/dashboard/top-outstanding-clients', { limit: 5 })
   }
+  catch {
+    data.value = null
+  }
+  finally {
+    fetching.value = false
+  }
+}
 
-  const sorted = [...clientMap.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
+onMounted(() => fetchData())
 
-  const maxVal = sorted.length > 0 ? (sorted[0]?.[1] ?? 1) : 1
+const isLoading = computed(() => props.loading || fetching.value)
+const currency = computed(() => data.value?.currency ?? 'RON')
 
-  return sorted.map(([name, amount]) => ({
-    name,
-    amount,
-    percent: Math.round((amount / maxVal) * 100),
+// Clients ranked by how much they still owe (converted to the default currency)
+const topClients = computed(() => {
+  const clients = data.value?.clients ?? []
+  const maxVal = clients.length ? Math.max(...clients.map(c => Number(c.amount)), 1) : 1
+  return clients.map(c => ({
+    name: c.name,
+    amount: Number(c.amount),
+    percent: Math.round((Number(c.amount) / maxVal) * 100),
   }))
 })
 
@@ -49,24 +65,19 @@ function formatMoney(amount: number) {
     </div>
 
     <div class="px-5 pb-5 flex-1 flex flex-col">
-      <template v-if="loading">
+      <template v-if="isLoading">
         <div v-for="i in 4" :key="i" class="mb-3">
           <USkeleton class="w-full h-4 mb-1" />
           <USkeleton class="w-3/4 h-2" />
         </div>
       </template>
       <template v-else>
-        <!-- Delta indicator -->
-        <div v-if="delta" class="mb-3">
-          <DashboardStatDelta :delta="delta" />
-        </div>
-
         <!-- Client list with bars -->
         <div v-if="topClients.length" class="space-y-3 flex-1">
           <div v-for="client in topClients" :key="client.name" class="space-y-1">
             <div class="flex items-center justify-between text-sm">
               <span class="text-(--ui-text-muted) truncate mr-2">{{ client.name }}</span>
-              <span class="font-semibold text-(--ui-text) tabular-nums whitespace-nowrap">{{ formatMoney(client.amount) }} {{ currency ?? 'RON' }}</span>
+              <span class="font-semibold text-(--ui-text) tabular-nums whitespace-nowrap">{{ formatMoney(client.amount) }} {{ currency }}</span>
             </div>
             <div class="h-1.5 bg-(--ui-bg-elevated) rounded-full overflow-hidden">
               <div
@@ -80,7 +91,7 @@ function formatMoney(amount: number) {
         <!-- Empty state -->
         <div v-else class="flex-1 flex flex-col items-center justify-center text-center py-4">
           <UIcon name="i-lucide-users" class="size-10 text-(--ui-text-muted) mb-3" />
-          <p class="text-sm text-(--ui-text-muted) mb-4">{{ $t('dashboard.cards.noPeriodData') }}</p>
+          <p class="text-sm text-(--ui-text-muted) mb-4">{{ $t('dashboard.cards.allPaid') }}</p>
           <UButton to="/invoices?create=true" color="primary" size="sm">
             {{ $t('dashboard.cards.issueInvoice') }}
           </UButton>

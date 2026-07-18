@@ -35,7 +35,6 @@ const {
   lastSyncedAt,
   outgoingAmountDelta,
   incomingAmountDelta,
-  clientCountDelta,
 } = storeToRefs(dashboardStore)
 
 const companyStore = useCompanyStore()
@@ -76,6 +75,8 @@ const { isModuleEnabled } = useModules()
       :currency="currency"
       :loading="loading"
       :delta="outgoingAmountDelta"
+      :date-from="dateFrom"
+      :date-to="dateTo"
     />
 
     <!-- Expenses Card -->
@@ -93,10 +94,7 @@ const { isModuleEnabled } = useModules()
     <!-- Client Balance Card -->
     <DashboardClientBalanceCard
       v-else-if="id === 'client-balance-card'"
-      :recent-activity="recentActivity as RecentActivityItem[]"
-      :currency="currency"
       :loading="loading"
-      :delta="clientCountDelta"
     />
 
     <!-- Unpaid Card -->
@@ -162,6 +160,7 @@ const { isModuleEnabled } = useModules()
       :data="monthlyTotals as MonthlyTotal[]"
       :currency="currency"
       :delta="outgoingAmountDelta"
+      :amount="outgoingAmount"
     />
 
     <!-- Sync Status -->
