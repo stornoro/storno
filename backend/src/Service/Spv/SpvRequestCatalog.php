@@ -77,6 +77,20 @@ final class SpvRequestCatalog
         'Decont pe taxa de valoare adaugata (D300) proiect pilot SAFT' => ['group' => 'declaratii', 'label' => 'D300 proiect pilot SAF-T', 'params' => [], 'optional' => ['an', 'luna']],
     ];
 
+    /**
+     * Types the SPV *web form* offers but the web service rejects with "tip raport= … necunoscut"
+     * (verified live: C168, Reprezentanti SPV, Certificat inregistrare fiscala). Kept in the catalog
+     * so the UI can say "only from the SPV website" instead of failing at ANAF.
+     */
+    private const WEB_ONLY = [
+        'C168', 'Reprezentanti SPV', 'Certificat', 'Certificat TVA', 'Certificat inregistrare fiscala',
+        'Certificat de rezidenta fiscala, pentru persoane juridice rezidente in Romania',
+        'Certificat de rezidenta fiscala, pentru persoane rezidente in Romania',
+        'Certificat atestare activitate sediu permanent/desemnat PJ străine în România',
+        'Certificat privind atestarea impozitului plătit în RO de persoane juridice străine',
+        'Decont pe taxa de valoare adaugata (D300) proiect pilot SAFT',
+    ];
+
     /** Types offered by the SPV web form that are decisions/notices ANAF issues; requestable as copies, no parameters known. */
     private const NOTICE_TYPES = [
         'Decizie 178 aprobare/respingere privind desemnarea reprezentantului', 'Decizie Grup Profit (174)', 'Decizie Grup Profit (175)',
@@ -153,10 +167,10 @@ final class SpvRequestCatalog
     {
         $out = [];
         foreach (self::TYPES as $type => $def) {
-            $out[] = ['type' => $type, 'group' => $def['group'], 'label' => $def['label'], 'params' => $def['params'], 'optional' => $def['optional'] ?? [], 'since' => self::SINCE[$type] ?? null, 'note' => self::NOTES[$type] ?? null];
+            $out[] = ['type' => $type, 'group' => $def['group'], 'label' => $def['label'], 'params' => $def['params'], 'optional' => $def['optional'] ?? [], 'since' => self::SINCE[$type] ?? null, 'note' => self::NOTES[$type] ?? null, 'wsSupported' => $this->isWsSupported($type)];
         }
         foreach (self::NOTICE_TYPES as $type) {
-            $out[] = ['type' => $type, 'group' => 'decizii', 'label' => $type, 'params' => [], 'optional' => ['an'], 'since' => self::SINCE[$type] ?? null, 'note' => null];
+            $out[] = ['type' => $type, 'group' => 'decizii', 'label' => $type, 'params' => [], 'optional' => ['an'], 'since' => self::SINCE[$type] ?? null, 'note' => null, 'wsSupported' => false];
         }
 
         return $out;
@@ -173,6 +187,14 @@ final class SpvRequestCatalog
         return isset(self::TYPES[$type]) || in_array($type, self::NOTICE_TYPES, true);
     }
 
+    /** Whether ANAF's web service (`cerere`) accepts the type; the rest exist only in the SPV website form. */
+    public function isWsSupported(string $type): bool
+    {
+        return isset(self::TYPES[$type]) && !in_array($type, self::WEB_ONLY, true);
+    }
+
+    public const SPV_WEB_URL = 'https://www.anaf.ro/anaf/internet/ANAF/servicii_online/spv/';
+
     /**
      * Validate the parameters for a type and build the ANAF URL.
      *
@@ -185,6 +207,9 @@ final class SpvRequestCatalog
         $type = trim($type);
         if (!$this->has($type)) {
             throw new \InvalidArgumentException(sprintf('Tip de solicitare necunoscut: "%s".', $type));
+        }
+        if (!$this->isWsSupported($type)) {
+            throw new \InvalidArgumentException(sprintf('"%s" nu poate fi solicitat prin serviciul web ANAF (raspunde "tip raport necunoscut"); se cere doar din formularul SPV de pe anaf.ro.', $type));
         }
         $def = self::TYPES[$type] ?? ['params' => [], 'optional' => ['an']];
         $required = $def['params'];

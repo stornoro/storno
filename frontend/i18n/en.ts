@@ -4088,6 +4088,8 @@ export default defineI18nLocale(async () => {
     anafText: 'ANAF wording',
     requests: {
       title: 'Requests to ANAF',
+      webOnlyShort: 'SPV website only',
+      webOnlyHint: 'ANAF does not accept this type through the web service (it answers "unknown report type"). Request it from the SPV form on anaf.ro; the answer then shows up here on sync.',
       description: 'Ask for reports (fisa rol, tax vector, outstanding obligations), copies of filed declarations, duplicate receipts or certificates. The answer lands in SPV and is archived here on the next sync.',
       new: 'New request',
       type: 'Request type',
