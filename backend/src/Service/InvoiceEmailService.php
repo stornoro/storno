@@ -39,6 +39,7 @@ class InvoiceEmailService
         private readonly string $frontendUrl,
         private readonly WhiteLabelResolver $whiteLabelResolver,
         private readonly OrgMailer $orgMailer,
+        private readonly OutboundEmailGuard $outboundEmailGuard,
     ) {}
 
     public function send(
@@ -74,6 +75,17 @@ class InvoiceEmailService
         // Always substitute template variables (handles both raw template text and user-edited text)
         $subject = $this->substituteVariables($subject, $invoice);
         $body = $this->substituteVariables($body, $invoice);
+
+        $this->outboundEmailGuard->assertCanSend(
+            $invoice->getCompany()?->getOrganization(),
+            $sentBy,
+            'invoice',
+            $to,
+            $cc,
+            $bcc,
+            $subject,
+            $body,
+        );
 
         // Build email log entry
         $fromName = $companyName ?: 'Storno.ro';

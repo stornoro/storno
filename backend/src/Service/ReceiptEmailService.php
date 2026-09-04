@@ -31,6 +31,7 @@ class ReceiptEmailService
         private readonly string $mailFrom,
         private readonly WhiteLabelResolver $whiteLabelResolver,
         private readonly OrgMailer $orgMailer,
+        private readonly OutboundEmailGuard $outboundEmailGuard,
     ) {}
 
     public function send(
@@ -60,6 +61,17 @@ class ReceiptEmailService
 
         $subject = $this->substituteVariables($subject, $receipt);
         $body = $this->substituteVariables($body, $receipt);
+
+        $this->outboundEmailGuard->assertCanSend(
+            $receipt->getCompany()?->getOrganization(),
+            $sentBy,
+            'receipt',
+            $to,
+            $cc,
+            $bcc,
+            $subject,
+            $body,
+        );
 
         $fromName = $companyName ?: 'Storno.ro';
 
