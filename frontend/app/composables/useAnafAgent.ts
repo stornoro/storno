@@ -527,6 +527,17 @@ export function useAnafAgent() {
     return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
   }
 
+  /**
+   * Send a request ("solicitare") to ANAF SPV through the agent: Storno builds the
+   * cerere URL, the agent GETs it with the certificate, Storno records id_solicitare.
+   */
+  async function requestSpvViaAgent(certificateId: string, type: string, params: Record<string, string>): Promise<any> {
+    const { post } = useApi()
+    const prepared = await post<{ requestId: string, anafUrl: string }>('/v1/spv/requests/prepare', { type, params })
+    const res = await proxyToAnaf({ url: prepared.anafUrl, method: 'GET', headers: {}, body: '', certificateId })
+    return await post(`/v1/spv/requests/${prepared.requestId}/agent-result`, { statusCode: res.statusCode, body: res.body })
+  }
+
   // ── Unattended SPV monitor (PIN + API key stored by the agent in the OS secret store) ──
   async function getMonitorStatus(): Promise<AgentMonitorEntry[]> {
     const res = await agentFetch('/monitor', { signal: AbortSignal.timeout(5000) })
@@ -595,6 +606,7 @@ export function useAnafAgent() {
     checkStatusViaAgent,
     syncViaAgent,
     syncSpvViaAgent,
+    requestSpvViaAgent,
     getMonitorStatus,
     enrollMonitor,
     unenrollMonitor,

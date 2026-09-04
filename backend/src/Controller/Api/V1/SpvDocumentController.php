@@ -84,6 +84,7 @@ class SpvDocumentController extends AbstractController
             SpvDocumentCategory::cases(),
         );
         $stats['severities'] = array_map(static fn (SpvDocumentSeverity $s) => $s->value, SpvDocumentSeverity::cases());
+        $stats['lastSyncedAt'] = $company->getSpvDocumentsSyncedAt()?->format(\DateTimeInterface::ATOM);
 
         return $this->json($stats);
     }

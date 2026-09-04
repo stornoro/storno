@@ -173,6 +173,11 @@ class Company
     #[Groups(['company'])]
     private ?\DateTimeImmutable $spvAccessErrorAt = null;
 
+    /** Last successful SPV inbox sync (listaMesaje archived), whichever channel ran it: web app or agent monitor. */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['company'])]
+    private ?\DateTimeImmutable $spvDocumentsSyncedAt = null;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['company'])]
     private ?int $efacturaDelayHours = null;
@@ -617,6 +622,18 @@ class Company
     public function getLastSyncedAt(): ?\DateTimeImmutable
     {
         return $this->lastSyncedAt;
+    }
+
+    public function getSpvDocumentsSyncedAt(): ?\DateTimeImmutable
+    {
+        return $this->spvDocumentsSyncedAt;
+    }
+
+    public function setSpvDocumentsSyncedAt(?\DateTimeImmutable $at): static
+    {
+        $this->spvDocumentsSyncedAt = $at;
+
+        return $this;
     }
 
     public function setLastSyncedAt(?\DateTimeImmutable $lastSyncedAt): static

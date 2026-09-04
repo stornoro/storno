@@ -4081,6 +4081,28 @@ export default defineI18nLocale(async () => {
 
   // ── Declaratii fiscale ─────────────────────────────────────────
   spv: {
+    lastSynced: 'Ultima sincronizare cu ANAF: {date}',
+    neverSynced: 'Nu s-a sincronizat inca cu ANAF. Apasa „Sincronizeaza cu ANAF” sau activeaza monitorizarea automata din pagina companiei.',
+    summary: 'Ce inseamna',
+    anafText: 'Textul ANAF',
+    requests: {
+      title: 'Solicitari catre ANAF',
+      description: 'Cere rapoarte (fisa rol, vector fiscal, obligatii de plata), copii dupa declaratii, duplicate de recipise sau certificate. Raspunsul ajunge in SPV si este arhivat aici la urmatoarea sincronizare.',
+      new: 'Solicitare noua',
+      type: 'Tip solicitare',
+      typePlaceholder: 'Alege ce vrei sa ceri de la ANAF',
+      submit: 'Trimite la ANAF',
+      empty: 'Nicio solicitare trimisa inca.',
+      created: 'Solicitarea a fost inregistrata la ANAF',
+      failed: 'Solicitarea nu a putut fi trimisa',
+      hintAnswer: 'Raspunsul apare in SPV in cateva minute pana la cateva ore; la urmatoarea sincronizare il gasesti aici.',
+      viewAnswer: 'Vezi raspunsul',
+      since: 'ANAF are date incepand cu {year}.',
+      agentHint: 'Solicitarea se trimite prin agentul local, cu certificatul digital al companiei.',
+      status: { pending: 'in pregatire', requested: 'trimisa la ANAF', answered: 'raspuns primit', error: 'eroare' },
+      groups: { rapoarte: 'Rapoarte', documente: 'Duplicate si certificate', declaratii: 'Copii dupa declaratii', decizii: 'Decizii si notificari' },
+      params: { an: 'An', luna: 'Luna', lunai: 'Luna de la', lunas: 'Luna pana la', motiv: 'Motiv (exact ca la ANAF)', numar_inregistrare: 'Numar de inregistrare', cui_pui: 'CUI punct de lucru' },
+    },
     title: 'Documente SPV',
     syncNow: 'Sincronizeaza cu ANAF',
     syncingPdfs: 'Descarc PDF {done}/{total}',

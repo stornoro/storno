@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { SpvDocument, SpvDocumentStats } from '~/types'
+import type { SpvRequest, SpvRequestType, SpvDocument, SpvDocumentStats } from '~/types'
 import { PAGINATION } from '~/utils/constants'
 
 interface PaginatedResponse {
@@ -124,7 +124,54 @@ export const useSpvDocumentStore = defineStore('spvDocuments', () => {
     total.value = 0
   }
 
+  // ── Requests to ANAF (solicitari) ──────────────────────────────────
+  const requests = ref<SpvRequest[]>([])
+  const requestsTotal = ref(0)
+  const requestTypes = ref<SpvRequestType[]>([])
+  const incomeCertificateReasons = ref<string[]>([])
+  const requestsLoading = ref(false)
+
+  async function fetchRequests(): Promise<void> {
+    const { get } = useApi()
+    requestsLoading.value = true
+    try {
+      const res = await get<{ data: SpvRequest[], total: number }>('/v1/spv/requests', { page: 1, limit: 50 })
+      requests.value = res.data
+      requestsTotal.value = res.total
+    } catch {
+      requests.value = []
+    } finally {
+      requestsLoading.value = false
+    }
+  }
+
+  async function fetchRequestTypes(): Promise<void> {
+    if (requestTypes.value.length > 0) return
+    const { get } = useApi()
+    const res = await get<{ types: SpvRequestType[], incomeCertificateReasons: string[] }>('/v1/spv/requests/types')
+    requestTypes.value = res.types
+    incomeCertificateReasons.value = res.incomeCertificateReasons
+  }
+
+  async function prepareRequest(type: string, params: Record<string, string>): Promise<{ requestId: string, anafUrl: string }> {
+    const { post } = useApi()
+    return await post<{ requestId: string, anafUrl: string }>('/v1/spv/requests/prepare', { type, params })
+  }
+
+  async function requestAgentResult(requestId: string, result: { statusCode: number, body: string }): Promise<SpvRequest> {
+    const { post } = useApi()
+    return await post<SpvRequest>(`/v1/spv/requests/${requestId}/agent-result`, result)
+  }
+
+  async function deleteRequest(requestId: string): Promise<void> {
+    const { del } = useApi()
+    await del(`/v1/spv/requests/${requestId}`)
+    requests.value = requests.value.filter(r => r.id !== requestId)
+  }
+
   return {
+    requests, requestsTotal, requestTypes, incomeCertificateReasons, requestsLoading,
+    fetchRequests, fetchRequestTypes, prepareRequest, requestAgentResult, deleteRequest,
     items, stats, loading, error,
     search, category, severity, unreadOnly, page, limit, total,
     totalPages, isEmpty,

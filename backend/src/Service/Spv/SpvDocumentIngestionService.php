@@ -7,6 +7,8 @@ use App\Entity\SpvDocument;
 use App\Enum\SpvDocumentSeverity;
 use App\Repository\OrganizationMembershipRepository;
 use App\Repository\SpvDocumentRepository;
+use App\Repository\SpvRequestRepository;
+use App\Entity\SpvRequest;
 use App\Service\NotificationService;
 use App\Service\Storage\OrganizationStorageResolver;
 use Doctrine\ORM\EntityManagerInterface;
@@ -29,7 +31,9 @@ final class SpvDocumentIngestionService
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly SpvDocumentRepository $repository,
+        private readonly SpvRequestRepository $requestRepository,
         private readonly SpvDocumentClassifier $classifier,
+        private readonly SpvDocumentSummarizer $summarizer,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
         private readonly OrganizationStorageResolver $storageResolver,
@@ -63,7 +67,9 @@ final class SpvDocumentIngestionService
                 $skipped++;
                 continue;
             }
-            if ($this->repository->findOneByAnafMessageId($company, $anafId)) {
+            if ($existing = $this->repository->findOneByAnafMessageId($company, $anafId)) {
+                // Already archived; still close a request that was registered after the document arrived.
+                $this->linkRequest($company, $existing);
                 continue;
             }
 
@@ -79,12 +85,16 @@ final class SpvDocumentIngestionService
             $doc->setCif($msgCif !== '' ? $msgCif : $cif);
             $doc->setDetails(isset($msg['detalii']) ? trim((string) $msg['detalii']) : null);
             $doc->setIdSolicitare(isset($msg['id_solicitare']) ? (string) $msg['id_solicitare'] : null);
+            $doc->setSummary($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $class['category']));
             $doc->setAnafCreatedAt($this->parseAnafDate($msg['data_creare'] ?? null));
 
             $this->entityManager->persist($doc);
             $created[] = $doc;
+
+            $this->linkRequest($company, $doc);
         }
 
+        $company->setSpvDocumentsSyncedAt(new \DateTimeImmutable());
         $this->entityManager->flush();
 
         if ($created !== []) {
@@ -190,6 +200,20 @@ final class SpvDocumentIngestionService
      * One notification per critical/high document, one summary for the rest.
      * @param SpvDocument[] $docs
      */
+    /** Answer to one of our SPV requests (solicitari): link the document and close the request. */
+    private function linkRequest(Company $company, SpvDocument $doc): void
+    {
+        if ($doc->getIdSolicitare() === null) {
+            return;
+        }
+        $spvRequest = $this->requestRepository->findOneByAnafRequestId($company, $doc->getIdSolicitare());
+        if ($spvRequest !== null && $spvRequest->getAnswerDocument() === null) {
+            $spvRequest->setAnswerDocument($doc)
+                ->setStatus(SpvRequest::STATUS_ANSWERED)
+                ->setAnsweredAt(new \DateTimeImmutable());
+        }
+    }
+
     private function notify(Company $company, array $docs): void
     {
         try {

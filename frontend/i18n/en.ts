@@ -4080,6 +4080,28 @@ export default defineI18nLocale(async () => {
 
   // ── Tax Declarations ───────────────────────────────────────────
   spv: {
+    lastSynced: 'Last ANAF sync: {date}',
+    neverSynced: 'Not synced with ANAF yet. Press "Sync with ANAF" or enable automatic monitoring on the company page.',
+    summary: 'What it means',
+    anafText: 'ANAF wording',
+    requests: {
+      title: 'Requests to ANAF',
+      description: 'Ask for reports (fisa rol, tax vector, outstanding obligations), copies of filed declarations, duplicate receipts or certificates. The answer lands in SPV and is archived here on the next sync.',
+      new: 'New request',
+      type: 'Request type',
+      typePlaceholder: 'Choose what to ask ANAF for',
+      submit: 'Send to ANAF',
+      empty: 'No requests sent yet.',
+      created: 'Request registered at ANAF',
+      failed: 'The request could not be sent',
+      hintAnswer: 'The answer shows up in SPV within minutes to a few hours; the next sync brings it here.',
+      viewAnswer: 'View answer',
+      since: 'ANAF has data from {year}.',
+      agentHint: 'The request goes through the local agent with the company certificate.',
+      status: { pending: 'preparing', requested: 'sent to ANAF', answered: 'answered', error: 'error' },
+      groups: { rapoarte: 'Reports', documente: 'Duplicates and certificates', declaratii: 'Copies of declarations', decizii: 'Decisions and notices' },
+      params: { an: 'Year', luna: 'Month', lunai: 'From month', lunas: 'To month', motiv: 'Reason (exact ANAF wording)', numar_inregistrare: 'Registration number', cui_pui: 'Branch CUI' },
+    },
     title: 'SPV documents',
     syncNow: 'Sync with ANAF',
     syncingPdfs: 'Downloading PDF {done}/{total}',

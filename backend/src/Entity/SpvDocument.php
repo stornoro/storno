@@ -65,6 +65,11 @@ class SpvDocument
     #[Groups(['spv_document:detail'])]
     private ?string $idSolicitare = null;
 
+    /** Plain-language explanation of the message (what it is, which declaration/period, what to do), built by SpvDocumentSummarizer. */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['spv_document:list', 'spv_document:detail'])]
+    private ?string $summary = null;
+
     /** ANAF `data_creare` (when it reached the SPV inbox). */
     #[ORM\Column(nullable: true)]
     #[Groups(['spv_document:list', 'spv_document:detail'])]
@@ -135,6 +140,8 @@ class SpvDocument
     public function getDetails(): ?string { return $this->details; }
     public function setDetails(?string $v): static { $this->details = $v; return $this; }
 
+    public function getSummary(): ?string { return $this->summary; }
+    public function setSummary(?string $v): static { $this->summary = $v; return $this; }
     public function getIdSolicitare(): ?string { return $this->idSolicitare; }
     public function setIdSolicitare(?string $v): static { $this->idSolicitare = $v; return $this; }
 
