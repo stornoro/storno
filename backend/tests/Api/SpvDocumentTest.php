@@ -62,8 +62,8 @@ class SpvDocumentTest extends ApiTestCase
         $body = json_encode([
             'titlu' => 'Lista Mesaje disponibile din ultimele 30 zile',
             'mesaje' => [
-                ['id' => "9001$suffix", 'tip' => 'SOMATII', 'cif' => $cif, 'detalii' => 'Somatie nr. 123', 'data_creare' => '202609031415'],
-                ['id' => "9002$suffix", 'tip' => 'RECIPISA', 'cif' => $cif, 'detalii' => 'Recipisa D300', 'data_creare' => '202609020900', 'id_solicitare' => '55'],
+                ['id' => "9001$suffix", 'tip' => 'SOMATII', 'cif' => $cif, 'detalii' => 'Somatie nr. 123', 'data_creare' => '03092026141500'],
+                ['id' => "9002$suffix", 'tip' => 'RECIPISA', 'cif' => $cif, 'detalii' => 'Recipisa D300', 'data_creare' => '02092026090000', 'id_solicitare' => '55'],
                 ['id' => "9003$suffix", 'tip' => 'CERTIFICAT FISCAL', 'cif' => $cif, 'detalii' => 'Certificat', 'data_creare' => '20260901'],
                 ['id' => "9004$suffix", 'tip' => 'SOMATII', 'cif' => '99999999', 'detalii' => 'alt CUI', 'data_creare' => '202609031415'],
             ],

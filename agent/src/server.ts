@@ -3,7 +3,7 @@ import { createServer } from 'node:https';
 import { execSync } from 'node:child_process';
 import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
-import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
+import { curlProxy, curlBatch, type ProxyRequest } from './proxy/curl-proxy.js';
 import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
 import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
 import { startSpvMonitor, statusList as monitorStatus, enroll as monitorEnroll, unenroll as monitorUnenroll, runSync as monitorRun } from './monitor/spv-monitor.js';
@@ -270,10 +270,35 @@ async function handleBatch(req: IncomingMessage, res: ServerResponse, config: Ag
     }
   }
 
-  // Execute requests sequentially (PIN cached after first)
   const results: Array<{ index: number; statusCode: number; headers: Record<string, string>; body: string; bodyEncoding?: string; error?: string }> = [];
 
+  // Fast path: plain GETs with one certificate go through a single curl process
+  // (engine loaded once, TLS connection reused). Items that come back without a
+  // response are retried one by one below.
+  const done = new Set<number>();
+  const first = payload.requests[0];
+  const batchable = payload.requests.length > 1
+    && payload.requests.every((r) => r.certificateId === first.certificateId && (r.method || 'GET').toUpperCase() === 'GET' && !r.body);
+  if (batchable) {
+    try {
+      for (const item of await curlBatch(payload.requests, config)) {
+        if (!item.result) continue;
+        results.push({ index: item.index, statusCode: item.result.statusCode, headers: item.result.headers, body: item.result.body, bodyEncoding: item.result.bodyEncoding });
+        done.add(item.index);
+      }
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) {
+        json(res, 200, { results, aborted: true, reason: 'PIN error — batch stopped to prevent certificate lockout' });
+        return;
+      }
+      if (!msg.startsWith('BATCH_UNSUPPORTED')) console.error(`[batch] single-process path failed, falling back to sequential: ${msg}`);
+    }
+  }
+
+  // Sequential path (PIN cached after first)
   for (let i = 0; i < payload.requests.length; i++) {
+    if (done.has(i)) continue;
     // Small delay between requests to avoid ANAF rate-limiting / connection resets
     if (i > 0) await new Promise(r => setTimeout(r, 500));
 
@@ -302,6 +327,7 @@ async function handleBatch(req: IncomingMessage, res: ServerResponse, config: Ag
     }
   }
 
+  results.sort((a, b) => a.index - b.index);
   json(res, 200, { results });
 }
 

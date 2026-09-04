@@ -275,19 +275,38 @@ final class SpvDocumentIngestionService
         }
     }
 
-    /** ANAF sends `data_creare` as "YYYYMMDDHHMM" (occasionally with seconds). */
-    private function parseAnafDate(mixed $raw): ?\DateTimeImmutable
+    /**
+     * ANAF's SPV service sends `data_creare` as "DDMMYYYYHHMMSS" (e.g. 31082026094216);
+     * the e-Factura service uses "YYYYMMDDHHMM". Detect which one by looking at where
+     * the four-digit year sits, never rely on PHP's silent month overflow.
+     */
+    public static function parseAnafDate(mixed $raw): ?\DateTimeImmutable
     {
         $s = preg_replace('/\D/', '', (string) $raw) ?? '';
-        foreach (['YmdHis' => 14, 'YmdHi' => 12, 'Ymd' => 8] as $format => $len) {
-            if (strlen($s) >= $len) {
-                $d = \DateTimeImmutable::createFromFormat('!' . $format, substr($s, 0, $len), new \DateTimeZone('Europe/Bucharest'));
-                if ($d) {
-                    return $d;
-                }
+        if (strlen($s) < 8) {
+            return null;
+        }
+        $tz = new \DateTimeZone('Europe/Bucharest');
+        $dayFirst = self::looksLikeYear(substr($s, 4, 4)) && !self::looksLikeYear(substr($s, 0, 4));
+        $formats = $dayFirst
+            ? ['dmYHis' => 14, 'dmYHi' => 12, 'dmY' => 8]
+            : ['YmdHis' => 14, 'YmdHi' => 12, 'Ymd' => 8];
+        foreach ($formats as $format => $len) {
+            if (strlen($s) < $len) {
+                continue;
+            }
+            $d = \DateTimeImmutable::createFromFormat('!' . $format, substr($s, 0, $len), $tz);
+            $errors = \DateTimeImmutable::getLastErrors();
+            if ($d && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0))) {
+                return $d;
             }
         }
         return null;
+    }
+
+    private static function looksLikeYear(string $four): bool
+    {
+        return preg_match('/^(19|20)\d\d$/', $four) === 1;
     }
 
     /**

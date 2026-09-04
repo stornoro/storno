@@ -867,6 +867,7 @@ export interface AnafProxyRequest {
 }
 
 export interface AnafProxyResponse {
+  index?: number
   statusCode: number
   headers: Record<string, string>
   body: string

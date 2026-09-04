@@ -107,6 +107,7 @@ export function useAnafAgent() {
     })
     const data = await res.json()
     return (data.results ?? []).map((r: any) => ({
+      index: r.index,
       statusCode: r.statusCode,
       headers: r.headers,
       body: r.body,
@@ -380,7 +381,10 @@ export function useAnafAgent() {
     let downloaded = 0
     let failed = 0
     const docs = result.documents ?? []
-    const CHUNK = 5
+    // The agent fetches a whole chunk in one curl process (token initialised once),
+    // then the PDFs are uploaded to Storno a few at a time.
+    const CHUNK = 25
+    const UPLOAD_CONCURRENCY = 4
     for (let i = 0; i < docs.length; i += CHUNK) {
       const chunk = docs.slice(i, i + CHUNK)
       const responses = await batchProxyToAnaf(chunk.map(d => ({
@@ -390,19 +394,26 @@ export function useAnafAgent() {
         body: '',
         certificateId,
       })))
-      for (let j = 0; j < chunk.length; j++) {
-        const res = responses[j]
-        try {
-          await post(`/v1/spv/documents/${chunk[j]!.documentId}/agent-document`, {
-            statusCode: res?.statusCode ?? 502,
-            body: res?.body ?? '',
-            bodyEncoding: res?.bodyEncoding,
-          })
-          downloaded++
-        } catch {
-          failed++
+      const byIndex = new Map<number, AnafProxyResponse>()
+      responses.forEach((r: any, idx: number) => byIndex.set(typeof r?.index === 'number' ? r.index : idx, r))
+      let cursor = 0
+      const worker = async () => {
+        while (cursor < chunk.length) {
+          const j = cursor++
+          const res = byIndex.get(j)
+          try {
+            await post(`/v1/spv/documents/${chunk[j]!.documentId}/agent-document`, {
+              statusCode: res?.statusCode ?? 502,
+              body: res?.body ?? '',
+              bodyEncoding: res?.bodyEncoding,
+            })
+            downloaded++
+          } catch {
+            failed++
+          }
         }
       }
+      await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, chunk.length) }, worker))
       onProgress?.(Math.min(i + CHUNK, docs.length), docs.length)
     }
 
