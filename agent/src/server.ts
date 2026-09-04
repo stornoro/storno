@@ -6,6 +6,7 @@ import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, curlBatch, type ProxyRequest } from './proxy/curl-proxy.js';
 import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
 import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
+import { submitSpvWebRequest } from './spv-web.js';
 import { startSpvMonitor, statusList as monitorStatus, enroll as monitorEnroll, unenroll as monitorUnenroll, runSync as monitorRun } from './monitor/spv-monitor.js';
 import { signPdf } from './signing/pdf-signer.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
@@ -14,7 +15,7 @@ declare const __VERSION__: string;
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'dev';
 
 /** Allowed proxy target hosts. */
-const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro', 'api.anaf.ro', 'decl.anaf.mfinante.gov.ro', 'www.anaf.ro'];
+const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro', 'api.anaf.ro', 'decl.anaf.mfinante.gov.ro', 'www.anaf.ro', 'login.anaf.ro'];
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -83,6 +84,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleSignAndSubmit(req, res, config);
   } else if (url === '/batch-sign-and-submit' && req.method === 'POST') {
     handleBatchSignAndSubmit(req, res, config);
+  } else if (url === '/spv-web-request' && req.method === 'POST') {
+    handleSpvWebRequest(req, res, config);
   } else if (url === '/monitor' && req.method === 'GET') {
     json(res, 200, { entries: monitorStatus() });
   } else if (url === '/monitor' && req.method === 'POST') {
@@ -93,6 +96,36 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleMonitorRun(res, monitorMatch(url)!.companyId, config);
   } else {
     json(res, 404, { error: 'Not found' });
+  }
+}
+
+/** SPV request through the ANAF website form (types the web service does not implement, e.g. C168). */
+async function handleSpvWebRequest(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+  let payload: { certificateId?: string; pin?: string; cif?: string; tipDocument?: string; params?: Record<string, string> };
+  try {
+    payload = JSON.parse(await readBody(req));
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+  if (!payload.certificateId || !payload.cif || !payload.tipDocument) {
+    json(res, 400, { error: 'Missing required fields: certificateId, cif, tipDocument' });
+    return;
+  }
+  try {
+    const result = await submitSpvWebRequest({ certificateId: payload.certificateId, pin: payload.pin, cif: payload.cif, tipDocument: payload.tipDocument, params: payload.params }, config);
+    json(res, 200, { statusCode: result.statusCode, headers: { 'content-type': 'application/json' }, body: result.body });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN') || msg.startsWith('PIN_REQUIRED')) {
+      json(res, 200, { error: msg, pinError: true });
+    } else {
+      json(res, 502, { error: `SPV web request failed: ${msg}` });
+    }
   }
 }
 

@@ -41,12 +41,17 @@ class SpvRequestTest extends ApiTestCase
         $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'CAF', 'params' => []], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(422);
 
-        // exists in the SPV website form but the web service rejects it (verified live: "tip raport= C168 necunoscut")
+        // exists in the SPV website form but the web service rejects it (verified live: "tip raport= C168 necunoscut"):
+        // the agent goes through the website form instead
         $this->assertFalse($byType['C168']['wsSupported']);
         $this->assertTrue($byType['Fisa Rol Completa']['wsSupported']);
         $c168 = $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'C168', 'params' => []], ['X-Company' => $companyId]);
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertStringContainsString('formularul SPV', $c168['error']);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame('web', $c168['channel']);
+        $this->assertNull($c168['anafUrl']);
+        $this->assertSame('C168', $c168['form']['tipDocument']);
+        $this->apiPost('/api/v1/spv/requests/' . $c168['requestId'] . '/agent-result', ['statusCode' => 200, 'body' => json_encode(['titlu' => 'Transmitere cerere tip C168', 'id_solicitare' => '192109803', 'canal' => 'spv-web'])], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
     }
 
     public function testPrepareAgentResultAndLinkToInboxDocument(): void
@@ -56,6 +61,7 @@ class SpvRequestTest extends ApiTestCase
 
         $prepared = $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'Fisa Rol', 'params' => []], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(200, json_encode($prepared));
+        $this->assertSame('ws', $prepared['channel']);
         $this->assertStringStartsWith('https://webserviced.anaf.ro/SPVWS2/rest/cerere?tip=Fisa%20Rol&cui=', $prepared['anafUrl']);
         $requestId = $prepared['requestId'];
 

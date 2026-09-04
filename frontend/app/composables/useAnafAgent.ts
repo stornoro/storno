@@ -524,8 +524,22 @@ export function useAnafAgent() {
    */
   async function requestSpvViaAgent(certificateId: string, type: string, params: Record<string, string>): Promise<any> {
     const { post } = useApi()
-    const prepared = await post<{ requestId: string, anafUrl: string }>('/v1/spv/requests/prepare', { type, params })
-    const res = await proxyToAnaf({ url: prepared.anafUrl, method: 'GET', headers: {}, body: '', certificateId })
+    const prepared = await post<{ requestId: string, channel: 'ws' | 'web', anafUrl: string | null, form: { cif: string, tipDocument: string, params: Record<string, string> } | null }>('/v1/spv/requests/prepare', { type, params })
+    let res: AnafProxyResponse
+    if (prepared.channel === 'web' && prepared.form) {
+      // Types the web service does not implement: the agent fills the SPV website form with the certificate.
+      const r = await agentFetch('/spv-web-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Storno-Agent': '1' },
+        body: JSON.stringify({ certificateId, pin: requirePin(certificateId), cif: prepared.form.cif, tipDocument: prepared.form.tipDocument, params: prepared.form.params }),
+        signal: AbortSignal.timeout(180_000),
+      })
+      const data = await r.json()
+      if (data.error) throw new Error(data.error)
+      res = data
+    } else {
+      res = await proxyToAnaf({ url: prepared.anafUrl!, method: 'GET', headers: {}, body: '', certificateId })
+    }
     return await post(`/v1/spv/requests/${prepared.requestId}/agent-result`, { statusCode: res.statusCode, body: res.body })
   }
 

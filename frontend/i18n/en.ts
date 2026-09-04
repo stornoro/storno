@@ -4089,7 +4089,7 @@ export default defineI18nLocale(async () => {
     requests: {
       title: 'Requests to ANAF',
       webOnlyShort: 'SPV website only',
-      webOnlyHint: 'ANAF does not accept this type through the web service (it answers "unknown report type"). Request it from the SPV form on anaf.ro; the answer then shows up here on sync.',
+      webOnlyHint: 'This type is not in the ANAF web service; the agent fills the SPV form on anaf.ro with the certificate, exactly like a browser. Needs agent 1.7.4 or newer.',
       description: 'Ask for reports (fisa rol, tax vector, outstanding obligations), copies of filed declarations, duplicate receipts or certificates. The answer lands in SPV and is archived here on the next sync.',
       new: 'New request',
       type: 'Request type',

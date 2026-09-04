@@ -33,11 +33,20 @@ function getCachedPin(certificateId: string): string | null {
   return entry.pin;
 }
 
-function getCookieJarPath(certificateId: string): string {
+function getCookieJarPath(certificateId: string, jar: 'api' | 'web' = 'api'): string {
   mkdirSync(COOKIE_DIR, { recursive: true });
-  // Sanitise thumbprint for use as filename
+  // Sanitise thumbprint for use as filename. Website navigation (portal + WebSEAL
+  // sessions) keeps its own jar: a stale APM cookie there turns the login into "Pagina logout".
   const safe = certificateId.replace(/[^a-zA-Z0-9]/g, '');
-  return join(COOKIE_DIR, `${safe}.txt`);
+  return join(COOKIE_DIR, jar === 'web' ? `${safe}-web.txt` : `${safe}.txt`);
+}
+
+/** Drop the website session so the next web request starts a clean certificate login. */
+export function resetWebSession(certificateId: string): void {
+  try {
+    const p = getCookieJarPath(certificateId, 'web');
+    if (existsSync(p)) unlinkSync(p);
+  } catch { /* best effort */ }
 }
 
 function hasValidSession(cookiePath: string): boolean {
@@ -95,6 +104,13 @@ export interface ProxyRequest {
   body: string;
   certificateId: string;
   pin?: string;
+  /**
+   * Browser-style navigation (HTML pages such as the SPV website forms): use the
+   * certificate only when there is no session yet (or when forceCert is set) and never
+   * apply the JSON "session expired" heuristic, which would misread every HTML page.
+   */
+  web?: boolean;
+  forceCert?: boolean;
   /** multipart/form-data upload of one file (e-guvernare WAS6DUS "linkdoc"); replaces `body`. */
   multipart?: {
     field: string;
@@ -196,10 +212,17 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
     }
   }
 
-  const cookiePath = getCookieJarPath(req.certificateId);
-  const usedSession = hasValidSession(cookiePath);
+  const cookiePath = getCookieJarPath(req.certificateId, req.web ? 'web' : 'api');
+  // Browser-style navigation: the ANAF portal sits behind WebSEAL + F5 APM, which both
+  // want the certificate presented on the TLS handshake (cookies alone get a 403), so
+  // web requests always carry the certificate; the jar still accumulates the session.
+  const usedSession = req.web ? false : hasValidSession(cookiePath);
   if (!usedSession && !req.pin) {
     throw new Error('PIN_REQUIRED: the certificate PIN was not provided; nothing is sent to ANAF without it');
+  }
+
+  if (req.web) {
+    return execRequest(req, config, usedSession);
   }
 
   let result: ProxyResponse;
@@ -248,7 +271,7 @@ async function execRequest(
   }
 
   console.log(`[proxy] ${req.method} ${req.url} → curl (${sessionValid ? 'cookies only' : 'cert'})`);
-  return execCurl(req, config);
+  return execCurl(req, config, !sessionValid);
 }
 
 /**
@@ -267,10 +290,10 @@ function pkcs11ToolchainFor(req: ProxyRequest, config: AgentConfig): Pkcs11Toolc
   return toolchain;
 }
 
-function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
+function execCurl(req: ProxyRequest, config: AgentConfig, useCert: boolean): Promise<ProxyResponse> {
   return new Promise((resolve, reject) => {
     const toolchain = pkcs11ToolchainFor(req, config);
-    const opts = buildCurlOptions(req, config, toolchain);
+    const opts = buildCurlOptions(req, config, toolchain, useCert);
     const curlPath = toolchain?.curlPath ?? config.curlPath;
     const configFile = writeCurlConfig(opts);
 
@@ -332,7 +355,7 @@ type CurlOpt = { opt: string; value?: string };
 
 /** Options common to every transfer of a process (cookies, cert, redirects). */
 function transferOptions(req: ProxyRequest, toolchain: Pkcs11Toolchain | null, useCert: boolean): CurlOpt[] {
-  const cookiePath = getCookieJarPath(req.certificateId);
+  const cookiePath = getCookieJarPath(req.certificateId, req.web ? 'web' : 'api');
   const opts: CurlOpt[] = [
     { opt: 'location' },                       // ANAF's F5 does 302 chains
     { opt: 'cookie', value: cookiePath },
@@ -367,14 +390,13 @@ function transferOptions(req: ProxyRequest, toolchain: Pkcs11Toolchain | null, u
   return opts;
 }
 
-function buildCurlOptions(req: ProxyRequest, config: AgentConfig, toolchain: Pkcs11Toolchain | null): CurlOpt[] {
-  const sessionValid = hasValidSession(getCookieJarPath(req.certificateId));
+function buildCurlOptions(req: ProxyRequest, config: AgentConfig, toolchain: Pkcs11Toolchain | null, useCert: boolean): CurlOpt[] {
   const opts: CurlOpt[] = [
     { opt: 'silent' },
     { opt: 'show-error' },
     { opt: 'dump-header', value: '-' },        // headers to stdout, before the body
     { opt: 'request', value: req.method },
-    ...transferOptions(req, toolchain, !sessionValid),
+    ...transferOptions(req, toolchain, useCert),
   ];
 
   // Body comes from stdin for methods that have one (never as a CLI arg)
@@ -416,6 +438,9 @@ function writeUploadFile(fileName: string, contentBase64: string): string {
 /** Write a private (0600) curl config file; the caller deletes it once curl exits. */
 function writeCurlConfig(opts: CurlOpt[]): string {
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  if (process.env.STORNO_AGENT_DEBUG_CURL) {
+    console.log('[proxy] curl config:\n' + redactPin(curlConfigText(opts)).replace(/^/gm, '    '));
+  }
   const file = join(CONFIG_DIR, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.cfg`);
   writeFileSync(file, curlConfigText(opts), { mode: 0o600 });
   return file;

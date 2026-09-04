@@ -4090,7 +4090,7 @@ export default defineI18nLocale(async () => {
     requests: {
       title: 'Solicitari catre ANAF',
       webOnlyShort: 'doar din SPV web',
-      webOnlyHint: 'ANAF nu accepta acest tip prin serviciul web (raspunde „tip raport necunoscut”). Se solicita doar din formularul SPV de pe anaf.ro; raspunsul apare apoi aici la sincronizare.',
+      webOnlyHint: 'Acest tip nu exista in serviciul web ANAF; agentul completeaza formularul SPV de pe anaf.ro cu certificatul, exact ca in browser. Necesita agent 1.7.4 sau mai nou.',
       description: 'Cere rapoarte (fisa rol, vector fiscal, obligatii de plata), copii dupa declaratii, duplicate de recipise sau certificate. Raspunsul ajunge in SPV si este arhivat aici la urmatoarea sincronizare.',
       new: 'Solicitare noua',
       type: 'Tip solicitare',
