@@ -676,6 +676,26 @@ public class JavaServiceServer {
                 "dukpdf_" + id + ".pdf");
             File tmpErr = new File(System.getProperty("java.io.tmpdir"),
                 "dukpdf_" + id + ".xml.err.txt");
+            File tmpZip = new File(System.getProperty("java.io.tmpdir"),
+                "dukpdf_" + id + "_atasament.zip");
+
+            // Optional attachment (forms such as C168 require a .zip with the scanned contract):
+            // with X-Duk-Xml-Length: N the body is N bytes of XML followed by the zip bytes.
+            String zipPath = null;
+            String xmlLenHeader = ex.getRequestHeaders().getFirst("X-Duk-Xml-Length");
+            if (xmlLenHeader != null && !xmlLenHeader.isEmpty()) {
+                int xmlLen;
+                try { xmlLen = Integer.parseInt(xmlLenHeader.trim()); } catch (NumberFormatException nfe) { xmlLen = -1; }
+                if (xmlLen <= 0 || xmlLen > xmlBytes.length) {
+                    sendJson(ex, 400, "{\"error\":\"X-Duk-Xml-Length does not match the body\"}");
+                    return;
+                }
+                if (xmlLen < xmlBytes.length) {
+                    Files.write(tmpZip.toPath(), java.util.Arrays.copyOfRange(xmlBytes, xmlLen, xmlBytes.length));
+                    zipPath = tmpZip.getAbsolutePath();
+                }
+                xmlBytes = java.util.Arrays.copyOfRange(xmlBytes, 0, xmlLen);
+            }
 
             try {
                 Files.write(tmpXml.toPath(), xmlBytes);
@@ -701,7 +721,7 @@ public class JavaServiceServer {
                 Method pdfMethod = intClass.getMethod("pdfCreation",
                     String.class, String.class, String.class, String.class);
                 int pdfResult = (Integer) pdfMethod.invoke(integrator,
-                    tmpXml.getAbsolutePath(), type, null, tmpPdf.getAbsolutePath());
+                    tmpXml.getAbsolutePath(), type, zipPath, tmpPdf.getAbsolutePath());
 
                 System.out.println("[JavaServices] DUK PDF #" + reqId +
                     " pdfCreation result=" + pdfResult);
@@ -810,6 +830,7 @@ public class JavaServiceServer {
                 tmpXml.delete();
                 tmpPdf.delete();
                 tmpErr.delete();
+                tmpZip.delete();
             }
         }
     }
