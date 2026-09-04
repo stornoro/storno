@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Exception\EmailSendBlockedException;
 use App\Repository\EmailLogRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Bridge\Monolog\Attribute\WithMonologChannel;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
@@ -23,6 +24,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * Organizations that relay through their own SMTP server (white-label) only get the
  * recipient cap and the HTML check: their reputation, their rules.
  */
+#[WithMonologChannel('abuse')]
 class OutboundEmailGuard
 {
     public const DOCUMENT_CATEGORIES = ['invoice', 'delivery_note', 'receipt'];
