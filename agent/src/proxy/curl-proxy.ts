@@ -1,9 +1,13 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import type { AgentConfig } from '../config.js';
 import { powershellProxy } from './powershell-proxy.js';
+import { resolvePkcs11Toolchain, pkcs11Uri, PKCS11_AUTO_ID, type Pkcs11Toolchain } from '../utils/toolchain.js';
+import { parseCertificateObjects } from '../certificates/linux.js';
+import { isPkcs11CertificateId } from '../certificates/discovery.js';
 
 /** Per-certificate cookie jar directory for session reuse. */
 const COOKIE_DIR = join(tmpdir(), 'storno-agent-cookies');
@@ -39,7 +43,11 @@ function getCookieJarPath(certificateId: string): string {
 function hasValidSession(cookiePath: string): boolean {
   try {
     if (!existsSync(cookiePath)) return false;
-    const age = Date.now() - statSync(cookiePath).mtimeMs;
+    const st = statSync(cookiePath);
+    // curl writes the jar even when the TLS handshake failed: an empty jar
+    // (or one holding only the Netscape header) is not a session.
+    if (st.size < 64) return false;
+    const age = Date.now() - st.mtimeMs;
     return age < SESSION_TTL_MS;
   } catch {
     return false;
@@ -100,6 +108,59 @@ export interface ProxyResponse {
  * If the session expires, cookies are invalidated and the request is retried
  * with the certificate.
  */
+/**
+ * PKCS#11 tokens whose certificates are private objects list nothing until a
+ * login. Before handing a PIN to curl (whose engine gives no feedback and
+ * would burn PIN attempts on every retry), verify it once with pkcs11-tool
+ * and learn the real certificate id. Results are cached per PIN.
+ */
+const pkcs11LoginCache = new Map<string, { ok: boolean; message: string; certIds: string[] }>();
+
+function verifyPkcs11Login(toolchain: Pkcs11Toolchain, pin: string): Promise<{ ok: boolean; message: string; certIds: string[] }> {
+  const key = createHash('sha256').update(toolchain.module + '\0' + pin).digest('hex');
+  const cached = pkcs11LoginCache.get(key);
+  if (cached) return Promise.resolve(cached);
+  if (!toolchain.pkcs11ToolPath) return Promise.resolve({ ok: true, message: 'no pkcs11-tool, skipping PIN check', certIds: [] });
+
+  return new Promise((resolve) => {
+    execFile(toolchain.pkcs11ToolPath as string, [
+      '--module', toolchain.module, '--login', '--pin', pin, '-O', '--type', 'cert',
+    ], { encoding: 'utf-8', timeout: 60_000, env: toolchain.env }, (err, stdout, stderr) => {
+      const out = `${stdout ?? ''}\n${stderr ?? ''}`;
+      let result: { ok: boolean; message: string; certIds: string[] };
+      if (/CKR_PIN_LOCKED/i.test(out)) {
+        result = { ok: false, message: 'PIN blocat (CKR_PIN_LOCKED). Deblocheaza tokenul cu PUK-ul din aplicatia producatorului.', certIds: [] };
+      } else if (/CKR_PIN_INCORRECT|CKR_PIN_INVALID|CKR_PIN_LEN_RANGE/i.test(out)) {
+        result = { ok: false, message: 'PIN verification failed', certIds: [] };
+      } else if (err && !/present token/i.test(out)) {
+        result = { ok: false, message: `pkcs11-tool login failed: ${out.trim().split('\n').slice(-2).join(' | ')}`, certIds: [] };
+      } else {
+        const certs = parseCertificateObjects(out);
+        result = { ok: true, message: `login ok, ${certs.length} certificate(s)`, certIds: certs.map((c) => c.id) };
+      }
+      console.log(`[pkcs11] ${result.message}${result.certIds.length ? ' ids=' + result.certIds.join(',') : ''}`);
+      pkcs11LoginCache.set(key, result);
+
+      // Diagnostic when the login worked but no certificate object is visible:
+      // list every object class so we can see how this middleware exposes it.
+      if (result.ok && result.certIds.length === 0) {
+        execFile(toolchain.pkcs11ToolPath as string, [
+          '--module', toolchain.module, '--login', '--pin', pin, '-O',
+        ], { encoding: 'utf-8', timeout: 60_000, env: toolchain.env }, (_e2, so2, se2) => {
+          const all = `${so2 ?? ''}\n${se2 ?? ''}`;
+          const summary = all.split('\n')
+            .filter((l) => /Object|label:|ID:|type:|Usage:|Access:|Subject|Key size/i.test(l))
+            .map((l) => l.trim()).join(' | ');
+          console.log(`[pkcs11] objects after login: ${summary || all.trim().split('\n').slice(-3).join(' | ')}`);
+          resolve(result);
+        });
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
 export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
   // Cache PIN in-memory when provided so subsequent requests don't need it from frontend
   if (req.pin) {
@@ -107,6 +168,21 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
   } else {
     const cached = getCachedPin(req.certificateId);
     if (cached) req = { ...req, pin: cached };
+  }
+
+  // PKCS#11 placeholder certificate: verify the PIN once and pin down the real id
+  if (req.certificateId === PKCS11_AUTO_ID && req.pin) {
+    const toolchain = pkcs11ToolchainFor(req, config);
+    if (toolchain) {
+      const login = await verifyPkcs11Login(toolchain, req.pin);
+      if (!login.ok) {
+        pinCache.delete(req.certificateId);
+        throw new Error(login.message);
+      }
+      if (login.certIds.length > 0) {
+        req = { ...req, certificateId: login.certIds[0] };
+      }
+    }
   }
 
   const cookiePath = getCookieJarPath(req.certificateId);
@@ -158,13 +234,32 @@ async function execRequest(
   return execCurl(req, config);
 }
 
+/**
+ * PKCS#11 toolchain for this request, or null when the certificate lives in
+ * the macOS Keychain / Windows store and platform curl handles it.
+ */
+function pkcs11ToolchainFor(req: ProxyRequest, config: AgentConfig): Pkcs11Toolchain | null {
+  const os = platform();
+  if (os === 'win32') return null;
+  if (os === 'darwin' && !isPkcs11CertificateId(req.certificateId)) return null;
+  const toolchain = resolvePkcs11Toolchain(config);
+  if (!toolchain) return null;
+  if (toolchain.missing.length > 0) {
+    throw new Error(`PKCS#11 toolchain incomplete: ${toolchain.missing.join('; ')}`);
+  }
+  return toolchain;
+}
+
 function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
   return new Promise((resolve, reject) => {
-    const args = buildCurlArgs(req, config);
+    const toolchain = pkcs11ToolchainFor(req, config);
+    const args = buildCurlArgs(req, config, toolchain);
+    const curlPath = toolchain?.curlPath ?? config.curlPath;
 
-    const child = spawn(config.curlPath, args, {
+    const child = spawn(curlPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 120_000,
+      env: toolchain?.env ?? process.env,
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -183,12 +278,16 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
       const rawBuffer = Buffer.concat(stdoutChunks);
 
       if (code !== 0 && rawBuffer.length === 0) {
-        reject(new Error(`curl exited with code ${code}: ${stderr}`));
+        console.error(`[proxy] ← curl exit ${code}: ${redactPin(stderr.trim().split('\n').slice(-3).join(' | '))}`);
+        reject(new Error(`curl exited with code ${code}: ${redactPin(stderr)}`));
         return;
       }
 
       try {
         const result = parseResponse(rawBuffer);
+        const preview = result.bodyEncoding === 'base64' ? `<binary ${result.body.length}b>` : result.body.replace(/\s+/g, ' ').slice(0, 160);
+        console.log(`[proxy] ← ${result.statusCode} ${result.headers['content-type'] ?? ''} ${preview}`);
+        if (code !== 0) console.error(`[proxy] curl exit ${code}: ${redactPin(stderr.trim().split('\n').slice(-2).join(' | '))}`);
         resolve(result);
       } catch (err) {
         reject(new Error(`Failed to parse curl response: ${(err as Error).message}`));
@@ -201,7 +300,7 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
   });
 }
 
-function buildCurlArgs(req: ProxyRequest, config: AgentConfig): string[] {
+function buildCurlArgs(req: ProxyRequest, config: AgentConfig, toolchain: Pkcs11Toolchain | null): string[] {
   const cookiePath = getCookieJarPath(req.certificateId);
   const sessionValid = hasValidSession(cookiePath);
 
@@ -231,26 +330,33 @@ function buildCurlArgs(req: ProxyRequest, config: AgentConfig): string[] {
   // allow subsequent requests without re-presenting the certificate.
   if (!sessionValid) {
     const os = platform();
-    if (os === 'darwin') {
-      args.push('--cert', req.certificateId);
-      if (req.pin) args.push('--pass', req.pin);
-    } else if (os === 'win32') {
-      args.push('--cert', `CurrentUser\\My\\${req.certificateId}`);
-    } else if (os === 'linux' && config.pkcs11Module) {
-      const certUri = req.pin
-        ? `pkcs11:id=%${req.certificateId};pin-value=${req.pin}`
-        : `pkcs11:id=%${req.certificateId}`;
+    if (toolchain) {
+      // PKCS#11 token via libp11's OpenSSL engine (macOS without a Keychain
+      // driver, or Linux). The PIN travels inside the URI, never as a flag.
+      const certUri = pkcs11Uri(req.certificateId, req.pin);
       args.push(
         '--engine', 'pkcs11',
         '--cert-type', 'ENG',
         '--cert', certUri,
+        '--key-type', 'ENG',
+        '--key', certUri,
       );
+    } else if (os === 'darwin') {
+      args.push('--cert', req.certificateId);
+      if (req.pin) args.push('--pass', req.pin);
+    } else if (os === 'win32') {
+      args.push('--cert', `CurrentUser\\My\\${req.certificateId}`);
     }
   }
 
   args.push(req.url);
 
   return args;
+}
+
+/** Never let a PIN reach logs or error messages (it travels inside the PKCS#11 URI). */
+function redactPin(text: string): string {
+  return text.replace(/pin-value=[^;'"\s]*/g, 'pin-value=<redacted>');
 }
 
 /** Content types that indicate binary data (should be base64-encoded). */

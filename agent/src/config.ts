@@ -7,6 +7,9 @@ export interface AgentConfig {
   allowedOrigins: string[];
   pkcs11Module: string | null;
   curlPath: string;
+  /** Optional overrides for the PKCS#11 toolchain (macOS/Linux). Auto-detected when null. */
+  opensslPath?: string | null;
+  pkcs11ToolPath?: string | null;
 }
 
 const CONFIG_DIR = join(homedir(), '.storno-agent');
@@ -26,6 +29,8 @@ const DEFAULT_CONFIG: AgentConfig = {
   // On Windows, use the native System32 curl (Schannel) instead of Git's curl (OpenSSL).
   // Schannel can access certificates from the Windows Certificate Store by thumbprint.
   curlPath: platform() === 'win32' ? 'C:\\Windows\\System32\\curl.exe' : 'curl',
+  opensslPath: null,
+  pkcs11ToolPath: null,
 };
 
 export function loadConfig(): AgentConfig {
