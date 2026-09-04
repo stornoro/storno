@@ -346,6 +346,69 @@ export function useAnafAgent() {
     return result.stats
   }
 
+  /**
+   * SPV inbox sync: list every ANAF message for the company (somatii,
+   * decizii, notificari, recipise...) through the agent, let the backend
+   * archive + classify them, then fetch the PDFs it still needs. Both the
+   * listing and every download require the certificate (mTLS).
+   */
+  async function syncSpvViaAgent(
+    certificateId: string,
+    days = 60,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ created: number; skipped: number; received: number; downloaded: number; failed: number }> {
+    const { post } = useApi()
+
+    const prepared = await post<{ anafUrl: string; cif: string; days: number }>('/v1/spv/sync-prepare', { days })
+
+    const listing = await proxyToAnaf({
+      url: prepared.anafUrl,
+      method: 'GET',
+      headers: {},
+      body: '',
+      certificateId,
+    })
+
+    const result = await post<{
+      stats: { created: number; skipped: number; received: number }
+      documents: Array<{ documentId: string; anafUrl: string; messageType: string }>
+    }>('/v1/spv/sync-agent-result', {
+      statusCode: listing.statusCode,
+      body: listing.body,
+    })
+
+    let downloaded = 0
+    let failed = 0
+    const docs = result.documents ?? []
+    const CHUNK = 5
+    for (let i = 0; i < docs.length; i += CHUNK) {
+      const chunk = docs.slice(i, i + CHUNK)
+      const responses = await batchProxyToAnaf(chunk.map(d => ({
+        url: d.anafUrl,
+        method: 'GET',
+        headers: {},
+        body: '',
+        certificateId,
+      })))
+      for (let j = 0; j < chunk.length; j++) {
+        const res = responses[j]
+        try {
+          await post(`/v1/spv/documents/${chunk[j]!.documentId}/agent-document`, {
+            statusCode: res?.statusCode ?? 502,
+            body: res?.body ?? '',
+            bodyEncoding: res?.bodyEncoding,
+          })
+          downloaded++
+        } catch {
+          failed++
+        }
+      }
+      onProgress?.(Math.min(i + CHUNK, docs.length), docs.length)
+    }
+
+    return { ...result.stats, downloaded, failed }
+  }
+
   async function refreshStatusesViaAgent(certificateId: string): Promise<{ accepted: number; rejected: number }> {
     const { post } = useApi()
 
@@ -458,6 +521,7 @@ export function useAnafAgent() {
     bulkSubmitViaAgent,
     checkStatusViaAgent,
     syncViaAgent,
+    syncSpvViaAgent,
     refreshStatusesViaAgent,
     getPreferredCertId,
     setPreferredCertId,

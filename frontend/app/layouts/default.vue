@@ -68,6 +68,12 @@ const links = computed(() => {
       to: '/declarations',
       onSelect: close,
     },
+    can(P.DECLARATION_VIEW) && {
+      label: $t('nav.spv'),
+      icon: 'i-lucide-inbox',
+      to: '/spv',
+      onSelect: close,
+    },
     can(P.CLIENT_VIEW) && {
       label: $t('nav.clients'),
       icon: 'i-lucide-users',

@@ -71,6 +71,11 @@ const categories = [
     events: ['sync.error', 'efactura.new_documents'],
   },
   {
+    key: 'spv',
+    label: $t('notificationPreferences.categories.spv'),
+    events: ['spv.document_received', 'spv.new_documents'],
+  },
+  {
     key: 'tokens',
     label: $t('notificationPreferences.categories.tokens'),
     events: ['token.expiring_soon', 'token.refresh_failed'],

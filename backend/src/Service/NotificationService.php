@@ -14,6 +14,7 @@ class NotificationService
 {
     private const EMAIL_ENABLED_BY_DEFAULT = [
         'invoice.rejected',
+        'spv.document_received',
         'invoice.anaf_deadline',
         'invoice.anaf_missing_token',
         'token.expiring_soon',

@@ -26,6 +26,8 @@ class NotificationPreferenceController extends AbstractController
         'proforma.expired',
         'sync.error',
         'efactura.new_documents',
+        'spv.document_received',
+        'spv.new_documents',
         'token.expiring_soon',
         'token.refresh_failed',
         'export_ready',

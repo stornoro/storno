@@ -36,6 +36,7 @@ class TaxDeclarationController extends AbstractController
         private readonly AnafDeclarationClient $anafClient,
         private readonly DukIntegratorService $dukIntegrator,
         private readonly LicenseManager $licenseManager,
+        private readonly \App\Service\Spv\SpvDocumentIngestionService $spvIngestion,
     ) {}
 
     #[Route('/declarations', methods: ['GET'])]
@@ -930,6 +931,10 @@ class TaxDeclarationController extends AbstractController
         $messages = $parsed['mesaje'] ?? [];
         $stats = ['created' => 0, 'updated' => 0];
         $recipisas = [];
+
+        // Archive every SPV message (somatii, decizii, notificari...), not only recipise.
+        // Returns the PDFs the agent still has to fetch; the frontend downloads them.
+        $spv = $this->spvIngestion->ingest($company, is_array($messages) ? $messages : []);
         $seen = []; // Track type+period combos processed in this sync to prevent duplicates
         $cif = (string) $company->getCif();
         $baseUrl = 'https://webserviced.anaf.ro/SPVWS2/rest';
@@ -1061,6 +1066,8 @@ class TaxDeclarationController extends AbstractController
 
         return $this->json([
             'stats' => $stats,
+            'spv' => ['created' => $spv['created'], 'skipped' => $spv['skipped']],
+            'documents' => $spv['documents'],
         ]);
     }
 

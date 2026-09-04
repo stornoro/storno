@@ -22,6 +22,7 @@ export default defineI18nLocale(async () => {
       deliveryNotes: 'Delivery notes',
       receipts: 'Receipts',
       declarations: 'Declarations',
+      spv: 'SPV documents',
       settings: 'Settings',
       admin: 'Administration',
       overview: 'Overview',
@@ -3205,6 +3206,7 @@ export default defineI18nLocale(async () => {
       exports: 'Export',
       reports: 'Reports',
       system: 'System',
+      spv: 'SPV documents (ANAF)',
     },
     events: {
       invoice: {
@@ -3223,6 +3225,10 @@ export default defineI18nLocale(async () => {
       },
       efactura: {
         new_documents: 'New e-Factura documents',
+      },
+      spv: {
+        document_received: 'Important SPV document (enforcement notice, decision, notice)',
+        new_documents: 'New SPV documents',
       },
       token: {
         expiring_soon: 'ANAF token expiring soon',
@@ -4048,6 +4054,49 @@ export default defineI18nLocale(async () => {
   },
 
   // ── Tax Declarations ───────────────────────────────────────────
+  spv: {
+    title: 'SPV documents',
+    syncNow: 'Sync with ANAF',
+    syncingPdfs: 'Downloading PDF {done}/{total}',
+    syncSuccess: 'SPV sync completed',
+    syncSummary: '{received} messages in SPV, {created} new, {downloaded} PDFs archived, {failed} failed',
+    syncError: 'SPV sync failed',
+    downloadError: 'The file could not be downloaded',
+    download: 'Download PDF',
+    markAllRead: 'Mark all as read',
+    markedRead: '{count} documents marked as read',
+    unread: 'Unread',
+    unreadOnly: 'Unread only',
+    allCategories: 'All categories',
+    allSeverities: 'Any importance',
+    searchPlaceholder: 'Search messages...',
+    emptyTitle: 'No SPV documents',
+    emptyDescription: 'Sync with ANAF through the local agent to bring in enforcement notices, decisions, notifications and receipts from the Virtual Private Space.',
+    filePending: 'PDF not downloaded yet',
+    filePurged: 'PDF removed by retention policy',
+    criticalUnreadTitle: '{count} unread critical documents',
+    criticalUnreadHint: 'Enforcement notices, deactivation or VAT cancellation decisions, risk analysis reports. They carry short legal deadlines.',
+    setupTitle: 'Agent setup',
+    severity: {
+      critical: 'Critical',
+      high: 'Important',
+      normal: 'Informational',
+      low: 'Routine',
+    },
+    stats: {
+      total: 'Total documents',
+      unread: 'Unread',
+      critical: 'Critical',
+      pendingPdf: 'PDFs to download',
+    },
+    detail: {
+      anafDate: 'ANAF date',
+      anafId: 'ANAF message ID',
+      requestId: 'Request ID',
+      cif: 'CUI',
+      archived: 'Archived',
+    },
+  },
   declarations: {
     title: 'Tax Declarations',
     create: 'New Declaration',
@@ -4405,6 +4454,10 @@ export default defineI18nLocale(async () => {
     'notification.invoice_rejected.title': '{company} — invoice rejected by ANAF',
     'notification.sync_error.title': '{company} — e-Factura sync error',
     'notification.new_documents.title': '{company} — new e-Factura documents',
+    'notification.spv.document_received.title': '{company}: {type}',
+    'notification.spv.document_received.message': '{details}',
+    'notification.spv.new_documents.title': '{company}',
+    'notification.spv.new_documents.message': '{count} new documents in SPV ({summary})',
     'notification.efactura.new_documents.title': '{company}',
     'notification.efactura.new_incoming.message': 'You received an invoice from {counterparty} · {amount}',
     'notification.efactura.new_outgoing.message': 'You sent an invoice to {counterparty} · {amount}',

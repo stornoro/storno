@@ -40,6 +40,8 @@ class SendExternalNotificationHandler
         'token.expiring_soon' => 'emails/notification_token_expiring.html.twig',
         'token.refresh_failed' => 'emails/notification_token_refresh_failed.html.twig',
         'efactura.new_documents' => 'emails/notification_efactura_new_documents.html.twig',
+        'spv.document_received' => 'emails/notification_spv_document_received.html.twig',
+        'spv.new_documents' => 'emails/notification_spv_new_documents.html.twig',
         'sync.error' => 'emails/notification_sync_error.html.twig',
         'invoice.anaf_deadline' => 'emails/notification_anaf_deadline.html.twig',
         'export_ready' => 'emails/notification_export_ready.html.twig',
@@ -422,6 +424,25 @@ class SendExternalNotificationHandler
                 '',
                 "\u{1F517} {$frontendUrl}/efactura",
             ]),
+
+            'spv.document_received' => implode("\n", array_filter([
+                "\u{1F6A8} *" . ($data['messageType'] ?? 'Document SPV') . "*",
+                '',
+                $message,
+                isset($data['companyId'])
+                    ? "\n\u{1F517} {$frontendUrl}/spv?company={$data['companyId']}"
+                    : null,
+            ])),
+
+            'spv.new_documents' => implode("\n", array_filter([
+                "\u{1F4E5} *Documente noi in SPV*",
+                !empty($data['count']) ? "\u{1F4CB} Documente noi: *{$data['count']}*" : null,
+                '',
+                $message,
+                isset($data['companyId'])
+                    ? "\n\u{1F517} {$frontendUrl}/spv?company={$data['companyId']}"
+                    : null,
+            ])),
 
             'efactura.new_documents' => implode("\n", array_filter([
                 "\u{1F4E5} *Documente noi e-Factura*",

@@ -22,6 +22,7 @@ export default defineI18nLocale(async () => {
       deliveryNotes: 'Avize',
       receipts: 'Bonuri fiscale',
       declarations: 'Declaratii',
+      spv: 'Documente SPV',
       settings: 'Setari',
       admin: 'Administrare',
       overview: 'Prezentare generala',
@@ -3204,6 +3205,7 @@ export default defineI18nLocale(async () => {
         exports: 'Export',
         reports: 'Rapoarte',
         system: 'Sistem',
+        spv: 'Documente SPV (ANAF)',
       },
       events: {
         invoice: {
@@ -3222,6 +3224,10 @@ export default defineI18nLocale(async () => {
         },
         efactura: {
           new_documents: 'Documente noi e-Factura',
+        },
+        spv: {
+          document_received: 'Document important in SPV (somatie, decizie, notificare)',
+          new_documents: 'Documente noi in SPV',
         },
         token: {
           expiring_soon: 'Token ANAF expira curand',
@@ -4049,6 +4055,49 @@ export default defineI18nLocale(async () => {
     },
 
   // ── Declaratii fiscale ─────────────────────────────────────────
+  spv: {
+    title: 'Documente SPV',
+    syncNow: 'Sincronizeaza cu ANAF',
+    syncingPdfs: 'Descarc PDF {done}/{total}',
+    syncSuccess: 'Sincronizare SPV finalizata',
+    syncSummary: '{received} mesaje in SPV, {created} noi, {downloaded} PDF-uri arhivate, {failed} esuate',
+    syncError: 'Sincronizarea SPV a esuat',
+    downloadError: 'Fisierul nu a putut fi descarcat',
+    download: 'Descarca PDF',
+    markAllRead: 'Marcheaza tot ca citit',
+    markedRead: '{count} documente marcate ca citite',
+    unread: 'Necitit',
+    unreadOnly: 'Doar necitite',
+    allCategories: 'Toate categoriile',
+    allSeverities: 'Orice importanta',
+    searchPlaceholder: 'Cauta in mesaje...',
+    emptyTitle: 'Niciun document SPV',
+    emptyDescription: 'Sincronizeaza cu ANAF prin agentul local ca sa aduci somatiile, deciziile, notificarile si recipisele din Spatiul Privat Virtual.',
+    filePending: 'PDF inca nedescarcat',
+    filePurged: 'PDF sters conform retentiei',
+    criticalUnreadTitle: '{count} documente critice necitite',
+    criticalUnreadHint: 'Somatii, decizii de inactivare sau anulare TVA, rapoarte de analiza de risc. Au termene legale scurte.',
+    setupTitle: 'Configurare agent',
+    severity: {
+      critical: 'Critic',
+      high: 'Important',
+      normal: 'Informativ',
+      low: 'Rutina',
+    },
+    stats: {
+      total: 'Total documente',
+      unread: 'Necitite',
+      critical: 'Critice',
+      pendingPdf: 'PDF-uri de descarcat',
+    },
+    detail: {
+      anafDate: 'Data ANAF',
+      anafId: 'ID mesaj ANAF',
+      requestId: 'ID solicitare',
+      cif: 'CUI',
+      archived: 'Arhivat',
+    },
+  },
   declarations: {
     title: 'Declaratii fiscale',
     create: 'Declaratie noua',
@@ -4406,6 +4455,10 @@ export default defineI18nLocale(async () => {
     'notification.invoice_rejected.title': '{company} — factură respinsă ANAF',
     'notification.sync_error.title': '{company} — eroare sincronizare e-Factura',
     'notification.new_documents.title': '{company} — documente noi e-Factura',
+    'notification.spv.document_received.title': '{company}: {type}',
+    'notification.spv.document_received.message': '{details}',
+    'notification.spv.new_documents.title': '{company}',
+    'notification.spv.new_documents.message': 'Ai {count} documente noi in SPV ({summary})',
     'notification.efactura.new_documents.title': '{company}',
     'notification.efactura.new_incoming.message': 'Ai primit o factură de la {counterparty} · {amount}',
     'notification.efactura.new_outgoing.message': 'Ai emis o factură către {counterparty} · {amount}',
