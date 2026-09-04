@@ -15,7 +15,10 @@ import { tmpdir, platform } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { signHashWindows } from './windows-signer.js';
 import { signHashMacos } from './macos-signer.js';
-import { signHashLinux } from './linux-signer.js';
+import { signHashPkcs11 } from './linux-signer.js';
+import type { AgentConfig } from '../config.js';
+import { resolvePkcs11Toolchain } from '../utils/toolchain.js';
+import { isPkcs11CertificateId } from '../certificates/discovery.js';
 
 const SIGNATURE_PLACEHOLDER_LENGTH = 16384; // 16KB for CMS signature — large enough for cert chain
 
@@ -25,14 +28,14 @@ const SIGNATURE_PLACEHOLDER_LENGTH = 16384; // 16KB for CMS signature — large 
  * @param pdfBuffer - Unsigned PDF as Buffer
  * @param certificateId - Certificate thumbprint/ID
  * @param pin - Optional PIN for smart card
- * @param pkcs11Module - PKCS#11 module path (Linux only)
+ * @param config - Agent config (PKCS#11 module / toolchain overrides)
  * @returns Signed PDF as Buffer
  */
 export async function signPdf(
   pdfBuffer: Buffer,
   certificateId: string,
-  pin?: string,
-  pkcs11Module?: string | null,
+  pin: string | undefined,
+  config: AgentConfig,
 ): Promise<Buffer> {
   const id = randomUUID();
   const workDir = join(tmpdir(), 'storno-pdfsign');
@@ -56,7 +59,7 @@ export async function signPdf(
     writeFileSync(hashPath, hashInput);
 
     // Phase 2: Sign the hash using platform-specific signer
-    const signature = await platformSign(hashInput, certificateId, pin, pkcs11Module);
+    const signature = await platformSign(hashInput, certificateId, pin, config);
     writeFileSync(sigPath, signature);
 
     // Phase 3: Embed signature into prepared PDF
@@ -220,16 +223,21 @@ function embedSignature(
 async function platformSign(
   data: Buffer,
   certificateId: string,
-  pin?: string,
-  pkcs11Module?: string | null,
+  pin: string | undefined,
+  config: AgentConfig,
 ): Promise<Buffer> {
   const os = platform();
   if (os === 'win32') {
     return signHashWindows(data, certificateId, pin);
   } else if (os === 'darwin') {
+    // Keychain-backed identities sign through the Security framework; tokens
+    // reachable only via vendor PKCS#11 middleware go through OpenSSL + libp11.
+    if (isPkcs11CertificateId(certificateId)) {
+      return signHashPkcs11(data, certificateId, pin, resolvePkcs11Toolchain(config));
+    }
     return signHashMacos(data, certificateId, pin);
   } else if (os === 'linux') {
-    return signHashLinux(data, certificateId, pin, pkcs11Module ?? undefined);
+    return signHashPkcs11(data, certificateId, pin, resolvePkcs11Toolchain(config));
   }
   throw new Error(`Unsupported platform for PDF signing: ${os}`);
 }

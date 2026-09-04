@@ -4,7 +4,8 @@ import { execSync } from 'node:child_process';
 import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
-import { CERT, KEY } from './certs.js';
+import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
+import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
 import { signPdf } from './signing/pdf-signer.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
@@ -105,9 +106,11 @@ async function handleUpdate(res: ServerResponse): Promise<void> {
   json(res, result.success ? 200 : 400, result);
 }
 
-function handleCertificates(res: ServerResponse, config: AgentConfig): void {
-  const certificates = discoverCertificates(config.pkcs11Module);
-  json(res, 200, { certificates });
+function handleCertificates(res: ServerResponse, _config: AgentConfig): void {
+  // Served from the background cache: some PKCS#11 middleware needs ~12s to
+  // initialise, while the frontend waits at most 5s for this endpoint.
+  const { certificates, refreshedAt } = getCachedCertificates();
+  json(res, 200, { certificates, refreshedAt });
 }
 
 async function handleProxy(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
@@ -310,7 +313,7 @@ async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, co
     // Step 1: Sign the PDF
     console.log(`[sign-and-submit] Signing PDF for cert ${payload.certificateId.substring(0, 8)}...`);
     const unsignedPdf = Buffer.from(payload.pdf, 'base64');
-    const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config.pkcs11Module);
+    const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config);
     console.log(`[sign-and-submit] PDF signed (${signedPdf.length} bytes)`);
 
     // Step 2: Upload signed PDF to ANAF via curl mTLS
@@ -427,7 +430,7 @@ async function handleBatchSignAndSubmit(req: IncomingMessage, res: ServerRespons
       // Sign
       console.log(`[batch-sign-and-submit] Signing ${i + 1}/${payload.requests.length}...`);
       const unsignedPdf = Buffer.from(item.pdf, 'base64');
-      const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config.pkcs11Module);
+      const signedPdf = await signPdf(unsignedPdf, payload.certificateId, payload.pin, config);
 
       // Upload
       console.log(`[batch-sign-and-submit] Uploading ${i + 1}/${payload.requests.length} to ${item.uploadUrl}`);
@@ -477,12 +480,16 @@ export function startServer(config?: AgentConfig): void {
   const cfg = config ?? loadConfig();
   const handler = (req: IncomingMessage, res: ServerResponse) => handleRequest(req, res, cfg);
 
-  const server = createServer({ cert: CERT, key: KEY }, handler);
+  const tls = bestLocalBundle();
+  const server = createServer({ cert: tls.cert, key: tls.key }, handler);
   const port = cfg.port;
+  startTlsRefresh(server, tls);
+  startCertificateCache(cfg);
 
   server.listen(port, '127.0.0.1', async () => {
     console.log(`Storno ANAF Agent v${VERSION}`);
     console.log(`Listening on https://agent.storno.ro:${port}`);
+    console.log(`TLS: ${tls.source} certificate, valid until ${tls.expiresAt.toISOString().slice(0, 10)}${isExpired(tls) ? ' (EXPIRED — refreshing from get.storno.ro)' : ''}`);
     console.log(`Platform: ${process.platform}`);
     console.log('');
     console.log('Endpoints:');

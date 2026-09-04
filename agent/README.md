@@ -27,7 +27,7 @@ npx storno-agent status
 # List certificates from your OS/hardware token
 npx storno-agent certificates
 
-# Configure PKCS#11 module (Linux only)
+# Configure PKCS#11 module (Linux/macOS; known vendor modules are auto-detected)
 npx storno-agent config --pkcs11-module /usr/lib/libeTPkcs11.so
 
 # Change port (default: 17394)
@@ -96,7 +96,7 @@ Proxy an mTLS request to ANAF. Requires `X-Storno-Agent: 1` header.
 
 | Platform | Certificate Access | How |
 |----------|-------------------|-----|
-| macOS | Keychain + USB tokens | `security find-identity` / SecureTransport curl |
+| macOS | Keychain + USB tokens | `security find-identity` / SecureTransport curl for tokens with a CryptoTokenKit driver; `pkcs11-tool` + Homebrew `curl --engine pkcs11` for vendor PKCS#11 middleware (see below) |
 | Windows | Windows Certificate Store | PowerShell `Get-ChildItem Cert:\` / SChannel curl |
 | Linux | PKCS#11 hardware tokens | `pkcs11-tool` / `curl --engine pkcs11` |
 
@@ -112,10 +112,35 @@ Proxy an mTLS request to ANAF. Requires `X-Storno-Agent: 1` header.
 ## Supported Hardware Tokens
 
 - SafeNet eToken (Thales)
+- Longmai mToken CryptoID (CertDigital) — see macOS note below
 - Feitian ePass
 - Bit4id miniLector
 - certSIGN
 - Any PKCS#11-compatible token (configure module path)
+
+### macOS tokens without a Keychain driver (e.g. Longmai mToken CryptoID)
+
+Some middleware installs only a PKCS#11 library and no CryptoTokenKit
+extension, so the certificate never appears in Keychain and Apple's curl
+cannot use it. The agent then goes through OpenSSL's `pkcs11` engine, which
+needs a Homebrew toolchain of the **same CPU architecture as the module**:
+
+```bash
+# Recommended: self-contained toolchain in ~/.storno-agent/toolchain-<arch>
+# (no sudo, no Homebrew, nothing else on the machine is touched; delete the
+# folder to uninstall). Pass the architecture of the module, which
+# `storno-agent certificates` prints. Takes a few minutes.
+./scripts/build-pkcs11-toolchain.sh x86_64   # Longmai standard driver on Apple Silicon
+./scripts/build-pkcs11-toolchain.sh arm64    # arm64 / universal modules
+
+# Alternative: Homebrew of the matching architecture
+brew install curl libp11 opensc                                   # arm64 module
+arch -x86_64 /usr/local/bin/brew install curl libp11 opensc       # x86_64 module, needs Intel Homebrew
+```
+
+`storno-agent certificates` prints the detected module, its architecture and
+anything still missing. On such tokens the certificates are private objects,
+so the list shows a single placeholder until the PIN is entered in the app.
 
 ## Configuration
 
@@ -126,7 +151,9 @@ Stored in `~/.storno-agent/config.json`:
   "port": 17394,
   "allowedOrigins": ["https://app.storno.ro", "http://localhost:3000"],
   "pkcs11Module": null,
-  "curlPath": "curl"
+  "curlPath": "curl",
+  "opensslPath": null,
+  "pkcs11ToolPath": null
 }
 ```
 

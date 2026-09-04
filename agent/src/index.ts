@@ -3,6 +3,7 @@
 import { startServer } from './server.js';
 import { loadConfig, saveConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
+import { resolvePkcs11Toolchain } from './utils/toolchain.js';
 import { registerProtocol } from './protocol.js';
 import { resolve } from 'node:path';
 
@@ -64,14 +65,34 @@ async function main() {
 
     case 'certificates': {
       const config = loadConfig();
-      const certs = discoverCertificates(config.pkcs11Module);
+      const toolchain = resolvePkcs11Toolchain(config);
+      if (toolchain) {
+        console.log(`PKCS#11 module: ${toolchain.module} (${toolchain.moduleName}, ${toolchain.moduleArchs.join('/')})`);
+        if (toolchain.emulated) {
+          console.log(`  Module needs ${toolchain.requiredArch} tools (running under emulation)`);
+        }
+        if (toolchain.missing.length) {
+          console.log('  Toolchain incomplete:');
+          for (const m of toolchain.missing) console.log(`    - ${m}`);
+        } else {
+          console.log(`  curl: ${toolchain.curlPath}`);
+          console.log(`  openssl: ${toolchain.opensslPath}`);
+          console.log(`  pkcs11-tool: ${toolchain.pkcs11ToolPath}`);
+        }
+        console.log('');
+      }
+      const certs = discoverCertificates(config);
       if (certs.length === 0) {
         console.log('No certificates found.');
         console.log('');
         console.log('Tips:');
         console.log('  - Make sure your hardware token is plugged in');
-        console.log('  - On Linux, configure the PKCS#11 module:');
-        console.log('    storno-agent config --pkcs11-module /path/to/pkcs11.so');
+        console.log('  - Install the token vendor middleware (PKCS#11 module)');
+        console.log('  - If the module is not auto-detected, configure it:');
+        console.log('    storno-agent config --pkcs11-module /path/to/module');
+        if (process.platform === 'darwin') {
+          console.log('  - macOS: tokens without a Keychain driver need Homebrew curl + libp11 + opensc');
+        }
       } else {
         console.log(`Found ${certs.length} certificate(s):\n`);
         for (const cert of certs) {
@@ -126,7 +147,7 @@ async function main() {
       console.log('  storno-agent config         Manage configuration');
       console.log('');
       console.log('Options:');
-      console.log('  storno-agent config --pkcs11-module <path>  Set PKCS#11 module (Linux)');
+      console.log('  storno-agent config --pkcs11-module <path>  Set PKCS#11 module (Linux/macOS, auto-detected when omitted)');
       console.log('  storno-agent config --port <number>         Set server port');
       console.log('  storno-agent config --show                  Show current config');
       break;
