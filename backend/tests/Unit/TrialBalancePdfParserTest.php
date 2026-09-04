@@ -118,10 +118,10 @@ class TrialBalancePdfParserTest extends TestCase
 
     public function testDetectCuiWithCfPrefix(): void
     {
-        $text = "TIME SAVER SERVICES S.R.L.   c.f. RO41928329   r.c. J40/15906/2019";
+        $text = "EXEMPLU CONSULT S.R.L.   c.f. RO12345673   r.c. J40/12345/2020";
 
         $result = $this->callDetectCompanyCui($text);
-        $this->assertSame('41928329', $result->companyCui);
+        $this->assertSame('12345673', $result->companyCui);
     }
 
     public function testDetectCuiWithCfPrefixNoDots(): void
@@ -414,7 +414,7 @@ DebitoareCreditoareDebitoareCreditoareDebitoareCreditoareDebitoareCreditoare
 DebitoareCreditoare
 Solduri initiale anSume precedenteRulaje perioadaSume totaleSolduri finale
 Balanta de verificare
-TIME SAVER SERVICES S.R.L.   c.f. RO41928329
+EXEMPLU CONSULT S.R.L.   c.f. RO12345673
 --
 1061REZERVE LEGALE            0.00           40.00            0.00            0.00            0.00           40.00            0.00           40.00           40.00            0.00
 TEXT;
@@ -524,8 +524,8 @@ TEXT;
             'Two dashes' => ['--', true],
             'Three dashes' => ['-------------------', true],
             'Equals' => ['===================', true],
-            'c.f. line' => ['c.f. RO41928329  r.c. J40/15906/2019', true],
-            'r.c. line' => ['r.c. J40/15906/2019', true],
+            'c.f. line' => ['c.f. RO12345673  r.c. J40/12345/2020', true],
+            'r.c. line' => ['r.c. J40/12345/2020', true],
             'Capital social' => ['Capital social 200', true],
             'Den cont' => ['Den cont  Sold initial  Rulaj', true],
             'Nr. crt header' => ['Nr. crt  Simbol cont  Debit', true],
@@ -534,7 +534,7 @@ TEXT;
         ];
     }
 
-    // ── Full text simulation (TIME SAVER SERVICES format) ───────────────
+    // ── Full text simulation (EXEMPLU CONSULT format) ───────────────
 
     public function testFullParseTimeSaverFormat(): void
     {
@@ -546,7 +546,7 @@ DebitoareCreditoareDebitoareCreditoareDebitoareCreditoareDebitoareCreditoare
 DebitoareCreditoare
 Solduri initiale anSume precedenteRulaje perioadaSume totaleSolduri finale
 Balanta de verificare
-TIME SAVER SERVICES S.R.L.   c.f. RO41928329   r.c. J40/15906/2019  Capital social 200
+EXEMPLU CONSULT S.R.L.   c.f. RO12345673   r.c. J40/12345/2020  Capital social 200
 BUCURESTI sect. 6 str. SOS VIRTUTII nr. 19D et. 4 cod postal BIR B tel. 0756100151
 --
 1012CAPITAL SUBSCRIS VARSAT            0.00          200.00            0.00            0.00            0.00          200.00            0.00          200.00          200.00            0.00
@@ -568,7 +568,7 @@ TEXT;
 
         $this->assertSame(2023, $result->year);
         $this->assertSame(12, $result->month);
-        $this->assertSame('41928329', $result->companyCui);
+        $this->assertSame('12345673', $result->companyCui);
 
         $this->assertGreaterThanOrEqual(7, count($result->rows), 'Should parse at least 7 account rows');
 
