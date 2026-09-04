@@ -84,6 +84,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleSignAndSubmit(req, res, config);
   } else if (url === '/batch-sign-and-submit' && req.method === 'POST') {
     handleBatchSignAndSubmit(req, res, config);
+  } else if (url === '/sign' && req.method === 'POST') {
+    handleSign(req, res, config);
   } else if (url === '/spv-web-request' && req.method === 'POST') {
     handleSpvWebRequest(req, res, config);
   } else if (url === '/monitor' && req.method === 'GET') {
@@ -385,6 +387,47 @@ interface SignAndSubmitResult {
   bodyEncoding?: string;
 }
 
+/**
+ * Sign one or more PDFs with the qualified certificate and hand them back
+ * (no upload). Used by the MCP tools for bulk signing.
+ * Body: {certificateId, pin?, pdf?: base64, items?: [{name, pdf: base64}]}
+ */
+async function handleSign(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+  let payload: { certificateId?: string; pin?: string; pdf?: string; items?: Array<{ name?: string; pdf: string }> };
+  try {
+    payload = JSON.parse(await readBody(req));
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+  if (!payload.certificateId || (!payload.pdf && !payload.items?.length)) {
+    json(res, 400, { error: 'Missing required fields: certificateId and pdf or items[]' });
+    return;
+  }
+  const items = payload.items?.length ? payload.items : [{ name: 'document.pdf', pdf: payload.pdf as string }];
+  const results: Array<{ index: number; name: string; pdf?: string; bytes?: number; error?: string }> = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    try {
+      const signed = await signPdf(Buffer.from(item.pdf, 'base64'), payload.certificateId, payload.pin, config);
+      results.push({ index: i, name: item.name || `document-${i + 1}.pdf`, pdf: signed.toString('base64'), bytes: signed.length });
+      console.log(`[sign] ${item.name || i + 1}: signed (${signed.length} bytes)`);
+    } catch (err) {
+      const msg = (err as Error).message;
+      results.push({ index: i, name: item.name || `document-${i + 1}.pdf`, error: msg });
+      if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN') || msg.startsWith('PIN_REQUIRED')) {
+        json(res, 200, { results, aborted: true, pinError: true, reason: 'PIN error — batch stopped to prevent certificate lockout' });
+        return;
+      }
+    }
+  }
+  json(res, 200, payload.items?.length ? { results } : { ...results[0] });
+}
+
 async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
   if (req.headers['x-storno-agent'] !== '1') {
     json(res, 403, { error: 'Missing X-Storno-Agent header' });
@@ -438,21 +481,29 @@ async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, co
       // e-guvernare declarations portal: the F5 APM in front of it needs the
       // certificate handshake on the entry page first (sets MRHSession/F5_ST/
       // JSESSIONID in the cookie jar), then the multipart POST rides that session.
+      // Login choreography (verified live): GET the app → APM login page with the
+      // "vhost=standard" form → POST it (curl follows the redirects, the certificate is
+      // presented on the TLS handshake) → the app page with the upload form appears.
+      const browser = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:154.0) Gecko/20100101 Firefox/154.0', 'Accept': 'text/html,application/xhtml+xml' };
       if (payload.sessionUrl) {
-        const prime = await curlProxy({
-          url: payload.sessionUrl,
-          method: 'GET',
-          headers: {},
-          body: '',
-          certificateId: payload.certificateId,
-          pin: payload.pin,
-        }, config);
-        console.log(`[sign-and-submit] portal session: HTTP ${prime.statusCode}`);
+        const origin = new URL(payload.sessionUrl).origin;
+        const auth = { certificateId: payload.certificateId, pin: payload.pin, web: true as const };
+        let page = await curlProxy({ url: payload.sessionUrl, method: 'GET', headers: browser, body: '', ...auth }, config);
+        if (page.body.includes('vhost')) {
+          page = await curlProxy({ url: `${origin}/my.policy`, method: 'POST', headers: { ...browser, 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${origin}/my.policy` }, body: 'vhost=standard', ...auth }, config);
+        }
+        if (!page.body.includes(payload.uploadField || 'linkdoc')) {
+          page = await curlProxy({ url: payload.sessionUrl, method: 'GET', headers: browser, body: '', ...auth }, config);
+        }
+        console.log(`[sign-and-submit] portal session: HTTP ${page.statusCode}, upload form ${page.body.includes(payload.uploadField || 'linkdoc') ? 'present' : 'MISSING'}`);
+        if (!page.body.includes(payload.uploadField || 'linkdoc')) {
+          throw new Error('ANAF portal did not show the upload form after the certificate login');
+        }
       }
       uploadResult = await curlProxy({
         url: payload.uploadUrl,
         method: 'POST',
-        headers: { ...(payload.uploadHeaders ?? {}) },
+        headers: { ...browser, ...(payload.uploadHeaders ?? {}), Referer: payload.sessionUrl || payload.uploadUrl },
         body: '',
         multipart: {
           field: payload.uploadField || 'linkdoc',
@@ -462,6 +513,7 @@ async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, co
         },
         certificateId: payload.certificateId,
         pin: payload.pin,
+        web: true,
       }, config);
     } else {
       uploadResult = await curlProxy({

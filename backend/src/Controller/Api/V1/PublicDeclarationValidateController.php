@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Service\Declaration\AnafDeclarationClient;
 use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DukUnavailableException;
 use Psr\Log\LoggerInterface;
@@ -27,8 +28,29 @@ class PublicDeclarationValidateController extends AbstractController
 
     public function __construct(
         private readonly DeclarationValidator $validator,
+        private readonly AnafDeclarationClient $anafClient,
         private readonly LoggerInterface $logger,
     ) {}
+
+    /** Processing status of a declaration filed on the e-guvernare portal: ANAF's public StareD112, by upload index and CUI/CNP. */
+    #[Route('/api/v1/public/declarations/status/{index}/{cui}', methods: ['GET'])]
+    public function status(string $index, string $cui, Request $request, RateLimiterFactory $publicValidateLimiter): JsonResponse
+    {
+        if (!$publicValidateLimiter->create($request->getClientIp() ?? 'unknown')->consume()->isAccepted()) {
+            return $this->json(['error' => 'Prea multe cereri.', 'code' => 'RATE_LIMITED'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+        if (!preg_match('/^\d{1,15}$/', $index) || !preg_match('/^\d{2,13}$/', $cui)) {
+            return $this->json(['error' => 'index si cui trebuie sa fie numerice.', 'code' => 'INVALID_INPUT'], Response::HTTP_BAD_REQUEST);
+        }
+        try {
+            $r = $this->anafClient->checkPortalStatus($index, $cui);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'ANAF StareD112 nu a raspuns.', 'code' => 'ANAF_UNAVAILABLE'], Response::HTTP_BAD_GATEWAY);
+        }
+        $labels = ['ok' => 'Documentul este valid: declaratia a fost acceptata.', 'nok' => 'Documentul are erori de validare: depunerea nu este valida, vezi recipisa.', 'processing' => 'In prelucrare la ANAF.', 'unknown' => 'Nicio declaratie gasita pentru acest index si CUI (inca neindexata sau date gresite).'];
+
+        return $this->json(['index' => $index, 'cui' => $cui, 'state' => $r['stare'], 'message' => $labels[$r['stare']] ?? $r['stare'], 'anafText' => $r['text'], 'recipisaUrl' => $r['stare'] === 'unknown' ? null : sprintf('https://www.anaf.ro/StareD112/ObtineRecipisa?numefisier=%s.pdf', $index)]);
+    }
 
     #[Route('/api/v1/public/declarations/validate', methods: ['POST'])]
     public function __invoke(Request $request, RateLimiterFactory $publicValidateLimiter): JsonResponse
