@@ -27,6 +27,17 @@ final class SpvDocumentSummarizerTest extends TestCase
         self::assertStringContainsString('acceptată', $out);
     }
 
+    public function testEnglishRecipisaAndDecision(): void
+    {
+        $out = $this->s->summarize('RECIPISA', 'recipisa pentru CIF 12345678, tip D406, numar_inregistrare INTERNT-100000123-2026/31-08-2026, perioada raportare 7.2026', null, 'en');
+        self::assertStringContainsString('Filing receipt', $out);
+        self::assertStringContainsString('SAF-T standard audit file (D406)', $out);
+        self::assertStringContainsString('July 2026', $out);
+        self::assertStringContainsString('registered at ANAF under number INTERNT-100000123-2026 on 31.08.2026', $out);
+        self::assertStringContainsString('tax-inactive', $this->s->summarize('Decizie inactivare', null, null, 'en'));
+        self::assertStringContainsString('Payment summons', $this->s->summarize('SOMATII', null, null, 'en'));
+    }
+
     public function testRecipisaWithErrorsWarns(): void
     {
         $out = $this->s->summarize('RECIPISA', 'recipisa pentru CIF 12345678, tip D300, numar_inregistrare INTERNT-100000124-2026/25-08-2026, perioada raportare 7.2026 - contine erori');

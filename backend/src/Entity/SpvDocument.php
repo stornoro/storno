@@ -70,6 +70,11 @@ class SpvDocument
     #[Groups(['spv_document:list', 'spv_document:detail'])]
     private ?string $summary = null;
 
+    /** Same explanation in English. */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['spv_document:list', 'spv_document:detail'])]
+    private ?string $summaryEn = null;
+
     /** ANAF `data_creare` (when it reached the SPV inbox). */
     #[ORM\Column(nullable: true)]
     #[Groups(['spv_document:list', 'spv_document:detail'])]
@@ -142,6 +147,8 @@ class SpvDocument
 
     public function getSummary(): ?string { return $this->summary; }
     public function setSummary(?string $v): static { $this->summary = $v; return $this; }
+    public function getSummaryEn(): ?string { return $this->summaryEn; }
+    public function setSummaryEn(?string $v): static { $this->summaryEn = $v; return $this; }
     public function getIdSolicitare(): ?string { return $this->idSolicitare; }
     public function setIdSolicitare(?string $v): static { $this->idSolicitare = $v; return $this; }
 

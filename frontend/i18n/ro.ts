@@ -4081,6 +4081,8 @@ export default defineI18nLocale(async () => {
 
   // ── Declaratii fiscale ─────────────────────────────────────────
   spv: {
+    pinRequiredTitle: 'PIN-ul certificatului lipseste',
+    pinRequiredHint: 'Nicio operatiune cu certificatul nu se face fara PIN. Introdu PIN-ul token-ului in pagina companiei, sectiunea ANAF → Agent, si salveaza preferinta.',
     lastSynced: 'Ultima sincronizare cu ANAF: {date}',
     neverSynced: 'Nu s-a sincronizat inca cu ANAF. Apasa „Sincronizeaza cu ANAF” sau activeaza monitorizarea automata din pagina companiei.',
     summary: 'Ce inseamna',

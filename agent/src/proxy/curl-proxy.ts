@@ -198,6 +198,9 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
 
   const cookiePath = getCookieJarPath(req.certificateId);
   const usedSession = hasValidSession(cookiePath);
+  if (!usedSession && !req.pin) {
+    throw new Error('PIN_REQUIRED: the certificate PIN was not provided; nothing is sent to ANAF without it');
+  }
 
   let result: ProxyResponse;
   try {
@@ -215,6 +218,9 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
   // invalidate cookies and retry with full mTLS authentication.
   if (usedSession && isSessionExpired(result)) {
     invalidateSession(req.certificateId);
+    if (!req.pin) {
+      throw new Error('PIN_REQUIRED: the ANAF session expired and no PIN was provided to authenticate again');
+    }
     return execRequest(req, config, false);
   }
 
@@ -462,6 +468,9 @@ export async function curlBatch(requests: ProxyRequest[], config: AgentConfig): 
 
   const cookiePath = getCookieJarPath(first.certificateId);
   const usedSession = hasValidSession(cookiePath);
+  if (!usedSession && !first.pin) {
+    throw new Error('PIN_REQUIRED: the certificate PIN was not provided; nothing is sent to ANAF without it');
+  }
   if (platform() === 'win32' && first.pin && !usedSession) {
     throw new Error('BATCH_UNSUPPORTED: Windows certificate store needs the PowerShell path for the first request');
   }
@@ -469,6 +478,9 @@ export async function curlBatch(requests: ProxyRequest[], config: AgentConfig): 
   let results = await execCurlBatch(first, requests, config, usedSession);
   if (usedSession && results.some((r) => r.result && isSessionExpired(r.result))) {
     invalidateSession(first.certificateId);
+    if (!first.pin) {
+      throw new Error('PIN_REQUIRED: the ANAF session expired and no PIN was provided to authenticate again');
+    }
     results = await execCurlBatch(first, requests, config, false);
   }
   return results;

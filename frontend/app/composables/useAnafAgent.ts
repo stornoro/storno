@@ -58,13 +58,16 @@ export function useAnafAgent() {
     return data.certificates ?? []
   }
 
+  /** Every ANAF call with the certificate needs the token PIN: never fall back to "no PIN". */
+  const PIN_REQUIRED_MESSAGE = 'PIN-ul certificatului lipseste. Introdu PIN-ul in Companie → ANAF → Agent si salveaza preferinta, apoi reia operatiunea.'
+  function requirePin(certificateId: string, pin?: string): string {
+    const value = pin || getSavedPin(certificateId)
+    if (!value) throw new Error(PIN_REQUIRED_MESSAGE)
+    return value
+  }
+
   async function proxyToAnaf(req: AnafProxyRequest): Promise<AnafProxyResponse> {
-    // Auto-attach saved PIN for the certificate if not already provided
-    const payload = { ...req }
-    if (!payload.pin) {
-      const savedPin = getSavedPin(req.certificateId)
-      if (savedPin) payload.pin = savedPin
-    }
+    const payload = { ...req, pin: requirePin(req.certificateId, req.pin) }
 
     const res = await agentFetch('/proxy', {
       method: 'POST',
@@ -86,15 +89,7 @@ export function useAnafAgent() {
   async function batchProxyToAnaf(requests: AnafProxyRequest[]): Promise<AnafProxyResponse[]> {
     if (requests.length === 0) return []
 
-    // Auto-attach saved PIN
-    const enriched = requests.map((req) => {
-      const payload = { ...req }
-      if (!payload.pin) {
-        const savedPin = getSavedPin(req.certificateId)
-        if (savedPin) payload.pin = savedPin
-      }
-      return payload
-    })
+    const enriched = requests.map((req) => ({ ...req, pin: requirePin(req.certificateId, req.pin) }))
 
     const res = await agentFetch('/batch', {
       method: 'POST',
@@ -127,11 +122,7 @@ export function useAnafAgent() {
     fileName?: string
     sessionUrl?: string
   }): Promise<AnafProxyResponse> {
-    const payload = { ...req }
-    if (!payload.pin) {
-      const savedPin = getSavedPin(req.certificateId)
-      if (savedPin) payload.pin = savedPin
-    }
+    const payload = { ...req, pin: requirePin(req.certificateId, req.pin) }
 
     const res = await agentFetch('/sign-and-submit', {
       method: 'POST',
