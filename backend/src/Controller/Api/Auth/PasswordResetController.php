@@ -61,7 +61,7 @@ class PasswordResetController extends AbstractController
 
         $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if (!$user) {
+        if (!$user || !$user->isActive() || $user->getDeletedAt() !== null) {
             return $response;
         }
 

@@ -84,7 +84,7 @@ class ConfirmEmailController extends AbstractController
 
         $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if ($user && !$user->isEmailVerified()) {
+        if ($user && $user->isActive() && $user->getDeletedAt() === null && !$user->isEmailVerified()) {
             $this->messageBus->dispatch(new SendEmailConfirmationMessage((string) $user->getId()));
         }
 

@@ -184,4 +184,15 @@ class OutboundEmailGuardTest extends TestCase
         $this->expectException(EmailSendBlockedException::class);
         $this->send($this->makeGuard(ownSmtp: true), to: 'victim@bigpond.com');
     }
+
+    public function testInactiveOrganizationCannotSend(): void
+    {
+        $guard = $this->makeGuard();
+        $org = (new Organization())->setIsActive(false);
+        $company = (new Company())->setOrganization($org);
+
+        $this->expectException(EmailSendBlockedException::class);
+        $this->expectExceptionMessageMatches('/disabled for this organization/');
+        $guard->assertCanSend($company, new User(), 'invoice', 'client@example.com', null, null, 'Factura FCT0001', 'Buna ziua');
+    }
 }

@@ -119,6 +119,15 @@ class OutboundEmailGuard
             return;
         }
 
+        if (!$org->isActive()) {
+            $this->block($org, $sentBy, $category, 'org_inactive', []);
+            throw new EmailSendBlockedException(
+                'Email sending is disabled for this organization.',
+                EmailSendBlockedException::CODE_PLAN_LIMIT,
+                Response::HTTP_FORBIDDEN,
+            );
+        }
+
         if (!$this->licenseManager->canSendEmails($org)) {
             throw new EmailSendBlockedException(
                 'Email sending is not available on your plan.',
