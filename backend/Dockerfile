@@ -97,7 +97,7 @@ WORKDIR /app
 COPY --from=vendor /app .
 
 # Copy compiled unified Java service
-COPY --from=java-build /build/JavaServiceServer.class tools/java-services/
+COPY --from=java-build /build/JavaServiceServer*.class tools/java-services/
 # Copy DUK Integrator JARs (may be empty if not yet downloaded)
 COPY --from=java-build /build/duk/ tools/duk-integrator/
 
