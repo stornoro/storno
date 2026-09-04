@@ -274,4 +274,31 @@ class ClientRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Lower-cased subset of $emails that belong to a non-deleted client of the company.
+     *
+     * @param string[] $emails
+     *
+     * @return string[]
+     */
+    public function findMatchingClientEmails(Company $company, array $emails): array
+    {
+        $emails = array_values(array_unique(array_map(static fn (string $e) => mb_strtolower(trim($e)), $emails)));
+        if ($emails === []) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('c')
+            ->select('LOWER(c.email) AS email')
+            ->where('c.company = :company')
+            ->andWhere('c.deletedAt IS NULL')
+            ->andWhere('LOWER(c.email) IN (:emails)')
+            ->setParameter('company', $company)
+            ->setParameter('emails', $emails)
+            ->getQuery()
+            ->getScalarResult();
+
+        return array_values(array_unique(array_column($rows, 'email')));
+    }
 }

@@ -2,9 +2,11 @@
 
 namespace App\Tests\Unit;
 
+use App\Entity\Company;
 use App\Entity\Organization;
 use App\Entity\User;
 use App\Exception\EmailSendBlockedException;
+use App\Repository\ClientRepository;
 use App\Repository\EmailLogRepository;
 use App\Service\LicenseManager;
 use App\Service\MailerConfigResolver;
@@ -28,6 +30,7 @@ class OutboundEmailGuardTest extends TestCase
         bool $ownSmtp = false,
         bool $burstAccepted = true,
         int $sentLast24h = 0,
+        array $clientEmails = ['client@example.com', 'a@x.ro', 'b@x.ro', 'c@x.ro', 'd@x.ro', 'e@x.ro'],
     ): OutboundEmailGuard {
         $license = $this->createMock(LicenseManager::class);
         $license->method('canSendEmails')->willReturn($canSend);
@@ -38,6 +41,11 @@ class OutboundEmailGuardTest extends TestCase
 
         $repo = $this->createMock(EmailLogRepository::class);
         $repo->method('countByOrganizationSince')->willReturn($sentLast24h);
+
+        $clients = $this->createMock(ClientRepository::class);
+        $clients->method('findMatchingClientEmails')->willReturnCallback(
+            static fn (Company $c, array $emails) => array_values(array_intersect(array_map('mb_strtolower', $emails), $clientEmails)),
+        );
 
         $limit = new RateLimit(
             $burstAccepted ? 5 : 0,
@@ -50,12 +58,13 @@ class OutboundEmailGuardTest extends TestCase
         $factory = $this->createMock(RateLimiterFactoryInterface::class);
         $factory->method('create')->willReturn($limiter);
 
-        return new OutboundEmailGuard($license, $resolver, $repo, $factory, $factory, new NullLogger());
+        return new OutboundEmailGuard($license, $resolver, $repo, $clients, $factory, $factory, new NullLogger());
     }
 
-    private function send(OutboundEmailGuard $guard, string $subject = 'Factura FCT0001 - Acme SRL', string $body = "Buna ziua,\n\nVa trimitem atasat factura FCT0001.", ?array $cc = null, ?array $bcc = null): void
+    private function send(OutboundEmailGuard $guard, string $subject = 'Factura FCT0001 - Acme SRL', string $body = "Buna ziua,\n\nVa trimitem atasat factura FCT0001.", ?array $cc = null, ?array $bcc = null, string $to = 'client@example.com'): void
     {
-        $guard->assertCanSend(new Organization(), new User(), 'invoice', 'client@example.com', $cc, $bcc, $subject, $body);
+        $company = (new Company())->setOrganization(new Organization());
+        $guard->assertCanSend($company, (new User())->setEmail('me@storno.ro'), 'invoice', $to, $cc, $bcc, $subject, $body);
     }
 
     public function testOrdinaryInvoiceEmailPasses(): void
@@ -145,5 +154,34 @@ class OutboundEmailGuardTest extends TestCase
     {
         $this->send($this->makeGuard(plan: LicenseManager::PLAN_PROFESSIONAL, sentLast24h: 500));
         $this->addToAssertionCount(1);
+    }
+
+    public function testRecipientMustBeAClient(): void
+    {
+        try {
+            $this->send($this->makeGuard(), to: 'victim@bigpond.com');
+            self::fail('expected block');
+        } catch (EmailSendBlockedException $e) {
+            self::assertSame(EmailSendBlockedException::CODE_RECIPIENT_NOT_CLIENT, $e->errorCode);
+            self::assertSame(422, $e->httpStatus);
+        }
+    }
+
+    public function testCcMustBeAClientToo(): void
+    {
+        $this->expectException(EmailSendBlockedException::class);
+        $this->send($this->makeGuard(), cc: ['stranger@example.org']);
+    }
+
+    public function testClientMatchIsCaseInsensitiveAndSenderMayCopyThemselves(): void
+    {
+        $this->send($this->makeGuard(), to: 'Client@Example.com', cc: ['me@storno.ro']);
+        $this->addToAssertionCount(1);
+    }
+
+    public function testOwnSmtpStillRequiresClientRecipients(): void
+    {
+        $this->expectException(EmailSendBlockedException::class);
+        $this->send($this->makeGuard(ownSmtp: true), to: 'victim@bigpond.com');
     }
 }

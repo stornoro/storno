@@ -2,9 +2,11 @@
 
 namespace App\Service;
 
+use App\Entity\Company;
 use App\Entity\Organization;
 use App\Entity\User;
 use App\Exception\EmailSendBlockedException;
+use App\Repository\ClientRepository;
 use App\Repository\EmailLogRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,6 +16,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * Abuse guard for user-composed document emails (invoice, delivery note, receipt).
  *
  * Every check runs before the message is handed to the platform mailer:
+ *  - every recipient must be a client of the company (or the company / sender itself)
  *  - plan must allow email sending
  *  - at most MAX_RECIPIENTS addresses per message (to + cc + bcc)
  *  - per-user burst limiter (sliding window, plan-aware)
@@ -62,6 +65,7 @@ class OutboundEmailGuard
         private readonly LicenseManager $licenseManager,
         private readonly MailerConfigResolver $mailerConfigResolver,
         private readonly EmailLogRepository $emailLogRepository,
+        private readonly ClientRepository $clientRepository,
         private readonly RateLimiterFactoryInterface $documentEmailFreeLimiter,
         private readonly RateLimiterFactoryInterface $documentEmailPaidLimiter,
         private readonly LoggerInterface $logger,
@@ -74,7 +78,7 @@ class OutboundEmailGuard
      * @throws EmailSendBlockedException
      */
     public function assertCanSend(
-        ?Organization $org,
+        ?Company $company,
         ?User $sentBy,
         string $category,
         string $to,
@@ -83,7 +87,9 @@ class OutboundEmailGuard
         string $subject,
         string $body,
     ): void {
-        $recipients = 1 + \count(array_filter($cc ?? [])) + \count(array_filter($bcc ?? []));
+        $org = $company?->getOrganization();
+        $addresses = array_values(array_filter(array_map('trim', [$to, ...($cc ?? []), ...($bcc ?? [])])));
+        $recipients = \count($addresses);
         if ($recipients > self::MAX_RECIPIENTS) {
             $this->block($org, $sentBy, $category, 'recipients', ['count' => $recipients]);
             throw new EmailSendBlockedException(
@@ -103,6 +109,10 @@ class OutboundEmailGuard
                     Response::HTTP_UNPROCESSABLE_ENTITY,
                 );
             }
+        }
+
+        if ($company) {
+            $this->assertRecipientsAreClients($company, $sentBy, $category, $addresses);
         }
 
         if (!$org) {
@@ -171,6 +181,32 @@ class OutboundEmailGuard
                 Response::HTTP_TOO_MANY_REQUESTS,
                 3600,
             );
+        }
+    }
+
+    /**
+     * Document emails may only go to addresses the company already has on file:
+     * a client's email, the company's own email, or the sending user's email.
+     *
+     * @param string[] $addresses
+     */
+    private function assertRecipientsAreClients(Company $company, ?User $sentBy, string $category, array $addresses): void
+    {
+        $own = array_filter([
+            mb_strtolower((string) $company->getEmail()),
+            mb_strtolower((string) $sentBy?->getEmail()),
+        ]);
+        $allowed = array_merge($own, $this->clientRepository->findMatchingClientEmails($company, $addresses));
+
+        foreach ($addresses as $address) {
+            if (!\in_array(mb_strtolower($address), $allowed, true)) {
+                $this->block($company->getOrganization(), $sentBy, $category, 'not_client', ['recipient' => $address]);
+                throw new EmailSendBlockedException(
+                    sprintf('%s is not one of your clients. Add the address to a client before emailing it.', $address),
+                    EmailSendBlockedException::CODE_RECIPIENT_NOT_CLIENT,
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                );
+            }
         }
     }
 

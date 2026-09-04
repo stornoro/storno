@@ -13,6 +13,7 @@ class EmailSendBlockedException extends \RuntimeException
     public const CODE_DAILY_LIMIT = 'EMAIL_DAILY_LIMIT';
     public const CODE_TOO_MANY_RECIPIENTS = 'EMAIL_TOO_MANY_RECIPIENTS';
     public const CODE_CONTENT_BLOCKED = 'EMAIL_CONTENT_BLOCKED';
+    public const CODE_RECIPIENT_NOT_CLIENT = 'EMAIL_RECIPIENT_NOT_CLIENT';
 
     public function __construct(
         string $message,

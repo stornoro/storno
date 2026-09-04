@@ -63,7 +63,7 @@ class ReceiptEmailService
         $body = $this->substituteVariables($body, $receipt);
 
         $this->outboundEmailGuard->assertCanSend(
-            $receipt->getCompany()?->getOrganization(),
+            $receipt->getCompany(),
             $sentBy,
             'receipt',
             $to,

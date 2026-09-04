@@ -77,7 +77,7 @@ class InvoiceEmailService
         $body = $this->substituteVariables($body, $invoice);
 
         $this->outboundEmailGuard->assertCanSend(
-            $invoice->getCompany()?->getOrganization(),
+            $invoice->getCompany(),
             $sentBy,
             'invoice',
             $to,

@@ -202,6 +202,11 @@ const exactMap: Record<string, string> = {
 }
 
 const patternMap: [RegExp, string | ((match: RegExpMatchArray) => string)][] = [
+  // victim@example.com is not one of your clients. Add the address to a client before emailing it.
+  [
+    /^(.+) is not one of your clients\. Add the address to a client before emailing it\.$/,
+    (m) => `${m[1]} nu este unul dintre clientii dvs. Adaugati adresa la un client inainte de a trimite emailul.`,
+  ],
   // A document email can have at most 5 recipients (to, cc and bcc combined).
   [
     /^A document email can have at most (\d+) recipients \(to, cc and bcc combined\)\.$/,
