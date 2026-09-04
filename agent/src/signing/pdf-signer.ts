@@ -31,11 +31,17 @@ const SIGNATURE_PLACEHOLDER_LENGTH = 16384; // 16KB for CMS signature — large 
  * @param config - Agent config (PKCS#11 module / toolchain overrides)
  * @returns Signed PDF as Buffer
  */
+export interface SignPdfOptions {
+  /** Draw a visible signature box (text lines) in the footer of the first or last page. */
+  visible?: { lines: string[]; page?: 'first' | 'last' };
+}
+
 export async function signPdf(
   pdfBuffer: Buffer,
   certificateId: string,
   pin: string | undefined,
   config: AgentConfig,
+  options: SignPdfOptions = {},
 ): Promise<Buffer> {
   const id = randomUUID();
   const workDir = join(tmpdir(), 'storno-pdfsign');
@@ -51,7 +57,7 @@ export async function signPdf(
     writeFileSync(unsignedPath, pdfBuffer);
 
     // Phase 1: Prepare PDF with signature placeholder
-    const { preparedPdf, byteRange, placeholderOffset } = preparePdfForSigning(pdfBuffer);
+    const { preparedPdf, byteRange, placeholderOffset } = preparePdfForSigning(pdfBuffer, options);
     writeFileSync(preparedPath, preparedPdf);
 
     // Compute hash of the byte ranges (everything except the placeholder)
@@ -83,103 +89,187 @@ export async function signPdf(
  * - /ByteRange and /Contents placeholders
  * - An updated xref and trailer
  */
-function preparePdfForSigning(pdf: Buffer): {
+function pdfText(t: string): string {
+  // Standard Helvetica with WinAnsi: transliterate Romanian diacritics, escape PDF string delimiters
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[ȘșŞş]/g, (c) => (c === 'Ș' || c === 'Ş' ? 'S' : 's')).replace(/[ȚțŢţ]/g, (c) => (c === 'Ț' || c === 'Ţ' ? 'T' : 't'))
+    .replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function preparePdfForSigning(pdf: Buffer, options: SignPdfOptions = {}): {
   preparedPdf: Buffer;
   byteRange: [number, number, number, number];
   placeholderOffset: number;
 } {
   // Find existing xref offset from the PDF trailer
   const pdfStr = pdf.toString('binary');
-  const startxrefMatch = pdfStr.match(/startxref\s+(\d+)/);
-  if (!startxrefMatch) throw new Error('Invalid PDF: no startxref found');
+  const startxrefMatches = [...pdfStr.matchAll(/startxref\s+(\d+)/g)];
+  if (startxrefMatches.length === 0) throw new Error('Invalid PDF: no startxref found');
+  const existingXrefOffset = parseInt(startxrefMatches[startxrefMatches.length - 1][1], 10);
 
-  const existingXrefOffset = parseInt(startxrefMatch[1], 10);
-
-  // Parse the trailer to find the root object reference
-  const trailerMatch = pdfStr.match(/trailer\s*<<([\s\S]*?)>>/);
+  // Trailer (last one): root object and object count
+  const trailers = [...pdfStr.matchAll(/trailer\s*<<([\s\S]*?)>>/g)];
   let rootRef = '1 0 R';
   let currentSize = 10;
-  if (trailerMatch) {
-    const rootMatch = trailerMatch[1].match(/\/Root\s+(\d+ \d+ R)/);
+  if (trailers.length > 0) {
+    const t = trailers[trailers.length - 1][1];
+    const rootMatch = t.match(/\/Root\s+(\d+ \d+ R)/);
     if (rootMatch) rootRef = rootMatch[1];
-    const sizeMatch = trailerMatch[1].match(/\/Size\s+(\d+)/);
+    const sizeMatch = t.match(/\/Size\s+(\d+)/);
     if (sizeMatch) currentSize = parseInt(sizeMatch[1], 10);
+  } else if (/\/Type\s*\/XRef/.test(pdfStr)) {
+    throw new Error('PDF uses cross-reference streams; re-save it as a classic PDF (DUKIntegrator output is supported)');
   }
+  const rootNum = parseInt(rootRef, 10);
 
-  // Create new objects for the signature
+  // Helpers over the classic (non-compressed) object syntax used by DUKIntegrator/iText 5
+  const objBody = (num: number): string | null => {
+    const re = new RegExp(`(?:^|[\\r\\n])${num} 0 obj\\s*([\\s\\S]*?)\\s*endobj`);
+    const m = pdfStr.match(re);
+    return m ? m[1] : null;
+  };
+  const catalog = objBody(rootNum);
+  if (!catalog) throw new Error(`Invalid PDF: catalog object ${rootNum} not found`);
+
+  // The objects of the incremental update
   const sigObjNum = currentSize;
-  const sigFieldObjNum = currentSize + 1;
-
-  // Build signature dictionary object — placeholder hex string for /Contents
+  const fieldObjNum = currentSize + 1;
+  let nextObj = currentSize + 2;
+  const updates: Array<{ num: number; body: string }> = [];
   const placeholderHex = '0'.repeat(SIGNATURE_PLACEHOLDER_LENGTH * 2);
 
-  // We'll build the incremental update
-  const parts: string[] = [];
+  // 1. Signature value
+  updates.push({ num: sigObjNum, body: `<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached\n/ByteRange [0 0000000000 0000000000 0000000000]\n/Contents <${placeholderHex}>\n/M (D:${formatPdfDate(new Date())})\n/Reason (Storno Digital Signature)\n>>` });
 
-  // Signature value object
-  parts.push(`${sigObjNum} 0 obj\n`);
-  parts.push(`<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached\n`);
-  parts.push(`/ByteRange [0 0000000000 0000000000 0000000000]\n`);
-  parts.push(`/Contents <${placeholderHex}>\n`);
-  parts.push(`/M (D:${formatPdfDate(new Date())})\n`);
-  parts.push(`/Reason (Storno Digital Signature)\n`);
-  parts.push(`>>\nendobj\n\n`);
+  // 2. Target page (first or last leaf of the page tree) for the widget's /P and /Annots
+  let firstPageNum: number | null = null;
+  let pageWidth = 595;
+  const wantLast = options.visible?.page === 'last';
+  const pagesRef = catalog.match(/\/Pages\s+(\d+) 0 R/);
+  if (pagesRef) {
+    let node = parseInt(pagesRef[1], 10);
+    for (let depth = 0; depth < 8; depth++) {
+      const body = objBody(node);
+      if (!body) break;
+      const kids = [...body.matchAll(/(\d+) 0 R/g)].map((m) => parseInt(m[1], 10));
+      const kidsArr = body.match(/\/Kids\s*\[([^\]]*)\]/);
+      if (!kidsArr) { firstPageNum = node; break; }
+      const refs = [...kidsArr[1].matchAll(/(\d+) 0 R/g)].map((m) => parseInt(m[1], 10));
+      if (refs.length === 0) break;
+      node = wantLast ? refs[refs.length - 1] : refs[0];
+      void kids;
+    }
+    const pageBody = firstPageNum !== null ? objBody(firstPageNum) : null;
+    const mb = pageBody?.match(/\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+    if (mb) pageWidth = parseFloat(mb[3]) - parseFloat(mb[1]);
+  }
 
-  // Append to existing PDF
-  const appendStr = parts.join('');
-  const appendOffset = pdf.length;
+  // 3. Signature field + widget, the thing verifiers look for in AcroForm /Fields.
+  //    Invisible by default; with options.visible a footer box with the given lines is drawn.
+  const fieldName = `Signature${Date.now() % 100000}`;
+  let rect = '[0 0 0 0]';
+  let apRef = '';
+  if (options.visible && firstPageNum !== null) {
+    const lines = options.visible.lines.slice(0, 4);
+    const w = Math.min(Math.max(pageWidth - 72, 200), 340);
+    const h = 14 + lines.length * 11;
+    const x = 36;
+    const y = 14;
+    rect = `[${x} ${y} ${x + w} ${y + h}]`;
+    const fontNum = nextObj++;
+    const apNum = nextObj++;
+    updates.push({ num: fontNum, body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>' });
+    let content = `q 0.96 0.97 0.98 rg 0 0 ${w} ${h} re f 0.55 0.6 0.66 RG 0.75 w 0.375 0.375 ${w - 0.75} ${h - 0.75} re S Q\n`;
+    content += `BT /F1 8 Tf 0.1 0.12 0.15 rg 7 ${h - 12} Td ${lines.map((l, i) => `${i > 0 ? '0 -11 Td ' : ''}(${pdfText(l)}) Tj`).join(' ')} ET\n`;
+    updates.push({ num: apNum, body: `<< /Type /XObject /Subtype /Form /BBox [0 0 ${w} ${h}] /Resources << /Font << /F1 ${fontNum} 0 R >> >> /Length ${Buffer.byteLength(content, 'binary')} >>\nstream\n${content}endstream` });
+    apRef = ` /AP << /N ${apNum} 0 R >> /DA (/F1 8 Tf 0 g)`;
+  }
+  updates.push({ num: fieldObjNum, body: `<< /Type /Annot /Subtype /Widget /FT /Sig /T (${fieldName}) /V ${sigObjNum} 0 R /F ${options.visible ? 4 : 132} /Rect ${rect}${firstPageNum !== null ? ` /P ${firstPageNum} 0 R` : ''}${apRef} >>` });
 
-  // Compute actual positions for ByteRange patching
+  // 4. AcroForm: append the field, set SigFlags 3 (indirect object or inline in the catalog)
+  const acroRef = catalog.match(/\/AcroForm\s+(\d+) 0 R/);
+  const patchAcroForm = (dict: string): string => {
+    let d = dict.replace(/\/SigFlags\s+\d+/, '');
+    if (/\/Fields\s*\[/.test(d)) {
+      d = d.replace(/\/Fields\s*\[/, `/Fields [${fieldObjNum} 0 R `);
+    } else if (/\/Fields\s+(\d+) 0 R/.test(d)) {
+      // Fields kept in a separate array object: rewrite that array
+      const arrNum = parseInt(d.match(/\/Fields\s+(\d+) 0 R/)![1], 10);
+      const arr = objBody(arrNum);
+      if (arr) updates.push({ num: arrNum, body: arr.trim().replace(/^\[/, `[${fieldObjNum} 0 R `) });
+    } else {
+      d = d.replace(/>>\s*$/, ` /Fields [${fieldObjNum} 0 R] >>`);
+    }
+    return d.replace(/>>\s*$/, ' /SigFlags 3 >>');
+  };
+  if (acroRef) {
+    const acroNum = parseInt(acroRef[1], 10);
+    const acro = objBody(acroNum);
+    if (!acro) throw new Error(`Invalid PDF: AcroForm object ${acroNum} not found`);
+    updates.push({ num: acroNum, body: patchAcroForm(acro.trim()) });
+  } else if (/\/AcroForm\s*<</.test(catalog)) {
+    const inline = catalog.match(/\/AcroForm\s*(<<[\s\S]*?>>)(?=\s*\/|\s*>>\s*$)/);
+    const patched = inline ? catalog.replace(inline[1], patchAcroForm(inline[1])) : catalog;
+    updates.push({ num: rootNum, body: patched.trim() });
+  } else {
+    // No form at all: create one and point the catalog to it
+    const acroNum = nextObj++;
+    updates.push({ num: acroNum, body: `<< /Fields [${fieldObjNum} 0 R] /SigFlags 3 >>` });
+    updates.push({ num: rootNum, body: catalog.trim().replace(/>>\s*$/, ` /AcroForm ${acroNum} 0 R >>`) });
+  }
+
+  // 5. Page /Annots: add the widget when the array is inline or missing (an indirect array is left alone)
+  if (firstPageNum !== null) {
+    const page = objBody(firstPageNum);
+    if (page && !/\/Annots\s+\d+ 0 R/.test(page)) {
+      const body = /\/Annots\s*\[/.test(page)
+        ? page.trim().replace(/\/Annots\s*\[/, `/Annots [${fieldObjNum} 0 R `)
+        : page.trim().replace(/>>\s*$/, ` /Annots [${fieldObjNum} 0 R] >>`);
+      updates.push({ num: firstPageNum, body });
+    }
+  }
+
+  // Serialise the incremental update
+  let appendStr = '\n';
+  const offsets: Array<{ num: number; offset: number }> = [];
+  for (const u of updates) {
+    offsets.push({ num: u.num, offset: pdf.length + Buffer.byteLength(appendStr, 'binary') });
+    appendStr += `${u.num} 0 obj\n${u.body}\nendobj\n`;
+  }
   const fullPdf = Buffer.concat([pdf, Buffer.from(appendStr, 'binary')]);
   const fullStr = fullPdf.toString('binary');
 
-  // Find the /Contents < position in the appended part
-  const contentsStart = fullStr.indexOf(`/Contents <${placeholderHex.substring(0, 10)}`, appendOffset);
+  const contentsStart = fullStr.indexOf(`/Contents <${placeholderHex.substring(0, 10)}`, pdf.length);
   if (contentsStart === -1) throw new Error('Failed to locate /Contents placeholder');
+  const contentValueStart = fullStr.indexOf('<', contentsStart + 9);
+  const contentValueEnd = contentValueStart + 1 + SIGNATURE_PLACEHOLDER_LENGTH * 2 + 1;
 
-  const contentValueStart = fullStr.indexOf('<', contentsStart + 9); // after "/Contents "
-  const contentValueEnd = contentValueStart + 1 + SIGNATURE_PLACEHOLDER_LENGTH * 2 + 1; // < + hex + >
-
-  // ByteRange: [0, contentValueStart, contentValueEnd, totalLength - contentValueEnd]
-  // But we need to know total length first, which includes the updated xref+trailer
-
-  // Build xref for incremental update
+  // xref with one subsection per run of consecutive object numbers
+  offsets.sort((a, b) => a.num - b.num);
   const newXrefOffset = fullPdf.length;
-  let xrefStr = `xref\n${sigObjNum} 1\n`;
-  xrefStr += `${String(appendOffset).padStart(10, '0')} 00000 n \n`;
-  xrefStr += `\ntrailer\n<< /Size ${currentSize + 1} /Root ${rootRef} /Prev ${existingXrefOffset} >>\n`;
-  xrefStr += `startxref\n${newXrefOffset}\n%%EOF\n`;
+  let xrefStr = 'xref\n';
+  let i = 0;
+  while (i < offsets.length) {
+    let j = i;
+    while (j + 1 < offsets.length && offsets[j + 1].num === offsets[j].num + 1) j++;
+    xrefStr += `${offsets[i].num} ${j - i + 1}\n`;
+    for (let k = i; k <= j; k++) xrefStr += `${String(offsets[k].offset).padStart(10, '0')} 00000 n \n`;
+    i = j + 1;
+  }
+  xrefStr += `trailer\n<< /Size ${nextObj} /Root ${rootRef} /Prev ${existingXrefOffset} >>\nstartxref\n${newXrefOffset}\n%%EOF\n`;
 
   const finalPdf = Buffer.concat([fullPdf, Buffer.from(xrefStr, 'binary')]);
   const totalLength = finalPdf.length;
 
-  // Now patch the ByteRange in the final PDF
-  const byteRange: [number, number, number, number] = [
-    0,
-    contentValueStart,
-    contentValueEnd,
-    totalLength - contentValueEnd,
-  ];
-
+  const byteRange: [number, number, number, number] = [0, contentValueStart, contentValueEnd, totalLength - contentValueEnd];
   const byteRangeStr = `[0 ${String(contentValueStart).padStart(10, '0')} ${String(contentValueEnd).padStart(10, '0')} ${String(totalLength - contentValueEnd).padStart(10, '0')}]`;
-
-  // Patch ByteRange in place
   const brSearchStr = '/ByteRange [0 0000000000 0000000000 0000000000]';
-  const brReplaceStr = `/ByteRange ${byteRangeStr}`;
-
   const finalStr = finalPdf.toString('binary');
-  const brIdx = finalStr.indexOf(brSearchStr, appendOffset);
+  const brIdx = finalStr.indexOf(brSearchStr, pdf.length);
   if (brIdx === -1) throw new Error('Failed to locate /ByteRange placeholder');
-
-  // Ensure replacement is exactly the same length
-  const padded = brReplaceStr.padEnd(brSearchStr.length, ' ');
+  const padded = `/ByteRange ${byteRangeStr}`.padEnd(brSearchStr.length, ' ');
   const patched = Buffer.from(finalStr.substring(0, brIdx) + padded + finalStr.substring(brIdx + brSearchStr.length), 'binary');
 
-  return {
-    preparedPdf: patched,
-    byteRange,
-    placeholderOffset: contentValueStart + 1, // skip the '<'
-  };
+  return { preparedPdf: patched, byteRange, placeholderOffset: contentValueStart + 1 };
 }
 
 /**
