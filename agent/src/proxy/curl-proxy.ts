@@ -95,6 +95,13 @@ export interface ProxyRequest {
   body: string;
   certificateId: string;
   pin?: string;
+  /** multipart/form-data upload of one file (e-guvernare WAS6DUS "linkdoc"); replaces `body`. */
+  multipart?: {
+    field: string;
+    fileName: string;
+    contentBase64: string;
+    contentType?: string;
+  };
 }
 
 export interface ProxyResponse {
@@ -266,7 +273,15 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
       timeout: 120_000,
       env: toolchain?.env ?? process.env,
     });
-    child.on('exit', () => { try { unlinkSync(configFile); } catch { /* gone */ } });
+    child.on('exit', () => {
+      try { unlinkSync(configFile); } catch { /* gone */ }
+      for (const o of opts) {
+        if (o.opt === 'form' && o.value) {
+          const m = o.value.match(/=@([^;]+)/);
+          if (m) { try { unlinkSync(m[1]); } catch { /* gone */ } }
+        }
+      }
+    });
 
     const stdoutChunks: Buffer[] = [];
     let stderr = '';
@@ -275,7 +290,7 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
     // Pipe body via stdin for POST/PUT (never as CLI arg)
-    if (req.body && req.method !== 'GET' && req.method !== 'HEAD') {
+    if (req.body && !req.multipart && req.method !== 'GET' && req.method !== 'HEAD') {
       child.stdin.write(req.body);
     }
     child.stdin.end();
@@ -357,7 +372,12 @@ function buildCurlOptions(req: ProxyRequest, config: AgentConfig, toolchain: Pkc
   ];
 
   // Body comes from stdin for methods that have one (never as a CLI arg)
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (req.multipart) {
+    // curl builds the multipart body itself from a private temp file; the file
+    // is removed by execCurl once the process exits.
+    const upload = writeUploadFile(req.multipart.fileName, req.multipart.contentBase64);
+    opts.push({ opt: 'form', value: `${req.multipart.field}=@${upload};filename=${req.multipart.fileName.replace(/[;"\\]/g, '_')};type=${req.multipart.contentType ?? 'application/pdf'}` });
+  } else if (req.method !== 'GET' && req.method !== 'HEAD') {
     opts.push({ opt: 'data', value: '@-' });
   }
   for (const [key, value] of Object.entries(req.headers)) {
@@ -377,6 +397,15 @@ function curlConfigText(opts: CurlOpt[]): string {
 }
 
 const CONFIG_DIR = join(tmpdir(), 'storno-agent-curl');
+
+/** Private (0600) copy of a file to upload; deleted together with the config file. */
+function writeUploadFile(fileName: string, contentBase64: string): string {
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const safe = fileName.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80) || 'upload.bin';
+  const file = join(CONFIG_DIR, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`);
+  writeFileSync(file, Buffer.from(contentBase64, 'base64'), { mode: 0o600 });
+  return file;
+}
 
 /** Write a private (0600) curl config file; the caller deletes it once curl exits. */
 function writeCurlConfig(opts: CurlOpt[]): string {

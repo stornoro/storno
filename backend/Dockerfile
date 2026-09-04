@@ -16,7 +16,7 @@ RUN composer dump-autoload --optimize
 # Same Alpine family as every other stage, so cross-stage glibc / musl
 # compatibility is preserved. javac/java come from /usr/lib/jvm.
 FROM alpine:3.19 AS java-build
-RUN apk add --no-cache openjdk17
+RUN apk add --no-cache openjdk17 curl
 
 WORKDIR /build
 COPY resources/validator/ROeFacturaValidator.jar validator/
@@ -25,8 +25,21 @@ COPY tools/signature-verifier/verifsignature.jar signature/
 COPY tools/duk-integrator/ duk-src/
 COPY tools/java-services/JavaServiceServer.java .
 
-# Move JARs to duk/ (may be empty if JARs not yet downloaded)
-RUN mkdir -p duk && (cp duk-src/*.jar duk/ 2>/dev/null || true)
+# ANAF's DUKIntegrator toolchain (core jars + one validator/pdf jar pair per form)
+# is downloaded from ANAF's own manifest so production validates declarations
+# exactly like the ANAF portal. The build fails when ANAF cannot be reached:
+# a backend without validators would silently accept broken declarations.
+# Set DUK_JARS_OPTIONAL=1 to build without them (dev only).
+ARG DUK_JARS_OPTIONAL=0
+RUN mkdir -p duk && (cp duk-src/*.jar duk/ 2>/dev/null || true) \
+    && for attempt in 1 2 3; do \
+         DUK_JARS_DIR=/build/duk sh duk-src/update-jars.sh && break; \
+         rc=$?; [ "$rc" -eq 3 ] && break; \
+         echo "update-jars attempt $attempt failed (rc=$rc)"; sleep 10; \
+       done; \
+    ls duk/DUKIntegrator.jar duk/DecValidation.jar >/dev/null 2>&1 \
+      || { [ "$DUK_JARS_OPTIONAL" = "1" ] && echo "WARNING: building without DUK validators"; } \
+      || { echo "ERROR: DUKIntegrator jars missing"; exit 1; }
 
 RUN javac -cp "validator/ROeFacturaValidator.jar:pdf/dist/generareFactura.jar:pdf/dist/lib/*:pdf/dist/:signature/verifsignature.jar:duk/*" \
     JavaServiceServer.java

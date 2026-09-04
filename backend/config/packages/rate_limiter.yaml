@@ -104,6 +104,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        public_validate:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
         public_generator:
             policy: 'sliding_window'
             limit: 999999
@@ -219,4 +223,8 @@ when@prod:
             public_generator:
                 policy: 'sliding_window'
                 limit: 30
+                interval: '1 hour'
+            public_validate:
+                policy: 'sliding_window'
+                limit: 60
                 interval: '1 hour'

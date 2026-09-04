@@ -444,3 +444,7 @@ services:
     App\Service\OutboundEmailGuard:
         tags:
             - { name: monolog.logger, channel: abuse }
+
+    App\Command\Anaf\UpdateAnafValidatorsCommand:
+        arguments:
+            $projectDir: '%kernel.project_dir%'

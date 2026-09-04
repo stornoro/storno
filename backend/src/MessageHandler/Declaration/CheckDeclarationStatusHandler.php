@@ -68,6 +68,18 @@ final class CheckDeclarationStatusHandler
 
         try {
             $company = $declaration->getCompany();
+
+            // Filed on the e-guvernare portal (agent + certificate): the public StareD112
+            // page answers by index + CUI without any token.
+            $viaPortal = ($declaration->getMetadata()['uploadResult']['source'] ?? null) === 'was6dus'
+                || ($declaration->getMetadata()['submittedViaAgent'] ?? false) === true;
+            if ($viaPortal) {
+                $portal = $this->anafClient->checkPortalStatus($declaration->getAnafUploadId(), $company->getCif());
+                $this->applyPortalStatus($declaration, $portal, $message, $company);
+
+                return;
+            }
+
             $token = $this->resolveToken($company);
 
             $result = $this->anafClient->checkStatus($declaration->getAnafUploadId(), $token);
@@ -144,6 +156,57 @@ final class CheckDeclarationStatusHandler
                 $this->entityManager->flush();
             }
         }
+    }
+
+    /** @param array{stare: string, text: ?string, index: string, raw: string} $portal */
+    private function applyPortalStatus(TaxDeclaration $declaration, array $portal, CheckDeclarationStatusMessage $message, \App\Entity\Company $company): void
+    {
+        $result = ['_source' => 'stared112', 'stare' => $portal['stare'], 'text' => $portal['text'], 'index' => $portal['index']];
+
+        if ($portal['stare'] === 'ok') {
+            $declaration->setStatus(DeclarationStatus::ACCEPTED);
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['statusResult' => $result]));
+            try {
+                $recipisa = $this->anafClient->downloadPortalRecipisa($portal['index']);
+                if ($recipisa !== '') {
+                    $recipisaPath = sprintf('declarations/%s/%s/%s_recipisa.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
+                    $this->defaultStorage->write($recipisaPath, $recipisa);
+                    $declaration->setRecipisaPath($recipisaPath);
+                }
+            } catch (\Throwable $e) {
+                $this->logger->warning('Failed to download portal recipisa.', ['error' => $e->getMessage()]);
+            }
+            $this->entityManager->flush();
+            $this->eventDispatcher->dispatch(new DeclarationAcceptedEvent($declaration));
+
+            return;
+        }
+
+        if ($portal['stare'] === 'nok') {
+            $declaration->setStatus(DeclarationStatus::REJECTED);
+            $declaration->setErrorMessage('ANAF: ' . ($portal['text'] ?? 'Documentul are erori de validare.') . ' Detaliile sunt in recipisa.');
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['statusResult' => $result]));
+            try {
+                $recipisa = $this->anafClient->downloadPortalRecipisa($portal['index']);
+                if ($recipisa !== '') {
+                    $recipisaPath = sprintf('declarations/%s/%s/%s_recipisa.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
+                    $this->defaultStorage->write($recipisaPath, $recipisa);
+                    $declaration->setRecipisaPath($recipisaPath);
+                }
+            } catch (\Throwable) {
+                // recipisa is optional here
+            }
+            $this->entityManager->flush();
+            $this->eventDispatcher->dispatch(new DeclarationRejectedEvent($declaration));
+
+            return;
+        }
+
+        // processing / not yet indexed: retry later
+        $this->messageBus->dispatch(new CheckDeclarationStatusMessage(
+            declarationId: $message->declarationId,
+            attempt: $message->attempt + 1,
+        ));
     }
 
     private function resolveToken(\App\Entity\Company $company): string

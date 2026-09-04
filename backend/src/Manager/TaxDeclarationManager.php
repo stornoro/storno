@@ -14,7 +14,10 @@ use App\Message\Declaration\SyncDeclarationsMessage;
 use App\Repository\TaxDeclarationRepository;
 use App\Service\Declaration\DeclarationDataPopulatorInterface;
 use App\Service\Declaration\DeclarationXmlGeneratorInterface;
+use App\Service\Declaration\DeclarationNamespaceResolver;
+use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DukIntegratorService;
+use App\Service\Declaration\DukUnavailableException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\TaggedIterator;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -35,6 +38,8 @@ class TaxDeclarationManager
         private readonly MessageBusInterface $messageBus,
         private readonly EventDispatcherInterface $eventDispatcher,
         private readonly DukIntegratorService $dukIntegrator,
+        private readonly DeclarationValidator $validator,
+        private readonly DeclarationNamespaceResolver $namespaces,
         #[TaggedIterator('app.declaration_data_populator')]
         iterable $dataPopulators,
         #[TaggedIterator('app.declaration_xml_generator')]
@@ -168,33 +173,41 @@ class TaxDeclarationManager
             throw new \InvalidArgumentException(sprintf('No XML generator found for type: %s', $declaration->getType()->value));
         }
 
-        // Generate XML to validate it
-        $xml = $generator->generate($declaration);
+        // Generate XML to validate it (namespace from metadata override or the shipped XSD)
+        $xml = $this->generateXml($declaration);
 
         // Basic XML validation
         $doc = new \DOMDocument();
-        if (!$doc->loadXML($xml)) {
+        if (!@$doc->loadXML($xml)) {
             throw new \RuntimeException('Generated XML is not valid.');
         }
 
-        // DUK validation (ANAF-grade) — if available
-        if ($this->dukIntegrator->isAvailable()) {
-            $dukResult = $this->dukIntegrator->validate($xml, $declaration->getType()->value);
-            if (!$dukResult->valid) {
-                throw new \RuntimeException(sprintf(
-                    'DUK validation failed: %s',
-                    implode('; ', $dukResult->errors)
-                ));
-            }
-
-            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
-                'dukValidation' => [
-                    'valid' => true,
-                    'warnings' => $dukResult->warnings,
-                    'validatedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
-                ],
-            ]));
+        // ANAF-grade validation through DUKIntegrator. Mandatory: a declaration is
+        // never marked validated on a syntax check alone.
+        try {
+            $outcome = $this->validator->validate($xml, $declaration->getType()->value);
+        } catch (DukUnavailableException $e) {
+            throw new \RuntimeException($e->getMessage(), 0, $e);
         }
+
+        if ($outcome->namespaceCorrected && $outcome->namespace !== null) {
+            // Remember the namespace ANAF asked for, so prepare()/download produce the same document.
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['xmlns' => $outcome->namespace]));
+        }
+
+        if (!$outcome->valid) {
+            $this->entityManager->flush();
+            throw new \RuntimeException(sprintf('DUK validation failed: %s', implode('; ', $outcome->errors)));
+        }
+
+        $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+            'dukValidation' => [
+                'valid' => true,
+                'namespace' => $outcome->namespace,
+                'warnings' => $outcome->warnings,
+                'validatedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            ],
+        ]));
 
         $declaration->setStatus(DeclarationStatus::VALIDATED);
         $this->entityManager->flush();
@@ -345,6 +358,11 @@ class TaxDeclarationManager
             throw new \InvalidArgumentException(sprintf('No XML generator found for type: %s', $declaration->getType()->value));
         }
 
-        return $generator->generate($declaration);
+        $xml = $generator->generate($declaration);
+
+        // ANAF XSDs are namespace-qualified; generators emit unqualified XML.
+        $namespace = $declaration->getMetadata()['xmlns'] ?? $this->namespaces->fromXsd($declaration->getType()->value);
+
+        return $this->namespaces->apply($xml, is_string($namespace) ? $namespace : null);
     }
 }

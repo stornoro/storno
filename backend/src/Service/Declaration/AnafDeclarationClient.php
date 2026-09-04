@@ -23,6 +23,8 @@ class AnafDeclarationClient
 {
     private const BASE_URL = 'https://webserviced.anaf.ro/SPVWS2/rest';
     private const EPATRIM_D112_URL = 'https://epatrim.anaf.ro/StareD112';
+    /** Public status page for declarations filed on the e-guvernare portal (no auth). */
+    public const STARE_D112_URL = 'https://www.anaf.ro/StareD112';
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -287,5 +289,55 @@ class AnafDeclarationClient
         }
 
         return ['raw' => $content];
+    }
+
+    /**
+     * Status of a declaration filed through the e-guvernare portal, by upload index
+     * and CUI/CNP. Public: no certificate, no token. Returns
+     * ['stare' => 'ok'|'nok'|'processing'|'unknown', 'text' => <ANAF wording>, 'raw' => <html>].
+     */
+    public function checkPortalStatus(string $uploadIndex, string $cui): array
+    {
+        $this->rateLimiter->consumeGlobal();
+        $response = $this->httpClient->request('POST', self::STARE_D112_URL . '/vizualizareStare.do', [
+            'body' => ['ghiseu' => 'N', 'id' => preg_replace('/\D/', '', $uploadIndex), 'cui' => preg_replace('/\D/', '', $cui)],
+            'headers' => ['Accept' => 'text/html'],
+            'timeout' => 30,
+        ]);
+        $html = $response->getContent(false);
+        $text = html_entity_decode(strip_tags(preg_replace('/\s+/', ' ', $html) ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        $stare = 'unknown';
+        $wording = null;
+        foreach ([
+            'Documentul este valid' => 'ok',
+            'Documentul are erori de validare' => 'nok',
+            'Fişierul depus nu este un document valid' => 'nok',
+            'Fisierul depus nu este un document valid' => 'nok',
+            'In prelucrare' => 'processing',
+            'În prelucrare' => 'processing',
+            'Nu a fost identificata nicio declaratie' => 'unknown',
+        ] as $needle => $state) {
+            if (mb_stripos($text, $needle) !== false) {
+                $stare = $state;
+                $wording = $needle;
+                break;
+            }
+        }
+
+        return ['stare' => $stare, 'text' => $wording, 'index' => $uploadIndex, 'raw' => mb_substr($text, 0, 2000)];
+    }
+
+    /** Signed recipisa PDF for a portal filing; empty string when ANAF has none (or after 60 days). */
+    public function downloadPortalRecipisa(string $uploadIndex): string
+    {
+        $this->rateLimiter->consumeGlobal();
+        $response = $this->httpClient->request('GET', self::STARE_D112_URL . '/ObtineRecipisa', [
+            'query' => ['numefisier' => preg_replace('/\D/', '', $uploadIndex) . '.pdf'],
+            'timeout' => 30,
+        ]);
+        $pdf = $response->getContent(false);
+
+        return str_starts_with($pdf, '%PDF') ? $pdf : '';
     }
 }

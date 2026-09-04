@@ -14,7 +14,7 @@ declare const __VERSION__: string;
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'dev';
 
 /** Allowed proxy target hosts. */
-const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro', 'api.anaf.ro'];
+const ALLOWED_HOSTS = ['webserviced.anaf.ro', 'epatrim.anaf.ro', 'api.anaf.ro', 'decl.anaf.mfinante.gov.ro', 'www.anaf.ro'];
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -338,6 +338,11 @@ interface SignAndSubmitRequest {
   uploadUrl: string;
   uploadHeaders: Record<string, string>;
   uploadContentType?: string;
+  /** 'multipart' = e-guvernare declarations portal (file field + APM session), default raw body */
+  uploadMode?: 'raw' | 'multipart';
+  uploadField?: string;
+  fileName?: string;
+  sessionUrl?: string;
 }
 
 interface SignAndSubmitResult {
@@ -395,17 +400,49 @@ async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, co
 
     // Step 2: Upload signed PDF to ANAF via curl mTLS
     console.log(`[sign-and-submit] Uploading to ${payload.uploadUrl}`);
-    const uploadResult = await curlProxy({
-      url: payload.uploadUrl,
-      method: 'POST',
-      headers: {
-        ...payload.uploadHeaders,
-        'Content-Type': payload.uploadContentType || 'application/pdf',
-      },
-      body: signedPdf.toString('base64'),
-      certificateId: payload.certificateId,
-      pin: payload.pin,
-    }, config);
+    let uploadResult;
+    if (payload.uploadMode === 'multipart') {
+      // e-guvernare declarations portal: the F5 APM in front of it needs the
+      // certificate handshake on the entry page first (sets MRHSession/F5_ST/
+      // JSESSIONID in the cookie jar), then the multipart POST rides that session.
+      if (payload.sessionUrl) {
+        const prime = await curlProxy({
+          url: payload.sessionUrl,
+          method: 'GET',
+          headers: {},
+          body: '',
+          certificateId: payload.certificateId,
+          pin: payload.pin,
+        }, config);
+        console.log(`[sign-and-submit] portal session: HTTP ${prime.statusCode}`);
+      }
+      uploadResult = await curlProxy({
+        url: payload.uploadUrl,
+        method: 'POST',
+        headers: { ...(payload.uploadHeaders ?? {}) },
+        body: '',
+        multipart: {
+          field: payload.uploadField || 'linkdoc',
+          fileName: payload.fileName || 'declaratie.pdf',
+          contentBase64: signedPdf.toString('base64'),
+          contentType: 'application/pdf',
+        },
+        certificateId: payload.certificateId,
+        pin: payload.pin,
+      }, config);
+    } else {
+      uploadResult = await curlProxy({
+        url: payload.uploadUrl,
+        method: 'POST',
+        headers: {
+          ...payload.uploadHeaders,
+          'Content-Type': payload.uploadContentType || 'application/pdf',
+        },
+        body: signedPdf.toString('base64'),
+        certificateId: payload.certificateId,
+        pin: payload.pin,
+      }, config);
+    }
 
     console.log(`[sign-and-submit] ANAF response: ${uploadResult.statusCode}`);
 
