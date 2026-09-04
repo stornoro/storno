@@ -104,6 +104,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        public_generator:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
 
 when@prod:
     framework:
@@ -211,4 +215,8 @@ when@prod:
             invitation_send:
                 policy: 'sliding_window'
                 limit: 10
+                interval: '1 hour'
+            public_generator:
+                policy: 'sliding_window'
+                limit: 30
                 interval: '1 hour'

@@ -354,6 +354,9 @@ export default defineI18nLocale(async () => {
         addCompany: 'Adauga firma',
         addCompanyDesc: 'Configureaza datele firmei pentru facturare.',
         addCompanyTime: '~3 min',
+        importData: 'Vii din SmartBill, Oblio sau alt program? Importa datele',
+        importDataDesc: 'Incarca exportul din vechiul program: clienti, produse si facturi, cu seriile pastrate.',
+        importDataTime: '~2 min',
         connectAnaf: 'Conecteaza ANAF pentru e-Factura',
         connectAnafDesc: 'Sincronizeaza automat facturile emise si primite.',
         connectAnafTime: '~2 min',
@@ -2270,7 +2273,7 @@ export default defineI18nLocale(async () => {
     companies: {
       title: 'Companii',
       description: 'Gestioneaza companiile tale si conexiunile ANAF',
-      noCompaniesDesc: 'Adauga prima companie pentru a incepe sincronizarea facturilor',
+      noCompaniesDesc: 'Adauga prima firma dupa CUI. Daca vii din SmartBill, Oblio, SAGA sau alt program, imediat dupa iti importam clientii, produsele si facturile, cu seriile pastrate.',
       cif: 'CIF',
       cifLabel: 'Cod de Identificare Fiscala',
       cifSearchPlaceholder: 'Cauta dupa CIF sau denumire...',
@@ -3407,7 +3410,11 @@ export default defineI18nLocale(async () => {
       exportError: 'Export esuat',
 
       // Migration section
-      migrationTitle: 'Migreaza datele din alte programe de facturare',
+      onboardingBannerTitle: 'Vii din SmartBill, Oblio sau alt program?',
+    onboardingBannerDescription: 'Incarca exportul din vechiul program si in 2 minute ai aici clientii, produsele si facturile, cu seriile pastrate. Nu trebuie sa introduci nimic manual.',
+    onboardingBannerStart: 'Importa datele mele',
+    onboardingBannerSkip: 'Incep de la zero',
+    migrationTitle: 'Migreaza datele din alte programe de facturare',
       migrationDescription: 'Importa nomenclatoarele si facturile din aplicatia anterioara in doar cativa pasi simpli',
       migrationNote: '*Inregistrarile existente vor fi actualizate.',
       stepImportClients: 'Import Nomenclator Clienti',

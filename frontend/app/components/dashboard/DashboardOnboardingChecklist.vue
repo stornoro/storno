@@ -6,12 +6,14 @@ const companyStore = useCompanyStore()
 const syncStore = useSyncStore()
 const dashboardStore = useDashboardStore()
 const bankAccountStore = useBankAccountStore()
+const importStore = useImportStore()
 
 // Use storeToRefs for reliable reactivity tracking
 const { hasCompanies, currentCompany } = storeToRefs(companyStore)
 const { hasValidToken } = storeToRefs(syncStore)
 const { lastSyncedAt, outgoingInvoices } = storeToRefs(dashboardStore)
 const { items: bankItems } = storeToRefs(bankAccountStore)
+const { history: importHistory } = storeToRefs(importStore)
 
 // Allow user to dismiss permanently (use localStorage for persistence)
 const DISMISS_KEY = 'onboarding_checklist_dismissed'
@@ -27,7 +29,14 @@ onMounted(async () => {
   if (!syncStore.syncStatus) {
     syncStore.fetchStatus()
   }
+  if (hasCompanies.value && importHistory.value.length === 0) {
+    importStore.fetchHistory()
+  }
 })
+
+const hasCompletedImport = computed(() =>
+  importHistory.value.some(job => job.status === 'completed'),
+)
 
 const anafSettingsLink = computed(() => {
   const id = currentCompany.value?.id
@@ -52,6 +61,14 @@ const steps = computed<OnboardingStep[]>(() => [
     time: $t('dashboard.onboarding.addCompanyTime'),
     done: hasCompanies.value,
     to: '/companies',
+  },
+  {
+    key: 'import',
+    label: $t('dashboard.onboarding.importData'),
+    description: $t('dashboard.onboarding.importDataDesc'),
+    time: $t('dashboard.onboarding.importDataTime'),
+    done: hasCompletedImport.value,
+    to: '/settings/import-export?onboarding=1',
   },
   {
     key: 'anaf',
