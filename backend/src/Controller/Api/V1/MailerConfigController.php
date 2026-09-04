@@ -3,12 +3,15 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\MailerConfig;
+use App\Entity\User;
 use App\Repository\MailerConfigRepository;
 use App\Security\OrganizationContext;
 use App\Service\LicenseManager;
 use App\Service\OrgMailer;
+use App\Service\Security\OutboundUrlPolicy;
 use App\Service\Storage\CredentialEncryptor;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,6 +33,8 @@ class MailerConfigController extends AbstractController
         private readonly CredentialEncryptor $credentialEncryptor,
         private readonly LicenseManager $licenseManager,
         private readonly OrgMailer $orgMailer,
+        private readonly OutboundUrlPolicy $outboundUrlPolicy,
+        private readonly LoggerInterface $logger,
     ) {}
 
     #[Route('/mailer-config', methods: ['GET'])]
@@ -75,6 +80,11 @@ class MailerConfigController extends AbstractController
         $fromAddress = trim((string) ($data['fromAddress'] ?? $config?->getFromAddress() ?? ''));
         if ($host === '') {
             return $this->json(['error' => 'Field "host" is required.'], Response::HTTP_BAD_REQUEST);
+        }
+        try {
+            $host = $this->outboundUrlPolicy->assertHostAllowed($host);
+        } catch (\InvalidArgumentException) {
+            return $this->json(['error' => 'SMTP host is not allowed.'], Response::HTTP_BAD_REQUEST);
         }
         if (!filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'A valid "fromAddress" is required.'], Response::HTTP_BAD_REQUEST);
@@ -180,9 +190,32 @@ class MailerConfigController extends AbstractController
             return $this->json(['success' => false, 'error' => 'Host and a valid fromAddress are required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $recipient = $data['testEmail'] ?? null;
-        if (!$recipient || !filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
-            $recipient = $fromAddress;
+        // Any public host on any port is fine (SMTP submission ports vary), but
+        // never let the test connect to loopback / private / docker-internal hosts.
+        try {
+            $host = $this->outboundUrlPolicy->assertHostAllowed($host);
+        } catch (\InvalidArgumentException) {
+            return $this->json(['success' => false, 'error' => 'SMTP host is not allowed.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // The test message may only go to the caller or to one of the
+        // organization's company addresses — never to an arbitrary recipient.
+        /** @var User $user */
+        $user = $this->getUser();
+        $allowedRecipients = array_values(array_unique(array_filter(array_map(
+            static fn (?string $e) => $e ? mb_strtolower(trim($e)) : null,
+            [$user->getEmail(), ...array_map(static fn ($c) => $c->getEmail(), $org->getCompanies()->toArray())],
+        ))));
+
+        $recipient = mb_strtolower(trim((string) ($data['testEmail'] ?? '')));
+        if ($recipient === '') {
+            $recipient = mb_strtolower((string) $user->getEmail());
+        }
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || !in_array($recipient, $allowedRecipients, true)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'testEmail must be your own address or one of your company addresses.',
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         try {
@@ -194,7 +227,14 @@ class MailerConfigController extends AbstractController
                 ->text('This is a test message confirming your custom email sender works.');
             (new SymfonyMailer($transport))->send($email);
         } catch (\Throwable $e) {
-            return $this->json(['success' => false, 'error' => mb_substr($e->getMessage(), 0, 255)]);
+            $this->logger->info('Mailer config test failed', [
+                'organizationId' => $org->getId()?->toRfc4122(),
+                'host' => $host,
+                'port' => $port,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json(['success' => false, 'error' => 'Test email could not be sent. Check the SMTP host, port, encryption and credentials.']);
         }
 
         if ($existing) {

@@ -53,9 +53,10 @@ class DeliveryNoteManager
         // Resolve client
         if (!empty($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $deliveryNote->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($company->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $deliveryNote->setClient($client);
         }
 
         // Scalar fields
@@ -248,9 +249,10 @@ class DeliveryNoteManager
         // Update client
         if (isset($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $deliveryNote->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($deliveryNote->getCompany()?->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $deliveryNote->setClient($client);
         }
 
         // Replace lines

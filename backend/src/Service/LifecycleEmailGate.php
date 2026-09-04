@@ -25,6 +25,11 @@ final class LifecycleEmailGate
                 return false;
             }
 
+            // Never send drips / trial reminders to an address nobody has confirmed
+            if (!$user->isEmailVerified()) {
+                return false;
+            }
+
             $pref = $this->entityManager->getRepository(NotificationPreference::class)->findOneBy([
                 'user' => $user,
                 'eventType' => $category,

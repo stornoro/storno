@@ -100,7 +100,7 @@ class ReceiptEmailService
         }
 
         try {
-            $converter = new CommonMarkConverter(['html_input' => 'allow']);
+            $converter = new CommonMarkConverter(['html_input' => 'strip', 'allow_unsafe_links' => false]);
             $bodyHtml = $converter->convert($body)->getContent();
 
             $unsubscribeUrl = $this->emailUnsubscribeService->generateUrl($to, 'document');

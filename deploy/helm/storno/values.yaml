@@ -200,8 +200,9 @@ centrifugo:
   env:
     CENTRIFUGO_API_KEY: ""
     CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ""
-    CENTRIFUGO_ADMIN: "true"
-    CENTRIFUGO_ADMIN_PASSWORD: "admin"
+    CENTRIFUGO_ADMIN: "false"
+    # Set CENTRIFUGO_ADMIN to "true" and a strong CENTRIFUGO_ADMIN_PASSWORD to enable the admin UI.
+    CENTRIFUGO_ADMIN_PASSWORD: ""
     # CENTRIFUGO_ADMIN_SECRET defaults to CENTRIFUGO_API_KEY in the template.
     CENTRIFUGO_ALLOWED_ORIGINS: "https://app.storno.ro"
 

@@ -121,8 +121,15 @@ security:
         - { path: ^/api/v1/oauth2/revoke$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/telegram/webhook$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1, roles: ROLE_API }
-        - { path: ^/api, roles: PUBLIC_ACCESS }
-        - { path: ^/api/*, roles: IS_AUTHENTICATED_FULLY }
+        # Non-v1 public endpoints (login / refresh / OAuth redirects / ANAF callback / docs)
+        - { path: ^/api/auth$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/refresh$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/refresh$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/connect/, roles: PUBLIC_ACCESS }
+        - { path: ^/api/anaf/link-callback$, methods: [GET], roles: PUBLIC_ACCESS }
+        - { path: ^/api/docs, roles: PUBLIC_ACCESS }
+        - { path: ^/api/\.well-known/, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:

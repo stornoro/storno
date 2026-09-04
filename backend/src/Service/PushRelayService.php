@@ -19,6 +19,7 @@ class PushRelayService
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
         private readonly string $pushRelayUrl = '',
+        private readonly string $pushRelaySecret = '',
     ) {}
 
     public function isEnabled(): bool
@@ -85,9 +86,18 @@ class PushRelayService
                 ];
             }
 
-            $response = $this->httpClient->request('POST', rtrim($this->pushRelayUrl, '/') . '/api/v1/push/send', [
+            $options = [
                 'json' => $payload,
-            ]);
+                'timeout' => 10,
+                'max_duration' => 15,
+            ];
+            // Authenticate against the relay; an empty secret (legacy / dev
+            // setups) leaves the header out so the relay can decide to refuse.
+            if ($this->pushRelaySecret !== '') {
+                $options['headers'] = ['Authorization' => 'Bearer ' . $this->pushRelaySecret];
+            }
+
+            $response = $this->httpClient->request('POST', rtrim($this->pushRelayUrl, '/') . '/api/v1/push/send', $options);
 
             $statusCode = $response->getStatusCode();
             if ($statusCode >= 400) {

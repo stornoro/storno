@@ -307,6 +307,8 @@ class InvoiceController extends AbstractController
                     throw new \DomainException('Invoice already has a storno refund.');
                 }
 
+                $this->invoiceManager->assertMonthlyInvoiceLimit($invoice->getCompany());
+
                 // Build the storno invoice
                 $storno = new Invoice();
                 $storno->setCompany($invoice->getCompany());
@@ -1571,6 +1573,9 @@ class InvoiceController extends AbstractController
         $templateId = $data['templateId'] ?? null;
         if ($templateId) {
             $template = $this->emailTemplateRepository->find($templateId);
+            if (!$template || !$template->getCompany()?->getId()?->equals($invoice->getCompany()?->getId())) {
+                return $this->json(['error' => 'Email template not found.'], Response::HTTP_BAD_REQUEST);
+            }
         }
 
         /** @var \App\Entity\User|null $user */

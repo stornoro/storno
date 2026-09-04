@@ -33,6 +33,7 @@ class RecurringInvoiceProcessor
         private readonly LoggerInterface $logger,
         private readonly CentrifugoService $centrifugo,
         private readonly LockFactory $lockFactory,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     /**
@@ -68,6 +69,17 @@ class RecurringInvoiceProcessor
         $invoiceNumbers = [];
 
         foreach ($dueItems as $recurringInvoice) {
+            // Plan gate: templates of organizations without the feature stay due but are not issued
+            $org = $recurringInvoice->getCompany()?->getOrganization();
+            if ($org !== null && !$this->licenseManager->canUseRecurringInvoices($org)) {
+                $this->logger->info('Skipping recurring invoice {id}: recurring invoices are not available on the {plan} plan', [
+                    'id' => (string) $recurringInvoice->getId(),
+                    'organizationId' => (string) $org->getId(),
+                    'plan' => $this->licenseManager->getEffectivePlan($org),
+                ]);
+                continue;
+            }
+
             try {
                 $result = $this->processOne($recurringInvoice, $date, $dryRun);
                 if ($result) {

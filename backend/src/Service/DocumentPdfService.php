@@ -207,18 +207,93 @@ class DocumentPdfService
         };
     }
 
+    public const CUSTOM_CSS_MAX_LENGTH = 20000;
+    public const FONT_FAMILY_PATTERN = '/^[A-Za-z0-9 ,\'"-]{1,100}$/';
+
+    /**
+     * Validate user-supplied custom CSS that is injected verbatim into a <style>
+     * block of the PDF templates. Returns an error message, or null when valid.
+     *
+     * Pure function: safe to call statically from controllers and tests.
+     */
+    public static function validateCustomCss(?string $css): ?string
+    {
+        if ($css === null || $css === '') {
+            return null;
+        }
+
+        if (mb_strlen($css) > self::CUSTOM_CSS_MAX_LENGTH) {
+            return sprintf('Custom CSS is too long (maximum %d characters).', self::CUSTOM_CSS_MAX_LENGTH);
+        }
+
+        if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $css)) {
+            return 'Custom CSS contains control characters, which are not allowed.';
+        }
+
+        // "<" is the only character that can terminate the surrounding <style>
+        // element; ">" is left alone because it is the CSS child combinator.
+        if (str_contains($css, '<')) {
+            return 'Custom CSS must not contain the "<" character.';
+        }
+
+        // Backslash escapes (e.g. "\3c" for "<", "\75rl(" for "url(") can smuggle
+        // forbidden tokens past the textual checks below; CSS rarely needs them.
+        if (str_contains($css, '\\')) {
+            return 'Custom CSS must not contain backslash escape sequences.';
+        }
+
+        // Normalise whitespace/comments so "@ import", "url /**/ (" etc. are caught too.
+        $normalized = strtolower($css);
+        $normalized = preg_replace('#/\*.*?\*/#s', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/', '', $normalized) ?? $normalized;
+
+        $forbidden = [
+            '@import' => 'Custom CSS must not contain @import rules.',
+            'url(' => 'Custom CSS must not contain url() references.',
+            'expression(' => 'Custom CSS must not contain expression().',
+            'javascript:' => 'Custom CSS must not contain "javascript:" URLs.',
+            '-moz-binding' => 'Custom CSS must not contain -moz-binding.',
+            'behavior:' => 'Custom CSS must not contain "behavior:" declarations.',
+        ];
+
+        foreach ($forbidden as $needle => $message) {
+            if (str_contains($normalized, $needle)) {
+                return $message;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate a font-family name that is injected into the PDF stylesheet.
+     * Returns an error message, or null when valid.
+     */
+    public static function validateFontFamily(?string $fontFamily): ?string
+    {
+        if ($fontFamily === null || $fontFamily === '') {
+            return null;
+        }
+
+        if (!preg_match(self::FONT_FAMILY_PATTERN, $fontFamily)) {
+            return 'Invalid font family. Use only letters, digits, spaces, commas, quotes and hyphens (max 100 characters).';
+        }
+
+        return null;
+    }
+
     public function renderSampleHtml(Company $company, array $overrides = []): string
     {
         $config = $this->resolveConfig($company);
         // Override with preview values
-        if (isset($overrides['templateSlug'])) {
+        if (isset($overrides['templateSlug']) && in_array($overrides['templateSlug'], array_column(self::AVAILABLE_TEMPLATES, 'slug'), true)) {
             $config->setTemplateSlug($overrides['templateSlug']);
         }
-        if (isset($overrides['primaryColor'])) {
+        if (isset($overrides['primaryColor']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $overrides['primaryColor'])) {
             $config->setPrimaryColor($overrides['primaryColor']);
         }
-        if (isset($overrides['fontFamily'])) {
-            $config->setFontFamily($overrides['fontFamily']);
+        if (isset($overrides['fontFamily']) && self::validateFontFamily((string) $overrides['fontFamily']) === null) {
+            $config->setFontFamily((string) $overrides['fontFamily']);
         }
         if (isset($overrides['showLogo'])) {
             $config->setShowLogo((bool) $overrides['showLogo']);
@@ -365,18 +440,35 @@ class DocumentPdfService
         return $this->twig->render($templatePath, $context);
     }
 
+    /**
+     * Hardened wkhtmltopdf options shared by every document render.
+     *
+     * The rendered HTML contains user-controlled fragments (custom CSS, labels,
+     * notes), so JavaScript is disabled and local file access is restricted to
+     * the bundled fonts directory (the templates reference the Noto fonts via
+     * file:// URLs; the logo is embedded as a data URI and needs no file access).
+     */
+    private function securePdfOptions(): array
+    {
+        return [
+            'encoding' => 'UTF-8',
+            'print-media-type' => true,
+            'no-outline' => true,
+            'disable-javascript' => true,
+            'disable-external-links' => true,
+            'disable-local-file-access' => true,
+            'allow' => [$this->projectDir . '/assets/fonts'],
+        ];
+    }
+
     private function convertToPdf(string $html): string
     {
-        return $this->snappy->getOutputFromHtml($html, [
+        return $this->snappy->getOutputFromHtml($html, $this->securePdfOptions() + [
             'page-size' => 'A4',
             'margin-top' => '10mm',
             'margin-bottom' => '10mm',
             'margin-left' => '10mm',
             'margin-right' => '10mm',
-            'encoding' => 'UTF-8',
-            'print-media-type' => true,
-            'no-outline' => true,
-            'enable-local-file-access' => true,
         ]);
     }
 
@@ -387,17 +479,13 @@ class DocumentPdfService
      */
     private function convertReceiptToPdf(string $html): string
     {
-        return $this->snappy->getOutputFromHtml($html, [
+        return $this->snappy->getOutputFromHtml($html, $this->securePdfOptions() + [
             'page-width' => '80mm',
             'page-height' => '297mm',
             'margin-top' => '4mm',
             'margin-bottom' => '4mm',
             'margin-left' => '4mm',
             'margin-right' => '4mm',
-            'encoding' => 'UTF-8',
-            'print-media-type' => true,
-            'no-outline' => true,
-            'enable-local-file-access' => true,
         ]);
     }
 

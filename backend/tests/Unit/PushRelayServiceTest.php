@@ -81,6 +81,34 @@ class PushRelayServiceTest extends TestCase
         $this->assertNotSame(PushRelayService::ERROR_TOKEN_UNREGISTERED, $err);
     }
 
+    public function testSendsBearerAuthorizationHeaderWhenSecretConfigured(): void
+    {
+        $seen = null;
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use (&$seen) {
+            $seen = $options['normalized_headers'] ?? $options['headers'] ?? [];
+            return new MockResponse('{"ok":true}', ['http_code' => 200]);
+        }, 'http://relay.example');
+        $svc = new PushRelayService($client, new NullLogger(), 'http://relay.example', 'top-secret');
+
+        $this->assertNull($svc->send('TOKEN', 'Hi', 'Body'));
+        $flat = implode("\n", array_map(fn ($h) => is_array($h) ? implode("\n", $h) : $h, $seen));
+        $this->assertStringContainsStringIgnoringCase('authorization: Bearer top-secret', $flat);
+    }
+
+    public function testOmitsAuthorizationHeaderWhenSecretEmpty(): void
+    {
+        $seen = null;
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use (&$seen) {
+            $seen = $options['normalized_headers'] ?? $options['headers'] ?? [];
+            return new MockResponse('{"ok":true}', ['http_code' => 200]);
+        }, 'http://relay.example');
+        $svc = new PushRelayService($client, new NullLogger(), 'http://relay.example', '');
+
+        $this->assertNull($svc->send('TOKEN', 'Hi', 'Body'));
+        $flat = strtolower(implode("\n", array_map(fn ($h) => is_array($h) ? implode("\n", $h) : $h, $seen)));
+        $this->assertStringNotContainsString('authorization:', $flat);
+    }
+
     public function testReturnsRelayDisabledWhenUrlEmpty(): void
     {
         $svc = new PushRelayService(new MockHttpClient(), new NullLogger(), '');

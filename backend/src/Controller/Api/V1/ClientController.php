@@ -18,6 +18,7 @@ use App\Services\AnafService;
 use App\Service\Vies\ViesService;
 use App\Message\ValidateViesMessage;
 use App\Util\AddressNormalizer;
+use App\Service\Export\CsvCell;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -25,6 +26,7 @@ use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
@@ -112,7 +114,7 @@ class ClientController extends AbstractController
         fputcsv($handle, ['Tip', 'Denumire', 'CUI', 'CNP', 'Cod TVA', 'Platitor TVA', 'Nr. Reg. Com.', 'Adresa', 'Oras', 'Judet', 'Tara', 'Cod Postal', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Persoana contact', 'Termen plata (zile)', 'Nr. identificare', 'Moneda']);
 
         foreach ($clients as $client) {
-            fputcsv($handle, [
+            fputcsv($handle, CsvCell::neutralizeRow([
                 $client->getType(),
                 $client->getName(),
                 $client->getCui(),
@@ -133,7 +135,7 @@ class ClientController extends AbstractController
                 $client->getDefaultPaymentTermDays(),
                 $client->getIdNumber(),
                 $client->getCurrency(),
-            ]);
+            ]));
         }
 
         rewind($handle);
@@ -168,8 +170,12 @@ class ClientController extends AbstractController
     }
 
     #[Route('/vies-lookup', methods: ['GET'])]
-    public function viesLookup(Request $request): JsonResponse
+    public function viesLookup(Request $request, RateLimiterFactory $registryLookupLimiter): JsonResponse
     {
+        if ($denied = $this->guardRegistryLookup($registryLookupLimiter)) {
+            return $denied;
+        }
+
         $vatCode = trim($request->query->get('vatCode', ''));
         if ($vatCode === '') {
             return $this->json(['error' => 'vatCode is required.'], Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -310,8 +316,12 @@ class ClientController extends AbstractController
      * Lookup a CUI in ANAF without creating a client — returns company details for form pre-fill.
      */
     #[Route('/anaf-lookup', methods: ['GET'])]
-    public function anafLookup(Request $request): JsonResponse
+    public function anafLookup(Request $request, RateLimiterFactory $registryLookupLimiter): JsonResponse
     {
+        if ($denied = $this->guardRegistryLookup($registryLookupLimiter)) {
+            return $denied;
+        }
+
         $cui = trim($request->query->get('cui', ''));
         if ($cui === '') {
             return $this->json(['error' => 'CUI is required.'], Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -658,6 +668,25 @@ class ClientController extends AbstractController
             'receiptHistory' => $receiptHistory,
             'receiptCount' => $receiptCount,
         ], context: ['groups' => ['client:detail', 'invoice:list', 'delivery_note:list', 'receipt:list']]);
+    }
+
+    /**
+     * ANAF / VIES lookups proxy third-party registries on the caller's behalf:
+     * require a client permission and throttle per user.
+     */
+    private function guardRegistryLookup(RateLimiterFactory $registryLookupLimiter): ?JsonResponse
+    {
+        if (!$this->organizationContext->hasPermission(Permission::CLIENT_CREATE)
+            && !$this->organizationContext->hasPermission(Permission::CLIENT_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $limiter = $registryLookupLimiter->create((string) $this->getUser()?->getUserIdentifier());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many lookups. Please try again later.'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        return null;
     }
 
     private function resolveCompany(Request $request): ?\App\Entity\Company

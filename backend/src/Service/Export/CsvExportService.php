@@ -40,7 +40,7 @@ class CsvExportService
         fputcsv($handle, self::CSV_HEADERS);
 
         foreach ($invoices as $invoice) {
-            fputcsv($handle, [
+            fputcsv($handle, CsvCell::neutralizeRow([
                 $invoice->getNumber(),
                 $invoice->getIssueDate()?->format('Y-m-d'),
                 $invoice->getDueDate()?->format('Y-m-d'),
@@ -59,7 +59,7 @@ class CsvExportService
                 $invoice->getPaymentMethod(),
                 $invoice->isDuplicate() ? 'Da' : 'Nu',
                 $invoice->isLateSubmission() ? 'Da' : 'Nu',
-            ]);
+            ]));
         }
 
         rewind($handle);

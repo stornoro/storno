@@ -8,6 +8,7 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "api-platform/core": "^3.2",
+        "aws/aws-php-sns-message-validator": "^1.10",
         "beberlei/doctrineextensions": "dev-master",
         "doctrine/doctrine-bundle": "^2.11",
         "doctrine/doctrine-migrations-bundle": "^3.3",

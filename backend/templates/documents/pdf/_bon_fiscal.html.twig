@@ -116,7 +116,8 @@
     }
 
     {% if customCss %}
-    {{ customCss|raw }}
+    {# Defense in depth: strip "<" so user CSS can never close the <style> element #}
+    {{ customCss|replace({'<': ''})|raw }}
     {% endif %}
 </style>
 </head>

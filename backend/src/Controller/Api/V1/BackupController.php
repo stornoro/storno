@@ -126,6 +126,14 @@ class BackupController extends AbstractController
             return $this->json(['error' => 'Backup job not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        $org = $company->getOrganization();
+        if (!$org || !$this->licenseManager->canBackupRestore($org)) {
+            return $this->json([
+                'error' => 'Backup & restore is not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
+
         if ($job->getStatus() !== 'completed' || !$job->getStoragePath()) {
             return $this->json(['error' => 'Backup is not ready for download.'], Response::HTTP_BAD_REQUEST);
         }

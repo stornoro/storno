@@ -10,13 +10,16 @@ use App\Repository\WebhookDeliveryRepository;
 use App\Repository\WebhookEndpointRepository;
 use App\Security\OrganizationContext;
 use App\Service\LicenseManager;
+use App\Service\Security\OutboundUrlPolicy;
 use App\Service\Webhook\WebhookEventRegistry;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Uuid;
@@ -26,6 +29,12 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 #[IsGranted('ROLE_USER')]
 class WebhookController extends AbstractController
 {
+    /** Maximum webhook endpoints across all companies of one organization. */
+    private const MAX_ENDPOINTS_PER_ORG = 10;
+
+    /** Only this many bytes of an endpoint's response are ever persisted. */
+    private const MAX_STORED_RESPONSE_BODY = 200;
+
     public function __construct(
         private readonly WebhookEndpointRepository $endpointRepository,
         private readonly WebhookDeliveryRepository $deliveryRepository,
@@ -34,6 +43,8 @@ class WebhookController extends AbstractController
         private readonly HttpClientInterface $httpClient,
         private readonly LicenseManager $licenseManager,
         private readonly MessageBusInterface $messageBus,
+        private readonly OutboundUrlPolicy $outboundUrlPolicy,
+        private readonly LoggerInterface $logger,
     ) {}
 
     #[Route('/events', methods: ['GET'])]
@@ -84,11 +95,19 @@ class WebhookController extends AbstractController
             ], Response::HTTP_PAYMENT_REQUIRED);
         }
 
+        $existingCount = $this->endpointRepository->count(['company' => $org->getCompanies()->toArray()]);
+        if ($existingCount >= self::MAX_ENDPOINTS_PER_ORG) {
+            return $this->json([
+                'error' => sprintf('You can register at most %d webhook endpoints.', self::MAX_ENDPOINTS_PER_ORG),
+                'code' => 'WEBHOOK_LIMIT',
+            ], Response::HTTP_CONFLICT);
+        }
+
         $data = json_decode($request->getContent(), true);
 
-        $url = $data['url'] ?? null;
-        if (!$url || !filter_var($url, FILTER_VALIDATE_URL) || !str_starts_with($url, 'https://')) {
-            return $this->json(['error' => 'A valid HTTPS URL is required.'], Response::HTTP_BAD_REQUEST);
+        $url = $this->validateWebhookUrl($data['url'] ?? null);
+        if ($url === null) {
+            return $this->json(['error' => 'A valid public HTTPS URL on port 443 is required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $events = $data['events'] ?? [];
@@ -137,7 +156,7 @@ class WebhookController extends AbstractController
     #[Route('/{uuid}', methods: ['PATCH'])]
     public function update(string $uuid, Request $request): JsonResponse
     {
-        $endpoint = $this->resolveEndpoint($uuid, requireManage: true);
+        $endpoint = $this->resolveEndpoint($uuid, requireManage: true, requirePlan: true);
         if ($endpoint instanceof JsonResponse) {
             return $endpoint;
         }
@@ -145,10 +164,11 @@ class WebhookController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         if (isset($data['url'])) {
-            if (!filter_var($data['url'], FILTER_VALIDATE_URL) || !str_starts_with($data['url'], 'https://')) {
-                return $this->json(['error' => 'A valid HTTPS URL is required.'], Response::HTTP_BAD_REQUEST);
+            $url = $this->validateWebhookUrl($data['url']);
+            if ($url === null) {
+                return $this->json(['error' => 'A valid public HTTPS URL on port 443 is required.'], Response::HTTP_BAD_REQUEST);
             }
-            $endpoint->setUrl($data['url']);
+            $endpoint->setUrl($url);
         }
 
         if (isset($data['events'])) {
@@ -193,11 +213,28 @@ class WebhookController extends AbstractController
     }
 
     #[Route('/{uuid}/test', methods: ['POST'])]
-    public function test(string $uuid): JsonResponse
+    public function test(string $uuid, RateLimiterFactory $webhookTestLimiter): JsonResponse
     {
-        $endpoint = $this->resolveEndpoint($uuid, requireManage: true);
+        $endpoint = $this->resolveEndpoint($uuid, requireManage: true, requirePlan: true);
         if ($endpoint instanceof JsonResponse) {
             return $endpoint;
+        }
+
+        if ($limited = $this->consumeTestLimiter($webhookTestLimiter)) {
+            return $limited;
+        }
+
+        // Re-validate right before connecting: DNS may have changed since the
+        // URL was stored (rebinding), and legacy rows predate the policy.
+        try {
+            $targetUrl = $this->outboundUrlPolicy->assertAllowed($endpoint->getUrl(), ['httpsOnly' => true, 'allowedPorts' => [443]]);
+        } catch (\InvalidArgumentException) {
+            return $this->json([
+                'success' => false,
+                'statusCode' => null,
+                'durationMs' => 0,
+                'error' => 'Endpoint URL is not allowed.',
+            ]);
         }
 
         $testPayload = [
@@ -220,7 +257,7 @@ class WebhookController extends AbstractController
         $startTime = hrtime(true);
 
         try {
-            $response = $this->httpClient->request('POST', $endpoint->getUrl(), [
+            $response = $this->httpClient->request('POST', $targetUrl, [
                 'headers' => [
                     'Content-Type' => 'application/json',
                     'X-Webhook-Signature' => $signature,
@@ -230,6 +267,8 @@ class WebhookController extends AbstractController
                 ],
                 'body' => $jsonPayload,
                 'timeout' => 10,
+                'max_duration' => 15,
+                'max_redirects' => 0,
             ]);
 
             $statusCode = $response->getStatusCode();
@@ -237,7 +276,7 @@ class WebhookController extends AbstractController
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
 
             $delivery->setResponseStatusCode($statusCode);
-            $delivery->setResponseBody($responseBody);
+            $delivery->setResponseBody(mb_substr($responseBody, 0, self::MAX_STORED_RESPONSE_BODY));
             $delivery->setDurationMs($durationMs);
 
             if ($statusCode >= 200 && $statusCode < 300) {
@@ -251,8 +290,13 @@ class WebhookController extends AbstractController
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
             $delivery->setDurationMs($durationMs);
             $delivery->setStatus(WebhookDeliveryStatus::FAILED);
-            $delivery->setErrorMessage(substr($e->getMessage(), 0, 500));
+            $delivery->setErrorMessage('Delivery failed.');
             $delivery->setCompletedAt(new \DateTimeImmutable());
+
+            $this->logger->info('Webhook test delivery failed', [
+                'endpointId' => $endpoint->getId()->toRfc4122(),
+                'error' => $e->getMessage(),
+            ]);
         }
 
         $this->entityManager->persist($delivery);
@@ -269,7 +313,7 @@ class WebhookController extends AbstractController
     #[Route('/{uuid}/regenerate-secret', methods: ['POST'])]
     public function regenerateSecret(string $uuid): JsonResponse
     {
-        $endpoint = $this->resolveEndpoint($uuid, requireManage: true);
+        $endpoint = $this->resolveEndpoint($uuid, requireManage: true, requirePlan: true);
         if ($endpoint instanceof JsonResponse) {
             return $endpoint;
         }
@@ -332,11 +376,15 @@ class WebhookController extends AbstractController
      * delivery is left untouched for audit history.
      */
     #[Route('/{uuid}/deliveries/{deliveryUuid}/retry', methods: ['POST'])]
-    public function retryDelivery(string $uuid, string $deliveryUuid): JsonResponse
+    public function retryDelivery(string $uuid, string $deliveryUuid, RateLimiterFactory $webhookTestLimiter): JsonResponse
     {
-        $endpoint = $this->resolveEndpoint($uuid, requireManage: true);
+        $endpoint = $this->resolveEndpoint($uuid, requireManage: true, requirePlan: true);
         if ($endpoint instanceof JsonResponse) {
             return $endpoint;
+        }
+
+        if ($limited = $this->consumeTestLimiter($webhookTestLimiter)) {
+            return $limited;
         }
 
         $delivery = $this->deliveryRepository->find(Uuid::fromString($deliveryUuid));
@@ -359,7 +407,13 @@ class WebhookController extends AbstractController
 
     // --- Private helpers ---
 
-    private function resolveEndpoint(string $uuid, bool $requireManage = false): WebhookEndpoint|JsonResponse
+    /**
+     * @param bool $requirePlan Also require the organization's plan to include
+     *                          webhooks (mutations that make outbound calls or
+     *                          change delivery targets). Deleting stays allowed
+     *                          after a downgrade so users can clean up.
+     */
+    private function resolveEndpoint(string $uuid, bool $requireManage = false, bool $requirePlan = false): WebhookEndpoint|JsonResponse
     {
         $company = $this->organizationContext->resolveCompany();
         if (!$company) {
@@ -371,12 +425,46 @@ class WebhookController extends AbstractController
             return $this->json(['error' => 'Access denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        if ($requirePlan && !$this->licenseManager->canUseWebhooks($company->getOrganization())) {
+            return $this->json([
+                'error' => 'Webhooks are not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
+
         $endpoint = $this->endpointRepository->find(Uuid::fromString($uuid));
         if (!$endpoint || $endpoint->getCompany()->getId()->toRfc4122() !== $company->getId()->toRfc4122()) {
             return $this->json(['error' => 'Webhook endpoint not found.'], Response::HTTP_NOT_FOUND);
         }
 
         return $endpoint;
+    }
+
+    /**
+     * Webhook targets must be public https:// URLs on port 443 with no
+     * credentials, resolving only to public addresses.
+     */
+    private function validateWebhookUrl(mixed $url): ?string
+    {
+        if (!is_string($url) || $url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        try {
+            return $this->outboundUrlPolicy->assertAllowed($url, ['httpsOnly' => true, 'allowedPorts' => [443]]);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    private function consumeTestLimiter(RateLimiterFactory $webhookTestLimiter): ?JsonResponse
+    {
+        $limiter = $webhookTestLimiter->create((string) $this->getUser()?->getUserIdentifier());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many webhook test requests. Please try again later.'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        return null;
     }
 
     private function serializeEndpoint(WebhookEndpoint $endpoint, bool $showSecret = false): array

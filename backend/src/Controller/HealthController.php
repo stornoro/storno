@@ -37,7 +37,7 @@ class HealthController extends AbstractController
             $this->entityManager->getConnection()->executeQuery('SELECT 1');
             $checks['database'] = 'ok';
         } catch (\Throwable $e) {
-            $checks['database'] = 'error: ' . $e->getMessage();
+            $checks['database'] = 'error';
             $healthy = false;
         }
 
@@ -46,7 +46,7 @@ class HealthController extends AbstractController
             $this->cache->get('health_check', fn () => 'ok');
             $checks['cache'] = 'ok';
         } catch (\Throwable $e) {
-            $checks['cache'] = 'error: ' . $e->getMessage();
+            $checks['cache'] = 'error';
             $healthy = false;
         }
 
@@ -64,7 +64,7 @@ class HealthController extends AbstractController
             $checks['centrifugo'] = 'ok';
             $checks['centrifugo_clients'] = $info['result']['nodes'][0]['num_clients'] ?? 0;
         } catch (\Throwable $e) {
-            $checks['centrifugo'] = 'error: ' . $e->getMessage();
+            $checks['centrifugo'] = 'error';
             $healthy = false;
         }
 

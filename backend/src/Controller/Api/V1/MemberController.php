@@ -160,7 +160,18 @@ class MemberController extends AbstractController
             if ($membership->getUser() === $currentUser) {
                 return $this->json(['error' => 'You cannot deactivate your own account.', 'messageKey' => MessageKey::ERR_MEMBER_CANNOT_DEACTIVATE_SELF], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
-            $membership->setIsActive((bool) $data['isActive']);
+
+            $isActive = (bool) $data['isActive'];
+
+            // Reactivating a member counts against the plan's seat limit
+            if ($isActive && !$membership->isActive() && !$this->licenseManager->canAddMember($org)) {
+                return $this->json([
+                    'error' => 'Organizatia a atins limita de utilizatori.',
+                    'code' => 'PLAN_LIMIT',
+                ], Response::HTTP_PAYMENT_REQUIRED);
+            }
+
+            $membership->setIsActive($isActive);
         }
 
         // Update allowed companies (only for ACCOUNTANT/EMPLOYEE)

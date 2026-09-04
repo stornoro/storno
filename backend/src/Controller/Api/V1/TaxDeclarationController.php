@@ -12,6 +12,7 @@ use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Declaration\AnafDeclarationClient;
 use App\Service\Declaration\DukIntegratorService;
+use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,6 +35,7 @@ class TaxDeclarationController extends AbstractController
         private readonly TaxDeclarationRepository $declarationRepository,
         private readonly AnafDeclarationClient $anafClient,
         private readonly DukIntegratorService $dukIntegrator,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/declarations', methods: ['GET'])]
@@ -65,7 +67,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -112,7 +114,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -135,7 +137,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -171,7 +173,7 @@ class TaxDeclarationController extends AbstractController
 
         foreach ($ids as $uuid) {
             $declaration = $this->manager->find($uuid);
-            if ($declaration) {
+            if ($declaration && $this->organizationContext->ownsCompany($declaration->getCompany())) {
                 $this->manager->delete($declaration, $user);
                 $deleted++;
             }
@@ -230,7 +232,7 @@ class TaxDeclarationController extends AbstractController
         $declarations = [];
         foreach ($ids as $id) {
             $declaration = $this->manager->find($id);
-            if ($declaration) {
+            if ($declaration && $this->organizationContext->ownsCompany($declaration->getCompany())) {
                 $declarations[] = $declaration;
             }
         }
@@ -248,7 +250,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -269,7 +271,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -321,7 +323,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -342,7 +344,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -374,10 +376,17 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        $org = $declaration->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canGeneratePdf($org)) {
+            return $this->json([
+                'error' => 'PDF generation is not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
         if (!$declaration->getPdfPath() || !$this->defaultStorage->fileExists($declaration->getPdfPath())) {
             return $this->json(['error' => 'PDF not available. Validate or prepare the declaration first.'], Response::HTTP_NOT_FOUND);
         }
@@ -399,7 +408,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -461,7 +470,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -566,7 +575,7 @@ class TaxDeclarationController extends AbstractController
 
         foreach ($ids as $id) {
             $declaration = $this->manager->find($id);
-            if (!$declaration) {
+            if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
                 $errors[] = ['declarationId' => $id, 'error' => 'Declaration not found.'];
                 continue;
             }
@@ -662,7 +671,7 @@ class TaxDeclarationController extends AbstractController
 
         foreach ($ids as $id) {
             $declaration = $this->manager->find($id);
-            if (!$declaration) {
+            if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
                 $errors[] = ['id' => $id, 'error' => 'Declaration not found.'];
                 continue;
             }
@@ -708,7 +717,7 @@ class TaxDeclarationController extends AbstractController
             }
 
             $declaration = $this->manager->find($declarationId);
-            if (!$declaration) {
+            if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
                 $errors[] = ['declarationId' => $declarationId, 'error' => 'Declaration not found.'];
                 continue;
             }
@@ -780,7 +789,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -1066,7 +1075,7 @@ class TaxDeclarationController extends AbstractController
         }
 
         $declaration = $this->manager->find($uuid);
-        if (!$declaration) {
+        if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany())) {
             return $this->json(['error' => 'Declaration not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -1261,7 +1270,7 @@ class TaxDeclarationController extends AbstractController
         foreach ($recipisas as $rec) {
             try {
                 $declaration = $this->declarationRepository->find($rec['declarationId']);
-                if (!$declaration || $declaration->getRecipisaPath() !== null) {
+                if (!$declaration || !$this->organizationContext->ownsCompany($declaration->getCompany()) || $declaration->getRecipisaPath() !== null) {
                     continue;
                 }
 

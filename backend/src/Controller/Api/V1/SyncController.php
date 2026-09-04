@@ -8,6 +8,7 @@ use App\Repository\CompanyRepository;
 use App\Repository\InvoiceRepository;
 use App\Repository\OrganizationMembershipRepository;
 use App\Security\OrganizationContext;
+use App\Security\Permission;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Message\Anaf\SyncCompanyMessage;
 use App\Service\Anaf\EFacturaClient;
@@ -21,10 +22,15 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/v1/sync')]
 class SyncController extends AbstractController
 {
+    /** How long a token-validation verdict is reused before asking ANAF again. */
+    private const TOKEN_VALIDATION_TTL = 600;
+
     public function __construct(
         private readonly AnafTokenResolver $tokenResolver,
         private readonly EFacturaClient $eFacturaClient,
@@ -37,6 +43,7 @@ class SyncController extends AbstractController
         private readonly CentrifugoService $centrifugo,
         private readonly MessageBusInterface $messageBus,
         private readonly EntityManagerInterface $entityManager,
+        private readonly CacheInterface $cache,
         private readonly string $env,
     ) {}
 
@@ -46,6 +53,10 @@ class SyncController extends AbstractController
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::EFACTURA_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $org = $company->getOrganization();
@@ -96,8 +107,7 @@ class SyncController extends AbstractController
         }
 
         try {
-            $cif = (string) $company->getCif();
-            $validation = $this->eFacturaClient->validateToken($cif, $token);
+            $validation = $this->validateTokenCached($company, $token);
             if (!$validation['valid']) {
                 // Invalidate cached CIF for this token so it's not reused
                 $this->tokenResolver->invalidateCifCache($company);
@@ -146,6 +156,10 @@ class SyncController extends AbstractController
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        if (!$this->organizationContext->hasPermission(Permission::EFACTURA_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
         $token = $this->tokenResolver->resolve($company);
         $hasToken = $token !== null;
         $tokenError = null;
@@ -153,8 +167,7 @@ class SyncController extends AbstractController
         // If token exists, validate it actually works for this company's CIF
         if ($hasToken) {
             try {
-                $cif = (string) $company->getCif();
-                $validation = $this->eFacturaClient->validateToken($cif, $token);
+                $validation = $this->validateTokenCached($company, $token);
                 if (!$validation['valid']) {
                     $hasToken = false;
                     $tokenError = $validation['error'];
@@ -186,6 +199,10 @@ class SyncController extends AbstractController
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::EFACTURA_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $limit = min((int) $request->query->get('limit', 10), 50);
@@ -241,6 +258,32 @@ class SyncController extends AbstractController
             }, $recentInvoices),
             'total' => min($total, 50),
         ]);
+    }
+
+    /**
+     * validateToken() costs a real ANAF call (and rate-limit budget) every time.
+     * Cache the verdict per company + token for TOKEN_VALIDATION_TTL so polling
+     * the status endpoint cannot be used to burn through the ANAF quota. The key
+     * includes a token digest, so reconnecting with a new token bypasses a stale
+     * "invalid" verdict immediately. Rate-limit / transport errors propagate and
+     * are not cached.
+     *
+     * @return array{valid: bool, error: ?string, statusCode?: int}
+     */
+    private function validateTokenCached(\App\Entity\Company $company, string $token): array
+    {
+        $cif = (string) $company->getCif();
+        $key = sprintf(
+            'anaf_token_validation.%s.%s',
+            $company->getId()->toRfc4122(),
+            substr(hash('sha256', $token), 0, 32),
+        );
+
+        return $this->cache->get($key, function (ItemInterface $item) use ($cif, $token): array {
+            $item->expiresAfter(self::TOKEN_VALIDATION_TTL);
+
+            return $this->eFacturaClient->validateToken($cif, $token);
+        });
     }
 
     private function notifySyncError(\App\Entity\Company $company, string $errorMsg, string $code): void

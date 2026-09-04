@@ -337,6 +337,10 @@ class DashboardController extends AbstractController
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
         $conn = $this->entityManager->getConnection();
         $companyId = (string) $company->getId();
         $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
@@ -408,6 +412,10 @@ class DashboardController extends AbstractController
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $conn = $this->entityManager->getConnection();
@@ -487,6 +495,10 @@ class DashboardController extends AbstractController
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $conn = $this->entityManager->getConnection();

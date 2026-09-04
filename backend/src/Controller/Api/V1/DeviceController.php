@@ -17,6 +17,12 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/v1/devices')]
 class DeviceController extends AbstractController
 {
+    /** Maximum push tokens kept per user; the oldest are evicted beyond this. */
+    private const MAX_DEVICES_PER_USER = 10;
+
+    /** FCM / APNs / web-push tokens: URL-safe token characters, sane length. */
+    private const TOKEN_PATTERN = '/^[A-Za-z0-9:_\-]{20,512}$/';
+
     public function __construct(
         private readonly UserDeviceRepository $deviceRepository,
         private readonly EntityManagerInterface $entityManager,
@@ -46,18 +52,29 @@ class DeviceController extends AbstractController
             return $this->json(['error' => 'Token and platform are required.'], Response::HTTP_BAD_REQUEST);
         }
 
+        if (!is_string($token) || !preg_match(self::TOKEN_PATTERN, $token)) {
+            return $this->json(['error' => 'Invalid device token.'], Response::HTTP_BAD_REQUEST);
+        }
+
         if (!in_array($platform, ['ios', 'android', 'web'], true)) {
             return $this->json(['error' => 'Invalid platform.'], Response::HTTP_BAD_REQUEST);
         }
 
         $existing = $this->deviceRepository->findByToken($token);
         if ($existing) {
-            $existing->setUser($user);
+            // A push token identifies one app install; never let another account
+            // silently take it over (that would redirect the owner's notifications).
+            if ($existing->getUser()?->getId()?->toRfc4122() !== $user->getId()->toRfc4122()) {
+                return $this->json(['error' => 'Device token is already registered.'], Response::HTTP_CONFLICT);
+            }
+
             $existing->setLastUsedAt(new \DateTimeImmutable());
             $this->entityManager->flush();
 
             return $this->json(['status' => 'updated']);
         }
+
+        $this->evictOldestDevices($user);
 
         $device = new UserDevice();
         $device->setUser($user);
@@ -79,12 +96,29 @@ class DeviceController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $token = $data['token'] ?? null;
 
-        if (!$token) {
+        if (!$token || !is_string($token)) {
             return $this->json(['error' => 'Token is required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $this->deviceRepository->removeByToken($user, $token);
 
         return $this->json(['status' => 'removed']);
+    }
+
+    /**
+     * Keep at most MAX_DEVICES_PER_USER rows per user: before adding a new
+     * device, drop the oldest ones so the count after insert stays capped.
+     */
+    private function evictOldestDevices(User $user): void
+    {
+        $devices = $this->deviceRepository->findBy(['user' => $user], ['createdAt' => 'ASC']);
+        $excess = count($devices) - (self::MAX_DEVICES_PER_USER - 1);
+        if ($excess <= 0) {
+            return;
+        }
+
+        foreach (array_slice($devices, 0, $excess) as $stale) {
+            $this->entityManager->remove($stale);
+        }
     }
 }

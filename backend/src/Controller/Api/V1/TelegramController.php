@@ -3,7 +3,9 @@ namespace App\Controller\Api\V1;
 
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,9 +15,17 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/api/v1/telegram')]
 class TelegramController extends AbstractController
 {
+    private const WEBHOOK_SECRET_HEADER = 'X-Telegram-Bot-Api-Secret-Token';
+
+    private static bool $missingSecretLogged = false;
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
+        private readonly LoggerInterface $logger,
+        private readonly string $env,
         private readonly ?string $telegramBotUsername = null,
+        #[Autowire(env: 'TELEGRAM_WEBHOOK_SECRET')]
+        private readonly ?string $telegramWebhookSecret = null,
     ) {}
 
     /**
@@ -71,6 +81,10 @@ class TelegramController extends AbstractController
     #[Route('/webhook', methods: ['POST'])]
     public function webhook(Request $request): JsonResponse
     {
+        if (!$this->isWebhookAuthorized($request)) {
+            return $this->json(['error' => 'Forbidden.'], Response::HTTP_FORBIDDEN);
+        }
+
         $update = json_decode($request->getContent(), true);
 
         if (!$update || !isset($update['message'])) {
@@ -138,6 +152,32 @@ class TelegramController extends AbstractController
             'linked' => $user->getTelegramChatId() !== null,
             'configured' => !empty($this->telegramBotUsername),
         ]);
+    }
+
+    /**
+     * Telegram echoes the secret configured via setWebhook(secret_token=...) in a header;
+     * anything without it is not coming from Telegram.
+     */
+    private function isWebhookAuthorized(Request $request): bool
+    {
+        $secret = (string) $this->telegramWebhookSecret;
+
+        if ($secret === '') {
+            if ($this->env !== 'prod') {
+                return true;
+            }
+
+            if (!self::$missingSecretLogged) {
+                self::$missingSecretLogged = true;
+                $this->logger->error('Telegram webhook: TELEGRAM_WEBHOOK_SECRET is not configured; rejecting all webhook calls.');
+            }
+
+            return false;
+        }
+
+        $provided = (string) $request->headers->get(self::WEBHOOK_SECRET_HEADER, '');
+
+        return $provided !== '' && hash_equals($secret, $provided);
     }
 
     private function sendTelegramMessage(string $chatId, string $text): void

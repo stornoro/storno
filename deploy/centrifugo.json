@@ -2,7 +2,7 @@
   "engine": "redis",
   "redis_address": "redis:6379",
   "allowed_origins": [],
-  "allow_subscribe_for_client": true,
+  "allow_subscribe_for_client": false,
   "allow_publish_for_client": false,
   "allow_presence_for_client": false,
   "allow_history_for_client": false,
@@ -11,7 +11,7 @@
   "namespaces": [
     {
       "name": "invoices",
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_history_for_client": true,
       "history_size": 20,
       "history_ttl": "120s"
@@ -19,7 +19,7 @@
     {
       "name": "notifications",
       "presence": true,
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_presence_for_client": true,
       "allow_history_for_client": true,
       "force_recovery": true,
@@ -29,26 +29,26 @@
     {
       "name": "dashboard",
       "presence": true,
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_presence_for_client": true
     },
     {
       "name": "user",
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_history_for_client": true,
       "history_size": 10,
       "history_ttl": "60s"
     },
     {
       "name": "import",
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_history_for_client": true,
       "history_size": 10,
       "history_ttl": "300s"
     },
     {
       "name": "backup",
-      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_client": false,
       "allow_history_for_client": true,
       "history_size": 10,
       "history_ttl": "300s"

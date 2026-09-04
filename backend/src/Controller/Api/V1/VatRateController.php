@@ -6,6 +6,7 @@ use App\Entity\VatRate;
 use App\Invoice\Codes\VatCategoryCode;
 use App\Repository\VatRateRepository;
 use App\Security\OrganizationContext;
+use App\Security\Permission;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -49,6 +50,10 @@ class VatRateController extends AbstractController
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         if (!isset($data['rate']) || !isset($data['label'])) {
@@ -81,6 +86,10 @@ class VatRateController extends AbstractController
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $vatRate = $this->vatRateRepository->find($uuid);
@@ -124,6 +133,10 @@ class VatRateController extends AbstractController
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
         $vatRate = $this->vatRateRepository->find($uuid);

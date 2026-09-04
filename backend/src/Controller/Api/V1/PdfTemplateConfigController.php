@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Entity\PdfTemplateConfig;
 use App\Repository\PdfTemplateConfigRepository;
 use App\Security\OrganizationContext;
+use App\Security\Permission;
 use App\Service\DocumentPdfService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -50,14 +51,43 @@ class PdfTemplateConfigController extends AbstractController
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
         }
 
+        if (!$this->organizationContext->hasPermission(Permission::SETTINGS_MANAGE)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON body.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Validate user-controlled fragments that end up inside the PDF stylesheet
+        // before touching the entity, so a rejected request leaves nothing dirty.
+        if (array_key_exists('fontFamily', $data)) {
+            if ($data['fontFamily'] !== null && !is_string($data['fontFamily'])) {
+                return $this->json(['error' => 'Invalid font family.'], Response::HTTP_BAD_REQUEST);
+            }
+            $fontError = DocumentPdfService::validateFontFamily($data['fontFamily']);
+            if ($fontError !== null) {
+                return $this->json(['error' => $fontError], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        if (array_key_exists('customCss', $data)) {
+            if ($data['customCss'] !== null && !is_string($data['customCss'])) {
+                return $this->json(['error' => 'Custom CSS must be a string.'], Response::HTTP_BAD_REQUEST);
+            }
+            $cssError = DocumentPdfService::validateCustomCss($data['customCss']);
+            if ($cssError !== null) {
+                return $this->json(['error' => $cssError], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
         $config = $this->configRepository->findByCompany($company);
         if (!$config) {
             $config = new PdfTemplateConfig();
             $config->setCompany($company);
             $this->entityManager->persist($config);
         }
-
-        $data = json_decode($request->getContent(), true);
 
         if (isset($data['templateSlug'])) {
             $validSlugs = array_column($this->documentPdfService->getAvailableTemplates(), 'slug');
@@ -75,7 +105,7 @@ class PdfTemplateConfigController extends AbstractController
         }
 
         if (array_key_exists('fontFamily', $data)) {
-            $config->setFontFamily($data['fontFamily']);
+            $config->setFontFamily($data['fontFamily'] === '' ? null : $data['fontFamily']);
         }
 
         if (isset($data['showLogo'])) {
@@ -124,7 +154,7 @@ class PdfTemplateConfigController extends AbstractController
         }
 
         if (array_key_exists('customCss', $data)) {
-            $config->setCustomCss($data['customCss']);
+            $config->setCustomCss($data['customCss'] === '' ? null : $data['customCss']);
         }
 
         if (array_key_exists('labelOverrides', $data)) {

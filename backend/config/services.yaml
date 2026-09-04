@@ -381,6 +381,7 @@ services:
     App\Service\PushRelayService:
         arguments:
             $pushRelayUrl: '%env(default::PUSH_RELAY_URL)%'
+            $pushRelaySecret: '%env(default::PUSH_RELAY_SECRET)%'
 
     App\MessageHandler\SendPushNotificationHandler:
         arguments:

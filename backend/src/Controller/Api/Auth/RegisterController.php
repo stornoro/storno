@@ -24,6 +24,9 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class RegisterController extends AbstractController
 {
+    private const MAX_NAME_LENGTH = 60;
+    private const MAX_ORGANIZATION_NAME_LENGTH = 100;
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly UserPasswordHasherInterface $passwordHasher,
@@ -56,11 +59,26 @@ class RegisterController extends AbstractController
             return $this->json(['error' => 'Captcha verification failed.'], Response::HTTP_FORBIDDEN);
         }
 
-        if (empty($data['email']) || empty($data['password'])) {
+        $email = is_string($data['email'] ?? null) ? mb_strtolower(trim($data['email'])) : '';
+        $password = is_string($data['password'] ?? null) ? $data['password'] : '';
+
+        if ($email === '' || $password === '') {
             return $this->json(['error' => 'Email and password are required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $existing = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $data['email']]);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json(['error' => 'Invalid email address.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $firstName = self::sanitizeNameInput($data['firstName'] ?? null, self::MAX_NAME_LENGTH);
+            $lastName = self::sanitizeNameInput($data['lastName'] ?? null, self::MAX_NAME_LENGTH);
+            $organizationName = self::sanitizeNameInput($data['organizationName'] ?? null, self::MAX_ORGANIZATION_NAME_LENGTH, rejectAt: false);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        $existing = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existing) {
             return $this->json(['error' => 'An account with this email already exists.'], Response::HTTP_CONFLICT);
         }
@@ -73,10 +91,10 @@ class RegisterController extends AbstractController
         }
 
         $user = new User();
-        $user->setEmail($data['email']);
-        $user->setFirstName($data['firstName'] ?? null);
-        $user->setLastName($data['lastName'] ?? null);
-        $user->setPassword($this->passwordHasher->hashPassword($user, $data['password']));
+        $user->setEmail($email);
+        $user->setFirstName($firstName);
+        $user->setLastName($lastName);
+        $user->setPassword($this->passwordHasher->hashPassword($user, $password));
         $user->setActive(true);
         $user->setEmailVerified(false);
         $user->setRoles(['ROLE_USER']);
@@ -94,7 +112,7 @@ class RegisterController extends AbstractController
         }
 
         // Create default organization
-        $orgName = $data['organizationName'] ?? ($user->getFullName() . "'s Organization");
+        $orgName = $organizationName ?? ($user->getFullName() . "'s Organization");
         $organization = new Organization();
         $organization->setName($orgName);
         $organization->setSlug($this->slugger->slug($orgName)->lower()->toString() . '-' . substr(md5(uniqid()), 0, 6));
@@ -122,5 +140,45 @@ class RegisterController extends AbstractController
             'message' => 'Registration successful. Please check your email to confirm your account.',
             'email' => $user->getEmail(),
         ], Response::HTTP_CREATED);
+    }
+
+    /**
+     * Free-text profile fields end up in outbound emails (welcome, invitations),
+     * so they must never carry links, addresses or line breaks.
+     *
+     * @throws \InvalidArgumentException when the value is not acceptable
+     */
+    public static function sanitizeNameInput(mixed $value, int $maxLength, bool $rejectAt = true): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (!is_string($value)) {
+            throw new \InvalidArgumentException('Invalid name.');
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (mb_strlen($value) > $maxLength) {
+            throw new \InvalidArgumentException(sprintf('Name must be at most %d characters.', $maxLength));
+        }
+
+        if (preg_match('/[\r\n]/', $value)) {
+            throw new \InvalidArgumentException('Name must not contain line breaks.');
+        }
+
+        if (preg_match('~://|www\.~i', $value)) {
+            throw new \InvalidArgumentException('Name must not contain links.');
+        }
+
+        if ($rejectAt && str_contains($value, '@')) {
+            throw new \InvalidArgumentException('Name must not contain email addresses.');
+        }
+
+        return $value;
     }
 }

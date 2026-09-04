@@ -81,6 +81,10 @@ class InvoiceDefaultsController extends AbstractController
         if ($clientId && $company) {
             try {
                 $client = $this->clientRepository->find(Uuid::fromString($clientId));
+                // Never resolve a client that belongs to another company
+                if ($client && !$client->getCompany()?->getId()?->equals($company->getId())) {
+                    $client = null;
+                }
                 if ($client && ReverseChargeHelper::shouldApplyReverseCharge($client, $company)) {
                     $reverseCharge = true;
                     // Override default VAT rate to reverse charge

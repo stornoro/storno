@@ -3,11 +3,13 @@
 namespace App\Service\Storage;
 
 use Aws\S3\S3Client;
+use Psr\Log\LoggerInterface;
 
 class StorageConnectionTester
 {
     public function __construct(
         private readonly StorageProviderRegistry $providerRegistry,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function test(string $provider, array $credentials, string $bucket, ?string $region, ?string $endpoint, bool $forcePathStyle): array
@@ -23,6 +25,14 @@ class StorageConnectionTester
                     'key' => $credentials['accessKeyId'],
                     'secret' => $credentials['secretAccessKey'],
                 ],
+                // Guzzle request options — keep the probe short and never follow
+                // redirects (a redirect could point the SDK at an internal host).
+                'http' => [
+                    'connect_timeout' => 5,
+                    'timeout' => 10,
+                    'allow_redirects' => false,
+                ],
+                'retries' => 0,
             ];
 
             if ($resolvedEndpoint) {
@@ -62,7 +72,14 @@ class StorageConnectionTester
 
             return ['success' => true];
         } catch (\Throwable $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
+            $this->logger->warning('Storage connection test failed.', [
+                'provider' => $provider,
+                'bucket' => $bucket,
+                'endpoint' => $resolvedEndpoint ?? $endpoint,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'error' => 'Connection test failed.'];
         }
     }
 }

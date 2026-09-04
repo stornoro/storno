@@ -56,27 +56,38 @@ class ConfirmEmailController extends AbstractController
     }
 
     #[Route('/api/auth/resend-confirmation', name: 'api_auth_resend_confirmation', methods: ['POST'])]
-    public function resend(Request $request, RateLimiterFactory $registerLimiter): JsonResponse
-    {
+    public function resend(
+        Request $request,
+        RateLimiterFactory $registerLimiter,
+        RateLimiterFactory $emailResendConfirmationLimiter,
+    ): JsonResponse {
         $limiter = $registerLimiter->create('resend_' . $request->getClientIp());
         if (!$limiter->consume()->isAccepted()) {
             return $this->json(['error' => 'Too many requests. Please try again later.'], Response::HTTP_TOO_MANY_REQUESTS);
         }
 
         $data = json_decode($request->getContent(), true);
-        $email = $data['email'] ?? null;
+        $email = is_string($data['email'] ?? null) ? trim($data['email']) : '';
 
-        if (!$email) {
+        if ($email === '') {
             return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
         }
 
         // Always return success to prevent email enumeration
+        $response = $this->json(['message' => 'If this email exists and is not confirmed, a confirmation email has been sent.']);
+
+        // Per-address throttle: same generic response, just skip sending
+        $emailLimiter = $emailResendConfirmationLimiter->create(hash('sha256', mb_strtolower($email)));
+        if (!$emailLimiter->consume()->isAccepted()) {
+            return $response;
+        }
+
         $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
 
         if ($user && !$user->isEmailVerified()) {
             $this->messageBus->dispatch(new SendEmailConfirmationMessage((string) $user->getId()));
         }
 
-        return $this->json(['message' => 'If this email exists and is not confirmed, a confirmation email has been sent.']);
+        return $response;
     }
 }
