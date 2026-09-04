@@ -62,6 +62,7 @@ class StripeAppTokenAuthenticator extends AbstractAuthenticator
         // other header-reading code cannot be tricked into a different company scope.
         $grantedCompanyId = $appToken->getCompany()->getId()->toRfc4122();
         $request->headers->set('X-Company', $grantedCompanyId);
+        $request->query->set('company', $grantedCompanyId);
         $request->attributes->set('_stripe_app_token', $appToken);
 
         return new SelfValidatingPassport(
