@@ -96,6 +96,11 @@ class OrganizationContext
         if ($companyId) {
             $company = $this->companyRepository->find(Uuid::fromString($companyId));
 
+            // The company must belong to the caller's organization (super admins excepted).
+            if ($company && !$this->ownsCompany($company)) {
+                return null;
+            }
+
             // Validate per-company access for non-OWNER/ADMIN
             $membership = $this->getMembership();
             if ($company && $membership) {
@@ -119,6 +124,28 @@ class OrganizationContext
         }
 
         return null;
+    }
+
+    /**
+     * True when the company belongs to the caller's current organization.
+     * Super admins may address any company. Use this on every entity loaded by
+     * UUID from the request before reading or mutating it.
+     */
+    public function ownsCompany(?Company $company): bool
+    {
+        if (!$company) {
+            return false;
+        }
+
+        $user = $this->security->getUser();
+        if ($user instanceof User && in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
+        $org = $this->getOrganization();
+        $companyOrgId = $company->getOrganization()?->getId();
+
+        return $org !== null && $companyOrgId !== null && $companyOrgId->equals($org->getId());
     }
 
     private function resolve(): void
