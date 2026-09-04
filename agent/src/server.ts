@@ -8,7 +8,7 @@ import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
 import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
 import { submitSpvWebRequest } from './spv-web.js';
 import { startSpvMonitor, statusList as monitorStatus, enroll as monitorEnroll, unenroll as monitorUnenroll, runSync as monitorRun } from './monitor/spv-monitor.js';
-import { signPdf } from './signing/pdf-signer.js';
+import { signPdf, type SignPdfOptions } from './signing/pdf-signer.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
 declare const __VERSION__: string;
@@ -397,7 +397,7 @@ async function handleSign(req: IncomingMessage, res: ServerResponse, config: Age
     json(res, 403, { error: 'Missing X-Storno-Agent header' });
     return;
   }
-  let payload: { certificateId?: string; pin?: string; pdf?: string; items?: Array<{ name?: string; pdf: string }> };
+  let payload: { certificateId?: string; pin?: string; pdf?: string; items?: Array<{ name?: string; pdf: string }>; visible?: boolean | { page?: 'first' | 'last'; lines?: string[] }; signerName?: string };
   try {
     payload = JSON.parse(await readBody(req));
   } catch {
@@ -409,11 +409,25 @@ async function handleSign(req: IncomingMessage, res: ServerResponse, config: Age
     return;
   }
   const items = payload.items?.length ? payload.items : [{ name: 'document.pdf', pdf: payload.pdf as string }];
+  // Visible signature box: "Semnat digital de <name>" + date + certificate issuer, in the page footer
+  let options: SignPdfOptions = {};
+  if (payload.visible) {
+    const cert = getCachedCertificates().certificates.find((c) => c.id === payload.certificateId);
+    // subject is already a display string, e.g. "Florin-Daniel Carcalicea (TIME SAVER SERVICES S.R.L.)"
+    const subject = String(cert?.subject ?? '');
+    const name = payload.signerName || subject.replace(/\s*\(.*\)\s*$/, '').trim() || 'certificat calificat';
+    const org = subject.match(/\(([^)]+)\)\s*$/)?.[1]?.trim();
+    const issuer = String(cert?.issuer ?? '').trim();
+    const now = new Date();
+    const stamp = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const custom = typeof payload.visible === 'object' ? payload.visible : {};
+    options = { visible: { page: custom.page ?? 'last', lines: custom.lines ?? [`Semnat digital de ${name}${org ? ` (${org})` : ''}`, `Data: ${stamp}`, issuer ? `Certificat calificat emis de ${issuer}` : 'Certificat digital calificat'] } };
+  }
   const results: Array<{ index: number; name: string; pdf?: string; bytes?: number; error?: string }> = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     try {
-      const signed = await signPdf(Buffer.from(item.pdf, 'base64'), payload.certificateId, payload.pin, config);
+      const signed = await signPdf(Buffer.from(item.pdf, 'base64'), payload.certificateId, payload.pin, config, options);
       results.push({ index: i, name: item.name || `document-${i + 1}.pdf`, pdf: signed.toString('base64'), bytes: signed.length });
       console.log(`[sign] ${item.name || i + 1}: signed (${signed.length} bytes)`);
     } catch (err) {
