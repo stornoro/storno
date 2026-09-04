@@ -108,6 +108,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        nomenclator:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
         public_generator:
             policy: 'sliding_window'
             limit: 999999
@@ -228,3 +232,7 @@ when@prod:
                 policy: 'sliding_window'
                 limit: 60
                 interval: '1 hour'
+            nomenclator:
+                policy: 'sliding_window'
+                limit: 600
+                interval: '1 minute'
