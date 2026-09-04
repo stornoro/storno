@@ -79,8 +79,8 @@ final class SpvRequestCatalog
 
     /**
      * Types the SPV *web form* offers but the web service rejects with "tip raport= … necunoscut"
-     * (verified live: C168, Reprezentanti SPV, Certificat inregistrare fiscala). Kept in the catalog
-     * so the UI can say "only from the SPV website" instead of failing at ANAF.
+     * (verified live: C168, Reprezentanti SPV, Certificat inregistrare fiscala). The agent sends
+     * these through the website form itself (www.anaf.ro/SNMD/solicitari.xhtml) with the certificate.
      */
     private const WEB_ONLY = [
         'C168', 'Reprezentanti SPV', 'Certificat', 'Certificat TVA', 'Certificat inregistrare fiscala',
@@ -199,7 +199,7 @@ final class SpvRequestCatalog
      * Validate the parameters for a type and build the ANAF URL.
      *
      * @param array<string, mixed> $params
-     * @return array{url: string, params: array<string, string>}
+     * @return array{channel: 'ws'|'web', url: ?string, form: ?array{cif: string, tipDocument: string, params: array<string, string>}, params: array<string, string>}
      * @throws \InvalidArgumentException with a user-facing Romanian message
      */
     public function buildRequest(string $type, string $cif, array $params): array
@@ -208,9 +208,7 @@ final class SpvRequestCatalog
         if (!$this->has($type)) {
             throw new \InvalidArgumentException(sprintf('Tip de solicitare necunoscut: "%s".', $type));
         }
-        if (!$this->isWsSupported($type)) {
-            throw new \InvalidArgumentException(sprintf('"%s" nu poate fi solicitat prin serviciul web ANAF (raspunde "tip raport necunoscut"); se cere doar din formularul SPV de pe anaf.ro.', $type));
-        }
+        $channel = $this->isWsSupported($type) ? 'ws' : 'web';
         $def = self::TYPES[$type] ?? ['params' => [], 'optional' => ['an']];
         $required = $def['params'];
         $allowed = array_merge($required, $def['optional'] ?? []);
@@ -251,7 +249,13 @@ final class SpvRequestCatalog
         }
         $query += $clean;
 
-        return ['url' => self::ANAF_CERERE_URL . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986), 'params' => $clean];
+        return [
+            'channel' => $channel,
+            // ws: the agent GETs this URL. web: the agent drives the SPV website form (SNMD) with the same certificate.
+            'url' => $channel === 'ws' ? self::ANAF_CERERE_URL . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986) : null,
+            'form' => $channel === 'web' ? ['cif' => $query['cui'], 'tipDocument' => $type, 'params' => $clean] : null,
+            'params' => $clean,
+        ];
     }
 
     private function validateParam(string $name, mixed $value, string $type): string

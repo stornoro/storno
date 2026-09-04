@@ -22,8 +22,9 @@ use Symfony\Component\Uid\Uuid;
  * duplicate receipts, certificates). The certificate lives on the user's
  * machine, so the flow mirrors the inbox sync:
  *
- *   1. POST /spv/requests/prepare {type, params}  → Storno validates and returns the ANAF URL
- *   2. the agent GETs that URL with the qualified certificate
+ *   1. POST /spv/requests/prepare {type, params}  → Storno validates and returns channel + ANAF URL / form
+ *   2. the agent GETs that URL with the qualified certificate (channel ws), or drives the SPV
+ *      website form with the same certificate (channel web: C168, certificates, decisions…)
  *   3. POST /spv/requests/{uuid}/agent-result {statusCode, body} → Storno records id_solicitare
  *   4. the answer arrives in listaMesaje with the same id_solicitare; the next
  *      inbox sync archives it and links it to the request.
@@ -107,7 +108,9 @@ class SpvRequestController extends AbstractController
 
         return $this->json([
             'requestId' => $spvRequest->getId()?->toRfc4122(),
+            'channel' => $built['channel'],
             'anafUrl' => $built['url'],
+            'form' => $built['form'],
             'type' => $type,
             'params' => $built['params'],
             'cif' => (string) $company->getCif(),
