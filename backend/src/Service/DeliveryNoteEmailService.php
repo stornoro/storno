@@ -63,7 +63,7 @@ class DeliveryNoteEmailService
         $body = $this->substituteVariables($body, $deliveryNote);
 
         $this->outboundEmailGuard->assertCanSend(
-            $deliveryNote->getCompany()?->getOrganization(),
+            $deliveryNote->getCompany(),
             $sentBy,
             'delivery_note',
             $to,
