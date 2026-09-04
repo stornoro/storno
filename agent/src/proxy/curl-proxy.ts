@@ -1,6 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import type { AgentConfig } from '../config.js';
@@ -13,7 +13,7 @@ import { isPkcs11CertificateId } from '../certificates/discovery.js';
 const COOKIE_DIR = join(tmpdir(), 'storno-agent-cookies');
 
 /** Session TTL — cookie files older than this are stale. */
-const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (ANAF F5 sessions were observed to survive longer; expiry is detected anyway)
 
 /** In-memory PIN cache per certificate — avoids re-asking for PIN on every request. */
 const pinCache = new Map<string, { pin: string; cachedAt: number }>();
@@ -65,6 +65,10 @@ function invalidateSession(certificateId: string): void {
 
 /** Detect ANAF F5 session expiry — redirects to logout/error pages. */
 function isSessionExpired(res: ProxyResponse): boolean {
+  // A PDF / ZIP (base64-encoded by parseResponse) is exactly what we asked for.
+  // Judging it by its first character used to mark every SPV download as an
+  // expired session, drop the cookie jar and redo the request with the token.
+  if (res.bodyEncoding === 'base64' || isBinaryContentType(res.headers['content-type'])) return false;
   const body = res.body.trimStart();
 
   // F5 redirects to logout/error pages when session is invalid
@@ -253,14 +257,16 @@ function pkcs11ToolchainFor(req: ProxyRequest, config: AgentConfig): Pkcs11Toolc
 function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
   return new Promise((resolve, reject) => {
     const toolchain = pkcs11ToolchainFor(req, config);
-    const args = buildCurlArgs(req, config, toolchain);
+    const opts = buildCurlOptions(req, config, toolchain);
     const curlPath = toolchain?.curlPath ?? config.curlPath;
+    const configFile = writeCurlConfig(opts);
 
-    const child = spawn(curlPath, args, {
+    const child = spawn(curlPath, ['-K', configFile], {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 120_000,
       env: toolchain?.env ?? process.env,
     });
+    child.on('exit', () => { try { unlinkSync(configFile); } catch { /* gone */ } });
 
     const stdoutChunks: Buffer[] = [];
     let stderr = '';
@@ -300,58 +306,212 @@ function execCurl(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse
   });
 }
 
-function buildCurlArgs(req: ProxyRequest, config: AgentConfig, toolchain: Pkcs11Toolchain | null): string[] {
-  const cookiePath = getCookieJarPath(req.certificateId);
-  const sessionValid = hasValidSession(cookiePath);
+/** One curl option; `value` undefined for flags. */
+type CurlOpt = { opt: string; value?: string };
 
-  const args: string[] = [
-    '-s',                  // Silent mode
-    '-S',                  // Show errors
-    '-D', '-',             // Dump headers to stdout
-    '-L',                  // Follow redirects (ANAF F5 load balancer does 302 chains)
-    '-b', cookiePath,      // Read cookies from jar
-    '-c', cookiePath,      // Write cookies to jar after response
-    '-X', req.method,
-    '--max-time', '120',
+/** Options common to every transfer of a process (cookies, cert, redirects). */
+function transferOptions(req: ProxyRequest, toolchain: Pkcs11Toolchain | null, useCert: boolean): CurlOpt[] {
+  const cookiePath = getCookieJarPath(req.certificateId);
+  const opts: CurlOpt[] = [
+    { opt: 'location' },                       // ANAF's F5 does 302 chains
+    { opt: 'cookie', value: cookiePath },
+    { opt: 'cookie-jar', value: cookiePath },
+    { opt: 'max-time', value: '120' },
   ];
 
-  // Only pipe body from stdin for methods that have a body
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    args.push('-d', '@-');
-  }
-
-  // Add request headers
-  for (const [key, value] of Object.entries(req.headers)) {
-    args.push('-H', `${key}: ${value}`);
-  }
-
-  // Only attach client certificate if there's no valid session cookie.
-  // After the first mTLS handshake, ANAF's F5 sets session cookies that
-  // allow subsequent requests without re-presenting the certificate.
-  if (!sessionValid) {
+  // Only attach the client certificate when there is no valid session cookie.
+  // After the first mTLS handshake ANAF's F5 sets session cookies that allow
+  // subsequent requests without re-presenting the certificate.
+  if (useCert) {
     const os = platform();
     if (toolchain) {
       // PKCS#11 token via libp11's OpenSSL engine (macOS without a Keychain
-      // driver, or Linux). The PIN travels inside the URI, never as a flag.
+      // driver, or Linux). The PIN travels inside the URI, inside the 0600
+      // config file — never on the command line.
       const certUri = pkcs11Uri(req.certificateId, req.pin);
-      args.push(
-        '--engine', 'pkcs11',
-        '--cert-type', 'ENG',
-        '--cert', certUri,
-        '--key-type', 'ENG',
-        '--key', certUri,
+      opts.push(
+        { opt: 'engine', value: 'pkcs11' },
+        { opt: 'cert-type', value: 'ENG' },
+        { opt: 'cert', value: certUri },
+        { opt: 'key-type', value: 'ENG' },
+        { opt: 'key', value: certUri },
       );
     } else if (os === 'darwin') {
-      args.push('--cert', req.certificateId);
-      if (req.pin) args.push('--pass', req.pin);
+      opts.push({ opt: 'cert', value: req.certificateId });
+      if (req.pin) opts.push({ opt: 'pass', value: req.pin });
     } else if (os === 'win32') {
-      args.push('--cert', `CurrentUser\\My\\${req.certificateId}`);
+      opts.push({ opt: 'cert', value: `CurrentUser\\My\\${req.certificateId}` });
+    }
+  }
+  return opts;
+}
+
+function buildCurlOptions(req: ProxyRequest, config: AgentConfig, toolchain: Pkcs11Toolchain | null): CurlOpt[] {
+  const sessionValid = hasValidSession(getCookieJarPath(req.certificateId));
+  const opts: CurlOpt[] = [
+    { opt: 'silent' },
+    { opt: 'show-error' },
+    { opt: 'dump-header', value: '-' },        // headers to stdout, before the body
+    { opt: 'request', value: req.method },
+    ...transferOptions(req, toolchain, !sessionValid),
+  ];
+
+  // Body comes from stdin for methods that have one (never as a CLI arg)
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    opts.push({ opt: 'data', value: '@-' });
+  }
+  for (const [key, value] of Object.entries(req.headers)) {
+    opts.push({ opt: 'header', value: `${key}: ${value}` });
+  }
+  opts.push({ opt: 'url', value: req.url });
+  return opts;
+}
+
+/** curl config-file quoting: backslash, double quote and control characters are escaped. */
+function curlQuote(value: string): string {
+  return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+}
+
+function curlConfigText(opts: CurlOpt[]): string {
+  return opts.map((o) => (o.value === undefined ? o.opt : `${o.opt} = ${curlQuote(o.value)}`)).join('\n') + '\n';
+}
+
+const CONFIG_DIR = join(tmpdir(), 'storno-agent-curl');
+
+/** Write a private (0600) curl config file; the caller deletes it once curl exits. */
+function writeCurlConfig(opts: CurlOpt[]): string {
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const file = join(CONFIG_DIR, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.cfg`);
+  writeFileSync(file, curlConfigText(opts), { mode: 0o600 });
+  return file;
+}
+
+// ── Batch: many GETs in ONE curl process ─────────────────────────────────────
+//
+// Spawning curl per document meant loading the PKCS#11 module (≈12 s on the
+// Longmai token) and a fresh mTLS handshake for every PDF. With `next`-separated
+// transfers in a single process the engine is initialised once and the TLS
+// connection is reused, so a download costs well under a second.
+
+export interface BatchItemResult {
+  index: number;
+  result?: ProxyResponse;
+  error?: string;
+}
+
+/**
+ * Fetch several GET requests (same certificate) in one curl process.
+ * Throws for whole-batch failures (PIN, toolchain, spawn); per-item problems
+ * are reported in the returned array so the caller can retry them singly.
+ */
+export async function curlBatch(requests: ProxyRequest[], config: AgentConfig): Promise<BatchItemResult[]> {
+  if (requests.length === 0) return [];
+  let first = requests[0];
+  for (const r of requests) {
+    if (r.certificateId !== first.certificateId) throw new Error('curlBatch: all requests must use the same certificate');
+    if ((r.method || 'GET').toUpperCase() !== 'GET' || r.body) throw new Error('curlBatch: only GET requests without a body');
+  }
+
+  if (first.pin) {
+    cachePin(first.certificateId, first.pin);
+  } else {
+    const cached = getCachedPin(first.certificateId);
+    if (cached) first = { ...first, pin: cached };
+  }
+
+  if (first.certificateId === PKCS11_AUTO_ID && first.pin) {
+    const toolchain = pkcs11ToolchainFor(first, config);
+    if (toolchain) {
+      const login = await verifyPkcs11Login(toolchain, first.pin);
+      if (!login.ok) {
+        pinCache.delete(first.certificateId);
+        throw new Error(login.message);
+      }
+      if (login.certIds.length > 0) first = { ...first, certificateId: login.certIds[0] };
     }
   }
 
-  args.push(req.url);
+  const cookiePath = getCookieJarPath(first.certificateId);
+  const usedSession = hasValidSession(cookiePath);
+  if (platform() === 'win32' && first.pin && !usedSession) {
+    throw new Error('BATCH_UNSUPPORTED: Windows certificate store needs the PowerShell path for the first request');
+  }
 
-  return args;
+  let results = await execCurlBatch(first, requests, config, usedSession);
+  if (usedSession && results.some((r) => r.result && isSessionExpired(r.result))) {
+    invalidateSession(first.certificateId);
+    results = await execCurlBatch(first, requests, config, false);
+  }
+  return results;
+}
+
+function execCurlBatch(auth: ProxyRequest, requests: ProxyRequest[], config: AgentConfig, sessionValid: boolean): Promise<BatchItemResult[]> {
+  return new Promise((resolve, reject) => {
+    const toolchain = pkcs11ToolchainFor(auth, config);
+    const curlPath = toolchain?.curlPath ?? config.curlPath;
+    const workDir = mkdtempSync(join(tmpdir(), 'storno-agent-batch-'));
+    const common = transferOptions(auth, toolchain, !sessionValid);
+
+    const opts: CurlOpt[] = [{ opt: 'silent' }, { opt: 'show-error' }];
+    requests.forEach((req, i) => {
+      if (i > 0) opts.push({ opt: 'next' });
+      opts.push(...common);
+      for (const [key, value] of Object.entries(req.headers)) opts.push({ opt: 'header', value: `${key}: ${value}` });
+      opts.push(
+        { opt: 'dump-header', value: join(workDir, `h${i}`) },
+        { opt: 'output', value: join(workDir, `b${i}`) },
+        { opt: 'url', value: req.url },
+      );
+    });
+    const configFile = writeCurlConfig(opts);
+    console.log(`[proxy] batch GET ×${requests.length} → curl (${sessionValid ? 'cookies only' : 'cert'}), one process`);
+    const startedAt = Date.now();
+
+    const child = spawn(curlPath, ['-K', configFile], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      timeout: Math.min(120_000 * requests.length, 20 * 60_000),
+      env: toolchain?.env ?? process.env,
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    const cleanup = () => {
+      try { unlinkSync(configFile); } catch { /* gone */ }
+      try { rmSync(workDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    };
+
+    child.on('error', (err) => {
+      cleanup();
+      reject(new Error(`Failed to spawn curl: ${err.message}`));
+    });
+
+    child.on('close', (code) => {
+      const results: BatchItemResult[] = [];
+      try {
+        const stderrTail = redactPin(stderr.trim().split('\n').slice(-3).join(' | '));
+        if (/PIN verification failed|Failed to set PIN|CKR_PIN_INCORRECT|CKR_PIN_LOCKED/i.test(stderr)) {
+          cleanup();
+          reject(new Error(`PIN verification failed: ${stderrTail}`));
+          return;
+        }
+        for (let i = 0; i < requests.length; i++) {
+          const hFile = join(workDir, `h${i}`);
+          const bFile = join(workDir, `b${i}`);
+          if (!existsSync(hFile) || statSync(hFile).size === 0) {
+            results.push({ index: i, error: `no response (curl exit ${code}: ${stderrTail})` });
+            continue;
+          }
+          const body = existsSync(bFile) ? readFileSync(bFile) : Buffer.alloc(0);
+          results.push({ index: i, result: buildResponse(readFileSync(hFile), body) });
+        }
+        const ok = results.filter((r) => r.result).length;
+        console.log(`[proxy] ← batch ${ok}/${requests.length} ok in ${((Date.now() - startedAt) / 1000).toFixed(1)}s${code !== 0 ? ` (curl exit ${code}: ${stderrTail})` : ''}`);
+      } finally {
+        cleanup();
+      }
+      resolve(results);
+    });
+  });
 }
 
 /** Never let a PIN reach logs or error messages (it travels inside the PKCS#11 URI). */
@@ -372,59 +532,60 @@ function parseResponse(raw: Buffer): ProxyResponse {
   // in the redirect chain. We need the LAST response's headers + body.
   // Headers are ASCII, so we search for header boundaries in the raw buffer,
   // then handle the body as binary if needed.
+  const lastStatusIdx = lastStatusLineIndex(raw);
+  if (lastStatusIdx === -1) {
+    return { statusCode: 200, headers: {}, body: raw.toString('utf-8') };
+  }
+  const headerEnd = raw.indexOf(Buffer.from('\r\n\r\n'), lastStatusIdx);
+  if (headerEnd === -1) {
+    return { statusCode: 200, headers: {}, body: raw.subarray(lastStatusIdx).toString('utf-8') };
+  }
+  const { statusCode, headers } = parseHeaderSection(raw.subarray(lastStatusIdx, headerEnd).toString('ascii'));
+  return finishResponse(statusCode, headers, raw.subarray(headerEnd + 4));
+}
 
+/** Response from a separate header dump (-D file) and body file (-o file). */
+function buildResponse(headerDump: Buffer, body: Buffer): ProxyResponse {
+  const lastStatusIdx = lastStatusLineIndex(headerDump);
+  if (lastStatusIdx === -1) return finishResponse(200, {}, body);
+  const { statusCode, headers } = parseHeaderSection(headerDump.subarray(lastStatusIdx).toString('ascii'));
+  return finishResponse(statusCode, headers, body);
+}
+
+function lastStatusLineIndex(raw: Buffer): number {
   const headerMarker = Buffer.from('HTTP/');
-  const headerBodySep = Buffer.from('\r\n\r\n');
-
-  // Find the last HTTP status line position
   let lastStatusIdx = -1;
   let searchFrom = 0;
   while (true) {
     const idx = raw.indexOf(headerMarker, searchFrom);
     if (idx === -1) break;
-    if (idx === 0 || raw[idx - 1] === 0x0A) { // \n
-      lastStatusIdx = idx;
-    }
+    if (idx === 0 || raw[idx - 1] === 0x0A) lastStatusIdx = idx;
     searchFrom = idx + 1;
   }
+  return lastStatusIdx;
+}
 
-  if (lastStatusIdx === -1) {
-    return { statusCode: 200, headers: {}, body: raw.toString('utf-8') };
-  }
-
-  // Find the header/body separator after the last status line
-  const headerEnd = raw.indexOf(headerBodySep, lastStatusIdx);
-  if (headerEnd === -1) {
-    return { statusCode: 200, headers: {}, body: raw.subarray(lastStatusIdx).toString('utf-8') };
-  }
-
-  // Parse headers as ASCII text
-  const headerSection = raw.subarray(lastStatusIdx, headerEnd).toString('ascii');
-  const bodyBuffer = raw.subarray(headerEnd + 4);
-
-  const headerLines = headerSection.split('\r\n');
+function parseHeaderSection(headerSection: string): { statusCode: number; headers: Record<string, string> } {
   const headers: Record<string, string> = {};
   let statusCode = 200;
-
-  for (const line of headerLines) {
+  for (const line of headerSection.split('\r\n')) {
     const statusMatch = line.match(/^HTTP\/[\d.]+ (\d+)/);
     if (statusMatch) {
       statusCode = parseInt(statusMatch[1], 10);
       continue;
     }
-
     const colonIdx = line.indexOf(':');
     if (colonIdx > 0) {
-      const key = line.substring(0, colonIdx).trim().toLowerCase();
-      const value = line.substring(colonIdx + 1).trim();
-      headers[key] = value;
+      headers[line.substring(0, colonIdx).trim().toLowerCase()] = line.substring(colonIdx + 1).trim();
     }
   }
+  return { statusCode, headers };
+}
 
+function finishResponse(statusCode: number, headers: Record<string, string>, bodyBuffer: Buffer): ProxyResponse {
   // For binary content types, base64-encode the body to preserve data integrity
   if (isBinaryContentType(headers['content-type'])) {
     return { statusCode, headers, body: bodyBuffer.toString('base64'), bodyEncoding: 'base64' };
   }
-
   return { statusCode, headers, body: bodyBuffer.toString('utf-8') };
 }

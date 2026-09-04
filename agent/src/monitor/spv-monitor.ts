@@ -19,7 +19,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentConfig } from '../config.js';
 import { getConfigDir } from '../config.js';
-import { curlProxy } from '../proxy/curl-proxy.js';
+import { curlProxy, curlBatch, type ProxyResponse } from '../proxy/curl-proxy.js';
 import { getSecret, setSecret, deleteSecret, secretStoreName } from './secrets.js';
 
 export interface MonitorEntry {
@@ -255,25 +255,33 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
 
     let downloaded = 0;
     let failed = 0;
-    for (const doc of result.documents ?? []) {
+    const docs = result.documents ?? [];
+    const CHUNK = 25;
+    for (let i = 0; i < docs.length; i += CHUNK) {
+      const chunk = docs.slice(i, i + CHUNK);
+      const reqs = chunk.map((doc) => ({ url: doc.anafUrl, method: 'GET', headers: {}, body: '', certificateId: entry.certificateId, pin }));
+      // One curl process for the whole chunk; anything it missed is retried singly.
+      const responses = new Map<number, ProxyResponse>();
       try {
-        const res = await curlProxy({
-          url: doc.anafUrl,
-          method: 'GET',
-          headers: {},
-          body: '',
-          certificateId: entry.certificateId,
-          pin,
-        }, config);
-        await api(entry, apiKey, 'POST', `/spv/documents/${doc.documentId}/agent-document`, {
-          statusCode: res.statusCode,
-          body: res.body,
-          bodyEncoding: res.bodyEncoding,
-        });
-        downloaded++;
+        for (const item of await curlBatch(reqs, config)) if (item.result) responses.set(item.index, item.result);
       } catch (err) {
-        failed++;
-        console.error(`[spv-monitor] ${entry.cif}: document ${doc.documentId} (${doc.messageType}) failed: ${(err as Error).message}`);
+        const msg = (err as Error).message;
+        if (msg.includes('PIN verification failed') || msg.includes('Failed to set PIN')) throw err;
+      }
+      for (let j = 0; j < chunk.length; j++) {
+        const doc = chunk[j];
+        try {
+          const res = responses.get(j) ?? await curlProxy(reqs[j], config);
+          await api(entry, apiKey, 'POST', `/spv/documents/${doc.documentId}/agent-document`, {
+            statusCode: res.statusCode,
+            body: res.body,
+            bodyEncoding: res.bodyEncoding,
+          });
+          downloaded++;
+        } catch (err) {
+          failed++;
+          console.error(`[spv-monitor] ${entry.cif}: document ${doc.documentId} (${doc.messageType}) failed: ${(err as Error).message}`);
+        }
       }
     }
 
