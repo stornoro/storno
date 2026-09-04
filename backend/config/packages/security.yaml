@@ -118,6 +118,7 @@ security:
         - { path: ^/api/v1/contact$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/storno-generator$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/declarations/validate$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/public/anaf/nomenclator/, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/unsubscribe$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/token$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/revoke$, methods: [POST], roles: PUBLIC_ACCESS }
