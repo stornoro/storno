@@ -28,6 +28,7 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('*/30 * * * *', new RunCommandMessage('app:efactura:sync')))
             // ANAF token refresh — every 12 hours (tokens last ~7 days, refresh when < 5 days remaining)
             ->add(RecurringMessage::cron('0 */12 * * *', new RunCommandMessage('app:anaf:refresh-tokens')))
+            ->add(RecurringMessage::cron('15 4 * * 0', new RunCommandMessage('app:anaf:update-validators')))
             // License sync — every 6 hours
             ->add(RecurringMessage::cron('0 */6 * * *', new RunCommandMessage('app:license:sync')))
             // Recurring invoices — daily 1 AM

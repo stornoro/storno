@@ -11,7 +11,9 @@ use App\Security\Permission;
 use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Declaration\AnafDeclarationClient;
+use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DukIntegratorService;
+use App\Service\Declaration\DukUnavailableException;
 use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
@@ -25,6 +27,10 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/v1')]
 class TaxDeclarationController extends AbstractController
 {
+    /** ANAF declarations portal (e-guvernare) upload form, certificate over mTLS. */
+    public const WAS6DUS_SESSION_URL = 'https://decl.anaf.mfinante.gov.ro/WAS6DUS/';
+    public const WAS6DUS_UPLOAD_URL = 'https://decl.anaf.mfinante.gov.ro/WAS6DUS/displayFile.do';
+
     public function __construct(
         private readonly TaxDeclarationManager $manager,
         private readonly OrganizationContext $organizationContext,
@@ -37,7 +43,47 @@ class TaxDeclarationController extends AbstractController
         private readonly DukIntegratorService $dukIntegrator,
         private readonly LicenseManager $licenseManager,
         private readonly \App\Service\Spv\SpvDocumentIngestionService $spvIngestion,
+        private readonly DeclarationValidator $declarationValidator,
     ) {}
+
+    /**
+     * Validate an arbitrary declaration XML with ANAF's DUKIntegrator validators
+     * (same behaviour as the public endpoint, but under the account's limits).
+     */
+    #[Route('/declarations/validate-xml', methods: ['POST'])]
+    public function validateXml(Request $request): JsonResponse
+    {
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $content = $request->getContent();
+        if (strlen($content) > 4 * 1024 * 1024) {
+            return $this->json(['error' => 'File too large (max 4 MB).', 'code' => 'PAYLOAD_TOO_LARGE'], Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
+        }
+        if (str_contains((string) $request->headers->get('Content-Type'), 'json')) {
+            $payload = json_decode($content, true);
+            $xml = is_array($payload) && is_string($payload['xml'] ?? null) ? $payload['xml'] : '';
+            $type = is_array($payload) && is_string($payload['type'] ?? null) ? $payload['type'] : null;
+        } else {
+            $xml = $content;
+            $type = $request->query->get('type');
+        }
+        $xml = ltrim($xml, "\xEF\xBB\xBF \t\r\n");
+        if ($xml === '' || $xml[0] !== '<') {
+            return $this->json(['error' => 'Body is not an XML document.', 'code' => 'INVALID_XML'], Response::HTTP_BAD_REQUEST);
+        }
+        $type = $type ? strtoupper(trim((string) $type)) : $this->declarationValidator->inferType($xml);
+        if ($type === null || !preg_match('/^[A-Z]\d{2,4}[A-Z]?$/', $type)) {
+            return $this->json(['error' => 'Could not infer the form; send "type" (e.g. D212, C168).', 'code' => 'UNKNOWN_TYPE'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        try {
+            return $this->json($this->declarationValidator->validate($xml, $type)->toArray(includeXml: true));
+        } catch (DukUnavailableException $e) {
+            return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATOR_UNAVAILABLE'], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+    }
 
     #[Route('/declarations', methods: ['GET'])]
     public function index(Request $request): JsonResponse
@@ -526,9 +572,17 @@ class TaxDeclarationController extends AbstractController
                 $declaration->setPdfPath($pdfPath);
                 $this->entityManager->flush();
 
+                // Declarations are filed on the e-guvernare declarations portal (WAS6DUS):
+                // signed PDF as multipart field "linkdoc", authenticated with the qualified
+                // certificate over mTLS. SPVWS2 /cerere is the report-request endpoint and
+                // never accepted uploads. The answer is HTML containing "Indexul este <n>".
                 return $this->json([
                     'pdfBase64' => base64_encode($pdfBinary),
-                    'anafUrl' => $baseUrl . '/cerere?tip=' . $type . '&cui=' . $cif,
+                    'anafUrl' => self::WAS6DUS_UPLOAD_URL,
+                    'uploadMode' => 'multipart',
+                    'uploadField' => 'linkdoc',
+                    'fileName' => sprintf('%s_%s_%s.pdf', $type, $cif, substr((string) $declaration->getId(), 0, 8)),
+                    'sessionUrl' => self::WAS6DUS_SESSION_URL,
                     'anafToken' => $anafToken->getToken(),
                     'declarationType' => $type,
                     'cif' => $cif,
@@ -828,6 +882,26 @@ class TaxDeclarationController extends AbstractController
         }
 
         $uploadId = $parsed['id_solicitare'] ?? $parsed['index_incarcare'] ?? $parsed['id_incarcare'] ?? null;
+
+        // e-guvernare portal (WAS6DUS) answers with HTML: success carries "Indexul este <n>",
+        // failure "Ne cerem scuze … Motivul: <span …>reason</span>".
+        if ($uploadId === null && is_string($body) && preg_match('/Indexul este\s*(?:<[^>]+>\s*)*(\d+)/iu', $body, $m)) {
+            $uploadId = $m[1];
+            $parsed = ['index' => $uploadId, 'source' => 'was6dus'];
+        } elseif ($uploadId === null && is_string($body) && preg_match('/Motivul:\s*(?:<[^>]+>\s*)*([^<]+)/iu', $body, $m)) {
+            $declaration->setStatus(DeclarationStatus::ERROR);
+            $declaration->setErrorMessage('ANAF: ' . trim(html_entity_decode($m[1])));
+            $this->entityManager->flush();
+
+            return $this->json($declaration, context: ['groups' => ['declaration:detail']]);
+        } elseif ($uploadId === null && is_string($body) && (stripos($body, 'my.policy') !== false || stripos($body, 'Prezentare certificat') !== false)) {
+            $declaration->setStatus(DeclarationStatus::ERROR);
+            $declaration->setErrorMessage('ANAF nu a acceptat certificatul (pagina de autentificare). Verifica inrolarea certificatului pentru acest CUI.');
+            $this->entityManager->flush();
+
+            return $this->json($declaration, context: ['groups' => ['declaration:detail']]);
+        }
+
         if ($uploadId) {
             $declaration->setAnafUploadId((string) $uploadId);
         }

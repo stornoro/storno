@@ -122,6 +122,10 @@ export function useAnafAgent() {
     uploadUrl: string
     uploadHeaders: Record<string, string>
     uploadContentType?: string
+    uploadMode?: 'raw' | 'multipart'
+    uploadField?: string
+    fileName?: string
+    sessionUrl?: string
   }): Promise<AnafProxyResponse> {
     const payload = { ...req }
     if (!payload.pin) {
@@ -151,17 +155,23 @@ export function useAnafAgent() {
       anafToken: string
       declarationType: string
       cif: string
+      uploadMode?: 'raw' | 'multipart'
+      uploadField?: string
+      fileName?: string
+      sessionUrl?: string
     }>(`/v1/declarations/${declarationId}/prepare`)
 
-    // Step 2: Sign PDF + upload to ANAF via agent
+    // Step 2: Sign PDF + upload to ANAF via agent (e-guvernare portal, multipart)
     const anafResponse = await signAndSubmit({
       pdf: prepared.pdfBase64,
       certificateId,
       uploadUrl: prepared.anafUrl,
-      uploadHeaders: {
-        'Authorization': `Bearer ${prepared.anafToken}`,
-      },
+      uploadHeaders: prepared.uploadMode === 'multipart' ? {} : { 'Authorization': `Bearer ${prepared.anafToken}` },
       uploadContentType: 'application/pdf',
+      uploadMode: prepared.uploadMode,
+      uploadField: prepared.uploadField,
+      fileName: prepared.fileName,
+      sessionUrl: prepared.sessionUrl,
     })
 
     // Check for agent-level errors
