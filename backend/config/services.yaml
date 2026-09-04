@@ -187,6 +187,9 @@ services:
     App\Service\Declaration\Forms\C168Form:
         tags: ['app.declaration_form']
 
+    App\Service\Declaration\Forms\D212Form:
+        tags: ['app.declaration_form']
+
     App\Service\Declaration\Forms\DeclarationFormRegistry:
         arguments:
             $forms: !tagged_iterator app.declaration_form

@@ -6,7 +6,7 @@ namespace App\Service\Declaration\Forms;
 
 final class FormBuildResult
 {
-    /** @param list<array{level: 'error'|'warning', code: string, field: string, message: string}> $issues */
+    /** @param list<array{level: 'error'|'warning'|'info', code: string, field: string, message: string}> $issues */
     public function __construct(
         public readonly string $xml,
         public readonly array $issues,
