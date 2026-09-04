@@ -767,6 +767,10 @@ async function onCreateSubmit() {
     if (company) {
       toast.add({ title: $t('companies.createSuccess'), color: 'success' })
       createOpen.value = false
+      // First company ever: lead with migration, not an empty dashboard.
+      if (companyStore.companies.length === 1) {
+        await navigateTo('/settings/import-export?onboarding=1')
+      }
     } else {
       if (companyStore.errorCode === 'PLAN_LIMIT') {
         showUpgrade.value = true

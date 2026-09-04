@@ -354,6 +354,9 @@ export default defineI18nLocale(async () => {
         addCompany: 'Add company',
         addCompanyDesc: 'Set up your company details for invoicing.',
         addCompanyTime: '~3 min',
+        importData: 'Coming from SmartBill, Oblio or another app? Import your data',
+        importDataDesc: 'Upload the export from your old app: clients, products and invoices, series preserved.',
+        importDataTime: '~2 min',
         connectAnaf: 'Connect ANAF for e-Factura',
         connectAnafDesc: 'Automatically sync issued and received invoices.',
         connectAnafTime: '~2 min',
@@ -2271,7 +2274,7 @@ export default defineI18nLocale(async () => {
   companies: {
     title: 'Companies',
     description: 'Manage your companies and ANAF connections',
-    noCompaniesDesc: 'Add your first company to start syncing invoices',
+    noCompaniesDesc: 'Add your first company by CUI. Coming from SmartBill, Oblio, SAGA or another app? Right after that we import your clients, products and invoices, series preserved.',
     cif: 'Tax ID',
     cifLabel: 'Tax Identification Number',
     cifSearchPlaceholder: 'Search by Tax ID or name...',
@@ -3408,6 +3411,10 @@ export default defineI18nLocale(async () => {
     exportError: 'Export failed',
 
     // Migration section
+    onboardingBannerTitle: 'Coming from SmartBill, Oblio or another app?',
+    onboardingBannerDescription: 'Upload the export from your old app and in 2 minutes your clients, products and invoices are here, series preserved. Nothing to retype.',
+    onboardingBannerStart: 'Import my data',
+    onboardingBannerSkip: 'Start from scratch',
     migrationTitle: 'Migrate data from other invoicing software',
     migrationDescription: 'Import nomenclatures and invoices from your previous application in just a few simple steps',
     migrationNote: '*Existing records will be updated.',

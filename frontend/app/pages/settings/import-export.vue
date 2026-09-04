@@ -13,6 +13,16 @@ const wizardOpen = ref(false)
 const wizardImportType = ref<string | undefined>(undefined)
 const restoreModalOpen = ref(false)
 
+// Shown right after the first company is created (?onboarding=1)
+const route = useRoute()
+const showOnboardingBanner = ref(route.query.onboarding === '1')
+
+function startOnboardingImport() {
+  showOnboardingBanner.value = false
+  wizardImportType.value = 'clients'
+  wizardOpen.value = true
+}
+
 // Migration steps configuration
 const migrationSteps = [
   {
@@ -357,6 +367,20 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-8">
+    <!-- Onboarding: migration first, empty dashboard never -->
+    <UAlert
+      v-if="showOnboardingBanner"
+      color="primary"
+      variant="soft"
+      icon="i-lucide-import"
+      :title="$t('importExport.onboardingBannerTitle')"
+      :description="$t('importExport.onboardingBannerDescription')"
+      :actions="[
+        { label: $t('importExport.onboardingBannerStart'), color: 'primary', variant: 'solid', icon: 'i-lucide-upload', onClick: startOnboardingImport },
+        { label: $t('importExport.onboardingBannerSkip'), color: 'neutral', variant: 'ghost', to: '/dashboard' },
+      ]"
+    />
+
     <!-- Section 0: Backup & Restore -->
     <BackupSection />
 
