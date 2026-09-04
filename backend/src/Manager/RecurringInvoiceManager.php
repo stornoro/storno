@@ -201,9 +201,10 @@ class RecurringInvoiceManager
         if (array_key_exists('clientId', $data)) {
             if (!empty($data['clientId'])) {
                 $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-                if ($client) {
-                    $ri->setClient($client);
+                if (!$client || !$company || !$client->getCompany()?->getId()?->equals($company->getId())) {
+                    throw new \DomainException('Client not found.');
                 }
+                $ri->setClient($client);
             } else {
                 $ri->setClient(null);
             }
@@ -272,9 +273,10 @@ class RecurringInvoiceManager
             // Product link
             if (!empty($lineData['productId'])) {
                 $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
-                if ($product) {
-                    $line->setProduct($product);
+                if (!$product || !$product->getCompany()?->getId()?->equals($ri->getCompany()?->getId())) {
+                    throw new \DomainException('Product not found.');
                 }
+                $line->setProduct($product);
             }
 
             $ri->addLine($line);

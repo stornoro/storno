@@ -48,9 +48,10 @@ class ProformaInvoiceManager
         // Resolve client
         if (!empty($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $proforma->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($company->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $proforma->setClient($client);
         }
 
         // Scalar fields
@@ -186,9 +187,10 @@ class ProformaInvoiceManager
         // Update client
         if (isset($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $proforma->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($proforma->getCompany()?->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $proforma->setClient($client);
         }
 
         // Replace lines
@@ -343,9 +345,10 @@ class ProformaInvoiceManager
             // Link product by productId or productCode
             if (!empty($lineData['productId'])) {
                 $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
-                if ($product) {
-                    $line->setProduct($product);
+                if (!$product || !$product->getCompany()?->getId()?->equals($proforma->getCompany()?->getId())) {
+                    throw new \DomainException('Product not found.');
                 }
+                $line->setProduct($product);
             } elseif ($line->getProductCode() && $proforma->getCompany()) {
                 $product = $this->productRepository->findOneBy([
                     'company' => $proforma->getCompany(),

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const modelValue = defineModel<string>({ required: true })
 
@@ -21,7 +22,12 @@ const textareaRef = ref<HTMLTextAreaElement | null>()
 
 const renderedHtml = computed(() => {
   if (!modelValue.value) return ''
-  return marked.parse(modelValue.value, { breaks: true }) as string
+  // The preview is bound via v-html: sanitize so a pasted template cannot
+  // execute scripts / event handlers / javascript: URLs in the editor.
+  // DOMPurify needs a DOM; during SSR the preview is hidden anyway.
+  if (import.meta.server) return ''
+  const html = marked.parse(modelValue.value, { breaks: true }) as string
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
 })
 
 function getTextarea(): HTMLTextAreaElement | null {

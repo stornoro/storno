@@ -14,6 +14,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[AsMessageHandler]
 class SendInvitationEmailHandler
 {
+    private const MAX_SUBJECT_ORG_NAME_LENGTH = 60;
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
@@ -43,7 +45,7 @@ class SendInvitationEmailHandler
         }
 
         $locale = $invitation->getInvitedBy()->getLocale();
-        $orgName = $invitation->getOrganization()->getName();
+        $orgName = self::sanitizeOrganizationName((string) $invitation->getOrganization()->getName());
         $inviterName = sprintf('%s %s', $invitation->getInvitedBy()->getFirstName(), $invitation->getInvitedBy()->getLastName());
         $acceptUrl = sprintf('%s/invite/%s', rtrim($this->frontendUrl, '/'), $invitation->getToken());
 
@@ -52,7 +54,7 @@ class SendInvitationEmailHandler
                 ->from($this->mailFrom)
                 ->to($invitation->getEmail())
                 ->subject($this->translator->trans('invitation.subject', [
-                    '%orgName%' => $orgName,
+                    '%orgName%' => mb_substr($orgName, 0, self::MAX_SUBJECT_ORG_NAME_LENGTH),
                 ], 'emails', $locale))
                 ->text($this->translator->trans('invitation.body', [
                     '%inviterName%' => $inviterName,
@@ -76,5 +78,18 @@ class SendInvitationEmailHandler
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * The organization name is user-controlled and lands in the subject line:
+     * drop links and line breaks so the email cannot be turned into a phishing carrier.
+     */
+    public static function sanitizeOrganizationName(string $name): string
+    {
+        $name = preg_replace('/[\r\n\t]+/', ' ', $name) ?? '';
+        $name = preg_replace('~\S*(?:://|www\.)\S*~i', '', $name) ?? '';
+        $name = preg_replace('/\s{2,}/', ' ', $name) ?? '';
+
+        return trim($name);
     }
 }

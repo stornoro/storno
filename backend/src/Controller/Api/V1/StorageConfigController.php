@@ -5,6 +5,7 @@ namespace App\Controller\Api\V1;
 use App\Entity\StorageConfig;
 use App\Repository\StorageConfigRepository;
 use App\Security\OrganizationContext;
+use App\Service\Security\OutboundUrlPolicy;
 use App\Service\Storage\CredentialEncryptor;
 use App\Service\Storage\StorageConnectionTester;
 use App\Service\Storage\StorageProviderRegistry;
@@ -13,11 +14,14 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/v1')]
 class StorageConfigController extends AbstractController
 {
+    private const IDENTIFIER_PATTERN = '/^[a-z0-9-]{1,64}$/i';
+
     public function __construct(
         private readonly OrganizationContext $organizationContext,
         private readonly StorageConfigRepository $storageConfigRepository,
@@ -25,6 +29,7 @@ class StorageConfigController extends AbstractController
         private readonly CredentialEncryptor $credentialEncryptor,
         private readonly StorageProviderRegistry $providerRegistry,
         private readonly StorageConnectionTester $connectionTester,
+        private readonly OutboundUrlPolicy $outboundUrlPolicy,
     ) {}
 
     #[Route('/storage-config', methods: ['GET'])]
@@ -71,6 +76,16 @@ class StorageConfigController extends AbstractController
             return $this->json(['error' => 'Field "bucket" is required.'], Response::HTTP_BAD_REQUEST);
         }
 
+        $identifierError = $this->validateIdentifiers($data);
+        if ($identifierError) {
+            return $identifierError;
+        }
+
+        $endpoint = $this->resolveRequestedEndpoint($provider, $data);
+        if ($endpoint instanceof JsonResponse) {
+            return $endpoint;
+        }
+
         $accessKeyId = $data['accessKeyId'] ?? null;
         $secretAccessKey = $data['secretAccessKey'] ?? null;
 
@@ -91,13 +106,6 @@ class StorageConfigController extends AbstractController
         $config->setPrefix($data['prefix'] ?? 'documents');
         $config->setForcePathStyle($data['forcePathStyle'] ?? $this->providerRegistry->getProvider($provider)['defaultForcePathStyle'] ?? false);
 
-        // Resolve endpoint
-        $endpoint = $data['endpoint'] ?? null;
-        if (!$endpoint) {
-            $endpointParams = $data;
-            $endpointParams['region'] = $data['region'] ?? null;
-            $endpoint = $this->providerRegistry->resolveEndpoint($provider, $endpointParams);
-        }
         $config->setEndpoint($endpoint);
 
         if (isset($data['isActive'])) {
@@ -151,10 +159,15 @@ class StorageConfigController extends AbstractController
     }
 
     #[Route('/storage-config/test', methods: ['POST'])]
-    public function test(Request $request): JsonResponse
+    public function test(Request $request, RateLimiterFactory $storageTestLimiter): JsonResponse
     {
         if (!$this->organizationContext->hasPermission('settings.manage')) {
             return $this->json(['error' => 'Access denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $limiter = $storageTestLimiter->create((string) $this->getUser()?->getUserIdentifier());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many connection tests. Please try again later.'], Response::HTTP_TOO_MANY_REQUESTS);
         }
 
         $data = json_decode($request->getContent(), true);
@@ -167,6 +180,16 @@ class StorageConfigController extends AbstractController
         $bucket = $data['bucket'] ?? null;
         if (!$bucket) {
             return $this->json(['error' => 'Field "bucket" is required.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $identifierError = $this->validateIdentifiers($data);
+        if ($identifierError) {
+            return $identifierError;
+        }
+
+        $endpoint = $this->resolveRequestedEndpoint($provider, $data);
+        if ($endpoint instanceof JsonResponse) {
+            return $endpoint;
         }
 
         $accessKeyId = $data['accessKeyId'] ?? null;
@@ -189,13 +212,6 @@ class StorageConfigController extends AbstractController
         $credentials = ['accessKeyId' => $accessKeyId, 'secretAccessKey' => $secretAccessKey];
         if (isset($data['accountId'])) {
             $credentials['accountId'] = $data['accountId'];
-        }
-
-        $endpoint = $data['endpoint'] ?? null;
-        if (!$endpoint) {
-            $endpointParams = $data;
-            $endpointParams['region'] = $data['region'] ?? null;
-            $endpoint = $this->providerRegistry->resolveEndpoint($provider, $endpointParams);
         }
 
         $providerMeta = $this->providerRegistry->getProvider($provider);
@@ -225,6 +241,48 @@ class StorageConfigController extends AbstractController
         }
 
         return $this->json(['data' => $this->providerRegistry->getProviders()]);
+    }
+
+    /**
+     * `region` and `accountId` are interpolated into provider hostnames, so they
+     * must be plain DNS-label-safe identifiers.
+     */
+    private function validateIdentifiers(array $data): ?JsonResponse
+    {
+        foreach (['region', 'accountId'] as $field) {
+            $value = $data[$field] ?? null;
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if (!is_string($value) || !preg_match(self::IDENTIFIER_PATTERN, $value)) {
+                return $this->json(['error' => sprintf('Invalid "%s".', $field)], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A client-supplied endpoint is honoured only for providers that support a
+     * custom endpoint, and only when it passes the outbound URL policy (https,
+     * public address). Every other provider gets its endpoint derived from the
+     * validated region / account id.
+     */
+    private function resolveRequestedEndpoint(string $provider, array $data): string|null|JsonResponse
+    {
+        $requested = $data['endpoint'] ?? null;
+
+        if ($this->providerRegistry->supportsEndpoint($provider) && is_string($requested) && trim($requested) !== '') {
+            try {
+                return $this->outboundUrlPolicy->assertAllowed($requested, ['httpsOnly' => true]);
+            } catch (\InvalidArgumentException) {
+                return $this->json(['error' => 'Endpoint URL is not allowed.'], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        $endpointParams = ['region' => $data['region'] ?? null, 'accountId' => $data['accountId'] ?? null];
+
+        return $this->providerRegistry->resolveEndpoint($provider, $endpointParams);
     }
 
     private function serialize(StorageConfig $config): array

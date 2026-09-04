@@ -155,8 +155,16 @@ class EmailTemplateController extends AbstractController
         }
 
         $template = $this->emailTemplateRepository->find($uuid);
-        if (!$template) {
+        if (!$template || !$this->organizationContext->ownsCompany($template->getCompany())) {
             return $this->json(['error' => 'Email template not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $org = $template->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canUseEmailTemplates($org)) {
+            return $this->json([
+                'error' => 'Email templates are not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
         }
 
         $data = json_decode($request->getContent(), true);
@@ -190,8 +198,16 @@ class EmailTemplateController extends AbstractController
         }
 
         $template = $this->emailTemplateRepository->find($uuid);
-        if (!$template) {
+        if (!$template || !$this->organizationContext->ownsCompany($template->getCompany())) {
             return $this->json(['error' => 'Email template not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $org = $template->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canUseEmailTemplates($org)) {
+            return $this->json([
+                'error' => 'Email templates are not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
         }
 
         $this->entityManager->remove($template);

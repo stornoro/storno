@@ -3,6 +3,8 @@
 namespace App\Service\EInvoice\Italy;
 
 use App\Service\EInvoice\EInvoiceConnectionTesterInterface;
+use App\Service\Security\OutboundUrlPolicy;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -11,6 +13,8 @@ class SdiConnectionTester implements EInvoiceConnectionTesterInterface
 {
     public function __construct(
         private readonly HttpClientInterface $httpClient,
+        private readonly OutboundUrlPolicy $outboundUrlPolicy,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function test(array $config): array
@@ -24,12 +28,20 @@ class SdiConnectionTester implements EInvoiceConnectionTesterInterface
 
         if ($hasIntermediary) {
             try {
-                $response = $this->httpClient->request('GET', rtrim($config['apiEndpoint'], '/') . '/status', [
+                $apiEndpoint = $this->outboundUrlPolicy->assertAllowed((string) $config['apiEndpoint'], ['httpsOnly' => true]);
+            } catch (\InvalidArgumentException) {
+                return ['success' => false, 'error' => 'API endpoint URL is not allowed.'];
+            }
+
+            try {
+                $response = $this->httpClient->request('GET', rtrim($apiEndpoint, '/') . '/status', [
                     'headers' => [
                         'Authorization' => 'Bearer ' . $config['apiKey'],
                         'Accept' => 'application/json',
                     ],
                     'timeout' => 10,
+                    'max_duration' => 15,
+                    'max_redirects' => 0,
                 ]);
 
                 $statusCode = $response->getStatusCode();
@@ -39,7 +51,12 @@ class SdiConnectionTester implements EInvoiceConnectionTesterInterface
 
                 return ['success' => false, 'error' => 'Intermediary returned HTTP ' . $statusCode];
             } catch (\Throwable $e) {
-                return ['success' => false, 'error' => $e->getMessage()];
+                $this->logger->warning('SDI intermediary connection test failed.', [
+                    'endpoint' => $apiEndpoint,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return ['success' => false, 'error' => 'Connection test failed.'];
             }
         }
 

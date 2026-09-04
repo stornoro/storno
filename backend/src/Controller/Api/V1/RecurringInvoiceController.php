@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\Organization;
 use App\Manager\RecurringInvoiceManager;
 use App\Repository\RecurringInvoiceRepository;
 use App\Security\OrganizationContext;
@@ -56,6 +57,11 @@ class RecurringInvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
+        $planLimit = $this->recurringPlanLimit($this->organizationContext->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
+        }
+
         $data = json_decode($request->getContent(), true);
         $ids = $data['ids'] ?? [];
 
@@ -68,7 +74,7 @@ class RecurringInvoiceController extends AbstractController
 
         foreach ($ids as $id) {
             $ri = $this->manager->find($id);
-            if (!$ri) {
+            if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
                 $errors[] = ['id' => $id, 'error' => 'Recurring invoice not found.'];
                 continue;
             }
@@ -90,6 +96,11 @@ class RecurringInvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
+        $planLimit = $this->recurringPlanLimit($this->organizationContext->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
+        }
+
         $data = json_decode($request->getContent(), true);
         $ids = $data['ids'] ?? [];
         $isActive = $data['isActive'] ?? null;
@@ -107,7 +118,7 @@ class RecurringInvoiceController extends AbstractController
 
         foreach ($ids as $id) {
             $ri = $this->manager->find($id);
-            if (!$ri) {
+            if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
                 $errors[] = ['id' => $id, 'error' => 'Recurring invoice not found.'];
                 continue;
             }
@@ -131,6 +142,11 @@ class RecurringInvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
+        $planLimit = $this->recurringPlanLimit($this->organizationContext->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
+        }
+
         $data = json_decode($request->getContent(), true);
         $ids = $data['ids'] ?? [];
 
@@ -143,7 +159,7 @@ class RecurringInvoiceController extends AbstractController
 
         foreach ($ids as $id) {
             $ri = $this->manager->find($id);
-            if (!$ri) {
+            if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
                 $errors[] = ['id' => $id, 'error' => 'Recurring invoice not found.'];
                 continue;
             }
@@ -174,7 +190,7 @@ class RecurringInvoiceController extends AbstractController
         }
 
         $ri = $this->manager->find($uuid);
-        if (!$ri) {
+        if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
             return $this->json(['error' => 'Recurring invoice not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -226,8 +242,13 @@ class RecurringInvoiceController extends AbstractController
         }
 
         $ri = $this->manager->find($uuid);
-        if (!$ri) {
+        if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
             return $this->json(['error' => 'Recurring invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $planLimit = $this->recurringPlanLimit($ri->getCompany()?->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
         }
 
         $data = json_decode($request->getContent(), true);
@@ -256,7 +277,7 @@ class RecurringInvoiceController extends AbstractController
         }
 
         $ri = $this->manager->find($uuid);
-        if (!$ri) {
+        if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
             return $this->json(['error' => 'Recurring invoice not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -273,8 +294,13 @@ class RecurringInvoiceController extends AbstractController
         }
 
         $ri = $this->manager->find($uuid);
-        if (!$ri) {
+        if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
             return $this->json(['error' => 'Recurring invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $planLimit = $this->recurringPlanLimit($ri->getCompany()?->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
         }
 
         $ri = $this->manager->toggle($ri);
@@ -290,12 +316,17 @@ class RecurringInvoiceController extends AbstractController
         }
 
         $ri = $this->manager->find($uuid);
-        if (!$ri) {
+        if (!$ri || !$this->organizationContext->ownsCompany($ri->getCompany())) {
             return $this->json(['error' => 'Recurring invoice not found.'], Response::HTTP_NOT_FOUND);
         }
 
         if (!$ri->getCompany()) {
             return $this->json(['error' => 'Recurring invoice has no company.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $planLimit = $this->recurringPlanLimit($ri->getCompany()?->getOrganization());
+        if ($planLimit) {
+            return $planLimit;
         }
 
         try {
@@ -305,6 +336,18 @@ class RecurringInvoiceController extends AbstractController
         }
 
         return $this->json($result);
+    }
+
+    private function recurringPlanLimit(?Organization $org): ?JsonResponse
+    {
+        if ($org && !$this->licenseManager->canUseRecurringInvoices($org)) {
+            return $this->json([
+                'error' => 'Recurring invoices are not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
+
+        return null;
     }
 
     private function validateData(array $data): ?string

@@ -72,6 +72,38 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        storage_test:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        webhook_test:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        anaf_org:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        registry_lookup:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        email_resend_confirmation:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        password_reset_email:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        share_link:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        invitation_send:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
 
 when@prod:
     framework:
@@ -148,3 +180,35 @@ when@prod:
                 policy: 'sliding_window'
                 limit: 60
                 interval: '10 minutes'
+            storage_test:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '10 minutes'
+            webhook_test:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '10 minutes'
+            anaf_org:
+                policy: 'sliding_window'
+                limit: 60
+                interval: '1 minute'
+            registry_lookup:
+                policy: 'sliding_window'
+                limit: 30
+                interval: '1 minute'
+            email_resend_confirmation:
+                policy: 'sliding_window'
+                limit: 3
+                interval: '1 hour'
+            password_reset_email:
+                policy: 'sliding_window'
+                limit: 3
+                interval: '1 hour'
+            share_link:
+                policy: 'sliding_window'
+                limit: 30
+                interval: '10 minutes'
+            invitation_send:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '1 hour'

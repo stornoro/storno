@@ -6,6 +6,7 @@ use App\Entity\Company;
 use App\Entity\DocumentEvent;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
+use App\Entity\Organization;
 use App\Entity\Product;
 use App\Entity\User;
 use App\Enum\DocumentStatus;
@@ -22,6 +23,7 @@ use App\Repository\ProductRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\EuVatRateService;
+use App\Service\LicenseManager;
 use App\Service\ReverseChargeHelper;
 use App\Validator\UblExtensionsValidator;
 use App\Event\Invoice\InvoiceCreatedEvent;
@@ -55,6 +57,7 @@ class InvoiceManager
         private readonly EuVatRateService $euVatRateService,
         private readonly UblExtensionsValidator $ublExtensionsValidator,
         private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     public function find(string $uuid): ?Invoice
@@ -96,6 +99,10 @@ class InvoiceManager
             }
         }
 
+        // Plan quota — enforced here so every creation path (API, conversions,
+        // recurring issuance, Stripe app, ...) is covered, not just the controller.
+        $this->assertMonthlyInvoiceLimit($company);
+
         $invoice = new Invoice();
         $invoice->setCompany($company);
         $invoice->setStatus(DocumentStatus::DRAFT);
@@ -110,12 +117,13 @@ class InvoiceManager
         // Resolve client
         if (!empty($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $invoice->setClient($client);
-                $invoice->setReceiverName($client->getName());
-                $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
-                $invoice->snapshotBuyer($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($company->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $invoice->setClient($client);
+            $invoice->setReceiverName($client->getName());
+            $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+            $invoice->snapshotBuyer($client);
         }
         // Allow setting receiver info directly (without a Client entity)
         if (!empty($data['receiverName'])) {
@@ -465,12 +473,13 @@ class InvoiceManager
         // Update client
         if (isset($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $invoice->setClient($client);
-                $invoice->setReceiverName($client->getName());
-                $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
-                $invoice->snapshotBuyer($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($invoice->getCompany()?->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $invoice->setClient($client);
+            $invoice->setReceiverName($client->getName());
+            $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
+            $invoice->snapshotBuyer($client);
         }
         // Manual receiver info (when no client entity selected)
         if (!isset($data['clientId'])) {
@@ -909,6 +918,8 @@ class InvoiceManager
         ?string $ratio = null,
         ?string $idempotencyKey = null,
     ): Invoice {
+        $this->assertMonthlyInvoiceLimit($invoice->getCompany());
+
         $storno = new Invoice();
         $storno->setCompany($invoice->getCompany());
         $storno->setClient($invoice->getClient());
@@ -1105,6 +1116,9 @@ class InvoiceManager
             $product = null;
             if (!empty($lineData['productId'])) {
                 $product = $this->productRepository->find(Uuid::fromString($lineData['productId']));
+                if (!$product || !$product->getCompany()?->getId()?->equals($company?->getId())) {
+                    throw new \DomainException('Product not found.');
+                }
             } elseif ($line->getProductCode() && $company) {
                 $product = $this->productRepository->findOneBy([
                     'company' => $company,
@@ -1157,6 +1171,53 @@ class InvoiceManager
     private function recalculateTotals(Invoice $invoice): void
     {
         $this->recalculateStoredTotals($invoice);
+    }
+
+    /**
+     * Enforce the plan's monthly outgoing-invoice quota for the company's organization.
+     * Called from every path that persists a new outgoing invoice (manual create,
+     * proforma/receipt/delivery-note conversion, recurring issuance, storno, Stripe app)
+     * so the limit cannot be bypassed by going around InvoiceController.
+     *
+     * @throws \DomainException when the organization has reached its monthly limit
+     */
+    public function assertMonthlyInvoiceLimit(?Company $company): void
+    {
+        $organization = $company?->getOrganization();
+        if (!$organization) {
+            return;
+        }
+
+        $maxPerMonth = (int) ($this->licenseManager->getFeatures($organization)['maxInvoicesPerMonth'] ?? 0);
+        if ($maxPerMonth <= 0) {
+            return; // 0 = unlimited
+        }
+
+        if ($this->countOutgoingInvoicesThisMonth($organization) >= $maxPerMonth) {
+            throw new \DomainException('Monthly invoice limit reached for your plan.');
+        }
+    }
+
+    /**
+     * Organization-wide equivalent of InvoiceRepository::countThisMonth():
+     * outgoing invoices created this month across all of the organization's companies.
+     */
+    protected function countOutgoingInvoicesThisMonth(Organization $organization): int
+    {
+        $firstOfMonth = new \DateTimeImmutable('first day of this month midnight');
+
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(i.id)')
+            ->from(Invoice::class, 'i')
+            ->join('i.company', 'c')
+            ->where('c.organization = :organization')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.createdAt >= :since')
+            ->setParameter('organization', $organization)
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('since', $firstOfMonth)
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 
     /**

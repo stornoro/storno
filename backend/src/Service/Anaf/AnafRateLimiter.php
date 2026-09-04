@@ -3,6 +3,7 @@
 namespace App\Service\Anaf;
 
 use App\Exception\AnafRateLimitException;
+use App\Security\OrganizationContext;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
@@ -19,10 +20,25 @@ class AnafRateLimiter
         private readonly RateLimiterFactory $stareMessageLimiter,
         #[Autowire(service: 'limiter.anaf_upload_rasp')]
         private readonly RateLimiterFactory $uploadRaspLimiter,
+        #[Autowire(service: 'limiter.anaf_org')]
+        private readonly RateLimiterFactory $orgLimiter,
+        private readonly OrganizationContext $organizationContext,
     ) {}
 
+    /**
+     * Consume one call from the shared ANAF budget. When the call originates
+     * from an authenticated HTTP request, a per-organization bucket is consumed
+     * first so a single tenant cannot exhaust the global budget for everyone.
+     * Message-handler (worker) calls have no organization context and only hit
+     * the global bucket, as before.
+     */
     public function consumeGlobal(): void
     {
+        $orgId = $this->resolveOrganizationId();
+        if ($orgId !== null) {
+            $this->consume($this->orgLimiter, 'anaf_org', 'anaf_org_' . $orgId);
+        }
+
         $this->consume($this->globalLimiter, 'anaf_global', 'anaf_global');
     }
 
@@ -44,6 +60,16 @@ class AnafRateLimiter
     public function consumeUploadRasp(string $cif): void
     {
         $this->consume($this->uploadRaspLimiter, 'anaf_upload_rasp', 'anaf_rasp_' . $cif);
+    }
+
+    private function resolveOrganizationId(): ?string
+    {
+        try {
+            return $this->organizationContext->getOrganization()?->getId()?->toRfc4122();
+        } catch (\Throwable) {
+            // No request / security context (CLI, workers) — skip the per-org bucket.
+            return null;
+        }
     }
 
     private function consume(RateLimiterFactory $factory, string $limitName, string $key): void

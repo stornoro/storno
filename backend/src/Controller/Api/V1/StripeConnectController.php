@@ -2,10 +2,12 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\Company;
 use App\Repository\PaymentRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
+use App\Service\LicenseManager;
 use App\Service\StripeConnectService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -25,6 +27,7 @@ class StripeConnectController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     /**
@@ -40,6 +43,10 @@ class StripeConnectController extends AbstractController
 
         if (!$this->organizationContext->hasPermission(Permission::ORG_MANAGE_BILLING)) {
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        if ($planLimit = $this->paymentLinksPlanLimit($company)) {
+            return $planLimit;
         }
 
         try {
@@ -174,6 +181,10 @@ class StripeConnectController extends AbstractController
             return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
         }
 
+        if ($planLimit = $this->paymentLinksPlanLimit($company)) {
+            return $planLimit;
+        }
+
         $connectAccount = $this->connectAccountRepository->findByCompany($company);
         if (!$connectAccount) {
             return $this->json(['error' => 'Stripe Connect account not found'], Response::HTTP_NOT_FOUND);
@@ -229,5 +240,21 @@ class StripeConnectController extends AbstractController
 
             return $this->json(['error' => 'Failed to disconnect'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Stripe Connect exists to power invoice payment links — a plan feature.
+     */
+    private function paymentLinksPlanLimit(Company $company): ?JsonResponse
+    {
+        $org = $company->getOrganization();
+        if ($org !== null && $this->licenseManager->canUsePaymentLinks($org)) {
+            return null;
+        }
+
+        return $this->json([
+            'error' => 'Payment links are not available on your plan.',
+            'code' => 'PLAN_LIMIT',
+        ], Response::HTTP_PAYMENT_REQUIRED);
     }
 }

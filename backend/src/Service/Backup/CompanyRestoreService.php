@@ -241,19 +241,57 @@ class CompanyRestoreService
         return $entityCounts;
     }
 
+    /** @var array<string, array<string, true>> table => [column => true] */
+    private array $tableColumnCache = [];
+
+    /**
+     * Column names of a table, looked up once per table from the live schema.
+     *
+     * @return array<string, true>
+     */
+    private function getTableColumns(Connection $conn, string $table): array
+    {
+        if (!isset($this->tableColumnCache[$table])) {
+            $columns = [];
+            foreach ($conn->createSchemaManager()->listTableColumns($table) as $column) {
+                $columns[strtolower($column->getName())] = true;
+            }
+            $this->tableColumnCache[$table] = $columns;
+        }
+
+        return $this->tableColumnCache[$table];
+    }
+
     private function insertRow(Connection $conn, string $table, array $row): void
     {
-        // Filter out any keys with null that don't exist as columns
-        $filteredRow = array_filter($row, fn ($v) => $v !== null || true);
+        // Keys come from the (user-uploaded) backup JSON and end up as SQL
+        // identifiers, so only accept well-formed names that exist on the table.
+        $knownColumns = $this->getTableColumns($conn, $table);
+        $filteredRow = [];
+        foreach ($row as $column => $value) {
+            if (!is_string($column) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $column)) {
+                $this->logger->warning('Restore: dropping malformed column name', ['table' => $table, 'column' => (string) $column]);
+                continue;
+            }
+            if (!isset($knownColumns[$column])) {
+                $this->logger->warning('Restore: dropping unknown column', ['table' => $table, 'column' => $column]);
+                continue;
+            }
+            $filteredRow[$column] = $value;
+        }
+
+        if ($filteredRow === []) {
+            return;
+        }
 
         $columns = array_keys($filteredRow);
         $placeholders = array_fill(0, count($columns), '?');
 
-        $quotedColumns = array_map(fn ($c) => "`{$c}`", $columns);
+        $quotedColumns = array_map(fn (string $c) => $conn->quoteIdentifier($c), $columns);
 
         $sql = sprintf(
-            'INSERT INTO `%s` (%s) VALUES (%s)',
-            $table,
+            'INSERT INTO %s (%s) VALUES (%s)',
+            $conn->quoteIdentifier($table),
             implode(', ', $quotedColumns),
             implode(', ', $placeholders)
         );

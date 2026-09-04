@@ -316,6 +316,29 @@ class CompanyController extends AbstractController
                 return $this->json(['error' => 'Grace period expired. Company cannot be restored.'], Response::HTTP_GONE);
             }
 
+            // Restoring re-activates a company: enforce the same plan limit as create().
+            // The count must only see active companies, so re-enable the soft-delete
+            // filter (disabled above to load the deleted company) just for this check.
+            $org = $company->getOrganization() ?? $this->organizationContext->getOrganization();
+            if ($org) {
+                if ($filterWasEnabled) {
+                    $filters->enable('soft_delete');
+                }
+                try {
+                    $canAdd = $this->licenseManager->canAddCompany($org);
+                } finally {
+                    if ($filterWasEnabled) {
+                        $filters->disable('soft_delete');
+                    }
+                }
+                if (!$canAdd) {
+                    return $this->json([
+                        'error' => 'Limita de companii atinsa. Upgradati planul.',
+                        'code' => 'PLAN_LIMIT',
+                    ], Response::HTTP_PAYMENT_REQUIRED);
+                }
+            }
+
             $company->restore();
             $this->entityManager->flush();
             $this->broadcastCompanyEvent($company, 'company.restored');
@@ -430,9 +453,10 @@ class CompanyController extends AbstractController
             return $this->json(['error' => 'No file uploaded.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $allowedMimes = ['image/png', 'image/jpeg', 'image/svg+xml'];
+        // SVG is deliberately excluded: it can carry scripts and is served inline by getLogo().
+        $allowedMimes = ['image/png', 'image/jpeg', 'image/webp'];
         if (!in_array($file->getMimeType(), $allowedMimes, true)) {
-            return $this->json(['error' => 'Invalid file type. Allowed: PNG, JPG, SVG.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid file type. Allowed: PNG, JPG, WEBP.'], Response::HTTP_BAD_REQUEST);
         }
 
         if ($file->getSize() > 2 * 1024 * 1024) {
@@ -515,6 +539,8 @@ class CompanyController extends AbstractController
             return new Response($content, 200, [
                 'Content-Type' => $mimeType,
                 'Cache-Control' => 'private, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+                'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; sandbox",
             ]);
         } catch (\Throwable) {
             return $this->json(['error' => 'Could not read logo.'], Response::HTTP_INTERNAL_SERVER_ERROR);

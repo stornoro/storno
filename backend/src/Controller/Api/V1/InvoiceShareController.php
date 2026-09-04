@@ -7,6 +7,7 @@ use App\Repository\InvoiceShareTokenRepository;
 use App\Repository\StripeConnectAccountRepository;
 use App\Service\DocumentPdfService;
 use App\Service\InvoiceXmlResolver;
+use App\Service\LicenseManager;
 use App\Service\PdfGeneratorService;
 use App\Service\StripeConnectService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -16,6 +17,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/v1/share')]
@@ -31,6 +33,8 @@ class InvoiceShareController extends AbstractController
         private readonly FilesystemOperator $defaultStorage,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly LicenseManager $licenseManager,
+        private readonly RateLimiterFactory $shareLinkLimiter,
     ) {}
 
     #[Route('/{token}', methods: ['GET'])]
@@ -97,6 +101,10 @@ class InvoiceShareController extends AbstractController
     #[Route('/{token}/pay', methods: ['POST'])]
     public function pay(string $token, Request $request): JsonResponse
     {
+        if ($throttled = $this->throttle($token, $request)) {
+            return $throttled;
+        }
+
         $shareToken = $this->shareTokenRepository->findValidByToken($token);
 
         if (!$shareToken) {
@@ -107,6 +115,14 @@ class InvoiceShareController extends AbstractController
         }
 
         $invoice = $shareToken->getInvoice();
+
+        $org = $invoice->getCompany()?->getOrganization();
+        if (!$org || !$this->licenseManager->canUsePaymentLinks($org)) {
+            return $this->json([
+                'error' => 'Online payments are not available for this invoice.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
 
         $data = json_decode($request->getContent(), true) ?? [];
         $requestedAmount = isset($data['amount']) ? (string) $data['amount'] : null;
@@ -125,8 +141,12 @@ class InvoiceShareController extends AbstractController
     }
 
     #[Route('/{token}/pdf', methods: ['GET'])]
-    public function pdf(string $token): Response
+    public function pdf(string $token, Request $request): Response
     {
+        if ($throttled = $this->throttle($token, $request)) {
+            return $throttled;
+        }
+
         $shareToken = $this->shareTokenRepository->findValidByToken($token);
 
         if (!$shareToken) {
@@ -137,6 +157,14 @@ class InvoiceShareController extends AbstractController
         }
 
         $invoice = $shareToken->getInvoice();
+
+        $org = $invoice->getCompany()?->getOrganization();
+        if (!$org || !$this->licenseManager->canGeneratePdf($org)) {
+            return $this->json([
+                'error' => 'PDF generation is not available for this invoice.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
 
         // Outgoing invoices: generate using company's selected design template
         if ($this->documentPdfService->isOutgoingInvoice($invoice)) {
@@ -181,8 +209,12 @@ class InvoiceShareController extends AbstractController
     }
 
     #[Route('/{token}/xml', methods: ['GET'])]
-    public function xml(string $token): Response
+    public function xml(string $token, Request $request): Response
     {
+        if ($throttled = $this->throttle($token, $request)) {
+            return $throttled;
+        }
+
         $shareToken = $this->shareTokenRepository->findValidByToken($token);
 
         if (!$shareToken) {
@@ -203,6 +235,20 @@ class InvoiceShareController extends AbstractController
             'Content-Type' => 'application/xml',
             'Content-Disposition' => sprintf('attachment; filename="factura-%s.xml"', $invoice->getNumber()),
         ]);
+    }
+
+    /**
+     * Public, unauthenticated routes: throttle per token + client IP so a leaked
+     * link cannot be used to hammer PDF generation or payment-session creation.
+     */
+    private function throttle(string $token, Request $request): ?JsonResponse
+    {
+        $limiter = $this->shareLinkLimiter->create(hash('sha256', $token . '|' . ($request->getClientIp() ?? 'unknown')));
+        if ($limiter->consume()->isAccepted()) {
+            return null;
+        }
+
+        return $this->json(['error' => 'Too many requests.'], Response::HTTP_TOO_MANY_REQUESTS);
     }
 
     private function formatCifWithPrefix(?string $cif, bool $isVatPayer): ?string

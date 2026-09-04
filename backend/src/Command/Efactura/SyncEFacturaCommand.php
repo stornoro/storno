@@ -2,9 +2,11 @@
 
 namespace App\Command\Efactura;
 
+use App\Entity\Company;
 use App\Message\Anaf\SyncCompanyMessage;
 use App\Repository\CompanyRepository;
 use App\Service\Anaf\EFacturaSyncService;
+use App\Service\LicenseManager;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,6 +26,7 @@ class SyncEFacturaCommand extends Command
         private readonly EFacturaSyncService $syncService,
         private readonly CompanyRepository $companyRepository,
         private readonly MessageBusInterface $messageBus,
+        private readonly LicenseManager $licenseManager,
     ) {
         parent::__construct();
     }
@@ -51,11 +54,28 @@ class SyncEFacturaCommand extends Command
             }
             $companies = [$company];
         } else {
-            $companies = $this->companyRepository->findBy(['syncEnabled' => true]);
+            // Scheduled run: honour the plan's auto-sync flag and sync interval.
+            // An explicit --company is an operator override and bypasses both.
+            $candidates = $this->companyRepository->findBy(['syncEnabled' => true]);
+            if (empty($candidates)) {
+                $io->info('No companies with sync enabled.');
+                return Command::SUCCESS;
+            }
+
+            $now = new \DateTimeImmutable();
+            $companies = array_values(array_filter(
+                $candidates,
+                fn (Company $c) => $this->isDueForSync($c, $now, $io),
+            ));
+
+            $skipped = count($candidates) - count($companies);
+            if ($skipped > 0) {
+                $io->text(sprintf('Skipped %d of %d sync-enabled companies (plan auto-sync/interval).', $skipped, count($candidates)));
+            }
         }
 
         if (empty($companies)) {
-            $io->info('No companies with sync enabled.');
+            $io->info('No companies due for sync.');
             return Command::SUCCESS;
         }
 
@@ -108,5 +128,51 @@ class SyncEFacturaCommand extends Command
         // Returning FAILURE causes the scheduler to log a noisy ERROR with will_retry:false,
         // which is misleading for transient ANAF issues (token expiry, rate limits, etc.).
         return Command::SUCCESS;
+    }
+
+    /**
+     * A company is due when its organization's plan allows auto-sync and the
+     * plan's sync interval has elapsed since the last successful sync.
+     */
+    private function isDueForSync(Company $company, \DateTimeImmutable $now, SymfonyStyle $io): bool
+    {
+        $org = $company->getOrganization();
+        if (!$org) {
+            return true;
+        }
+
+        if (!$this->licenseManager->canAutoSync($org)) {
+            if ($io->isVerbose()) {
+                $io->text(sprintf(
+                    '  Skipping %s (CIF: %s): auto-sync not available on the %s plan',
+                    $company->getName(),
+                    $company->getCif(),
+                    $this->licenseManager->getEffectivePlan($org),
+                ));
+            }
+
+            return false;
+        }
+
+        $interval = $this->licenseManager->getSyncInterval($org);
+        $lastSyncedAt = $company->getLastSyncedAt();
+        if ($interval > 0 && $lastSyncedAt !== null) {
+            $nextSyncAt = $lastSyncedAt->modify(sprintf('+%d seconds', $interval));
+            if ($nextSyncAt > $now) {
+                if ($io->isVerbose()) {
+                    $io->text(sprintf(
+                        '  Skipping %s (CIF: %s): next sync allowed at %s (%s plan)',
+                        $company->getName(),
+                        $company->getCif(),
+                        $nextSyncAt->format('Y-m-d H:i:s'),
+                        $this->licenseManager->getEffectivePlan($org),
+                    ));
+                }
+
+                return false;
+            }
+        }
+
+        return true;
     }
 }

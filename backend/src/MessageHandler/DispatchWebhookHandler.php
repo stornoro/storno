@@ -7,6 +7,7 @@ use App\Enum\WebhookDeliveryStatus;
 use App\Message\DispatchWebhookMessage;
 use App\Repository\WebhookDeliveryRepository;
 use App\Repository\WebhookEndpointRepository;
+use App\Service\Security\OutboundUrlPolicy;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -20,6 +21,9 @@ class DispatchWebhookHandler
     private const MAX_ATTEMPTS = 3;
     private const RETRY_DELAYS_MS = [60_000, 300_000, 900_000]; // 1min, 5min, 15min
 
+    /** Only this many bytes of an endpoint's response are ever persisted. */
+    private const MAX_STORED_RESPONSE_BODY = 200;
+
     private readonly ?string $webhookRelayUrl;
     private readonly ?string $webhookRelaySecret;
 
@@ -30,6 +34,7 @@ class DispatchWebhookHandler
         private readonly HttpClientInterface $httpClient,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
+        private readonly OutboundUrlPolicy $outboundUrlPolicy,
         ?string $webhookRelayUrl = null,
         ?string $webhookRelaySecret = null,
     ) {
@@ -61,6 +66,25 @@ class DispatchWebhookHandler
         $delivery->setAttempt($message->attempt);
         $delivery->setStatus(WebhookDeliveryStatus::PENDING);
 
+        // Re-check the outbound policy right before sending: the URL was
+        // validated on save, but DNS can be rebound afterwards and legacy rows
+        // predate the policy. A blocked URL is a hard failure — no retries.
+        try {
+            $targetUrl = $this->outboundUrlPolicy->assertAllowed($endpoint->getUrl(), ['httpsOnly' => true, 'allowedPorts' => [443]]);
+        } catch (\InvalidArgumentException) {
+            $delivery->setStatus(WebhookDeliveryStatus::FAILED);
+            $delivery->setErrorMessage('Endpoint URL is not allowed.');
+            $delivery->setCompletedAt(new \DateTimeImmutable());
+            $this->entityManager->flush();
+
+            $this->logger->warning('Webhook delivery blocked by outbound URL policy', [
+                'deliveryId' => $delivery->getId()->toRfc4122(),
+                'endpointId' => $message->endpointId,
+            ]);
+
+            return;
+        }
+
         $jsonPayload = json_encode($message->payload, JSON_UNESCAPED_UNICODE);
         $signature = hash_hmac('sha256', $jsonPayload, $endpoint->getSecret());
 
@@ -77,7 +101,7 @@ class DispatchWebhookHandler
         try {
             if ($this->webhookRelayUrl && $this->webhookRelaySecret) {
                 $relayBody = json_encode([
-                    'target_url' => $endpoint->getUrl(),
+                    'target_url' => $targetUrl,
                     'method' => 'POST',
                     'headers' => $webhookHeaders,
                     'body' => $jsonPayload,
@@ -90,16 +114,20 @@ class DispatchWebhookHandler
                     ],
                     'body' => $relayBody,
                     'timeout' => 15,
+                    'max_duration' => 20,
+                    'max_redirects' => 0,
                 ]);
 
                 $relayData = json_decode($relayResponse->getContent(false), true);
                 $statusCode = $relayData['status'] ?? 0;
                 $responseBody = $relayData['body'] ?? ($relayData['error'] ?? '');
             } else {
-                $response = $this->httpClient->request('POST', $endpoint->getUrl(), [
+                $response = $this->httpClient->request('POST', $targetUrl, [
                     'headers' => $webhookHeaders,
                     'body' => $jsonPayload,
                     'timeout' => 10,
+                    'max_duration' => 15,
+                    'max_redirects' => 0,
                 ]);
 
                 $statusCode = $response->getStatusCode();
@@ -109,7 +137,7 @@ class DispatchWebhookHandler
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
 
             $delivery->setResponseStatusCode($statusCode);
-            $delivery->setResponseBody($responseBody);
+            $delivery->setResponseBody(mb_substr((string) $responseBody, 0, self::MAX_STORED_RESPONSE_BODY));
             $delivery->setDurationMs($durationMs);
 
             if ($statusCode >= 200 && $statusCode < 300) {
@@ -121,7 +149,13 @@ class DispatchWebhookHandler
         } catch (\Throwable $e) {
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
             $delivery->setDurationMs($durationMs);
-            $this->handleFailure($delivery, $message, $e->getMessage());
+            $this->logger->info('Webhook delivery attempt failed', [
+                'deliveryId' => $delivery->getId()->toRfc4122(),
+                'endpointId' => $message->endpointId,
+                'attempt' => $message->attempt,
+                'error' => $e->getMessage(),
+            ]);
+            $this->handleFailure($delivery, $message, 'Delivery failed.');
         }
 
         $this->entityManager->flush();

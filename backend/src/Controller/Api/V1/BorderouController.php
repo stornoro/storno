@@ -4,6 +4,8 @@ namespace App\Controller\Api\V1;
 
 use App\Entity\BankAccount;
 use App\Entity\BorderouTransaction;
+use App\Entity\Client;
+use App\Entity\Company;
 use App\Enum\ProformaStatus;
 use App\Repository\BankAccountRepository;
 use App\Repository\BorderouTransactionRepository;
@@ -14,6 +16,7 @@ use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Borderou\BorderouImportService;
 use App\Service\Borderou\BorderouMatchingService;
+use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -34,6 +37,7 @@ class BorderouController extends AbstractController
         private readonly BankAccountRepository $bankAccountRepo,
         private readonly ProformaInvoiceRepository $proformaRepo,
         private readonly EntityManagerInterface $em,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/providers', methods: ['GET'])]
@@ -72,6 +76,10 @@ class BorderouController extends AbstractController
         $sourceType = $request->request->get('sourceType');
         if (!in_array($sourceType, ['borderou', 'bank_statement', 'marketplace'], true)) {
             return $this->json(['error' => 'Invalid sourceType. Must be "borderou", "bank_statement", or "marketplace".'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($sourceType === 'bank_statement' && !$this->canUseBankStatements($company)) {
+            return $this->bankStatementsPlanLimitResponse();
         }
 
         $provider = $request->request->get('provider');
@@ -180,11 +188,18 @@ class BorderouController extends AbstractController
             return $this->json(['error' => 'Cannot modify a saved transaction.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        if ($tx->getSourceType() === 'bank_statement' && !$this->canUseBankStatements($company)) {
+            return $this->bankStatementsPlanLimitResponse();
+        }
+
         $data = json_decode($request->getContent(), true);
 
         if (isset($data['clientId'])) {
             if ($data['clientId']) {
-                $client = $this->em->find(\App\Entity\Client::class, $data['clientId']);
+                $client = $this->em->find(Client::class, $data['clientId']);
+                if (!$client || !$this->belongsToCompany($client->getCompany(), $company)) {
+                    return $this->json(['error' => 'Client not found.'], Response::HTTP_NOT_FOUND);
+                }
                 $tx->setMatchedClient($client);
             } else {
                 $tx->setMatchedClient(null);
@@ -194,6 +209,9 @@ class BorderouController extends AbstractController
         if (isset($data['invoiceId'])) {
             if ($data['invoiceId']) {
                 $invoice = $this->invoiceRepo->find($data['invoiceId']);
+                if (!$invoice || !$this->belongsToCompany($invoice->getCompany(), $company)) {
+                    return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+                }
                 $tx->setMatchedInvoice($invoice);
                 // Mutual exclusion: clear proforma if invoice set
                 $tx->setMatchedProformaInvoice(null);
@@ -205,6 +223,9 @@ class BorderouController extends AbstractController
         if (isset($data['proformaInvoiceId'])) {
             if ($data['proformaInvoiceId']) {
                 $proforma = $this->proformaRepo->find($data['proformaInvoiceId']);
+                if (!$proforma || !$this->belongsToCompany($proforma->getCompany(), $company)) {
+                    return $this->json(['error' => 'Proforma invoice not found.'], Response::HTTP_NOT_FOUND);
+                }
                 $tx->setMatchedProformaInvoice($proforma);
                 // Mutual exclusion: clear invoice if proforma set
                 $tx->setMatchedInvoice(null);
@@ -379,6 +400,10 @@ class BorderouController extends AbstractController
             return $this->json(['error' => 'No transactions specified.'], Response::HTTP_BAD_REQUEST);
         }
 
+        if (!$this->canUseBankStatements($company) && $this->containsBankStatements($this->txRepo->findByIds($transactionIds))) {
+            return $this->bankStatementsPlanLimitResponse();
+        }
+
         $result = $this->importService->saveTransactions($transactionIds, $company);
 
         return $this->json($result);
@@ -409,13 +434,55 @@ class BorderouController extends AbstractController
         $transactions = array_filter($transactions, fn (BorderouTransaction $tx) => $tx->getCompany()->getId()->toRfc4122() === $company->getId()->toRfc4122()
         );
 
+        if (!$this->canUseBankStatements($company) && $this->containsBankStatements($transactions)) {
+            return $this->bankStatementsPlanLimitResponse();
+        }
+
         $this->matchingService->rematchTransactions($transactions, $company);
 
         return $this->json($transactions, context: ['groups' => ['borderou:list']]);
     }
 
-    private function resolveCompany(Request $request): ?\App\Entity\Company
+    private function resolveCompany(Request $request): ?Company
     {
         return $this->organizationContext->resolveCompany($request);
+    }
+
+    /**
+     * The plan matrix gates "bank statements" only; courier bordereaux and
+     * marketplace reports stay available on every plan.
+     */
+    private function canUseBankStatements(Company $company): bool
+    {
+        $org = $company->getOrganization();
+
+        return $org !== null && $this->licenseManager->canUseBankStatements($org);
+    }
+
+    /**
+     * @param iterable<BorderouTransaction> $transactions
+     */
+    private function containsBankStatements(iterable $transactions): bool
+    {
+        foreach ($transactions as $tx) {
+            if ($tx->getSourceType() === 'bank_statement') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function bankStatementsPlanLimitResponse(): JsonResponse
+    {
+        return $this->json([
+            'error' => 'Bank statements are not available on your plan.',
+            'code' => 'PLAN_LIMIT',
+        ], Response::HTTP_PAYMENT_REQUIRED);
+    }
+
+    private function belongsToCompany(?Company $owner, Company $company): bool
+    {
+        return $owner?->getId()?->equals($company->getId()) === true;
     }
 }

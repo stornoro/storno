@@ -21,6 +21,13 @@ class TurnstileVerifier
         }
 
         if (!$this->turnstileSecretKey) {
+            // Fail closed in production: a missing secret must not disable the captcha.
+            if ($this->env === 'prod') {
+                $this->logger->error('Turnstile secret key is not configured; rejecting captcha verification.');
+
+                return false;
+            }
+
             return true;
         }
 

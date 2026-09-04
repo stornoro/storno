@@ -4,7 +4,7 @@ services:
     image: ghcr.io/stornoro/backend:latest
     restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-8900}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8900}:80"
     environment:
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
@@ -74,7 +74,7 @@ services:
     image: ghcr.io/stornoro/frontend:latest
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8901}:3000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8901}:3000"
     environment:
       NUXT_API_BASE: http://backend
       NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-https://api.storno.ro}
@@ -137,12 +137,12 @@ services:
     image: centrifugo/centrifugo:v5
     restart: unless-stopped
     ports:
-      - "${CENTRIFUGO_PORT:-8445}:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${CENTRIFUGO_PORT:-8445}:8000"
     environment:
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
       CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET}
-      CENTRIFUGO_ADMIN: "true"
-      CENTRIFUGO_ADMIN_PASSWORD: ${CENTRIFUGO_ADMIN_PASSWORD:-admin}
+      CENTRIFUGO_ADMIN: ${CENTRIFUGO_ADMIN:-false}
+      CENTRIFUGO_ADMIN_PASSWORD: ${CENTRIFUGO_ADMIN_PASSWORD:-}
       CENTRIFUGO_ADMIN_SECRET: ${CENTRIFUGO_API_KEY}
       CENTRIFUGO_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGINS:-https://app.storno.ro}
     command: centrifugo --health --config /centrifugo/config.json

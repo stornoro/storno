@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\Organization;
 use App\Entity\OrganizationInvitation;
 use App\Enum\MessageKey;
 use App\Entity\OrganizationMembership;
@@ -21,12 +22,16 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
 #[Route('/api/v1/invitations')]
 class InvitationController extends AbstractController
 {
+    /** Maximum number of open (pending, non-expired) invitations an organization may hold. */
+    private const MAX_PENDING_INVITATIONS = 10;
+
     public function __construct(
         private readonly OrganizationInvitationRepository $invitationRepository,
         private readonly OrganizationMembershipRepository $membershipRepository,
@@ -36,6 +41,7 @@ class InvitationController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly LicenseManager $licenseManager,
         private readonly MessageBusInterface $messageBus,
+        private readonly RateLimiterFactory $invitationSendLimiter,
     ) {}
 
     #[Route('', methods: ['POST'])]
@@ -102,6 +108,18 @@ class InvitationController extends AbstractController
                 'error' => 'Exista deja o invitatie in asteptare pentru acest email.',
                 'code' => 'ALREADY_INVITED',
             ], Response::HTTP_CONFLICT);
+        }
+
+        // Cap open invitations per organization
+        if (count($this->invitationRepository->findPendingByOrganization($org)) >= self::MAX_PENDING_INVITATIONS) {
+            return $this->json([
+                'error' => 'Prea multe invitatii in asteptare. Anulati sau asteptati expirarea celor existente.',
+                'code' => 'INVITATION_LIMIT',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($rateLimited = $this->checkSendRateLimit($org)) {
+            return $rateLimited;
         }
 
         // Validate allowed companies (for accountant/employee roles)
@@ -196,6 +214,10 @@ class InvitationController extends AbstractController
 
         if (!$invitation->isPending()) {
             return $this->json(['error' => 'Invitatia nu mai este valida.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($rateLimited = $this->checkSendRateLimit($org)) {
+            return $rateLimited;
         }
 
         $invitation->resetExpiry();
@@ -299,6 +321,23 @@ class InvitationController extends AbstractController
             'organizationId' => (string) $org->getId(),
             'organizationName' => $org->getName(),
         ]);
+    }
+
+    /**
+     * Invitation emails are sent on behalf of the organization: throttle per org
+     * so a single account cannot turn the feature into a mail cannon.
+     */
+    private function checkSendRateLimit(Organization $org): ?JsonResponse
+    {
+        $limiter = $this->invitationSendLimiter->create('org_' . $org->getId());
+        if ($limiter->consume()->isAccepted()) {
+            return null;
+        }
+
+        return $this->json([
+            'error' => 'Prea multe invitatii trimise. Incercati din nou mai tarziu.',
+            'code' => 'INVITATION_RATE_LIMIT',
+        ], Response::HTTP_TOO_MANY_REQUESTS);
     }
 
     private function serializeInvitation(OrganizationInvitation $invitation): array

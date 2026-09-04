@@ -26,8 +26,11 @@ class PasswordResetController extends AbstractController
     ) {}
 
     #[Route('/api/auth/forgot-password', name: 'api_auth_forgot_password', methods: ['POST'])]
-    public function forgotPassword(Request $request, RateLimiterFactory $passwordResetLimiter): JsonResponse
-    {
+    public function forgotPassword(
+        Request $request,
+        RateLimiterFactory $passwordResetLimiter,
+        RateLimiterFactory $passwordResetEmailLimiter,
+    ): JsonResponse {
         $limiter = $passwordResetLimiter->create($request->getClientIp());
         if (!$limiter->consume()->isAccepted()) {
             return $this->json(['error' => 'Too many requests.'], Response::HTTP_TOO_MANY_REQUESTS);
@@ -41,18 +44,34 @@ class PasswordResetController extends AbstractController
             return $this->json(['error' => 'Captcha verification failed.'], Response::HTTP_FORBIDDEN);
         }
 
-        $email = $data['email'] ?? null;
+        $email = is_string($data['email'] ?? null) ? trim($data['email']) : '';
 
-        if (!$email) {
+        if ($email === '') {
             return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Always return success to prevent email enumeration
+        $response = $this->json(['message' => 'If an account exists with this email, a reset link has been sent.']);
+
+        // Per-address throttle: same generic response, just skip sending
+        $emailLimiter = $passwordResetEmailLimiter->create(hash('sha256', mb_strtolower($email)));
+        if (!$emailLimiter->consume()->isAccepted()) {
+            return $response;
         }
 
         $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        // Always return success to prevent email enumeration
         if (!$user) {
-            return $this->json(['message' => 'If an account exists with this email, a reset link has been sent.']);
+            return $response;
         }
+
+        // Only one live reset token per user
+        $this->entityManager->createQueryBuilder()
+            ->delete(ResetPassword::class, 'r')
+            ->where('r.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->execute();
 
         $token = bin2hex(random_bytes(32));
         $resetPassword = new ResetPassword();
@@ -66,7 +85,7 @@ class PasswordResetController extends AbstractController
 
         $this->messageBus->dispatch(new SendPasswordResetMessage($user->getEmail(), $token, $user->getLocale()));
 
-        return $this->json(['message' => 'If an account exists with this email, a reset link has been sent.']);
+        return $response;
     }
 
     #[Route('/api/auth/reset-password', name: 'api_auth_reset_password', methods: ['POST'])]

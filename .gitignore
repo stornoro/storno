@@ -49,3 +49,6 @@ agent/node_modules/
 # Local-only Docker Compose overrides (per-developer machine setup)
 docker-compose.local.yml
 *.local.yml
+
+# Cloudflare wrangler local state (contains account ids)
+.wrangler/

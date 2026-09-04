@@ -95,6 +95,16 @@ class StorageProviderRegistry
         return isset(self::PROVIDERS[$key]);
     }
 
+    /**
+     * True when the provider accepts a user-supplied endpoint URL. For every
+     * other provider the endpoint is derived from region / account id and any
+     * client-supplied value must be ignored.
+     */
+    public function supportsEndpoint(string $key): bool
+    {
+        return (bool) (self::PROVIDERS[$key]['supportsEndpoint'] ?? false);
+    }
+
     public function resolveEndpoint(string $provider, array $params): ?string
     {
         return match ($provider) {

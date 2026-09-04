@@ -14,6 +14,7 @@ use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,6 +27,12 @@ class AppleAuthController extends AbstractController
     private const APPLE_JWKS_URL = 'https://appleid.apple.com/auth/keys';
     private const APPLE_ISSUER = 'https://appleid.apple.com';
 
+    /** Fallback audience: the iOS app bundle identifier. */
+    private const DEFAULT_CLIENT_IDS = ['com.storno.app'];
+
+    /** @var string[] Accepted `aud` values (app bundle id and/or Services ID). */
+    private readonly array $appleClientIds;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly JWTTokenManagerInterface $jwtManager,
@@ -34,7 +41,12 @@ class AppleAuthController extends AbstractController
         private readonly SluggerInterface $slugger,
         private readonly LicenseValidationService $licenseValidationService,
         private readonly MfaService $mfaService,
-    ) {}
+        #[Autowire(env: 'APPLE_CLIENT_IDS')]
+        ?string $appleClientIds = null,
+    ) {
+        $ids = array_values(array_filter(array_map('trim', explode(',', (string) $appleClientIds))));
+        $this->appleClientIds = $ids ?: self::DEFAULT_CLIENT_IDS;
+    }
 
     #[Route('/api/auth/apple', name: 'api_auth_apple', methods: ['POST'])]
     public function __invoke(Request $request, RateLimiterFactory $oauthLoginLimiter): JsonResponse
@@ -48,6 +60,7 @@ class AppleAuthController extends AbstractController
         $identityToken = $data['identityToken'] ?? null;
         $fullName = $data['fullName'] ?? null;
         $providedEmail = $data['email'] ?? null;
+        $nonce = isset($data['nonce']) && is_string($data['nonce']) ? $data['nonce'] : null;
 
         if (!$identityToken) {
             return $this->json(['error' => 'Missing identityToken.'], Response::HTTP_BAD_REQUEST);
@@ -55,7 +68,7 @@ class AppleAuthController extends AbstractController
 
         // Verify the Apple identity token
         try {
-            $payload = $this->verifyAppleToken($identityToken);
+            $payload = $this->verifyAppleToken($identityToken, $nonce);
         } catch (\Exception) {
             return $this->json(['error' => 'Invalid Apple token.'], Response::HTTP_UNAUTHORIZED);
         }
@@ -187,7 +200,7 @@ class AppleAuthController extends AbstractController
     /**
      * Verify Apple identity token using Apple's public keys (JWKS).
      */
-    private function verifyAppleToken(string $identityToken): ?array
+    private function verifyAppleToken(string $identityToken, ?string $nonce = null): ?array
     {
         // Decode header to get kid
         $parts = explode('.', $identityToken);
@@ -254,7 +267,37 @@ class AppleAuthController extends AbstractController
             throw new \RuntimeException('Token expired.');
         }
 
+        $this->assertAudienceAndNonce($claims, $nonce);
+
         return $claims;
+    }
+
+    /**
+     * The token must have been issued for one of our client ids, and when the
+     * client supplied a nonce it must match the one bound into the token.
+     */
+    private function assertAudienceAndNonce(array $claims, ?string $nonce): void
+    {
+        $aud = $claims['aud'] ?? null;
+        $audiences = is_array($aud) ? $aud : [$aud];
+        $audienceMatches = false;
+        foreach ($audiences as $candidate) {
+            if (is_string($candidate) && in_array($candidate, $this->appleClientIds, true)) {
+                $audienceMatches = true;
+                break;
+            }
+        }
+        if (!$audienceMatches) {
+            throw new \RuntimeException('Invalid audience.');
+        }
+
+        if ($nonce !== null && $nonce !== '' && isset($claims['nonce'])) {
+            $claimNonce = (string) $claims['nonce'];
+            // Apple stores the nonce as sent to it; clients usually send SHA-256(rawNonce) to Apple.
+            if (!hash_equals($claimNonce, $nonce) && !hash_equals($claimNonce, hash('sha256', $nonce))) {
+                throw new \RuntimeException('Invalid nonce.');
+            }
+        }
     }
 
     /**

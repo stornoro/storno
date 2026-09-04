@@ -7,6 +7,8 @@ knp_snappy:
             print-media-type:  true
             no-outline:        true
             orientation:       Portrait
+            # Rendered HTML may contain user-controlled fragments; never run scripts.
+            disable-javascript: true
     image:
         enabled:    true
         binary:     '%env(WKHTMLTOIMAGE_PATH)%'

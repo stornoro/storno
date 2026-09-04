@@ -150,7 +150,7 @@ class SupplierController extends AbstractController
         foreach ($ids as $id) {
             try {
                 $supplier = $this->supplierRepository->find($id);
-                if (!$supplier) {
+                if (!$supplier || !$this->organizationContext->ownsCompany($supplier->getCompany())) {
                     $errors[] = ['id' => $id, 'error' => 'Supplier not found.'];
                     continue;
                 }
@@ -249,7 +249,7 @@ class SupplierController extends AbstractController
     public function show(string $uuid, Request $request): JsonResponse
     {
         $supplier = $this->supplierRepository->find($uuid);
-        if (!$supplier) {
+        if (!$supplier || !$this->organizationContext->ownsCompany($supplier->getCompany())) {
             return $this->json(['error' => 'Supplier not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -281,7 +281,7 @@ class SupplierController extends AbstractController
     public function update(string $uuid, Request $request): JsonResponse
     {
         $supplier = $this->supplierRepository->find($uuid);
-        if (!$supplier) {
+        if (!$supplier || !$this->organizationContext->ownsCompany($supplier->getCompany())) {
             return $this->json(['error' => 'Supplier not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -353,7 +353,7 @@ class SupplierController extends AbstractController
     public function delete(string $uuid): JsonResponse
     {
         $supplier = $this->supplierRepository->find($uuid);
-        if (!$supplier) {
+        if (!$supplier || !$this->organizationContext->ownsCompany($supplier->getCompany())) {
             return $this->json(['error' => 'Supplier not found.'], Response::HTTP_NOT_FOUND);
         }
 

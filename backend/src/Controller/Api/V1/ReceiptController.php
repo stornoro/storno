@@ -11,6 +11,7 @@ use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\ReceiptEmailService;
 use App\Service\DocumentPdfService;
+use App\Service\LicenseManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +30,7 @@ class ReceiptController extends AbstractController
         private readonly ReceiptEmailService $receiptEmailService,
         private readonly EmailLogRepository $emailLogRepository,
         private readonly EmailTemplateRepository $emailTemplateRepository,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/receipts', methods: ['GET'])]
@@ -56,7 +58,7 @@ class ReceiptController extends AbstractController
     public function show(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -125,7 +127,7 @@ class ReceiptController extends AbstractController
     public function update(string $uuid, Request $request): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -153,7 +155,7 @@ class ReceiptController extends AbstractController
     public function deleteReceipt(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -174,7 +176,7 @@ class ReceiptController extends AbstractController
     public function issue(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -200,7 +202,7 @@ class ReceiptController extends AbstractController
     public function cancel(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -221,7 +223,7 @@ class ReceiptController extends AbstractController
     public function restore(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -251,7 +253,7 @@ class ReceiptController extends AbstractController
         }
 
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$receipt->getCompany()?->getId()?->equals($company->getId())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -307,7 +309,7 @@ class ReceiptController extends AbstractController
     public function downloadPdf(string $uuid): Response
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -315,6 +317,13 @@ class ReceiptController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        $org = $receipt->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canGeneratePdf($org)) {
+            return $this->json([
+                'error' => 'PDF generation is not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
         try {
             $pdfContent = $this->documentPdfService->generateReceiptPdf($receipt);
         } catch (\Throwable $e) {
@@ -332,7 +341,7 @@ class ReceiptController extends AbstractController
     public function sendEmail(string $uuid, Request $request): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -356,6 +365,9 @@ class ReceiptController extends AbstractController
         $templateId = $data['templateId'] ?? null;
         if ($templateId) {
             $template = $this->emailTemplateRepository->find($templateId);
+            if (!$template || !$template->getCompany()?->getId()?->equals($receipt->getCompany()?->getId())) {
+                return $this->json(['error' => 'Email template not found.'], Response::HTTP_BAD_REQUEST);
+            }
         }
 
         try {
@@ -384,7 +396,7 @@ class ReceiptController extends AbstractController
     public function emailDefaults(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -419,7 +431,7 @@ class ReceiptController extends AbstractController
     public function emailHistory(string $uuid): JsonResponse
     {
         $receipt = $this->receiptManager->find($uuid);
-        if (!$receipt) {
+        if (!$receipt || !$this->organizationContext->ownsCompany($receipt->getCompany())) {
             return $this->json(['error' => 'Receipt not found.'], Response::HTTP_NOT_FOUND);
         }
 

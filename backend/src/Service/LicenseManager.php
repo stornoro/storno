@@ -22,8 +22,10 @@ class LicenseManager
     public const PLAN_BUSINESS = 'business';
 
     /**
-     * Internal state for expired trials / canceled subscriptions.
-     * Not a selectable plan — uses 'free' DB value for backward compatibility.
+     * Locked-down feature set. Not a selectable plan and never returned by
+     * getEffectivePlan() on SaaS (expired trials resolve to Freemium); it is the
+     * 'free' DB value LicenseValidationService stamps on unlicensed organizations
+     * of a self-hosted instance, and the fallback row for unknown plan names.
      */
     public const PLAN_EXPIRED = 'free';
 
@@ -160,8 +162,25 @@ class LicenseManager
     private const TRIAL_DAYS = 14;
 
     /**
+     * Stripe subscription statuses that grant the paid plan outright.
+     */
+    private const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
+
+    /**
+     * How long a past_due subscription keeps its paid features while dunning runs.
+     */
+    private const PAST_DUE_GRACE_DAYS = 14;
+
+    /**
      * Resolve the effective plan for an organization.
-     * Active subscriptions and trials return a real plan; otherwise expired.
+     *
+     * Paid plans are granted only by an active/trialing Stripe subscription, a
+     * past_due subscription still inside the dunning grace period, or a plan set
+     * without any Stripe subscription (admin / self-hosted license sync). Every
+     * other subscription state (unpaid, paused, incomplete, canceled, ...) falls
+     * back to the trial (Starter) while it lasts, then to Freemium — Freemium is
+     * the advertised no-time-limit tier, so an expired trial never resolves to
+     * PLAN_EXPIRED here.
      */
     public function getEffectivePlan(Organization $org): string
     {
@@ -190,23 +209,7 @@ class LicenseManager
             $plan = self::PLAN_PROFESSIONAL;
         }
 
-        // Active Stripe subscription → use the org plan directly
-        if ($org->hasActiveSubscription()) {
-            if (\in_array($plan, self::ALL_PLANS, true)) {
-                return $plan;
-            }
-        }
-
-        // Past-due subscription: keep features active briefly (grace period)
-        if ($org->getSubscriptionStatus() === 'past_due') {
-            if (\in_array($plan, self::ALL_PLANS, true)) {
-                return $plan;
-            }
-        }
-
-        // Manually set plan (e.g. by admin) — only if subscription is not canceled
-        if (\in_array($plan, self::ALL_PLANS, true)
-            && !\in_array($org->getSubscriptionStatus(), ['canceled', 'incomplete_expired'], true)) {
+        if (\in_array($plan, self::ALL_PLANS, true) && $this->isPaidPlanGranted($org)) {
             return $plan;
         }
 
@@ -216,6 +219,60 @@ class LicenseManager
         }
 
         return self::PLAN_FREEMIUM;
+    }
+
+    /**
+     * Whitelist of subscription states that keep the stored paid plan.
+     *
+     * - active / trialing: paid subscription in good standing
+     * - past_due: only while inside the dunning grace window
+     * - no Stripe subscription at all (status and id both null): plan was set
+     *   manually (admin panel, app:plan:upgrade, self-hosted license sync)
+     *
+     * Anything else — unpaid, paused, incomplete, canceled, incomplete_expired,
+     * or a subscription id with no status — does not grant the paid plan.
+     */
+    private function isPaidPlanGranted(Organization $org): bool
+    {
+        $status = $org->getSubscriptionStatus();
+
+        if (\in_array($status, self::ACTIVE_SUBSCRIPTION_STATUSES, true)) {
+            return true;
+        }
+
+        if ($status === 'past_due') {
+            return $this->isWithinPastDueGrace($org);
+        }
+
+        return $status === null && $org->getStripeSubscriptionId() === null;
+    }
+
+    /**
+     * A past_due subscription keeps its features for PAST_DUE_GRACE_DAYS after
+     * the payment failure. The failure timestamp recorded by the Stripe webhook
+     * (settings.dunning_failed_at) is the anchor; the org's updatedAt (bumped
+     * when the status flipped) is the fallback when the webhook did not run.
+     */
+    private function isWithinPastDueGrace(Organization $org, ?\DateTimeImmutable $now = null): bool
+    {
+        $now ??= new \DateTimeImmutable();
+
+        $anchor = null;
+        $failedAt = $org->getSettings()['dunning_failed_at'] ?? null;
+        if (\is_string($failedAt) && $failedAt !== '') {
+            try {
+                $anchor = new \DateTimeImmutable($failedAt);
+            } catch (\Exception) {
+                $anchor = null;
+            }
+        }
+
+        $anchor ??= $org->getUpdatedAt();
+        if ($anchor === null) {
+            return false;
+        }
+
+        return $now <= $anchor->modify(sprintf('+%d days', self::PAST_DUE_GRACE_DAYS));
     }
 
     /**

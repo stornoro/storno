@@ -312,6 +312,10 @@ class ImportController extends AbstractController
             return $job;
         }
 
+        if ($planLimit = $this->importPlanLimit($job)) {
+            return $planLimit;
+        }
+
         $data = json_decode($request->getContent(), true) ?? [];
 
         if (!isset($data['columnMapping']) || !is_array($data['columnMapping'])) {
@@ -349,6 +353,10 @@ class ImportController extends AbstractController
         $job = $this->resolveJob($id, $request);
         if ($job instanceof JsonResponse) {
             return $job;
+        }
+
+        if ($planLimit = $this->importPlanLimit($job)) {
+            return $planLimit;
         }
 
         if (empty($job->getColumnMapping())) {
@@ -441,6 +449,10 @@ class ImportController extends AbstractController
         $job = $this->resolveJob($id, $request);
         if ($job instanceof JsonResponse) {
             return $job;
+        }
+
+        if ($planLimit = $this->importPlanLimit($job)) {
+            return $planLimit;
         }
 
         if (!in_array($job->getStatus(), ['completed', 'cancelled'], true)) {
@@ -621,5 +633,22 @@ class ImportController extends AbstractController
         }
 
         return $job;
+    }
+
+    /**
+     * Same plan gate as upload(): a job created before a downgrade must not be
+     * advanced, executed or reverted on a plan without import/export.
+     */
+    private function importPlanLimit(ImportJob $job): ?JsonResponse
+    {
+        $org = $job->getCompany()?->getOrganization();
+        if ($org !== null && $this->licenseManager->canImportExport($org)) {
+            return null;
+        }
+
+        return $this->json([
+            'error' => 'Import is not available on your plan.',
+            'code' => 'PLAN_LIMIT',
+        ], Response::HTTP_PAYMENT_REQUIRED);
     }
 }

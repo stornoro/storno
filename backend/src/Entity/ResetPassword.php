@@ -98,8 +98,16 @@ class ResetPassword
     #[ORM\PrePersist]
     public function prePersistValues()
     {
-        $this->setToken(sha1(random_bytes(rand(8, 10))));
-        $this->setRequestedAt(new DateTimeImmutable());
-        $this->setExpiresAt($this->getRequestedAt()->add(new DateInterval('PT2H')));
+        // Only fill in defaults; never overwrite a token that was set explicitly
+        // (the email link must carry the very token that is stored).
+        if ($this->token === null) {
+            $this->setToken(bin2hex(random_bytes(32)));
+        }
+        if ($this->requestedAt === null) {
+            $this->setRequestedAt(new DateTimeImmutable());
+        }
+        if ($this->expiresAt === null) {
+            $this->setExpiresAt($this->getRequestedAt()->add(new DateInterval('PT2H')));
+        }
     }
 }

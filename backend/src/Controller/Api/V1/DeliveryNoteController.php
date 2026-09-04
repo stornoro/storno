@@ -15,6 +15,7 @@ use App\Service\Anaf\ETransportValidator;
 use App\Service\Anaf\ETransportXmlGenerator;
 use App\Service\DeliveryNoteEmailService;
 use App\Service\DocumentPdfService;
+use App\Service\LicenseManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,6 +37,7 @@ class DeliveryNoteController extends AbstractController
         private readonly EmailTemplateRepository $emailTemplateRepository,
         private readonly ETransportValidator $eTransportValidator,
         private readonly ETransportXmlGenerator $eTransportXmlGenerator,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/delivery-notes', methods: ['GET'])]
@@ -85,7 +87,7 @@ class DeliveryNoteController extends AbstractController
         }
 
         $proforma = $this->proformaInvoiceRepository->findWithDetails($data['proformaId']);
-        if (!$proforma) {
+        if (!$proforma || !$proforma->getCompany()?->getId()?->equals($company->getId())) {
             return $this->json(['error' => 'Proforma invoice not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -124,7 +126,7 @@ class DeliveryNoteController extends AbstractController
         $deliveryNotes = [];
         foreach ($data['ids'] as $id) {
             $dn = $this->deliveryNoteManager->find($id);
-            if (!$dn) {
+            if (!$dn || !$dn->getCompany()?->getId()?->equals($company->getId())) {
                 return $this->json(['error' => sprintf('Delivery note %s not found.', $id)], Response::HTTP_NOT_FOUND);
             }
             $deliveryNotes[] = $dn;
@@ -143,7 +145,7 @@ class DeliveryNoteController extends AbstractController
     public function show(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -208,7 +210,7 @@ class DeliveryNoteController extends AbstractController
     public function update(string $uuid, Request $request): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -241,7 +243,7 @@ class DeliveryNoteController extends AbstractController
     public function deleteDeliveryNote(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -267,7 +269,7 @@ class DeliveryNoteController extends AbstractController
     public function issue(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -293,7 +295,7 @@ class DeliveryNoteController extends AbstractController
     public function cancel(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -314,7 +316,7 @@ class DeliveryNoteController extends AbstractController
     public function restore(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -344,7 +346,7 @@ class DeliveryNoteController extends AbstractController
         }
 
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$deliveryNote->getCompany()?->getId()?->equals($company->getId())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -366,7 +368,7 @@ class DeliveryNoteController extends AbstractController
     public function validateETransport(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -415,7 +417,7 @@ class DeliveryNoteController extends AbstractController
     public function submitETransport(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -450,7 +452,7 @@ class DeliveryNoteController extends AbstractController
         }
 
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -472,7 +474,7 @@ class DeliveryNoteController extends AbstractController
     public function downloadPdf(string $uuid, Request $request): Response
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -480,6 +482,13 @@ class DeliveryNoteController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        $org = $deliveryNote->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canGeneratePdf($org)) {
+            return $this->json([
+                'error' => 'PDF generation is not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
         $hideVat = $request->query->getBoolean('hideVat', false);
         $hidePrices = $request->query->getBoolean('hidePrices', false);
 
@@ -500,7 +509,7 @@ class DeliveryNoteController extends AbstractController
     public function sendEmail(string $uuid, Request $request): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -524,6 +533,9 @@ class DeliveryNoteController extends AbstractController
         $templateId = $data['templateId'] ?? null;
         if ($templateId) {
             $template = $this->emailTemplateRepository->find($templateId);
+            if (!$template || !$template->getCompany()?->getId()?->equals($deliveryNote->getCompany()?->getId())) {
+                return $this->json(['error' => 'Email template not found.'], Response::HTTP_BAD_REQUEST);
+            }
         }
 
         try {
@@ -552,7 +564,7 @@ class DeliveryNoteController extends AbstractController
     public function emailDefaults(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -587,7 +599,7 @@ class DeliveryNoteController extends AbstractController
     public function emailHistory(string $uuid): JsonResponse
     {
         $deliveryNote = $this->deliveryNoteManager->find($uuid);
-        if (!$deliveryNote) {
+        if (!$deliveryNote || !$this->organizationContext->ownsCompany($deliveryNote->getCompany())) {
             return $this->json(['error' => 'Delivery note not found.'], Response::HTTP_NOT_FOUND);
         }
 

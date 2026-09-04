@@ -58,9 +58,10 @@ class ReceiptManager
         // Resolve client (optional for B2C)
         if (!empty($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $receipt->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($company->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $receipt->setClient($client);
         }
 
         // Scalar fields
@@ -195,9 +196,10 @@ class ReceiptManager
         // Update client
         if (isset($data['clientId'])) {
             $client = $this->clientRepository->find(Uuid::fromString($data['clientId']));
-            if ($client) {
-                $receipt->setClient($client);
+            if (!$client || !$client->getCompany()?->getId()?->equals($receipt->getCompany()?->getId())) {
+                throw new \DomainException('Client not found.');
             }
+            $receipt->setClient($client);
         }
 
         // Replace lines

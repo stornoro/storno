@@ -273,6 +273,15 @@ class BorderouImportService
             default => 'bank_transfer',
         };
 
+        // Defense in depth: a matched document must belong to the transaction's company
+        $txCompanyId = $tx->getCompany()->getId();
+        if ($invoice && !$invoice->getCompany()?->getId()?->equals($txCompanyId)) {
+            throw new \DomainException('Matched invoice does not belong to the transaction company.');
+        }
+        if ($proforma && !$proforma->getCompany()?->getId()?->equals($txCompanyId)) {
+            throw new \DomainException('Matched proforma does not belong to the transaction company.');
+        }
+
         if ($invoice) {
             $balance = $invoice->getBalance();
 

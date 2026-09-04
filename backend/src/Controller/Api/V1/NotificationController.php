@@ -95,23 +95,26 @@ class NotificationController extends AbstractController
      */
     private function refreshIosBadge(User $user): void
     {
-        $devices = $this->userDeviceRepository->findBy(['user' => $user, 'platform' => 'ios']);
-        if (empty($devices)) {
+        // At most one badge push per user per call: target the most recently
+        // used iOS device so a read/mark-all cannot fan out into N pushes.
+        $device = $this->userDeviceRepository->findOneBy(
+            ['user' => $user, 'platform' => 'ios'],
+            ['lastUsedAt' => 'DESC', 'createdAt' => 'DESC'],
+        );
+        if (!$device) {
             return;
         }
 
         $unread = $this->notificationRepository->countUnread($user);
 
-        foreach ($devices as $device) {
-            $this->bus->dispatch(new SendPushNotificationMessage(
-                deviceToken: $device->getToken(),
-                title: '',
-                body: '',
-                data: ['type' => 'badge_update'],
-                badge: $unread,
-                silent: true,
-            ));
-        }
+        $this->bus->dispatch(new SendPushNotificationMessage(
+            deviceToken: $device->getToken(),
+            title: '',
+            body: '',
+            data: ['type' => 'badge_update'],
+            badge: $unread,
+            silent: true,
+        ));
     }
 
     private function serialize(Notification $n): array

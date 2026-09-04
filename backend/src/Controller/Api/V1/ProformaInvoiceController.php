@@ -8,6 +8,7 @@ use App\Constants\Pagination;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\DocumentPdfService;
+use App\Service\LicenseManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,6 +24,7 @@ class ProformaInvoiceController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly DocumentPdfService $documentPdfService,
         private readonly LoggerInterface $logger,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('/proforma-invoices', methods: ['GET'])]
@@ -65,7 +67,7 @@ class ProformaInvoiceController extends AbstractController
 
         foreach ($ids as $id) {
             $proforma = $this->proformaInvoiceManager->find($id);
-            if (!$proforma) {
+            if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
                 $errors[] = ['id' => $id, 'error' => 'Proforma not found.'];
                 continue;
             }
@@ -84,7 +86,7 @@ class ProformaInvoiceController extends AbstractController
     public function show(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -144,7 +146,7 @@ class ProformaInvoiceController extends AbstractController
     public function update(string $uuid, Request $request): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -172,7 +174,7 @@ class ProformaInvoiceController extends AbstractController
     public function deleteProforma(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -193,7 +195,7 @@ class ProformaInvoiceController extends AbstractController
     public function send(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -214,7 +216,7 @@ class ProformaInvoiceController extends AbstractController
     public function accept(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -235,7 +237,7 @@ class ProformaInvoiceController extends AbstractController
     public function reject(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -256,7 +258,7 @@ class ProformaInvoiceController extends AbstractController
     public function cancel(string $uuid): JsonResponse
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -286,7 +288,7 @@ class ProformaInvoiceController extends AbstractController
         }
 
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$proforma->getCompany()?->getId()?->equals($company->getId())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -308,7 +310,7 @@ class ProformaInvoiceController extends AbstractController
     public function downloadPdf(string $uuid): Response
     {
         $proforma = $this->proformaInvoiceManager->find($uuid);
-        if (!$proforma) {
+        if (!$proforma || !$this->organizationContext->ownsCompany($proforma->getCompany())) {
             return $this->json(['error' => 'Proforma not found.'], Response::HTTP_NOT_FOUND);
         }
 
@@ -316,6 +318,13 @@ class ProformaInvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
+        $org = $proforma->getCompany()?->getOrganization();
+        if ($org && !$this->licenseManager->canGeneratePdf($org)) {
+            return $this->json([
+                'error' => 'PDF generation is not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
         try {
             $pdfContent = $this->documentPdfService->generateProformaPdf($proforma);
         } catch (\Throwable $e) {

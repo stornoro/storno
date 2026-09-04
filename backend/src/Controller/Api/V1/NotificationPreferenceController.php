@@ -3,6 +3,8 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\User;
+use App\Security\OrganizationContext;
+use App\Service\LicenseManager;
 use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -35,6 +37,8 @@ class NotificationPreferenceController extends AbstractController
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly EntityManagerInterface $entityManager,
+        private readonly OrganizationContext $organizationContext,
+        private readonly LicenseManager $licenseManager,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -71,6 +75,15 @@ class NotificationPreferenceController extends AbstractController
 
         if (!is_array($preferences)) {
             return $this->json(['error' => 'Invalid payload.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        // SMS / WhatsApp cost money per message: only allow enabling them when
+        // the user has a phone number on file and the organization is on a paid plan.
+        if ($this->requestsPhoneChannel($preferences) && !$this->canUsePhoneChannels($user)) {
+            return $this->json([
+                'error' => 'SMS and WhatsApp notifications require a phone number on your profile and a paid plan.',
+                'code' => 'PHONE_CHANNEL_UNAVAILABLE',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         foreach ($preferences as $item) {
@@ -119,5 +132,35 @@ class NotificationPreferenceController extends AbstractController
         }
 
         return $this->json(['data' => $data]);
+    }
+
+    private function requestsPhoneChannel(array $preferences): bool
+    {
+        foreach ($preferences as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if (!empty($item['smsEnabled']) || !empty($item['whatsappEnabled'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function canUsePhoneChannels(User $user): bool
+    {
+        if (trim((string) $user->getPhone()) === '') {
+            return false;
+        }
+
+        $org = $this->organizationContext->getOrganization();
+        if (!$org) {
+            return false;
+        }
+
+        $plan = $this->licenseManager->getEffectivePlan($org);
+
+        return !in_array($plan, [LicenseManager::PLAN_FREEMIUM, LicenseManager::PLAN_EXPIRED], true);
     }
 }
