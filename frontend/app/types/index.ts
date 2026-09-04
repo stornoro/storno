@@ -682,6 +682,7 @@ export interface SpvDocument {
   cif: string | null
   details: string | null
   idSolicitare?: string | null
+  summary: string | null
   anafCreatedAt: string | null
   fileName: string | null
   fileSize: number | null
@@ -702,6 +703,33 @@ export interface SpvDocumentStats {
   bySeverity: Record<string, number>
   categories: Array<{ value: SpvDocumentCategory; label: string }>
   severities: SpvDocumentSeverity[]
+  lastSyncedAt: string | null
+}
+
+export type SpvRequestStatus = 'pending' | 'requested' | 'answered' | 'error'
+
+export interface SpvRequest {
+  id: string
+  requestType: string
+  params: Record<string, string>
+  anafRequestId: string | null
+  title: string | null
+  status: SpvRequestStatus
+  errorMessage: string | null
+  createdAt: string
+  answeredAt: string | null
+  answerDocumentId: string | null
+  requestedByName: string | null
+}
+
+export interface SpvRequestType {
+  type: string
+  group: 'rapoarte' | 'documente' | 'declaratii' | 'decizii'
+  label: string
+  params: string[]
+  optional: string[]
+  since: number | null
+  note: string | null
 }
 
 // ── VAT Report ──────────────────────────────────────────────────────

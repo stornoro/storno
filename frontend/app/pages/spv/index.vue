@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SpvDocument } from '~/types'
+import type { SpvDocument, SpvRequest, SpvRequestType } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -8,12 +8,12 @@ const store = useSpvDocumentStore()
 const companyStore = useCompanyStore()
 const toast = useToast()
 const route = useRoute()
-const { syncSpvViaAgent, getPreferredCertId, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
+const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
 
 useHead({ title: $t('spv.title') })
 
 onMounted(async () => {
-  await Promise.all([store.fetchDocuments(), store.fetchStats()])
+  await Promise.all([store.fetchDocuments(), store.fetchStats(), store.fetchRequests()])
   const focus = route.query.document as string | undefined
   if (focus) {
     const doc = await store.fetchDocument(focus)
@@ -35,6 +35,7 @@ watch(() => companyStore.currentCompanyId, () => {
   store.$reset()
   store.fetchDocuments()
   store.fetchStats()
+  store.fetchRequests()
 })
 
 // ── Sync through the local agent ───────────────────────────────────
@@ -113,6 +114,84 @@ async function handleMarkAllRead() {
   }
 }
 
+// ── Requests to ANAF (solicitari) ──────────────────────────────────
+const requestOpen = ref(false)
+const requestSending = ref(false)
+const requestType = ref<string | null>(null)
+const requestParams = ref<Record<string, string>>({})
+
+const groupLabels: Record<string, string> = { rapoarte: 'spv.requests.groups.rapoarte', documente: 'spv.requests.groups.documente', declaratii: 'spv.requests.groups.declaratii', decizii: 'spv.requests.groups.decizii' }
+const requestTypeItems = computed(() => {
+  const groups: Array<Array<{ label: string, value: string }>> = []
+  for (const g of ['rapoarte', 'documente', 'declaratii', 'decizii']) {
+    const items = store.requestTypes.filter(t => t.group === g).map(t => ({ label: t.label !== t.type ? `${t.label}` : t.type, value: t.type, group: g }))
+    if (items.length) groups.push(items)
+  }
+  return groups
+})
+const selectedRequestType = computed<SpvRequestType | undefined>(() => store.requestTypes.find(t => t.type === requestType.value))
+const requestFields = computed(() => {
+  const t = selectedRequestType.value
+  if (!t) return [] as Array<{ name: string, required: boolean }>
+  return [...t.params.map(n => ({ name: n, required: true })), ...t.optional.map(n => ({ name: n, required: false }))]
+})
+const monthItems = Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1), value: String(i + 1) }))
+const reasonItems = computed(() => store.incomeCertificateReasons.map(r => ({ label: r, value: r })))
+const requestReady = computed(() => !!selectedRequestType.value && selectedRequestType.value.params.every(n => (requestParams.value[n] ?? '') !== ''))
+
+async function openRequest() {
+  try { await store.fetchRequestTypes() } catch (e: any) { toast.add({ title: e?.message ?? $t('common.error'), color: 'error' }); return }
+  requestType.value = null
+  requestParams.value = { an: String(new Date().getFullYear()) }
+  requestOpen.value = true
+}
+
+async function sendRequest() {
+  if (!requestType.value) return
+  if (!savedCertId.value) { setupState.value = 'no-cert'; setupOpen.value = true; return }
+  await checkAgent()
+  if (!agentAvailable.value) {
+    await tryAutoStart()
+    await checkAgent()
+    if (!agentAvailable.value) { setupState.value = 'no-agent'; setupOpen.value = true; return }
+  }
+  requestSending.value = true
+  try {
+    const params: Record<string, string> = {}
+    for (const f of requestFields.value) {
+      const v = (requestParams.value[f.name] ?? '').toString().trim()
+      if (v !== '') params[f.name] = v
+    }
+    const result: SpvRequest = await requestSpvViaAgent(savedCertId.value, requestType.value, params)
+    if (result.status === 'requested') {
+      toast.add({ title: $t('spv.requests.created'), description: $t('spv.requests.hintAnswer'), color: 'success' })
+      requestOpen.value = false
+    } else {
+      toast.add({ title: $t('spv.requests.failed'), description: result.errorMessage ?? undefined, color: 'error' })
+    }
+  } catch (e: any) {
+    toast.add({ title: $t('spv.requests.failed'), description: e?.data?.error ?? e?.message, color: 'error' })
+  } finally {
+    requestSending.value = false
+    await store.fetchRequests()
+  }
+}
+
+async function openAnswer(req: SpvRequest) {
+  if (!req.answerDocumentId) return
+  const doc = await store.fetchDocument(req.answerDocumentId)
+  if (doc) openDetail(doc)
+}
+
+async function removeRequest(req: SpvRequest) {
+  try { await store.deleteRequest(req.id) } catch (e: any) { toast.add({ title: e?.message ?? $t('common.error'), color: 'error' }) }
+}
+
+const requestStatusColor: Record<string, 'success' | 'warning' | 'error' | 'neutral' | 'primary'> = { pending: 'neutral', requested: 'primary', answered: 'success', error: 'error' }
+function describeParams(params: Record<string, string>): string {
+  return Object.entries(params).map(([k, v]) => `${$t(`spv.requests.params.${k}`)}: ${v}`).join(' · ')
+}
+
 // ── Presentation helpers ───────────────────────────────────────────
 const severityColor: Record<string, 'error' | 'warning' | 'primary' | 'neutral'> = {
   critical: 'error',
@@ -166,6 +245,9 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
           >
             {{ $t('spv.markAllRead') }}
           </UButton>
+          <UButton icon="i-lucide-send" color="neutral" variant="outline" @click="openRequest">
+            {{ $t('spv.requests.new') }}
+          </UButton>
           <UButton icon="i-lucide-refresh-cw" :loading="syncing" @click="handleSync">
             {{ syncing && syncProgress ? $t('spv.syncingPdfs', { done: syncProgress.done, total: syncProgress.total }) : $t('spv.syncNow') }}
           </UButton>
@@ -183,6 +265,12 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
           :title="$t('spv.criticalUnreadTitle', { count: criticalUnread })"
           :description="$t('spv.criticalUnreadHint')"
         />
+
+        <p class="text-xs text-muted flex items-center gap-1.5">
+          <UIcon name="i-lucide-clock" class="size-3.5" />
+          <span v-if="store.stats?.lastSyncedAt">{{ $t('spv.lastSynced', { date: formatDate(store.stats.lastSyncedAt) }) }}</span>
+          <span v-else>{{ $t('spv.neverSynced') }}</span>
+        </p>
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <UCard>
@@ -247,7 +335,8 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
                 <UBadge color="neutral" variant="outline" size="xs">{{ doc.categoryLabel }}</UBadge>
                 <UBadge v-if="!doc.read" color="primary" variant="soft" size="xs">{{ $t('spv.unread') }}</UBadge>
               </div>
-              <p class="text-sm text-muted mt-0.5 line-clamp-2">{{ doc.details || '—' }}</p>
+              <p v-if="doc.summary" class="text-sm mt-0.5 line-clamp-2">{{ doc.summary }}</p>
+              <p class="text-xs text-muted mt-0.5 line-clamp-1">{{ doc.details || '—' }}</p>
               <div class="text-xs text-dimmed mt-1 flex gap-3 flex-wrap">
                 <span>{{ formatDate(doc.anafCreatedAt) }}</span>
                 <span v-if="doc.hasPdf">{{ doc.fileName }} {{ formatSize(doc.fileSize) }}</span>
@@ -270,7 +359,68 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
         <div v-if="store.totalPages > 1" class="flex justify-center">
           <UPagination v-model:page="store.page" :total="store.total" :items-per-page="store.limit" />
         </div>
+
+        <!-- Requests to ANAF (solicitari) -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="font-semibold">{{ $t('spv.requests.title') }}</h3>
+                <p class="text-xs text-muted">{{ $t('spv.requests.description') }}</p>
+              </div>
+              <UButton icon="i-lucide-send" size="sm" variant="outline" color="neutral" @click="openRequest">{{ $t('spv.requests.new') }}</UButton>
+            </div>
+          </template>
+          <div v-if="store.requests.length === 0" class="text-sm text-muted py-2">{{ $t('spv.requests.empty') }}</div>
+          <div v-else class="divide-y divide-default -mx-4">
+            <div v-for="req in store.requests" :key="req.id" class="flex items-start gap-3 px-4 py-2.5">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-sm">{{ req.requestType }}</span>
+                  <UBadge :color="requestStatusColor[req.status] ?? 'neutral'" variant="subtle" size="xs">{{ $t(`spv.requests.status.${req.status}`) }}</UBadge>
+                </div>
+                <div class="text-xs text-muted mt-0.5">
+                  <span v-if="Object.keys(req.params).length">{{ describeParams(req.params) }} · </span>
+                  <span>{{ formatDate(req.createdAt) }}</span>
+                  <span v-if="req.anafRequestId"> · ANAF #{{ req.anafRequestId }}</span>
+                  <span v-if="req.requestedByName"> · {{ req.requestedByName }}</span>
+                </div>
+                <p v-if="req.errorMessage" class="text-xs text-error mt-0.5">{{ req.errorMessage }}</p>
+                <p v-else-if="req.status === 'requested'" class="text-xs text-dimmed mt-0.5">{{ $t('spv.requests.hintAnswer') }}</p>
+              </div>
+              <UButton v-if="req.answerDocumentId" icon="i-lucide-file-text" size="xs" variant="soft" @click="openAnswer(req)">{{ $t('spv.requests.viewAnswer') }}</UButton>
+              <UButton v-else-if="req.status === 'error' || req.status === 'pending'" icon="i-lucide-trash-2" size="xs" color="neutral" variant="ghost" :aria-label="$t('common.delete')" @click="removeRequest(req)" />
+            </div>
+          </div>
+        </UCard>
       </div>
+
+      <!-- New request modal -->
+      <UModal v-model:open="requestOpen" :title="$t('spv.requests.new')">
+        <template #body>
+          <div class="space-y-4">
+            <UFormField :label="$t('spv.requests.type')" required>
+              <USelectMenu v-model="requestType" :items="requestTypeItems" value-key="value" :placeholder="$t('spv.requests.typePlaceholder')" class="w-full" />
+            </UFormField>
+            <p v-if="selectedRequestType?.note" class="text-xs text-muted">{{ selectedRequestType.note }}</p>
+            <p v-if="selectedRequestType?.since" class="text-xs text-dimmed">{{ $t('spv.requests.since', { year: selectedRequestType.since }) }}</p>
+            <div v-if="requestFields.length" class="grid grid-cols-2 gap-3">
+              <UFormField v-for="f in requestFields" :key="f.name" :label="$t(`spv.requests.params.${f.name}`)" :required="f.required" :class="f.name === 'motiv' || f.name === 'numar_inregistrare' ? 'col-span-2' : ''">
+                <USelectMenu v-if="f.name === 'luna' || f.name === 'lunai' || f.name === 'lunas'" v-model="requestParams[f.name]" :items="monthItems" value-key="value" class="w-full" />
+                <USelectMenu v-else-if="f.name === 'motiv'" v-model="requestParams[f.name]" :items="reasonItems" value-key="value" class="w-full" searchable />
+                <UInput v-else v-model="requestParams[f.name]" :placeholder="f.name === 'numar_inregistrare' ? 'INTERNT-100000123-2026' : ''" class="w-full" />
+              </UFormField>
+            </div>
+            <p class="text-xs text-muted">{{ $t('spv.requests.agentHint') }}</p>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex gap-2 justify-end w-full">
+            <UButton color="neutral" variant="ghost" @click="requestOpen = false">{{ $t('common.cancel') }}</UButton>
+            <UButton icon="i-lucide-send" :loading="requestSending" :disabled="!requestReady" @click="sendRequest">{{ $t('spv.requests.submit') }}</UButton>
+          </div>
+        </template>
+      </UModal>
 
       <!-- Detail -->
       <USlideover v-model:open="detailOpen" :title="detail?.messageType ?? ''">
@@ -280,7 +430,11 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               <UBadge :color="severityColor[detail.severity] ?? 'neutral'" variant="subtle">{{ $t(`spv.severity.${detail.severity}`) }}</UBadge>
               <UBadge color="neutral" variant="outline">{{ detail.categoryLabel }}</UBadge>
             </div>
-            <p class="text-sm whitespace-pre-wrap">{{ detail.details || '—' }}</p>
+            <UAlert v-if="detail.summary" color="primary" variant="soft" icon="i-lucide-info" :title="$t('spv.summary')" :description="detail.summary ?? undefined" />
+            <div>
+              <div class="text-xs text-muted mb-1">{{ $t('spv.anafText') }}</div>
+              <p class="text-sm whitespace-pre-wrap">{{ detail.details || '—' }}</p>
+            </div>
             <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <dt class="text-muted">{{ $t('spv.detail.anafDate') }}</dt><dd>{{ formatDate(detail.anafCreatedAt) }}</dd>
               <dt class="text-muted">{{ $t('spv.detail.anafId') }}</dt><dd class="font-mono">{{ detail.anafMessageId }}</dd>
