@@ -43,6 +43,7 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // Weekly cleanup — Sunday
             ->add(RecurringMessage::cron('0 2 * * 0', new RunCommandMessage('app:user:clear-unconfirmed')))
             ->add(RecurringMessage::cron('0 3 * * 0', new RunCommandMessage('app:archive:cleanup')))
+            ->add(RecurringMessage::cron('30 3 * * 0', new RunCommandMessage('app:spv:cleanup')))
             // Daily notification table trim — 03:30 UTC, low-traffic window
             ->add(RecurringMessage::cron('30 3 * * *', new RunCommandMessage('app:notifications:cleanup')))
             // Monthly audit log purge — 1st of month

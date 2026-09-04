@@ -193,6 +193,10 @@ notifications:
     body: 'Va rugam sa va re-autorizati token-ul ANAF pentru a continua trimiterea facturilor electronice.'
     reauthorize: 'Re-autorizeaza token'
 
+  spv_document_received:
+    heading: 'Document nou in SPV'
+  spv_new_documents:
+    heading: 'Documente noi in SPV'
   efactura_new_documents:
     heading: 'Documente noi e-Factura'
 

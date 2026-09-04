@@ -207,6 +207,10 @@ notifications:
     reauthorize: 'Re-authorize token'
 
   # e-Factura new documents
+  spv_document_received:
+    heading: 'New document in SPV'
+  spv_new_documents:
+    heading: 'New documents in SPV'
   efactura_new_documents:
     heading: 'New e-Factura documents'
 

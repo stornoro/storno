@@ -62,6 +62,13 @@ notification:
       message: 'Ai emis o factura catre %counterparty% · %amount%'
     new_documents_multi:
       message: 'Ai %count% documente noi (%incoming% primite, %outgoing% emise)'
+  spv:
+    document_received:
+      title: '%company%: %type%'
+      message: '%details%'
+    new_documents:
+      title: '%company%'
+      message: 'Ai %count% documente noi in SPV (%summary%)'
   version_gate:
     blocking_title: 'Actualizare critica obligatorie'
     blocking_body: 'Versiunea ta (%current%) nu mai este suportata. Actualizeaza la %latest% pentru a continua sa folosesti Storno.ro.'

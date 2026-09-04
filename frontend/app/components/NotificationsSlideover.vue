@@ -91,6 +91,11 @@ function notificationLink(n: BackendNotification): string | null {
   const invoiceId = n.data?.invoiceId as string | undefined
   if (invoiceId && n.type.startsWith('invoice.')) return `/invoices/${invoiceId}`
   if (n.type === 'efactura.new_documents') return '/efactura'
+  if (n.type === 'spv.document_received') {
+    const documentId = n.data?.documentId as string | undefined
+    return documentId ? `/spv?document=${documentId}` : '/spv'
+  }
+  if (n.type === 'spv.new_documents') return '/spv'
   if (n.type === 'sync.error' || n.type === 'sync.completed') return '/efactura'
   if (n.type === 'token.expiring_soon' || n.type === 'token.refresh_failed') return '/efactura'
   if (n.type === 'payment.received' && invoiceId) return `/invoices/${invoiceId}`

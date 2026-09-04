@@ -668,6 +668,42 @@ export interface EFacturaMessage {
   createdAt: string
 }
 
+// ── SPV inbox (ANAF messages archive) ──────────────────────────────
+export type SpvDocumentCategory = 'somatie' | 'decizie' | 'notificare' | 'adresa' | 'analiza_risc' | 'recipisa' | 'declaratie' | 'certificat' | 'raspuns' | 'plata' | 'extras_cont' | 'ajutor_stat' | 'facturi_arhiva' | 'tezaur' | 'registru' | 'altele'
+export type SpvDocumentSeverity = 'critical' | 'high' | 'normal' | 'low'
+
+export interface SpvDocument {
+  id: string
+  anafMessageId: string
+  messageType: string
+  category: SpvDocumentCategory
+  categoryLabel: string
+  severity: SpvDocumentSeverity
+  cif: string | null
+  details: string | null
+  idSolicitare?: string | null
+  anafCreatedAt: string | null
+  fileName: string | null
+  fileSize: number | null
+  downloadedAt: string | null
+  downloadError?: string | null
+  readAt: string | null
+  read: boolean
+  hasPdf: boolean
+  purgedAt: string | null
+  createdAt: string
+}
+
+export interface SpvDocumentStats {
+  total: number
+  unread: number
+  pendingPdf: number
+  byCategory: Record<string, number>
+  bySeverity: Record<string, number>
+  categories: Array<{ value: SpvDocumentCategory; label: string }>
+  severities: SpvDocumentSeverity[]
+}
+
 // ── VAT Report ──────────────────────────────────────────────────────
 export interface VatBucket {
   taxableBase: string

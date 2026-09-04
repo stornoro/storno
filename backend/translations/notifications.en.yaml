@@ -62,6 +62,13 @@ notification:
       message: 'You sent an invoice to %counterparty% · %amount%'
     new_documents_multi:
       message: 'You have %count% new documents (%incoming% incoming, %outgoing% outgoing)'
+  spv:
+    document_received:
+      title: '%company%: %type%'
+      message: '%details%'
+    new_documents:
+      title: '%company%'
+      message: '%count% new documents in SPV (%summary%)'
   version_gate:
     blocking_title: 'Critical update required'
     blocking_body: 'Your app version (%current%) is no longer supported. Update to %latest% to keep using Storno.ro.'
