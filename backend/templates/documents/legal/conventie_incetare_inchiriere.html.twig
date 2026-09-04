@@ -1,0 +1,37 @@
+{% extends 'documents/legal/_layout.html.twig' %}
+{% block body %}
+<p>încheiată astăzi, <b>{{ data_conventie }}</b>, de comun acord între:</p>
+<div class="parties">
+<p>1. <b>{{ locator.nume }}</b>, domiciliat în {{ locator.adresa }}{% if locator.ci_serie or locator.ci_numar %}, posesor al C.I. seria {{ locator.ci_serie }} nr. {{ locator.ci_numar }}{% endif %}{% if locator.cnp %}, CNP {{ locator.cnp }}{% endif %}, în calitate de <b>LOCATOR</b>,</p>
+<p>și</p>
+<p>2. <b>{{ locatar.nume }}</b>, domiciliat în {{ locatar.adresa }}{% if locatar.ci_serie or locatar.ci_numar %}, posesor al C.I. seria {{ locatar.ci_serie }} nr. {{ locatar.ci_numar }}{% endif %}{% if locatar.cnp %}, CNP {{ locatar.cnp }}{% endif %}, în calitate de <b>LOCATAR</b>.</p>
+</div>
+<p>Părțile au convenit încheierea prezentei convenții în următoarele condiții:</p>
+
+<h2>Art. 1. Obiectul Convenției</h2>
+<p>Părțile constată și convin, de comun acord, încetarea efectelor Contractului de închiriere nr. <b>{{ contract.numar }}</b> din data de <b>{{ contract.data }}</b>, având ca obiect imobilul situat în {{ contract.adresa_imobil }}{% if contract.numar_inregistrare_anaf %}, înregistrat la ANAF sub nr. {{ contract.numar_inregistrare_anaf }}{% if contract.data_inregistrare_anaf %} din data de {{ contract.data_inregistrare_anaf }}{% endif %}{% endif %}.</p>
+
+<h2>Art. 2. Data încetării</h2>
+<p>Contractul de închiriere își încetează definitiv efectele la data de <b>{{ data_incetare }}</b>. La această dată, Locatarul va preda imobilul complet liber de bunurile sale personale și va restitui toate seturile de chei primite.</p>
+
+<h2>Art. 3. Situația financiară și utilitățile</h2>
+<p>(1) Locatarul a achitat integral chiria datorată până la data încetării stabilite la Art. 2.</p>
+<p>(2) Plata utilităților aferente perioadei de derulare a contractului revine în sarcina Locatarului. Pentru facturile emise ulterior plecării, plata se va efectua de către Locatar în termen de {{ termen_utilitati_zile|default(5) }} zile de la transmiterea copiei facturii de către Locator sau se va deconta din garanție, conform Art. 4.</p>
+
+<h2>Art. 4. Restituirea garanției</h2>
+{% if garantie.suma %}
+<p>Garanția în cuantum de <b>{{ garantie.suma }} {{ garantie.valuta|default('EUR') }}</b> va fi restituită Locatarului în termen de {{ garantie.termen_zile|default(15) }} zile de la data eliberării imobilului, după deducerea eventualelor costuri pentru utilități neachitate sau reparații ale degradărilor ce depășesc uzura normală a bunului, consemnate în Procesul-Verbal de predare-primire.</p>
+{% else %}
+<p>Părțile declară că nu există garanție de restituit sau că aceasta a fost deja restituită integral.</p>
+{% endif %}
+
+<h2>Art. 5. Declarație finală</h2>
+<p>Părțile declară că, odată cu îndeplinirea obligațiilor menționate în prezenta convenție și în Procesul-Verbal de predare-primire, nu mai au și nu vor mai avea nicio pretenție de orice natură una față de cealaltă decurgând din raportul contractual stins.</p>
+
+<p>Prezenta convenție a fost încheiată astăzi, {{ data_conventie }}, în 2 exemplare originale, câte unul pentru fiecare parte.</p>
+
+<table class="sig"><tr>
+<td><b>LOCATOR</b><br>{{ locator.nume }}<br><br><br>_______________________</td>
+<td><b>LOCATAR</b><br>{{ locatar.nume }}<br><br><br>_______________________</td>
+</tr></table>
+{% endblock %}
