@@ -1,0 +1,10 @@
+{% extends 'documents/legal/_layout.html.twig' %}
+{% block body %}
+<p>Subsemnatul <b>{{ locator.nume }}</b>{% if locator.cnp %}, CNP {{ locator.cnp }}{% endif %}, cu domiciliul în {{ locator.adresa }}, în calitate de <b>locator</b> (proprietar), cunoscând prevederile art. 326 din Codul penal privind falsul în declarații, declar pe propria răspundere următoarele:</p>
+<p>1. Contractul de închiriere <b>nr. {{ contract.numar }} din {{ contract.data }}</b>, încheiat cu <b>{{ locatar.nume }}</b>{% if locatar.cnp %}, CNP {{ locatar.cnp }}{% endif %}, având ca obiect imobilul situat în {{ contract.adresa_imobil }}{% if contract.chirie %}, cu o chirie lunară de {{ contract.chirie }} {{ contract.valuta|default('EUR') }}{% endif %}{% if contract.numar_inregistrare_anaf %}, înregistrat la ANAF prin cererea C168 nr. {{ contract.numar_inregistrare_anaf }}{% if contract.data_inregistrare_anaf %} din {{ contract.data_inregistrare_anaf }}{% endif %}{% endif %}, a fost încheiat pe perioada {{ contract.data_inceput }} – {{ contract.data_sfarsit }}.</p>
+<p>2. Contractul <b>a încetat {{ motiv|default('la termen') }}, la data de {{ data_incetare }}</b>{% if motiv_detalii %}, {{ motiv_detalii }}{% else %}, prin ajungerea la termenul convenit. Chiriașul nu a solicitat și nu a fost încheiată nicio prelungire sau act adițional, iar imobilul a fost eliberat și predat la data încetării{% endif %}.</p>
+<p>3. De la data de {{ data_incetare }} nu am mai încasat chirie în baza acestui contract.</p>
+<p>Prezenta declarație este dată pentru a fi anexată cererii C168 privind înregistrarea încetării contractului de locațiune la organul fiscal competent{% if organ_fiscal %} ({{ organ_fiscal }}){% endif %}.</p>
+<p style="margin-top:28px">Data: {{ data_declaratie }}</p>
+<p style="margin-top:24px">Semnătura,<br><br><br>{{ locator.nume }}</p>
+{% endblock %}
