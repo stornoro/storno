@@ -183,6 +183,14 @@ services:
     App\Service\Import\Persister\RecurringInvoicePersister:
         tags: ['app.import_persister']
 
+    # Declaration forms an AI can build through the public API (C168 today)
+    App\Service\Declaration\Forms\C168Form:
+        tags: ['app.declaration_form']
+
+    App\Service\Declaration\Forms\DeclarationFormRegistry:
+        arguments:
+            $forms: !tagged_iterator app.declaration_form
+
     # Wire the orchestrator — inject tagged collections for each interface group
     App\Service\Import\ImportOrchestrator:
         arguments:

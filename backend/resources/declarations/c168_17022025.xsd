@@ -1,0 +1,964 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:c168:declaratie:v3" targetNamespace="mfp:anaf:dgti:c168:declaratie:v3" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.02" xml:lang="ro">
+	<xs:element name="c168" type="C168Type"/>
+	<xs:complexType name="C168Type">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="contract" type="ContractType" maxOccurs="100"/>
+				</xs:sequence>
+				<xs:attribute name="an" type="IntInt2023_2100SType" use="required"/>
+				<xs:attribute name="luna" type="IntInt12_12SType" use="required"/>
+				<xs:attribute name="nume_decl" type="Str75" use="required"/>
+				<xs:attribute name="pren_decl" type="Str75" use="required"/>
+				<xs:attribute name="func_decl" type="Str50" use="required"/>
+				<xs:attribute name="d_rec" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="den_L" type="Str200" use="required"/>
+				<xs:attribute name="cif" type="CifSType" use="required"/>
+				<xs:attribute name="tip_locator" type="IntInt1_3SType" use="required"/>
+				<xs:attribute name="RS_L" type="IntInt1_2SType" use="required"/>
+				<xs:attribute name="judet_L" type="Int_listaCodJudSType"/>
+				<xs:attribute name="cod_localit_L" type="IntPoz6SType"/>
+				<xs:attribute name="cod_strada_L" type="IntPoz5SType"/>
+				<xs:attribute name="localit_L" type="Str100" use="required"/>
+				<xs:attribute name="strada_L" type="Str100" use="required"/>
+				<xs:attribute name="nr_L" type="Str10" use="required"/>
+				<xs:attribute name="tara_L" type="Str_listaTariSType"/>
+				<xs:attribute name="adresa_L" type="Str200"/>
+				<xs:attribute name="codp_L" type="Str6"/>
+				<xs:attribute name="tel_L" type="IntPoz10SType"/>
+				<xs:attribute name="email_L" type="Email200SType"/>
+				<xs:attribute name="ufisc_L" type="Str_ufiscSType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="ContractType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:sequence>
+					<xs:element name="locatar" type="LocatarType" maxOccurs="100"/>
+					<xs:element name="locator" type="LocatorType" maxOccurs="100"/>
+				</xs:sequence>
+				<xs:attribute name="proc_n4" type="DblPoz3_2SType"/>
+				<xs:attribute name="ID_contract" type="IntPoz4SType" use="required"/>
+				<xs:attribute name="bifa_modif" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="bifa_incet" type="IntInt0_1SType" use="required"/>
+				<xs:attribute name="nr_I" type="Str20" use="required"/>
+				<xs:attribute name="data_I" type="DateSType" use="required"/>
+				<xs:attribute name="per1_C" type="DateSType" use="required"/>
+				<xs:attribute name="per2_C" type="DateSType"/>
+				<xs:attribute name="bifa_bun" type="IntInt1_2SType"/>
+				<xs:attribute name="judet_C" type="Int_listaCodJudSType"/>
+				<xs:attribute name="cod_localit_C" type="IntPoz6SType"/>
+				<xs:attribute name="cod_strada_C" type="IntPoz5SType"/>
+				<xs:attribute name="localit_C" type="Str100"/>
+				<xs:attribute name="strada_C" type="Str100"/>
+				<xs:attribute name="nr_C" type="Str10"/>
+				<xs:attribute name="adresa_C" type="Str200"/>
+				<xs:attribute name="codp_C" type="Str6"/>
+				<xs:attribute name="chirie1" type="IntPoz15SType" use="required"/>
+				<xs:attribute name="moneda1" type="Str_moneda1SType" use="required"/>
+				<xs:attribute name="mobil" type="Str200"/>
+				<xs:attribute name="nr_M" type="Str20"/>
+				<xs:attribute name="data_M" type="DateSType"/>
+				<xs:attribute name="per1_M" type="DateSType"/>
+				<xs:attribute name="per2_M" type="DateSType"/>
+				<xs:attribute name="chirie2" type="IntPoz15SType"/>
+				<xs:attribute name="moneda2" type="Str_moneda1SType"/>
+				<xs:attribute name="nr_S" type="Str20"/>
+				<xs:attribute name="data_S" type="DateSType"/>
+				<xs:attribute name="per1_S" type="DateSType"/>
+				<xs:attribute name="per2_S" type="DateSType"/>
+				<xs:attribute name="motiv_S" type="Str200"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="LocatarType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="ID_locatar" type="IntPoz8SType" use="required"/>
+				<xs:attribute name="den_Ch" type="Str200" use="required"/>
+				<xs:attribute name="cif_Ch" type="CifSType"/>
+				<xs:attribute name="RS_Ch" type="IntInt1_2SType" use="required"/>
+				<xs:attribute name="judet_Ch" type="Int_listaCodJudSType"/>
+				<xs:attribute name="cod_localit_Ch" type="IntPoz6SType"/>
+				<xs:attribute name="cod_strada_Ch" type="IntPoz5SType"/>
+				<xs:attribute name="localit_Ch" type="Str100"/>
+				<xs:attribute name="strada_Ch" type="Str100"/>
+				<xs:attribute name="nr_Ch" type="Str10"/>
+				<xs:attribute name="tara_Ch" type="Str2"/>
+				<xs:attribute name="adresa_Ch" type="Str200"/>
+				<xs:attribute name="codp_Ch" type="Str6"/>
+				<xs:attribute name="tel_Ch" type="IntPoz10SType"/>
+				<xs:attribute name="email_Ch" type="Email200SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="LocatorType">
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="ID_locator" type="IntPoz8SType" use="required"/>
+				<xs:attribute name="d_decl" type="IntInt0_1SType"/>
+				<xs:attribute name="den_P" type="Str200" use="required"/>
+				<xs:attribute name="cif_P" type="CifSType" use="required"/>
+				<xs:attribute name="calit_locator_P" type="IntInt0_1SType"/>
+				<xs:attribute name="tip_locator_P" type="IntInt1_3SType"/>
+				<xs:attribute name="RS_P" type="IntInt1_2SType"/>
+				<xs:attribute name="judet_P" type="Int_listaCodJudSType"/>
+				<xs:attribute name="cod_localit_P" type="IntPoz6SType"/>
+				<xs:attribute name="cod_strada_P" type="IntPoz5SType"/>
+				<xs:attribute name="localit_P" type="Str100"/>
+				<xs:attribute name="strada_P" type="Str100"/>
+				<xs:attribute name="nr_P" type="Str10"/>
+				<xs:attribute name="tara_P" type="Str2"/>
+				<xs:attribute name="adresa_P" type="Str200"/>
+				<xs:attribute name="codp_P" type="Str6"/>
+				<xs:attribute name="tel_P" type="IntPoz10SType"/>
+				<xs:attribute name="email_P" type="Email200SType"/>
+				<xs:attribute name="ufisc_P" type="Str_ufiscSType"/>
+				<xs:attribute name="fractie_n1P" type="IntPoz3SType"/>
+				<xs:attribute name="fractie_n2P" type="IntPoz3SType"/>
+				<xs:attribute name="proc_n3P" type="DblPoz3_2SType"/>
+				<xs:attribute name="proc_n4P" type="DblPoz3_2SType"/>
+			</xs:restriction>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:simpleType name="IntInt2023_2100SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="2023"/>
+			<xs:maxInclusive value="2100"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt12_12SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="12"/>
+			<xs:maxInclusive value="12"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str75">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="75"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str50">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="50"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt0_1SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="1"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str200">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="CifSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="[1-9]\d{12}|[1-9]\d{1,9}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_3SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="3"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntInt1_2SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="1"/>
+			<xs:maxInclusive value="2"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Int_listaCodJudSType">
+		<xs:restriction base="xs:integer">
+			<xs:enumeration value="1"/>
+			<xs:enumeration value="2"/>
+			<xs:enumeration value="3"/>
+			<xs:enumeration value="4"/>
+			<xs:enumeration value="5"/>
+			<xs:enumeration value="6"/>
+			<xs:enumeration value="7"/>
+			<xs:enumeration value="8"/>
+			<xs:enumeration value="9"/>
+			<xs:enumeration value="10"/>
+			<xs:enumeration value="11"/>
+			<xs:enumeration value="51"/>
+			<xs:enumeration value="12"/>
+			<xs:enumeration value="13"/>
+			<xs:enumeration value="14"/>
+			<xs:enumeration value="15"/>
+			<xs:enumeration value="16"/>
+			<xs:enumeration value="17"/>
+			<xs:enumeration value="52"/>
+			<xs:enumeration value="18"/>
+			<xs:enumeration value="19"/>
+			<xs:enumeration value="20"/>
+			<xs:enumeration value="21"/>
+			<xs:enumeration value="22"/>
+			<xs:enumeration value="23"/>
+			<xs:enumeration value="24"/>
+			<xs:enumeration value="25"/>
+			<xs:enumeration value="26"/>
+			<xs:enumeration value="27"/>
+			<xs:enumeration value="28"/>
+			<xs:enumeration value="29"/>
+			<xs:enumeration value="30"/>
+			<xs:enumeration value="31"/>
+			<xs:enumeration value="32"/>
+			<xs:enumeration value="33"/>
+			<xs:enumeration value="34"/>
+			<xs:enumeration value="35"/>
+			<xs:enumeration value="36"/>
+			<xs:enumeration value="37"/>
+			<xs:enumeration value="38"/>
+			<xs:enumeration value="39"/>
+			<xs:enumeration value="40"/>
+			<xs:enumeration value="41"/>
+			<xs:enumeration value="42"/>
+			<xs:enumeration value="43"/>
+			<xs:enumeration value="44"/>
+			<xs:enumeration value="45"/>
+			<xs:enumeration value="46"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz6SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz5SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="99999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str100">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="100"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str10">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="10"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_listaTariSType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="2"/>
+			<xs:enumeration value="PS"/>
+			<xs:enumeration value="FC"/>
+			<xs:enumeration value="JM"/>
+			<xs:enumeration value="JP"/>
+			<xs:enumeration value="KZ"/>
+			<xs:enumeration value="KE"/>
+			<xs:enumeration value="KG"/>
+			<xs:enumeration value="KI"/>
+			<xs:enumeration value="KW"/>
+			<xs:enumeration value="LA"/>
+			<xs:enumeration value="LS"/>
+			<xs:enumeration value="LV"/>
+			<xs:enumeration value="LB"/>
+			<xs:enumeration value="LR"/>
+			<xs:enumeration value="LY"/>
+			<xs:enumeration value="LI"/>
+			<xs:enumeration value="LT"/>
+			<xs:enumeration value="LU"/>
+			<xs:enumeration value="MO"/>
+			<xs:enumeration value="MK"/>
+			<xs:enumeration value="MG"/>
+			<xs:enumeration value="MW"/>
+			<xs:enumeration value="MY"/>
+			<xs:enumeration value="MV"/>
+			<xs:enumeration value="ML"/>
+			<xs:enumeration value="MT"/>
+			<xs:enumeration value="MH"/>
+			<xs:enumeration value="MQ"/>
+			<xs:enumeration value="MR"/>
+			<xs:enumeration value="MU"/>
+			<xs:enumeration value="YT"/>
+			<xs:enumeration value="FM"/>
+			<xs:enumeration value="MC"/>
+			<xs:enumeration value="MN"/>
+			<xs:enumeration value="MS"/>
+			<xs:enumeration value="MZ"/>
+			<xs:enumeration value="ME"/>
+			<xs:enumeration value="NA"/>
+			<xs:enumeration value="NR"/>
+			<xs:enumeration value="NP"/>
+			<xs:enumeration value="NI"/>
+			<xs:enumeration value="NE"/>
+			<xs:enumeration value="NU"/>
+			<xs:enumeration value="NF"/>
+			<xs:enumeration value="CD"/>
+			<xs:enumeration value="RS"/>
+			<xs:enumeration value="GS"/>
+			<xs:enumeration value="MP"/>
+			<xs:enumeration value="PS"/>
+			<xs:enumeration value="RU"/>
+			<xs:enumeration value="SA"/>
+			<xs:enumeration value="TF"/>
+			<xs:enumeration value="TW"/>
+			<xs:enumeration value="UM"/>
+			<xs:enumeration value="WS"/>
+			<xs:enumeration value="XK"/>
+			<xs:enumeration value="XL"/>
+			<xs:enumeration value="AX"/>
+			<xs:enumeration value="AF"/>
+			<xs:enumeration value="FC"/>
+			<xs:enumeration value="ZA"/>
+			<xs:enumeration value="AL"/>
+			<xs:enumeration value="DZ"/>
+			<xs:enumeration value="AD"/>
+			<xs:enumeration value="AO"/>
+			<xs:enumeration value="AI"/>
+			<xs:enumeration value="AQ"/>
+			<xs:enumeration value="AG"/>
+			<xs:enumeration value="AN"/>
+			<xs:enumeration value="AR"/>
+			<xs:enumeration value="AM"/>
+			<xs:enumeration value="AU"/>
+			<xs:enumeration value="AT"/>
+			<xs:enumeration value="AZ"/>
+			<xs:enumeration value="BS"/>
+			<xs:enumeration value="BH"/>
+			<xs:enumeration value="BD"/>
+			<xs:enumeration value="BB"/>
+			<xs:enumeration value="BE"/>
+			<xs:enumeration value="BZ"/>
+			<xs:enumeration value="BJ"/>
+			<xs:enumeration value="BM"/>
+			<xs:enumeration value="BT"/>
+			<xs:enumeration value="BY"/>
+			<xs:enumeration value="BO"/>
+			<xs:enumeration value="BA"/>
+			<xs:enumeration value="BW"/>
+			<xs:enumeration value="BR"/>
+			<xs:enumeration value="BN"/>
+			<xs:enumeration value="BG"/>
+			<xs:enumeration value="BF"/>
+			<xs:enumeration value="BI"/>
+			<xs:enumeration value="KH"/>
+			<xs:enumeration value="CM"/>
+			<xs:enumeration value="CA"/>
+			<xs:enumeration value="CV"/>
+			<xs:enumeration value="CZ"/>
+			<xs:enumeration value="CL"/>
+			<xs:enumeration value="CN"/>
+			<xs:enumeration value="CX"/>
+			<xs:enumeration value="TD"/>
+			<xs:enumeration value="CY"/>
+			<xs:enumeration value="CI"/>
+			<xs:enumeration value="CC"/>
+			<xs:enumeration value="CO"/>
+			<xs:enumeration value="KM"/>
+			<xs:enumeration value="CG"/>
+			<xs:enumeration value="CK"/>
+			<xs:enumeration value="KP"/>
+			<xs:enumeration value="KR"/>
+			<xs:enumeration value="HR"/>
+			<xs:enumeration value="CU"/>
+			<xs:enumeration value="DK"/>
+			<xs:enumeration value="DM"/>
+			<xs:enumeration value="DO"/>
+			<xs:enumeration value="EC"/>
+			<xs:enumeration value="CH"/>
+			<xs:enumeration value="AE"/>
+			<xs:enumeration value="ER"/>
+			<xs:enumeration value="EE"/>
+			<xs:enumeration value="FO"/>
+			<xs:enumeration value="FJ"/>
+			<xs:enumeration value="FI"/>
+			<xs:enumeration value="FR"/>
+			<xs:enumeration value="GA"/>
+			<xs:enumeration value="GM"/>
+			<xs:enumeration value="GE"/>
+			<xs:enumeration value="DE"/>
+			<xs:enumeration value="GH"/>
+			<xs:enumeration value="GI"/>
+			<xs:enumeration value="TV"/>
+			<xs:enumeration value="EL"/>
+			<xs:enumeration value="GD"/>
+			<xs:enumeration value="GL"/>
+			<xs:enumeration value="GP"/>
+			<xs:enumeration value="GU"/>
+			<xs:enumeration value="GT"/>
+			<xs:enumeration value="GN"/>
+			<xs:enumeration value="GQ"/>
+			<xs:enumeration value="GW"/>
+			<xs:enumeration value="GY"/>
+			<xs:enumeration value="GF"/>
+			<xs:enumeration value="HT"/>
+			<xs:enumeration value="HM"/>
+			<xs:enumeration value="HN"/>
+			<xs:enumeration value="HK"/>
+			<xs:enumeration value="IN"/>
+			<xs:enumeration value="ID"/>
+			<xs:enumeration value="JO"/>
+			<xs:enumeration value="IQ"/>
+			<xs:enumeration value="IR"/>
+			<xs:enumeration value="IE"/>
+			<xs:enumeration value="XI"/>
+			<xs:enumeration value="IS"/>
+			<xs:enumeration value="IL"/>
+			<xs:enumeration value="IT"/>
+			<xs:enumeration value="EG"/>
+			<xs:enumeration value="ET"/>
+			<xs:enumeration value="FK"/>
+			<xs:enumeration value="MX"/>
+			<xs:enumeration value="MA"/>
+			<xs:enumeration value="NG"/>
+			<xs:enumeration value="NL"/>
+			<xs:enumeration value="PH"/>
+			<xs:enumeration value="UG"/>
+			<xs:enumeration value="UY"/>
+			<xs:enumeration value="CR"/>
+			<xs:enumeration value="GB"/>
+			<xs:enumeration value="SV"/>
+			<xs:enumeration value="AW"/>
+			<xs:enumeration value="BV"/>
+			<xs:enumeration value="KY"/>
+			<xs:enumeration value="XM"/>
+			<xs:enumeration value="PW"/>
+			<xs:enumeration value="NO"/>
+			<xs:enumeration value="NC"/>
+			<xs:enumeration value="NZ"/>
+			<xs:enumeration value="OM"/>
+			<xs:enumeration value="PK"/>
+			<xs:enumeration value="PA"/>
+			<xs:enumeration value="PG"/>
+			<xs:enumeration value="PY"/>
+			<xs:enumeration value="PE"/>
+			<xs:enumeration value="PN"/>
+			<xs:enumeration value="PF"/>
+			<xs:enumeration value="PL"/>
+			<xs:enumeration value="PT"/>
+			<xs:enumeration value="XC"/>
+			<xs:enumeration value="PR"/>
+			<xs:enumeration value="QA"/>
+			<xs:enumeration value="YE"/>
+			<xs:enumeration value="MD"/>
+			<xs:enumeration value="RE"/>
+			<xs:enumeration value="RO"/>
+			<xs:enumeration value="RW"/>
+			<xs:enumeration value="US"/>
+			<xs:enumeration value="EH"/>
+			<xs:enumeration value="SH"/>
+			<xs:enumeration value="KN"/>
+			<xs:enumeration value="LC"/>
+			<xs:enumeration value="PM"/>
+			<xs:enumeration value="VC"/>
+			<xs:enumeration value="AS"/>
+			<xs:enumeration value="SM"/>
+			<xs:enumeration value="ST"/>
+			<xs:enumeration value="SN"/>
+			<xs:enumeration value="XS"/>
+			<xs:enumeration value="SC"/>
+			<xs:enumeration value="SL"/>
+			<xs:enumeration value="SG"/>
+			<xs:enumeration value="SY"/>
+			<xs:enumeration value="SK"/>
+			<xs:enumeration value="GG"/>
+			<xs:enumeration value="SI"/>
+			<xs:enumeration value="SB"/>
+			<xs:enumeration value="SO"/>
+			<xs:enumeration value="ES"/>
+			<xs:enumeration value="LK"/>
+			<xs:enumeration value="SD"/>
+			<xs:enumeration value="SE"/>
+			<xs:enumeration value="SR"/>
+			<xs:enumeration value="SJ"/>
+			<xs:enumeration value="SZ"/>
+			<xs:enumeration value="TJ"/>
+			<xs:enumeration value="TZ"/>
+			<xs:enumeration value="IO"/>
+			<xs:enumeration value="TH"/>
+			<xs:enumeration value="TL"/>
+			<xs:enumeration value="TG"/>
+			<xs:enumeration value="TK"/>
+			<xs:enumeration value="TO"/>
+			<xs:enumeration value="TT"/>
+			<xs:enumeration value="TN"/>
+			<xs:enumeration value="TR"/>
+			<xs:enumeration value="TM"/>
+			<xs:enumeration value="TC"/>
+			<xs:enumeration value="UA"/>
+			<xs:enumeration value="HU"/>
+			<xs:enumeration value="MM"/>
+			<xs:enumeration value="UZ"/>
+			<xs:enumeration value="VU"/>
+			<xs:enumeration value="VA"/>
+			<xs:enumeration value="VE"/>
+			<xs:enumeration value="VN"/>
+			<xs:enumeration value="VI"/>
+			<xs:enumeration value="VG"/>
+			<xs:enumeration value="WF"/>
+			<xs:enumeration value="ZM"/>
+			<xs:enumeration value="ZW"/>
+			<xs:enumeration value="DJ"/>
+			<xs:enumeration value="CS"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str6">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="6"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz10SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Email200SType">
+		<xs:restriction base="xs:token">
+			<xs:maxLength value="200"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_ufiscSType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="6"/>
+			<xs:enumeration value="013001"/>
+			<xs:enumeration value="013002"/>
+			<xs:enumeration value="013003"/>
+			<xs:enumeration value="014003"/>
+			<xs:enumeration value="014004"/>
+			<xs:enumeration value="014006"/>
+			<xs:enumeration value="014007"/>
+			<xs:enumeration value="023001"/>
+			<xs:enumeration value="024001"/>
+			<xs:enumeration value="024003"/>
+			<xs:enumeration value="024004"/>
+			<xs:enumeration value="024007"/>
+			<xs:enumeration value="025004"/>
+			<xs:enumeration value="033001"/>
+			<xs:enumeration value="033002"/>
+			<xs:enumeration value="033003"/>
+			<xs:enumeration value="034002"/>
+			<xs:enumeration value="034003"/>
+			<xs:enumeration value="034005"/>
+			<xs:enumeration value="043001"/>
+			<xs:enumeration value="043002"/>
+			<xs:enumeration value="044001"/>
+			<xs:enumeration value="044004"/>
+			<xs:enumeration value="045009"/>
+			<xs:enumeration value="053001"/>
+			<xs:enumeration value="054001"/>
+			<xs:enumeration value="054002"/>
+			<xs:enumeration value="054004"/>
+			<xs:enumeration value="054006"/>
+			<xs:enumeration value="063001"/>
+			<xs:enumeration value="064001"/>
+			<xs:enumeration value="064002"/>
+			<xs:enumeration value="064003"/>
+			<xs:enumeration value="073001"/>
+			<xs:enumeration value="073002"/>
+			<xs:enumeration value="074001"/>
+			<xs:enumeration value="074002"/>
+			<xs:enumeration value="083001"/>
+			<xs:enumeration value="083002"/>
+			<xs:enumeration value="083003"/>
+			<xs:enumeration value="083004"/>
+			<xs:enumeration value="084002"/>
+			<xs:enumeration value="084005"/>
+			<xs:enumeration value="084006"/>
+			<xs:enumeration value="084008"/>
+			<xs:enumeration value="093001"/>
+			<xs:enumeration value="094001"/>
+			<xs:enumeration value="094002"/>
+			<xs:enumeration value="094003"/>
+			<xs:enumeration value="103001"/>
+			<xs:enumeration value="103002"/>
+			<xs:enumeration value="104002"/>
+			<xs:enumeration value="104003"/>
+			<xs:enumeration value="113001"/>
+			<xs:enumeration value="113002"/>
+			<xs:enumeration value="114001"/>
+			<xs:enumeration value="114004"/>
+			<xs:enumeration value="114006"/>
+			<xs:enumeration value="114007"/>
+			<xs:enumeration value="115001"/>
+			<xs:enumeration value="123001"/>
+			<xs:enumeration value="123002"/>
+			<xs:enumeration value="123003"/>
+			<xs:enumeration value="123005"/>
+			<xs:enumeration value="124002"/>
+			<xs:enumeration value="133001"/>
+			<xs:enumeration value="133002"/>
+			<xs:enumeration value="133003"/>
+			<xs:enumeration value="134003"/>
+			<xs:enumeration value="134004"/>
+			<xs:enumeration value="134009"/>
+			<xs:enumeration value="143001"/>
+			<xs:enumeration value="143002"/>
+			<xs:enumeration value="144003"/>
+			<xs:enumeration value="153001"/>
+			<xs:enumeration value="154002"/>
+			<xs:enumeration value="154003"/>
+			<xs:enumeration value="154004"/>
+			<xs:enumeration value="154005"/>
+			<xs:enumeration value="163001"/>
+			<xs:enumeration value="164001"/>
+			<xs:enumeration value="164002"/>
+			<xs:enumeration value="164003"/>
+			<xs:enumeration value="164004"/>
+			<xs:enumeration value="165009"/>
+			<xs:enumeration value="173001"/>
+			<xs:enumeration value="173002"/>
+			<xs:enumeration value="174001"/>
+			<xs:enumeration value="183001"/>
+			<xs:enumeration value="184001"/>
+			<xs:enumeration value="184003"/>
+			<xs:enumeration value="184004"/>
+			<xs:enumeration value="184005"/>
+			<xs:enumeration value="193001"/>
+			<xs:enumeration value="193002"/>
+			<xs:enumeration value="193003"/>
+			<xs:enumeration value="194001"/>
+			<xs:enumeration value="203001"/>
+			<xs:enumeration value="203002"/>
+			<xs:enumeration value="203003"/>
+			<xs:enumeration value="203004"/>
+			<xs:enumeration value="203005"/>
+			<xs:enumeration value="204003"/>
+			<xs:enumeration value="213001"/>
+			<xs:enumeration value="213002"/>
+			<xs:enumeration value="213003"/>
+			<xs:enumeration value="223001"/>
+			<xs:enumeration value="223002"/>
+			<xs:enumeration value="224001"/>
+			<xs:enumeration value="224002"/>
+			<xs:enumeration value="225001"/>
+			<xs:enumeration value="234001"/>
+			<xs:enumeration value="234002"/>
+			<xs:enumeration value="234003"/>
+			<xs:enumeration value="237001"/>
+			<xs:enumeration value="243001"/>
+			<xs:enumeration value="243002"/>
+			<xs:enumeration value="244005"/>
+			<xs:enumeration value="244006"/>
+			<xs:enumeration value="253001"/>
+			<xs:enumeration value="254001"/>
+			<xs:enumeration value="254002"/>
+			<xs:enumeration value="254003"/>
+			<xs:enumeration value="254004"/>
+			<xs:enumeration value="263001"/>
+			<xs:enumeration value="263002"/>
+			<xs:enumeration value="263003"/>
+			<xs:enumeration value="263004"/>
+			<xs:enumeration value="264002"/>
+			<xs:enumeration value="264003"/>
+			<xs:enumeration value="273001"/>
+			<xs:enumeration value="273002"/>
+			<xs:enumeration value="274001"/>
+			<xs:enumeration value="274002"/>
+			<xs:enumeration value="283001"/>
+			<xs:enumeration value="283002"/>
+			<xs:enumeration value="284001"/>
+			<xs:enumeration value="284002"/>
+			<xs:enumeration value="293001"/>
+			<xs:enumeration value="293002"/>
+			<xs:enumeration value="294004"/>
+			<xs:enumeration value="294005"/>
+			<xs:enumeration value="294007"/>
+			<xs:enumeration value="294010"/>
+			<xs:enumeration value="294012"/>
+			<xs:enumeration value="295013"/>
+			<xs:enumeration value="303001"/>
+			<xs:enumeration value="303002"/>
+			<xs:enumeration value="304001"/>
+			<xs:enumeration value="304002"/>
+			<xs:enumeration value="313001"/>
+			<xs:enumeration value="314001"/>
+			<xs:enumeration value="314002"/>
+			<xs:enumeration value="314003"/>
+			<xs:enumeration value="323001"/>
+			<xs:enumeration value="323002"/>
+			<xs:enumeration value="324001"/>
+			<xs:enumeration value="324002"/>
+			<xs:enumeration value="324008"/>
+			<xs:enumeration value="333001"/>
+			<xs:enumeration value="333002"/>
+			<xs:enumeration value="333003"/>
+			<xs:enumeration value="333004"/>
+			<xs:enumeration value="333005"/>
+			<xs:enumeration value="334001"/>
+			<xs:enumeration value="334003"/>
+			<xs:enumeration value="343001"/>
+			<xs:enumeration value="343002"/>
+			<xs:enumeration value="343003"/>
+			<xs:enumeration value="344001"/>
+			<xs:enumeration value="344002"/>
+			<xs:enumeration value="353001"/>
+			<xs:enumeration value="353002"/>
+			<xs:enumeration value="354001"/>
+			<xs:enumeration value="354002"/>
+			<xs:enumeration value="354003"/>
+			<xs:enumeration value="354004"/>
+			<xs:enumeration value="354005"/>
+			<xs:enumeration value="363001"/>
+			<xs:enumeration value="364001"/>
+			<xs:enumeration value="364003"/>
+			<xs:enumeration value="364004"/>
+			<xs:enumeration value="365001"/>
+			<xs:enumeration value="373001"/>
+			<xs:enumeration value="373002"/>
+			<xs:enumeration value="373003"/>
+			<xs:enumeration value="374001"/>
+			<xs:enumeration value="383001"/>
+			<xs:enumeration value="383002"/>
+			<xs:enumeration value="384004"/>
+			<xs:enumeration value="384005"/>
+			<xs:enumeration value="384007"/>
+			<xs:enumeration value="384008"/>
+			<xs:enumeration value="393001"/>
+			<xs:enumeration value="393002"/>
+			<xs:enumeration value="394004"/>
+			<xs:enumeration value="408001"/>
+			<xs:enumeration value="408002"/>
+			<xs:enumeration value="408003"/>
+			<xs:enumeration value="408004"/>
+			<xs:enumeration value="408005"/>
+			<xs:enumeration value="408006"/>
+			<xs:enumeration value="513001"/>
+			<xs:enumeration value="513002"/>
+			<xs:enumeration value="514002"/>
+			<xs:enumeration value="514003"/>
+			<xs:enumeration value="523001"/>
+			<xs:enumeration value="524001"/>
+			<xs:enumeration value="524002"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DblPoz3_2SType">
+		<xs:restriction base="xs:double">
+			<xs:minInclusive value="0."/>
+			<xs:pattern value="\d{0,3}(\.\d{0,2})?"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz4SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="9999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str20">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="20"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DateSType">
+		<xs:restriction base="xs:token">
+			<xs:pattern value="([1-9]|0[1-9]|[12][0-9]|3[01])\.([1-9]|0[1-9]|1[012])\.\d{4}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz15SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999999999999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str_moneda1SType">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="256"/>
+			<xs:enumeration value="AED"/>
+			<xs:enumeration value="BND"/>
+			<xs:enumeration value="COP"/>
+			<xs:enumeration value="GBP"/>
+			<xs:enumeration value="IRR"/>
+			<xs:enumeration value="LRD"/>
+			<xs:enumeration value="MZN"/>
+			<xs:enumeration value="RSD"/>
+			<xs:enumeration value="SZL"/>
+			<xs:enumeration value="UZS"/>
+			<xs:enumeration value="XPT"/>
+			<xs:enumeration value="AFN"/>
+			<xs:enumeration value="BOB"/>
+			<xs:enumeration value="COU"/>
+			<xs:enumeration value="GEL"/>
+			<xs:enumeration value="ISK"/>
+			<xs:enumeration value="LSL"/>
+			<xs:enumeration value="NAD"/>
+			<xs:enumeration value="RUB"/>
+			<xs:enumeration value="THB"/>
+			<xs:enumeration value="VES"/>
+			<xs:enumeration value="XSU"/>
+			<xs:enumeration value="ALL"/>
+			<xs:enumeration value="BOV"/>
+			<xs:enumeration value="CRC"/>
+			<xs:enumeration value="GHS"/>
+			<xs:enumeration value="JMD"/>
+			<xs:enumeration value="LYD"/>
+			<xs:enumeration value="NGN"/>
+			<xs:enumeration value="RWF"/>
+			<xs:enumeration value="TJS"/>
+			<xs:enumeration value="VND"/>
+			<xs:enumeration value="XUA"/>
+			<xs:enumeration value="AMD"/>
+			<xs:enumeration value="BRL"/>
+			<xs:enumeration value="CUC"/>
+			<xs:enumeration value="GIP"/>
+			<xs:enumeration value="JOD"/>
+			<xs:enumeration value="MAD"/>
+			<xs:enumeration value="NIO"/>
+			<xs:enumeration value="SAR"/>
+			<xs:enumeration value="TMT"/>
+			<xs:enumeration value="VUV"/>
+			<xs:enumeration value="XXX"/>
+			<xs:enumeration value="ANG"/>
+			<xs:enumeration value="BSD"/>
+			<xs:enumeration value="CUP"/>
+			<xs:enumeration value="GMD"/>
+			<xs:enumeration value="JPY"/>
+			<xs:enumeration value="MDL"/>
+			<xs:enumeration value="NOK"/>
+			<xs:enumeration value="SBD"/>
+			<xs:enumeration value="TND"/>
+			<xs:enumeration value="WST"/>
+			<xs:enumeration value="YER"/>
+			<xs:enumeration value="AOA"/>
+			<xs:enumeration value="BTN"/>
+			<xs:enumeration value="CVE"/>
+			<xs:enumeration value="GNF"/>
+			<xs:enumeration value="KES"/>
+			<xs:enumeration value="MGA"/>
+			<xs:enumeration value="NPR"/>
+			<xs:enumeration value="SCR"/>
+			<xs:enumeration value="TOP"/>
+			<xs:enumeration value="XAF"/>
+			<xs:enumeration value="ZAR"/>
+			<xs:enumeration value="ARS"/>
+			<xs:enumeration value="BWP"/>
+			<xs:enumeration value="CZK"/>
+			<xs:enumeration value="GTQ"/>
+			<xs:enumeration value="KGS"/>
+			<xs:enumeration value="MKD"/>
+			<xs:enumeration value="NZD"/>
+			<xs:enumeration value="SDG"/>
+			<xs:enumeration value="TRY"/>
+			<xs:enumeration value="XAG"/>
+			<xs:enumeration value="ZMW"/>
+			<xs:enumeration value="AUD"/>
+			<xs:enumeration value="BYN"/>
+			<xs:enumeration value="DJF"/>
+			<xs:enumeration value="GYD"/>
+			<xs:enumeration value="KHR"/>
+			<xs:enumeration value="MMK"/>
+			<xs:enumeration value="OMR"/>
+			<xs:enumeration value="SEK"/>
+			<xs:enumeration value="TTD"/>
+			<xs:enumeration value="XAU"/>
+			<xs:enumeration value="ZWL"/>
+			<xs:enumeration value="AWG"/>
+			<xs:enumeration value="BZD"/>
+			<xs:enumeration value="DKK"/>
+			<xs:enumeration value="HKD"/>
+			<xs:enumeration value="KMF"/>
+			<xs:enumeration value="MNT"/>
+			<xs:enumeration value="PAB"/>
+			<xs:enumeration value="SGD"/>
+			<xs:enumeration value="TWD"/>
+			<xs:enumeration value="XBA"/>
+			<xs:enumeration value="AZN"/>
+			<xs:enumeration value="CAD"/>
+			<xs:enumeration value="DOP"/>
+			<xs:enumeration value="HNL"/>
+			<xs:enumeration value="KPW"/>
+			<xs:enumeration value="MOP"/>
+			<xs:enumeration value="PEN"/>
+			<xs:enumeration value="SHP"/>
+			<xs:enumeration value="TZS"/>
+			<xs:enumeration value="XBB"/>
+			<xs:enumeration value="BAM"/>
+			<xs:enumeration value="CDF"/>
+			<xs:enumeration value="DZD"/>
+			<xs:enumeration value="HRK"/>
+			<xs:enumeration value="KRW"/>
+			<xs:enumeration value="MRU"/>
+			<xs:enumeration value="PGK"/>
+			<xs:enumeration value="SLL"/>
+			<xs:enumeration value="UAH"/>
+			<xs:enumeration value="XBC"/>
+			<xs:enumeration value="BBD"/>
+			<xs:enumeration value="CHE"/>
+			<xs:enumeration value="EGP"/>
+			<xs:enumeration value="HTG"/>
+			<xs:enumeration value="KWD"/>
+			<xs:enumeration value="MUR"/>
+			<xs:enumeration value="PHP"/>
+			<xs:enumeration value="SOS"/>
+			<xs:enumeration value="UGX"/>
+			<xs:enumeration value="XBD"/>
+			<xs:enumeration value="BDT"/>
+			<xs:enumeration value="CHF"/>
+			<xs:enumeration value="ERN"/>
+			<xs:enumeration value="HUF"/>
+			<xs:enumeration value="KYD"/>
+			<xs:enumeration value="MVR"/>
+			<xs:enumeration value="PKR"/>
+			<xs:enumeration value="SRD"/>
+			<xs:enumeration value="USD"/>
+			<xs:enumeration value="XCD"/>
+			<xs:enumeration value="BGN"/>
+			<xs:enumeration value="CHW"/>
+			<xs:enumeration value="ETB"/>
+			<xs:enumeration value="IDR"/>
+			<xs:enumeration value="KZT"/>
+			<xs:enumeration value="MWK"/>
+			<xs:enumeration value="PLN"/>
+			<xs:enumeration value="SSP"/>
+			<xs:enumeration value="USN"/>
+			<xs:enumeration value="XDR"/>
+			<xs:enumeration value="BHD"/>
+			<xs:enumeration value="CLF"/>
+			<xs:enumeration value="EUR"/>
+			<xs:enumeration value="ILS"/>
+			<xs:enumeration value="LAK"/>
+			<xs:enumeration value="MXN"/>
+			<xs:enumeration value="PYG"/>
+			<xs:enumeration value="STN"/>
+			<xs:enumeration value="UYI"/>
+			<xs:enumeration value="XOF"/>
+			<xs:enumeration value="BIF"/>
+			<xs:enumeration value="CLP"/>
+			<xs:enumeration value="FJD"/>
+			<xs:enumeration value="INR"/>
+			<xs:enumeration value="LBP"/>
+			<xs:enumeration value="MXV"/>
+			<xs:enumeration value="QAR"/>
+			<xs:enumeration value="SVC"/>
+			<xs:enumeration value="UYU"/>
+			<xs:enumeration value="XPD"/>
+			<xs:enumeration value="BMD"/>
+			<xs:enumeration value="CNY"/>
+			<xs:enumeration value="FKP"/>
+			<xs:enumeration value="IQD"/>
+			<xs:enumeration value="LKR"/>
+			<xs:enumeration value="MYR"/>
+			<xs:enumeration value="RON"/>
+			<xs:enumeration value="SYP"/>
+			<xs:enumeration value="UYW"/>
+			<xs:enumeration value="XPF"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz8SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="99999999"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Str2">
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="2"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IntPoz3SType">
+		<xs:restriction base="xs:integer">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="999"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>

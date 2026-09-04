@@ -64,16 +64,22 @@ class DukIntegratorService
      *
      * @return string PDF binary content
      */
-    public function generatePdf(string $xml, string $type): string
+    public function generatePdf(string $xml, string $type, ?string $zip = null): string
     {
         $type = strtoupper($type);
 
         try {
+            // With an attachment (C168 needs a .zip with the scanned contract) the body is
+            // XML followed by the zip bytes and X-Duk-Xml-Length tells the service where to cut.
+            $headers = ['Content-Type' => $zip === null ? 'application/xml' : 'application/octet-stream'];
+            if ($zip !== null) {
+                $headers['X-Duk-Xml-Length'] = (string) strlen($xml);
+            }
             $response = $this->httpClient->request('POST', $this->serviceUrl . '/duk/generate-pdf', [
                 'query' => ['type' => $type],
-                'body' => $xml,
-                'headers' => ['Content-Type' => 'application/xml'],
-                'timeout' => 60,
+                'body' => $zip === null ? $xml : $xml . $zip,
+                'headers' => $headers,
+                'timeout' => 120,
             ]);
 
             $statusCode = $response->getStatusCode();
