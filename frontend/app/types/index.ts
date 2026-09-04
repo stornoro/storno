@@ -826,6 +826,29 @@ export interface AnafStatus {
 }
 
 // ── ANAF Agent ──────────────────────────────────────────────────────
+export interface AgentMonitorEntry {
+  companyId: string
+  organizationId: string | null
+  cif: string
+  name: string
+  certificateId: string
+  intervalHours: number
+  enabled: boolean
+  apiBase: string
+  apiTokenId: string | null
+  createdAt: string
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastResult: { listed?: number; created?: number; downloaded?: number; failed?: number } | null
+  lastError: string | null
+  consecutiveFailures: number
+  nextRunAt: string | null
+  running: boolean
+  hasPin: boolean
+  hasApiKey: boolean
+  secretStore: string
+}
+
 export interface AgentCertificate {
   id: string
   subject: string

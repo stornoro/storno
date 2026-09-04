@@ -438,12 +438,10 @@ class TaxDeclarationController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $year = $data['year'] ?? (int) date('Y');
-
-        $this->manager->syncFromAnaf($company, (int) $year);
-
-        return $this->json(['message' => 'Sync started.'], Response::HTTP_ACCEPTED);
+        // ANAF SPVWS2 accepts only the qualified certificate (mTLS); the OAuth
+        // token is rejected, so a server-side sync can never succeed. Point the
+        // caller at the agent flow instead of queueing a job that will fail.
+        return $this->agentRequired('sync-prepare', 'sync-agent-result');
     }
 
     #[Route('/declarations/refresh-statuses', methods: ['POST'])]
@@ -458,9 +456,16 @@ class TaxDeclarationController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $this->manager->refreshStatuses($company);
+        return $this->agentRequired('refresh-prepare', 'refresh-agent-result');
+    }
 
-        return $this->json(['message' => 'Status refresh started.'], Response::HTTP_ACCEPTED);
+    private function agentRequired(string $prepare, string $result): JsonResponse
+    {
+        return $this->json([
+            'error' => 'Declaratiile si mesajele SPV se pot prelua doar cu certificatul digital calificat, prin agentul local Storno. Porneste agentul si foloseste sincronizarea din aplicatie.',
+            'code' => 'AGENT_REQUIRED',
+            'hint' => sprintf('Use the agent flow: POST /api/v1/declarations/%s, then relay ANAF\'s answer to POST /api/v1/declarations/%s. See https://docs.storno.ro/agent', $prepare, $result),
+        ], Response::HTTP_CONFLICT);
     }
 
     #[Route('/declarations/{uuid}/prepare', methods: ['GET'])]

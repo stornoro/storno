@@ -6,6 +6,7 @@ import { discoverCertificates } from './certificates/discovery.js';
 import { curlProxy, type ProxyRequest } from './proxy/curl-proxy.js';
 import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
 import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
+import { startSpvMonitor, statusList as monitorStatus, enroll as monitorEnroll, unenroll as monitorUnenroll, runSync as monitorRun } from './monitor/spv-monitor.js';
 import { signPdf } from './signing/pdf-signer.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
@@ -82,8 +83,58 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleSignAndSubmit(req, res, config);
   } else if (url === '/batch-sign-and-submit' && req.method === 'POST') {
     handleBatchSignAndSubmit(req, res, config);
+  } else if (url === '/monitor' && req.method === 'GET') {
+    json(res, 200, { entries: monitorStatus() });
+  } else if (url === '/monitor' && req.method === 'POST') {
+    handleMonitorEnroll(req, res);
+  } else if (monitorMatch(url) && req.method === 'DELETE') {
+    handleMonitorUnenroll(res, monitorMatch(url)!.companyId);
+  } else if (monitorMatch(url)?.action === 'run' && req.method === 'POST') {
+    handleMonitorRun(res, monitorMatch(url)!.companyId, config);
   } else {
     json(res, 404, { error: 'Not found' });
+  }
+}
+
+/** /monitor/{companyId} or /monitor/{companyId}/run */
+function monitorMatch(url: string): { companyId: string; action: string | null } | null {
+  const m = url.match(/^\/monitor\/([A-Za-z0-9-]{8,64})(?:\/(run))?$/);
+  return m ? { companyId: m[1], action: m[2] ?? null } : null;
+}
+
+async function handleMonitorEnroll(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+  const body = await readBody(req);
+  let payload: Parameters<typeof monitorEnroll>[0];
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+  try {
+    const entry = monitorEnroll(payload);
+    const status = monitorStatus().find((e) => e.companyId === entry.companyId) ?? entry;
+    json(res, 200, { entry: status });
+  } catch (err) {
+    json(res, 400, { error: (err as Error).message });
+  }
+}
+
+function handleMonitorUnenroll(res: ServerResponse, companyId: string): void {
+  const result = monitorUnenroll(companyId);
+  json(res, 200, result);
+}
+
+async function handleMonitorRun(res: ServerResponse, companyId: string, config: AgentConfig): Promise<void> {
+  try {
+    const result = await monitorRun(companyId, config);
+    json(res, 200, { result, entry: monitorStatus().find((e) => e.companyId === companyId) ?? null });
+  } catch (err) {
+    json(res, 502, { error: (err as Error).message, entry: monitorStatus().find((e) => e.companyId === companyId) ?? null });
   }
 }
 
@@ -485,6 +536,7 @@ export function startServer(config?: AgentConfig): void {
   const port = cfg.port;
   startTlsRefresh(server, tls);
   startCertificateCache(cfg);
+  startSpvMonitor(cfg);
 
   server.listen(port, '127.0.0.1', async () => {
     console.log(`Storno ANAF Agent v${VERSION}`);
