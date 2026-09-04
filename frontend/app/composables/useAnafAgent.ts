@@ -1,4 +1,4 @@
-import type { AgentCertificate, AnafProxyRequest, AnafProxyResponse } from '~/types'
+import type { AgentCertificate, AnafProxyRequest, AnafProxyResponse, AgentMonitorEntry } from '~/types'
 
 const AGENT_BASE = 'https://agent.storno.ro:17394'
 
@@ -506,6 +506,58 @@ export function useAnafAgent() {
     return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
   }
 
+  // ── Unattended SPV monitor (PIN + API key stored by the agent in the OS secret store) ──
+  async function getMonitorStatus(): Promise<AgentMonitorEntry[]> {
+    const res = await agentFetch('/monitor', { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.entries ?? []
+  }
+
+  async function enrollMonitor(input: {
+    companyId: string
+    organizationId?: string | null
+    cif: string
+    name?: string
+    certificateId: string
+    pin: string
+    apiKey: string
+    apiTokenId?: string | null
+    apiBase: string
+    intervalHours?: number
+  }): Promise<AgentMonitorEntry> {
+    const res = await agentFetch('/monitor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Storno-Agent': '1' },
+      body: JSON.stringify(input),
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Agent monitor enroll failed')
+    return data.entry
+  }
+
+  async function unenrollMonitor(companyId: string): Promise<{ removed: boolean, apiTokenId: string | null }> {
+    const res = await agentFetch(`/monitor/${companyId}`, {
+      method: 'DELETE',
+      headers: { 'X-Storno-Agent': '1' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Agent monitor unenroll failed')
+    return { removed: !!data.removed, apiTokenId: data.apiTokenId ?? null }
+  }
+
+  async function runMonitor(companyId: string): Promise<{ entry: AgentMonitorEntry | null, error?: string }> {
+    const res = await agentFetch(`/monitor/${companyId}/run`, {
+      method: 'POST',
+      headers: { 'X-Storno-Agent': '1' },
+      signal: AbortSignal.timeout(10 * 60 * 1000),
+    })
+    const data = await res.json()
+    return { entry: data.entry ?? null, error: res.ok ? undefined : (data.error || 'Sync failed') }
+  }
+
   return {
     agentAvailable,
     agentVersion,
@@ -522,6 +574,10 @@ export function useAnafAgent() {
     checkStatusViaAgent,
     syncViaAgent,
     syncSpvViaAgent,
+    getMonitorStatus,
+    enrollMonitor,
+    unenrollMonitor,
+    runMonitor,
     refreshStatusesViaAgent,
     getPreferredCertId,
     setPreferredCertId,

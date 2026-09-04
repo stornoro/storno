@@ -34,6 +34,12 @@ final class RefreshDeclarationStatusesHandler
 
     public function __invoke(RefreshDeclarationStatusesMessage $message): void
     {
+        // Retired: SPVWS2 requires the qualified certificate over mTLS, which only
+        // the local storno-agent can present. The controller now answers
+        // AGENT_REQUIRED instead of dispatching; anything still queued is dropped.
+        $this->logger->warning('RefreshDeclarationStatusesHandler: server-side SPV sync is retired (mTLS only); use the agent flow.', ['company' => $message->companyId]);
+        return;
+
         $company = $this->entityManager->getRepository(Company::class)->find(
             Uuid::fromString($message->companyId)
         );

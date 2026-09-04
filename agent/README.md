@@ -92,6 +92,15 @@ Proxy an mTLS request to ANAF. Requires `X-Storno-Agent: 1` header.
 }
 ```
 
+## Automatic SPV monitoring (1.7.0+)
+
+The agent can poll the ANAF SPV inbox on a schedule while the web app is closed. Enrollment happens from the web app (Company → ANAF → *Monitorizare SPV automată*), which posts the company, certificate id, PIN and a scoped Storno API key (`declaration.view`, `declaration.submit`) to the agent.
+
+- Secrets go to the OS secure store: macOS Keychain (`security`), Windows DPAPI (PowerShell `ConvertFrom-SecureString`), Linux `secret-tool`, or `~/.storno-agent/secrets.json` (mode 0600) as a fallback. Only the schedule lives in `~/.storno-agent/monitor.json`.
+- Scheduler: first tick 90 s after start, then every 15 min it runs any entry whose interval (1–24 h) has elapsed. Failures back off (interval × (1 + failures), capped at 24 h). One company syncs at a time.
+- One cycle = `POST /api/v1/spv/sync-prepare` → `listaMesaje` with the certificate → `POST /api/v1/spv/sync-agent-result` → `descarcare` for each pending PDF → `POST /api/v1/spv/documents/{id}/agent-document`.
+- Endpoints: `GET /monitor`, `POST /monitor`, `DELETE /monitor/:companyId`, `POST /monitor/:companyId/run` (all require `X-Storno-Agent: 1`; CORS restricted to app.storno.ro). `apiBase` must be a storno.ro host.
+
 ## Platform Support
 
 | Platform | Certificate Access | How |

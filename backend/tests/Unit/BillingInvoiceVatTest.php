@@ -6,6 +6,7 @@ use App\Entity\Company;
 use App\Entity\Organization;
 use App\Entity\VatRate;
 use App\Manager\InvoiceManager;
+use App\Repository\ClientRepository;
 use App\Repository\CompanyRepository;
 use App\Repository\DocumentSeriesRepository;
 use App\Repository\VatRateRepository;
@@ -90,6 +91,7 @@ class BillingInvoiceVatTest extends TestCase
         $service = new BillingInvoiceService(
             $this->createMock(InvoiceManager::class),
             $this->createMock(CompanyRepository::class),
+            $this->createMock(ClientRepository::class),
             $this->createMock(DocumentSeriesRepository::class),
             $vatRateRepo,
             $euVatRateService,

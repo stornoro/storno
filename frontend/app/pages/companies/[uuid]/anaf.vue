@@ -150,6 +150,93 @@
         </div>
       </UCard>
 
+      <!-- Unattended SPV monitor (agent scheduler) -->
+      <UCard v-if="agentAvailable && agentCerts.length > 0" variant="outline">
+        <template #header>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-radar" class="h-5 w-5 text-primary" />
+              <h3 class="font-semibold">{{ $t('anaf.monitorTitle') }}</h3>
+            </div>
+            <UBadge :color="monitorEntry?.enabled ? 'success' : 'neutral'" variant="subtle">
+              {{ monitorEntry?.enabled ? $t('anaf.monitorActive') : $t('anaf.monitorInactive') }}
+            </UBadge>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.monitorDescription') }}</p>
+
+          <template v-if="monitorEntry">
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div class="flex justify-between gap-3">
+                <dt class="text-(--ui-text-muted)">{{ $t('anaf.monitorInterval') }}</dt>
+                <dd>{{ $t('anaf.monitorEveryHours', { hours: monitorEntry.intervalHours }) }}</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-(--ui-text-muted)">{{ $t('anaf.monitorSecretStore') }}</dt>
+                <dd>{{ monitorEntry.secretStore }}</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-(--ui-text-muted)">{{ $t('anaf.monitorLastRun') }}</dt>
+                <dd>{{ monitorEntry.lastRunAt ? formatMonitorDate(monitorEntry.lastRunAt) : '—' }}</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-(--ui-text-muted)">{{ $t('anaf.monitorNextRun') }}</dt>
+                <dd>{{ monitorEntry.running ? $t('anaf.monitorRunningNow') : (monitorEntry.nextRunAt ? formatMonitorDate(monitorEntry.nextRunAt) : '—') }}</dd>
+              </div>
+              <div v-if="monitorEntry.lastResult" class="flex justify-between gap-3 sm:col-span-2">
+                <dt class="text-(--ui-text-muted)">{{ $t('anaf.monitorLastResult') }}</dt>
+                <dd>{{ $t('anaf.monitorResultSummary', { listed: monitorEntry.lastResult.listed ?? 0, created: monitorEntry.lastResult.created ?? 0, downloaded: monitorEntry.lastResult.downloaded ?? 0, failed: monitorEntry.lastResult.failed ?? 0 }) }}</dd>
+              </div>
+            </dl>
+            <UAlert
+              v-if="monitorEntry.lastError"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-alert-triangle"
+              :title="$t('anaf.monitorLastError')"
+              :description="monitorEntry.lastError"
+            />
+            <UAlert
+              v-if="!monitorEntry.hasPin || !monitorEntry.hasApiKey"
+              color="warning"
+              variant="subtle"
+              icon="i-lucide-key-round"
+              :description="$t('anaf.monitorSecretsMissing')"
+            />
+            <div class="flex flex-wrap gap-2">
+              <UButton icon="i-lucide-refresh-cw" variant="outline" :loading="monitorRunning" @click="runMonitorNow">
+                {{ $t('anaf.monitorRunNow') }}
+              </UButton>
+              <UButton icon="i-lucide-power-off" color="error" variant="ghost" :loading="monitorSaving" @click="disableMonitor">
+                {{ $t('anaf.monitorDisable') }}
+              </UButton>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="flex flex-wrap items-end gap-3">
+              <UFormField :label="$t('anaf.monitorInterval')">
+                <USelect v-model="monitorInterval" :items="monitorIntervalOptions" class="w-40" />
+              </UFormField>
+              <UButton
+                icon="i-lucide-radar"
+                :loading="monitorSaving"
+                :disabled="!agentSelectedCertId || !agentPin"
+                @click="enableMonitor()"
+              >
+                {{ $t('anaf.monitorEnable') }}
+              </UButton>
+            </div>
+            <p v-if="!agentSelectedCertId || !agentPin" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorNeedsCertAndPin') }}</p>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorSecurityNote') }}</p>
+          </template>
+        </div>
+      </UCard>
+
+      <SharedStepUpMfaModal v-model:open="showMonitorMfa" @verified="onMonitorMfaVerified" />
+
       <!-- Aggregate Status Card -->
       <UCard variant="outline">
         <template #header>
@@ -412,7 +499,7 @@
 </template>
 
 <script setup lang="ts">
-import type { AnafToken, AnafStatus, AgentCertificate } from '~/types'
+import type { AnafToken, AnafStatus, AgentCertificate, AgentMonitorEntry } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -423,7 +510,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, certDisplayName, certIssuerShort, certExpiry } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor } = useAnafAgent()
 const agentUpdating = ref(false)
 
 const uuid = computed(() => route.params.uuid as string)
@@ -467,6 +554,111 @@ async function onUpdateAgent() {
     }
   } finally {
     agentUpdating.value = false
+  }
+}
+
+// Unattended SPV monitor (agent scheduler)
+const apiKeyStore = useApiKeyStore()
+const monitorEntry = ref<AgentMonitorEntry | null>(null)
+const monitorSaving = ref(false)
+const monitorRunning = ref(false)
+const monitorInterval = ref(6)
+const showMonitorMfa = ref(false)
+const monitorIntervalOptions = computed(() => [1, 3, 6, 12, 24].map(h => ({ label: $t('anaf.monitorEveryHours', { hours: h }), value: h })))
+const monitorCompany = computed(() => companyStore.companies.find(c => c.id === uuid.value) ?? null)
+
+function formatMonitorDate(iso: string): string {
+  return new Date(iso).toLocaleString(intlLocale, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+async function loadMonitorStatus() {
+  try {
+    const entries = await getMonitorStatus()
+    monitorEntry.value = entries.find(e => e.companyId === uuid.value) ?? null
+  } catch {
+    monitorEntry.value = null
+  }
+}
+
+async function enableMonitor(verificationToken?: string) {
+  const company = monitorCompany.value
+  if (!company || !agentSelectedCertId.value || !agentPin.value) return
+  monitorSaving.value = true
+  try {
+    const key = await apiKeyStore.createApiKey({
+      name: `Storno Agent - ${company.name}`,
+      scopes: ['declaration.view', 'declaration.submit'],
+    }, verificationToken)
+    if (!key) {
+      if (apiKeyStore.error?.includes('mfa_required')) {
+        showMonitorMfa.value = true
+        return
+      }
+      toast.add({ title: apiKeyStore.error || $t('anaf.monitorEnableFailed'), color: 'error' })
+      return
+    }
+    if (!key.token) {
+      toast.add({ title: $t('anaf.monitorEnableFailed'), color: 'error' })
+      return
+    }
+    try {
+      monitorEntry.value = await enrollMonitor({
+        companyId: uuid.value,
+        organizationId: authStore.organization?.id ?? null,
+        cif: String(company.cif),
+        name: company.name,
+        certificateId: agentSelectedCertId.value,
+        pin: agentPin.value,
+        apiKey: key.token,
+        apiTokenId: key.id,
+        apiBase: useApiBase().replace(/\/api$/, ''),
+        intervalHours: monitorInterval.value,
+      })
+      setPreferredCertId(uuid.value, agentSelectedCertId.value)
+      toast.add({ title: $t('anaf.monitorEnabled'), color: 'success' })
+    } catch (err: any) {
+      // The agent refused: do not leave an orphan key behind.
+      await apiKeyStore.revokeApiKey(key.id)
+      toast.add({ title: $t('anaf.monitorEnableFailed'), description: err?.message, color: 'error' })
+    }
+  } finally {
+    monitorSaving.value = false
+  }
+}
+
+function onMonitorMfaVerified(verificationToken: string) {
+  showMonitorMfa.value = false
+  enableMonitor(verificationToken)
+}
+
+async function disableMonitor() {
+  monitorSaving.value = true
+  try {
+    const result = await unenrollMonitor(uuid.value)
+    if (result.apiTokenId) await apiKeyStore.revokeApiKey(result.apiTokenId)
+    monitorEntry.value = null
+    toast.add({ title: $t('anaf.monitorDisabled'), color: 'success' })
+  } catch (err: any) {
+    toast.add({ title: $t('anaf.monitorDisableFailed'), description: err?.message, color: 'error' })
+  } finally {
+    monitorSaving.value = false
+  }
+}
+
+async function runMonitorNow() {
+  monitorRunning.value = true
+  try {
+    const result = await runMonitor(uuid.value)
+    if (result.entry) monitorEntry.value = result.entry
+    if (result.error) {
+      toast.add({ title: $t('anaf.monitorRunFailed'), description: result.error, color: 'error' })
+    } else {
+      toast.add({ title: $t('anaf.monitorRunDone'), color: 'success' })
+    }
+  } catch (err: any) {
+    toast.add({ title: $t('anaf.monitorRunFailed'), description: err?.message, color: 'error' })
+  } finally {
+    monitorRunning.value = false
   }
 }
 
@@ -782,6 +974,7 @@ onMounted(async () => {
   const running = await checkAgent()
   if (running) {
     await loadAgentCerts()
+    await loadMonitorStatus()
   }
 })
 </script>
