@@ -2,6 +2,7 @@ monolog:
     channels:
         - deprecation # Deprecations are logged in the dedicated "deprecation" channel when it exists
         - scheduler
+        - abuse # Outbound email abuse guard decisions (always written, own file in prod)
 
 when@dev:
     monolog:
@@ -74,6 +75,13 @@ when@prod:
                 level: debug
                 max_files: 30
                 channels: [scheduler]
+                formatter: monolog.formatter.json
+            abuse:
+                type: rotating_file
+                path: "%kernel.logs_dir%/abuse.log"
+                level: warning
+                max_files: 30
+                channels: [abuse]
                 formatter: monolog.formatter.json
             deprecation:
                 type: "null"
