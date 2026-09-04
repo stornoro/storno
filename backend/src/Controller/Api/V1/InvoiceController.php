@@ -7,6 +7,7 @@ use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
 use App\Enum\DocumentStatus;
 use App\Enum\MessageKey;
+use App\Exception\EmailSendBlockedException;
 use App\Manager\InvoiceManager;
 use App\Message\GeneratePdfMessage;
 use App\Message\GenerateZipExportMessage;
@@ -1586,6 +1587,10 @@ class InvoiceController extends AbstractController
                 $template,
                 $user,
             );
+        } catch (EmailSendBlockedException $e) {
+            $headers = $e->retryAfter ? ['Retry-After' => (string) $e->retryAfter] : [];
+
+            return $this->json(['error' => $e->getMessage(), 'code' => $e->errorCode], $e->httpStatus, $headers);
         } catch (\Throwable $e) {
             return $this->json(['error' => 'Failed to send email: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

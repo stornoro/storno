@@ -30,6 +30,13 @@ const exactMap: Record<string, string> = {
   'Challenge expired or not found.': 'Provocarea a expirat sau nu a fost gasita.',
   'Missing session ID.': 'ID-ul sesiunii lipseste.',
 
+  // ── Outbound email guard ─────────────────────────────────────────
+  'Too many emails sent in a short time. Please wait a few minutes and try again.': 'Prea multe emailuri trimise intr-un interval scurt. Asteptati cateva minute si incercati din nou.',
+  'Email sending is not available on your plan.': 'Trimiterea de emailuri nu este disponibila pe planul dvs.',
+  'The email content was rejected by our abuse filter. Document emails must describe the attached document.': 'Continutul emailului a fost respins de filtrul anti-abuz. Emailurile trebuie sa descrie documentul atasat.',
+  'The email body contains HTML that is not allowed.': 'Corpul emailului contine cod HTML nepermis.',
+  'The email subject contains characters that are not allowed.': 'Subiectul emailului contine caractere nepermise.',
+
   // ── Permissions / Access ─────────────────────────────────────────
   'Access denied.': 'Acces interzis.',
   'Forbidden.': 'Acces interzis.',
@@ -195,6 +202,16 @@ const exactMap: Record<string, string> = {
 }
 
 const patternMap: [RegExp, string | ((match: RegExpMatchArray) => string)][] = [
+  // A document email can have at most 5 recipients (to, cc and bcc combined).
+  [
+    /^A document email can have at most (\d+) recipients \(to, cc and bcc combined\)\.$/,
+    (m) => `Un email poate avea cel mult ${m[1]} destinatari (to, cc si bcc la un loc).`,
+  ],
+  // Daily email limit reached (30 document emails per 24 hours on your plan).
+  [
+    /^Daily email limit reached \((\d+) document emails per 24 hours on your plan\)\.$/,
+    (m) => `Limita zilnica de emailuri a fost atinsa (${m[1]} emailuri de documente la 24 de ore pe planul dvs.).`,
+  ],
   // Payment amount cannot exceed the remaining balance of 1500.00
   [
     /^Payment amount cannot exceed the remaining balance of (.+)\.$/,

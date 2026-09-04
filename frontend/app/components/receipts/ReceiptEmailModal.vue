@@ -242,6 +242,7 @@ async function onSend() {
   else {
     toast.add({
       title: $t('receipts.emailError'),
+      description: receiptStore.error || undefined,
       icon: 'i-lucide-mail-x',
       color: 'error',
     })

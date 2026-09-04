@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Constants\Pagination;
+use App\Exception\EmailSendBlockedException;
 use App\Manager\ReceiptManager;
 use App\Repository\EmailLogRepository;
 use App\Repository\EmailTemplateRepository;
@@ -368,6 +369,10 @@ class ReceiptController extends AbstractController
                 sentBy: $user,
                 template: $template,
             );
+        } catch (EmailSendBlockedException $e) {
+            $headers = $e->retryAfter ? ['Retry-After' => (string) $e->retryAfter] : [];
+
+            return $this->json(['error' => $e->getMessage(), 'code' => $e->errorCode], $e->httpStatus, $headers);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

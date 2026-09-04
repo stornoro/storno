@@ -6,6 +6,7 @@ use App\Entity\Company;
 use App\Entity\DeliveryNote;
 use App\Entity\EmailLog;
 use App\Entity\Invoice;
+use App\Entity\Organization;
 use App\Entity\Receipt;
 use App\Enum\EmailStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -111,5 +112,25 @@ class EmailLogRepository extends ServiceEntityRepository
             ->orderBy('el.sentAt', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Number of document emails (any status) attempted by an organization since a point in time.
+     *
+     * @param string[] $categories
+     */
+    public function countByOrganizationSince(Organization $organization, \DateTimeInterface $since, array $categories): int
+    {
+        return (int) $this->createQueryBuilder('el')
+            ->select('COUNT(el.id)')
+            ->join('el.company', 'c')
+            ->where('c.organization = :org')
+            ->andWhere('el.sentAt >= :since')
+            ->andWhere('el.category IN (:categories)')
+            ->setParameter('org', $organization)
+            ->setParameter('since', $since)
+            ->setParameter('categories', $categories)
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 }

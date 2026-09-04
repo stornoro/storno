@@ -64,6 +64,14 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        document_email_free:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
+        document_email_paid:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
 
 when@prod:
     framework:
@@ -132,3 +140,11 @@ when@prod:
                 policy: 'sliding_window'
                 limit: 10
                 interval: '1 hour'
+            document_email_free:
+                policy: 'sliding_window'
+                limit: 10
+                interval: '10 minutes'
+            document_email_paid:
+                policy: 'sliding_window'
+                limit: 60
+                interval: '10 minutes'

@@ -31,6 +31,7 @@ class DeliveryNoteEmailService
         private readonly string $mailFrom,
         private readonly WhiteLabelResolver $whiteLabelResolver,
         private readonly OrgMailer $orgMailer,
+        private readonly OutboundEmailGuard $outboundEmailGuard,
     ) {}
 
     public function send(
@@ -60,6 +61,17 @@ class DeliveryNoteEmailService
 
         $subject = $this->substituteVariables($subject, $deliveryNote);
         $body = $this->substituteVariables($body, $deliveryNote);
+
+        $this->outboundEmailGuard->assertCanSend(
+            $deliveryNote->getCompany()?->getOrganization(),
+            $sentBy,
+            'delivery_note',
+            $to,
+            $cc,
+            $bcc,
+            $subject,
+            $body,
+        );
 
         $fromName = $companyName ?: 'Storno.ro';
 

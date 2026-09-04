@@ -242,6 +242,7 @@ async function onSend() {
   else {
     toast.add({
       title: $t('deliveryNotes.emailError'),
+      description: deliveryNoteStore.error || undefined,
       icon: 'i-lucide-mail-x',
       color: 'error',
     })
