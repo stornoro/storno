@@ -38,7 +38,8 @@ final class ResummarizeSpvDocumentsCommand extends Command
         $count = 0;
         foreach ($qb->getQuery()->toIterable() as $doc) {
             /** @var SpvDocument $doc */
-            $doc->setSummary($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $doc->getCategory()));
+            $doc->setSummary($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $doc->getCategory(), 'ro'));
+            $doc->setSummaryEn($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $doc->getCategory(), 'en'));
             if (++$count % 200 === 0) {
                 $this->entityManager->flush();
                 $this->entityManager->clear();

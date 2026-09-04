@@ -683,6 +683,7 @@ export interface SpvDocument {
   details: string | null
   idSolicitare?: string | null
   summary: string | null
+  summaryEn: string | null
   anafCreatedAt: string | null
   fileName: string | null
   fileSize: number | null

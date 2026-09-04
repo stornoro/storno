@@ -4080,6 +4080,8 @@ export default defineI18nLocale(async () => {
 
   // ── Tax Declarations ───────────────────────────────────────────
   spv: {
+    pinRequiredTitle: 'Certificate PIN missing',
+    pinRequiredHint: 'No operation with the certificate runs without the PIN. Enter the token PIN on the company page, ANAF → Agent, and save the preference.',
     lastSynced: 'Last ANAF sync: {date}',
     neverSynced: 'Not synced with ANAF yet. Press "Sync with ANAF" or enable automatic monitoring on the company page.',
     summary: 'What it means',

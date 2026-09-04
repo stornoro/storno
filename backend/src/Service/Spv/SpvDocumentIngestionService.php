@@ -85,7 +85,8 @@ final class SpvDocumentIngestionService
             $doc->setCif($msgCif !== '' ? $msgCif : $cif);
             $doc->setDetails(isset($msg['detalii']) ? trim((string) $msg['detalii']) : null);
             $doc->setIdSolicitare(isset($msg['id_solicitare']) ? (string) $msg['id_solicitare'] : null);
-            $doc->setSummary($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $class['category']));
+            $doc->setSummary($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $class['category'], 'ro'));
+            $doc->setSummaryEn($this->summarizer->summarize($doc->getMessageType(), $doc->getDetails(), $class['category'], 'en'));
             $doc->setAnafCreatedAt($this->parseAnafDate($msg['data_creare'] ?? null));
 
             $this->entityManager->persist($doc);

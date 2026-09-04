@@ -8,7 +8,7 @@ const store = useSpvDocumentStore()
 const companyStore = useCompanyStore()
 const toast = useToast()
 const route = useRoute()
-const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
+const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, getSavedPin, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
 
 useHead({ title: $t('spv.title') })
 
@@ -46,11 +46,16 @@ const savedCertId = computed(() => {
 const syncing = ref(false)
 const syncProgress = ref<{ done: number; total: number } | null>(null)
 const setupOpen = ref(false)
-const setupState = ref<'no-cert' | 'no-agent'>('no-cert')
+const setupState = ref<'no-cert' | 'no-agent' | 'no-pin'>('no-cert')
 
 async function handleSync() {
   if (!savedCertId.value) {
     setupState.value = 'no-cert'
+    setupOpen.value = true
+    return
+  }
+  if (!getSavedPin(savedCertId.value)) {
+    setupState.value = 'no-pin'
     setupOpen.value = true
     return
   }
@@ -117,7 +122,7 @@ async function handleMarkAllRead() {
 // ── Requests to ANAF (solicitari) ──────────────────────────────────
 const requestOpen = ref(false)
 const requestSending = ref(false)
-const requestType = ref<string | null>(null)
+const requestType = ref<string | undefined>(undefined)
 const requestParams = ref<Record<string, string>>({})
 
 const groupLabels: Record<string, string> = { rapoarte: 'spv.requests.groups.rapoarte', documente: 'spv.requests.groups.documente', declaratii: 'spv.requests.groups.declaratii', decizii: 'spv.requests.groups.decizii' }
@@ -141,7 +146,7 @@ const requestReady = computed(() => !!selectedRequestType.value && selectedReque
 
 async function openRequest() {
   try { await store.fetchRequestTypes() } catch (e: any) { toast.add({ title: e?.message ?? $t('common.error'), color: 'error' }); return }
-  requestType.value = null
+  requestType.value = undefined
   requestParams.value = { an: String(new Date().getFullYear()) }
   requestOpen.value = true
 }
@@ -149,6 +154,7 @@ async function openRequest() {
 async function sendRequest() {
   if (!requestType.value) return
   if (!savedCertId.value) { setupState.value = 'no-cert'; setupOpen.value = true; return }
+  if (!getSavedPin(savedCertId.value)) { setupState.value = 'no-pin'; setupOpen.value = true; return }
   await checkAgent()
   if (!agentAvailable.value) {
     await tryAutoStart()
@@ -212,6 +218,10 @@ const severityItems = computed(() => [
   { label: $t('spv.allSeverities'), value: null },
   ...(['critical', 'high', 'normal', 'low'] as const).map(s => ({ label: $t(`spv.severity.${s}`), value: s })),
 ])
+
+function summaryFor(doc: SpvDocument): string | null {
+  return locale.value === 'ro' ? (doc.summary ?? doc.summaryEn) : (doc.summaryEn ?? doc.summary)
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -335,7 +345,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
                 <UBadge color="neutral" variant="outline" size="xs">{{ doc.categoryLabel }}</UBadge>
                 <UBadge v-if="!doc.read" color="primary" variant="soft" size="xs">{{ $t('spv.unread') }}</UBadge>
               </div>
-              <p v-if="doc.summary" class="text-sm mt-0.5 line-clamp-2">{{ doc.summary }}</p>
+              <p v-if="summaryFor(doc)" class="text-sm mt-0.5 line-clamp-2">{{ summaryFor(doc) }}</p>
               <p class="text-xs text-muted mt-0.5 line-clamp-1">{{ doc.details || '—' }}</p>
               <div class="text-xs text-dimmed mt-1 flex gap-3 flex-wrap">
                 <span>{{ formatDate(doc.anafCreatedAt) }}</span>
@@ -430,7 +440,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               <UBadge :color="severityColor[detail.severity] ?? 'neutral'" variant="subtle">{{ $t(`spv.severity.${detail.severity}`) }}</UBadge>
               <UBadge color="neutral" variant="outline">{{ detail.categoryLabel }}</UBadge>
             </div>
-            <UAlert v-if="detail.summary" color="primary" variant="soft" icon="i-lucide-info" :title="$t('spv.summary')" :description="detail.summary ?? undefined" />
+            <UAlert v-if="summaryFor(detail)" color="primary" variant="soft" icon="i-lucide-info" :title="$t('spv.summary')" :description="summaryFor(detail) ?? undefined" />
             <div>
               <div class="text-xs text-muted mb-1">{{ $t('spv.anafText') }}</div>
               <p class="text-sm whitespace-pre-wrap">{{ detail.details || '—' }}</p>
@@ -465,11 +475,11 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
         </template>
         <template #body>
           <div class="flex flex-col items-center gap-3 py-4 px-4">
-            <UIcon :name="setupState === 'no-cert' ? 'i-lucide-key-round' : 'i-lucide-wifi-off'" class="text-3xl text-warning" />
-            <p class="text-sm font-medium">{{ setupState === 'no-cert' ? $t('declarations.agentNoCertConfigured') : $t('declarations.bulkAgentNotRunning') }}</p>
-            <p class="text-sm text-muted text-center">{{ setupState === 'no-cert' ? $t('declarations.agentConfigureFirstHint') : $t('declarations.bulkAgentStartHint') }}</p>
+            <UIcon :name="setupState === 'no-agent' ? 'i-lucide-wifi-off' : 'i-lucide-key-round'" class="text-3xl text-warning" />
+            <p class="text-sm font-medium">{{ setupState === 'no-cert' ? $t('declarations.agentNoCertConfigured') : setupState === 'no-pin' ? $t('spv.pinRequiredTitle') : $t('declarations.bulkAgentNotRunning') }}</p>
+            <p class="text-sm text-muted text-center">{{ setupState === 'no-cert' ? $t('declarations.agentConfigureFirstHint') : setupState === 'no-pin' ? $t('spv.pinRequiredHint') : $t('declarations.bulkAgentStartHint') }}</p>
             <UButton
-              v-if="setupState === 'no-cert'"
+              v-if="setupState === 'no-cert' || setupState === 'no-pin'"
               :label="$t('declarations.agentConfigureFirst')"
               icon="i-lucide-settings"
               variant="outline"

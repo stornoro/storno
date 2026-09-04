@@ -1,0 +1,7 @@
+name = "mta-sts-storno"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[routes]]
+pattern = "mta-sts.storno.ro/*"
+zone_name = "storno.ro"
