@@ -40,6 +40,13 @@ class SpvRequestTest extends ApiTestCase
         // unknown type
         $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'CAF', 'params' => []], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(422);
+
+        // exists in the SPV website form but the web service rejects it (verified live: "tip raport= C168 necunoscut")
+        $this->assertFalse($byType['C168']['wsSupported']);
+        $this->assertTrue($byType['Fisa Rol Completa']['wsSupported']);
+        $c168 = $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'C168', 'params' => []], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertStringContainsString('formularul SPV', $c168['error']);
     }
 
     public function testPrepareAgentResultAndLinkToInboxDocument(): void

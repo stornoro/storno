@@ -129,7 +129,7 @@ const groupLabels: Record<string, string> = { rapoarte: 'spv.requests.groups.rap
 const requestTypeItems = computed(() => {
   const groups: Array<Array<{ label: string, value: string }>> = []
   for (const g of ['rapoarte', 'documente', 'declaratii', 'decizii']) {
-    const items = store.requestTypes.filter(t => t.group === g).map(t => ({ label: t.label !== t.type ? `${t.label}` : t.type, value: t.type, group: g }))
+    const items = store.requestTypes.filter(t => t.group === g).map(t => ({ label: t.wsSupported ? t.label : `${t.label} (${$t('spv.requests.webOnlyShort')})`, value: t.type, group: g, disabled: !t.wsSupported }))
     if (items.length) groups.push(items)
   }
   return groups
@@ -142,7 +142,7 @@ const requestFields = computed(() => {
 })
 const monthItems = Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1), value: String(i + 1) }))
 const reasonItems = computed(() => store.incomeCertificateReasons.map(r => ({ label: r, value: r })))
-const requestReady = computed(() => !!selectedRequestType.value && selectedRequestType.value.params.every(n => (requestParams.value[n] ?? '') !== ''))
+const requestReady = computed(() => !!selectedRequestType.value && selectedRequestType.value.wsSupported && selectedRequestType.value.params.every(n => (requestParams.value[n] ?? '') !== ''))
 
 async function openRequest() {
   try { await store.fetchRequestTypes() } catch (e: any) { toast.add({ title: e?.message ?? $t('common.error'), color: 'error' }); return }
@@ -412,6 +412,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
             <UFormField :label="$t('spv.requests.type')" required>
               <USelectMenu v-model="requestType" :items="requestTypeItems" value-key="value" :placeholder="$t('spv.requests.typePlaceholder')" class="w-full" />
             </UFormField>
+            <UAlert v-if="selectedRequestType && !selectedRequestType.wsSupported" color="warning" variant="soft" icon="i-lucide-globe" :description="$t('spv.requests.webOnlyHint')" />
             <p v-if="selectedRequestType?.note" class="text-xs text-muted">{{ selectedRequestType.note }}</p>
             <p v-if="selectedRequestType?.since" class="text-xs text-dimmed">{{ $t('spv.requests.since', { year: selectedRequestType.since }) }}</p>
             <div v-if="requestFields.length" class="grid grid-cols-2 gap-3">

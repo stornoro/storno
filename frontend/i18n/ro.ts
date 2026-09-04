@@ -4089,6 +4089,8 @@ export default defineI18nLocale(async () => {
     anafText: 'Textul ANAF',
     requests: {
       title: 'Solicitari catre ANAF',
+      webOnlyShort: 'doar din SPV web',
+      webOnlyHint: 'ANAF nu accepta acest tip prin serviciul web (raspunde „tip raport necunoscut”). Se solicita doar din formularul SPV de pe anaf.ro; raspunsul apare apoi aici la sincronizare.',
       description: 'Cere rapoarte (fisa rol, vector fiscal, obligatii de plata), copii dupa declaratii, duplicate de recipise sau certificate. Raspunsul ajunge in SPV si este arhivat aici la urmatoarea sincronizare.',
       new: 'Solicitare noua',
       type: 'Tip solicitare',

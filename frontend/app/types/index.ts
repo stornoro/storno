@@ -731,6 +731,7 @@ export interface SpvRequestType {
   optional: string[]
   since: number | null
   note: string | null
+  wsSupported: boolean
 }
 
 // ── VAT Report ──────────────────────────────────────────────────────
