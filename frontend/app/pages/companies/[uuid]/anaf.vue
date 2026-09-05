@@ -511,6 +511,7 @@ const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
 const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor } = useAnafAgent()
+const { describeAgentError } = useAgentError()
 const agentUpdating = ref(false)
 
 const uuid = computed(() => route.params.uuid as string)
@@ -619,7 +620,7 @@ async function enableMonitor(verificationToken?: string) {
     } catch (err: any) {
       // The agent refused: do not leave an orphan key behind.
       await apiKeyStore.revokeApiKey(key.id)
-      toast.add({ title: $t('anaf.monitorEnableFailed'), description: err?.message, color: 'error' })
+      toast.add({ title: $t('anaf.monitorEnableFailed'), description: describeAgentError(err).description, color: 'error' })
     }
   } finally {
     monitorSaving.value = false
@@ -639,7 +640,7 @@ async function disableMonitor() {
     monitorEntry.value = null
     toast.add({ title: $t('anaf.monitorDisabled'), color: 'success' })
   } catch (err: any) {
-    toast.add({ title: $t('anaf.monitorDisableFailed'), description: err?.message, color: 'error' })
+    toast.add({ title: $t('anaf.monitorDisableFailed'), description: describeAgentError(err).description, color: 'error' })
   } finally {
     monitorSaving.value = false
   }
@@ -656,7 +657,7 @@ async function runMonitorNow() {
       toast.add({ title: $t('anaf.monitorRunDone'), color: 'success' })
     }
   } catch (err: any) {
-    toast.add({ title: $t('anaf.monitorRunFailed'), description: err?.message, color: 'error' })
+    toast.add({ title: $t('anaf.monitorRunFailed'), description: describeAgentError(err).description, color: 'error' })
   } finally {
     monitorRunning.value = false
   }
