@@ -9,6 +9,7 @@ const companyStore = useCompanyStore()
 const toast = useToast()
 const route = useRoute()
 const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, getSavedPin, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
+const { describeAgentError } = useAgentError()
 
 useHead({ title: $t('spv.title') })
 
@@ -83,7 +84,10 @@ async function handleSync() {
     })
     await Promise.all([store.fetchDocuments(), store.fetchStats()])
   } catch (e: any) {
-    toast.add({ title: e?.data?.error ?? e?.message ?? $t('spv.syncError'), color: 'error' })
+    const d = describeAgentError(e, $t('spv.syncError'))
+    toast.add({ title: d.title, description: d.description, color: 'error' })
+    if (d.code === 'agent-offline') { setupState.value = 'no-agent'; setupOpen.value = true }
+    if (d.code === 'pin-required') { setupState.value = 'no-pin'; setupOpen.value = true }
   } finally {
     syncing.value = false
     syncProgress.value = null
@@ -176,7 +180,8 @@ async function sendRequest() {
       toast.add({ title: $t('spv.requests.failed'), description: result.errorMessage ?? undefined, color: 'error' })
     }
   } catch (e: any) {
-    toast.add({ title: $t('spv.requests.failed'), description: e?.data?.error ?? e?.message, color: 'error' })
+    const d = describeAgentError(e, $t('spv.requests.failed'))
+    toast.add({ title: d.title, description: d.description, color: 'error' })
   } finally {
     requestSending.value = false
     await store.fetchRequests()

@@ -4079,6 +4079,19 @@ export default defineI18nLocale(async () => {
   },
 
   // ── Tax Declarations ───────────────────────────────────────────
+  agentErrors: {
+    'agent-offline': { title: 'Storno Agent is not running', hint: 'Start the Storno Agent app on this computer (or install it from get.storno.ro/agent) and try again.' },
+    'agent-timeout': { title: 'Storno Agent did not answer in time', hint: 'The agent is running but the operation took too long. Check that the USB token is plugged in and try again.' },
+    'token-missing': { title: 'USB token not connected', hint: 'Plug in the token with the digital certificate (or check its driver / middleware), then try again.' },
+    'pin-required': { title: 'Certificate PIN missing', hint: 'Nothing is done with the certificate without its PIN. Enter the PIN under Company → ANAF → Agent and save the preference.' },
+    'pin-wrong': { title: 'Wrong PIN', hint: 'The token rejected the PIN. Check it in the vendor application: after a few wrong attempts the token locks.' },
+    'pin-locked': { title: 'Token locked', hint: 'The PIN was entered wrongly too many times. Unlock the token with the PUK in the vendor application (SafeNet, Longmai, certSIGN).' },
+    'anaf-unreachable': { title: 'ANAF is not answering', hint: 'ANAF\'s servers did not respond or returned an error. Try again in a few minutes.' },
+    'anaf-session': { title: 'ANAF did not accept the certificate', hint: 'The SPV session expired or the certificate has no rights on this CUI. Check in SPV that the certificate is enrolled for the company and try again.' },
+    'storno-unreachable': { title: 'Connection to Storno lost', hint: 'The request never reached Storno (internet down or an update in progress). Wait a few seconds and try again.' },
+    unknown: { title: 'The operation failed', hint: 'Please try again. If the problem persists, write to contact@storno.ro.' },
+  },
+
   spv: {
     pinRequiredTitle: 'Certificate PIN missing',
     pinRequiredHint: 'No operation with the certificate runs without the PIN. Enter the token PIN on the company page, ANAF → Agent, and save the preference.',

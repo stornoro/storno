@@ -27,6 +27,7 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
 // ── Agent Bulk Submit ─────────────────────────────────────────────
 const companyStore = useCompanyStore()
 const { agentAvailable, agentVersion, agentUpdateAvailable, agentLatestVersion, checkAgent, bulkSubmitViaAgent, syncViaAgent, refreshStatusesViaAgent, tryAutoStart, triggerAgentUpdate, getPreferredCertId } = useAnafAgent()
+const { describeAgentError } = useAgentError()
 const agentUpdating = ref(false)
 
 async function onUpdateAgent() {
@@ -105,7 +106,8 @@ async function runBulkAgentSubmit(ids: string[]) {
     agentBulkErrors.value.push(...result.errors)
     agentBulkRetryableIds.value = result.retryableIds
   } catch (e: any) {
-    agentBulkErrors.value.push({ declarationId: '', error: e?.message ?? 'Unknown error' })
+    const d = describeAgentError(e)
+    agentBulkErrors.value.push({ declarationId: '', error: d.description ? `${d.title}: ${d.description}` : d.title })
   }
 
   agentBulkState.value = 'done'
@@ -262,7 +264,8 @@ async function handleRefreshStatuses() {
     toast.add({ title: $t('declarations.refreshSuccess') + ` (${msg})`, color: 'success' })
     store.fetchDeclarations()
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.syncError'), color: 'error' })
+    const d = describeAgentError(e, $t('declarations.syncError'))
+    toast.add({ title: d.title, description: d.description, color: 'error' })
   } finally {
     refreshing.value = false
   }
@@ -278,7 +281,8 @@ async function handleSyncFromAnaf() {
     syncPopoverOpen.value = false
     store.fetchDeclarations()
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.syncError'), color: 'error' })
+    const d = describeAgentError(e, $t('declarations.syncError'))
+    toast.add({ title: d.title, description: d.description, color: 'error' })
   } finally {
     syncing.value = false
   }

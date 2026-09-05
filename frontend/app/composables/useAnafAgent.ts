@@ -1,4 +1,5 @@
 import type { AgentCertificate, AnafProxyRequest, AnafProxyResponse, AgentMonitorEntry } from '~/types'
+import { AgentError, classifyAgentError } from './useAgentError'
 
 const AGENT_BASE = 'https://agent.storno.ro:17394'
 
@@ -9,8 +10,29 @@ export function useAnafAgent() {
   const agentUpdateAvailable = ref(false)
   const agentLatestVersion = ref<string | null>(null)
 
+  /** fetch() to the local agent; a connection failure becomes a typed error ("the agent is not running"), never a raw TypeError. */
   async function agentFetch(path: string, opts?: RequestInit): Promise<Response> {
-    return await fetch(`${AGENT_BASE}${path}`, opts)
+    try {
+      return await fetch(`${AGENT_BASE}${path}`, opts)
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
+        throw new AgentError('agent-timeout', `Storno Agent did not answer in time (${path})`, err?.message)
+      }
+      throw new AgentError('agent-offline', `Storno Agent is not reachable (${path})`, err?.message)
+    }
+  }
+
+  /** The agent answered with an error: classify it (PIN, token, ANAF) so the UI can say what to do. */
+  async function agentJson<T = any>(res: Response): Promise<T> {
+    let data: any = null
+    try { data = await res.json() } catch { data = null }
+    if (!res.ok || (data && typeof data === 'object' && data.error && !('statusCode' in data) && !('results' in data))) {
+      const message = String(data?.error ?? `Agent HTTP ${res.status}`)
+      const details = typeof data?.details === 'string' ? data.details : undefined
+      const code = classifyAgentError({ message: [message, details].filter(Boolean).join(' | ') })
+      throw new AgentError(code === 'unknown' ? 'unknown' : code, details ? `${message}: ${details}` : message, details)
+    }
+    return data as T
   }
 
   async function checkAgent(): Promise<boolean> {
@@ -78,7 +100,7 @@ export function useAnafAgent() {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(130_000), // 120s for PIN + buffer
     })
-    return await res.json()
+    return await agentJson<AnafProxyResponse>(res)
   }
 
   /**
@@ -100,7 +122,7 @@ export function useAnafAgent() {
       body: JSON.stringify({ requests: enriched }),
       signal: AbortSignal.timeout(enriched.length * 30_000 + 30_000),
     })
-    const data = await res.json()
+    const data = await agentJson<{ results?: any[] }>(res)
     return (data.results ?? []).map((r: any) => ({
       index: r.index,
       statusCode: r.statusCode,

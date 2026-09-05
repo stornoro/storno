@@ -4080,6 +4080,19 @@ export default defineI18nLocale(async () => {
     },
 
   // ── Declaratii fiscale ─────────────────────────────────────────
+  agentErrors: {
+    'agent-offline': { title: 'Storno Agent nu ruleaza', hint: 'Porneste aplicatia Storno Agent de pe acest calculator (sau instaleaz-o de la get.storno.ro/agent) si reia operatiunea.' },
+    'agent-timeout': { title: 'Storno Agent nu a raspuns la timp', hint: 'Agentul este pornit, dar operatiunea a durat prea mult. Verifica daca tokenul USB este conectat si incearca din nou.' },
+    'token-missing': { title: 'Tokenul USB nu este conectat', hint: 'Introdu tokenul cu certificatul digital (sau verifica driverul/middleware-ul acestuia), apoi reia operatiunea.' },
+    'pin-required': { title: 'PIN-ul certificatului lipseste', hint: 'Nicio operatiune cu certificatul nu se face fara PIN. Introdu PIN-ul in Companie → ANAF → Agent si salveaza preferinta.' },
+    'pin-wrong': { title: 'PIN gresit', hint: 'PIN-ul introdus nu a fost acceptat de token. Verifica-l in aplicatia producatorului: dupa cateva incercari gresite tokenul se blocheaza.' },
+    'pin-locked': { title: 'Tokenul este blocat', hint: 'PIN-ul a fost introdus gresit de prea multe ori. Deblocheaza tokenul cu PUK-ul din aplicatia producatorului (SafeNet, Longmai, certSIGN).' },
+    'anaf-unreachable': { title: 'ANAF nu raspunde', hint: 'Serverele ANAF nu au raspuns sau au dat eroare. Incearca din nou in cateva minute.' },
+    'anaf-session': { title: 'ANAF nu a acceptat certificatul', hint: 'Sesiunea SPV a expirat sau certificatul nu are drepturi pe acest CUI. Verifica in SPV ca certificatul este inrolat pentru firma si reia operatiunea.' },
+    'storno-unreachable': { title: 'Conexiunea cu Storno s-a intrerupt', hint: 'Cererea nu a ajuns la Storno (internet intrerupt sau o actualizare in curs). Asteapta cateva secunde si incearca din nou.' },
+    unknown: { title: 'Operatiunea a esuat', hint: 'Incearca din nou. Daca problema persista, scrie-ne la contact@storno.ro.' },
+  },
+
   spv: {
     pinRequiredTitle: 'PIN-ul certificatului lipseste',
     pinRequiredHint: 'Nicio operatiune cu certificatul nu se face fara PIN. Introdu PIN-ul token-ului in pagina companiei, sectiunea ANAF → Agent, si salveaza preferinta.',
