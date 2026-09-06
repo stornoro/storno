@@ -70,10 +70,24 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-# Zip the .app bundle (use -y to preserve symlinks)
-cd build
-zip -r -y "$(basename "$OUTPUT_ZIP")" "$(basename "$APP_DIR")"
-cd ..
+# Seal the bundle with an ad-hoc signature. Without it the bundle has no
+# _CodeSignature/CodeResources while the pkg binary carries its own ad-hoc
+# signature, and Gatekeeper reports a quarantined download as
+# "Storno Agent is damaged and can't be opened". Sealed, macOS shows the
+# regular "unidentified developer" flow (right-click > Open / Open Anyway).
+# Set MACOS_SIGN_IDENTITY to a "Developer ID Application" identity to sign
+# for real (notarization still has to be done separately).
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign "${MACOS_SIGN_IDENTITY:--}" "$APP_DIR"
+  codesign --verify --deep --strict "$APP_DIR"
+fi
+
+# Zip the .app bundle with ditto so the signature seal and symlinks survive.
+if command -v ditto >/dev/null 2>&1; then
+  ditto -c -k --keepParent "$APP_DIR" "$OUTPUT_ZIP"
+else
+  (cd build && zip -r -y "$(basename "$OUTPUT_ZIP")" "$(basename "$APP_DIR")")
+fi
 
 # Clean up .app directory
 rm -rf "$APP_DIR"

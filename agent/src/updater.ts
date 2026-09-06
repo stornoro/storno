@@ -2,7 +2,7 @@ import { createWriteStream, renameSync, chmodSync, unlinkSync } from 'node:fs';
 import { get as httpsGet } from 'node:https';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 
 const REPO = 'stornoro/storno';
 const RELEASE_TAG_PREFIX = 'agent-v';
@@ -121,6 +121,15 @@ export async function applyUpdate(currentVersion: string): Promise<{ success: bo
     // Ensure executable permission on unix
     if (process.platform !== 'win32') {
       chmodSync(binaryPath, 0o755);
+    }
+
+    // Re-seal the .app bundle so its signature covers the new binary
+    // (release bundles are ad-hoc signed; a stale seal reads as "damaged").
+    if (process.platform === 'darwin') {
+      const appDir = binaryPath.match(/^(.*\.app)\/Contents\/MacOS\//)?.[1];
+      if (appDir) {
+        try { execFileSync('codesign', ['--force', '--deep', '--sign', '-', appDir], { stdio: 'ignore' }); } catch { /* best effort */ }
+      }
     }
 
     // Restart: spawn the new binary and exit
