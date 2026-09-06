@@ -134,7 +134,8 @@ final class C168Form implements DeclarationFormInterface
                 ['code' => 'DUK-BUN', 'source' => 'ANAF DUKIntegrator', 'message' => 'bifa_bun=1 (imobil) requires the property address; bifa_bun=2 (mobil) requires the description.'],
                 ['code' => 'BR-C168-00991', 'source' => 'ANAF web form (also checked online by Storno)', 'message' => 'Procentul calculat trebuie să fie egal cu suma cotelor locatorilor din contract (±0.1): contract.cotaVenit = Σ locatori[].cotaVenit.'],
                 ['code' => 'BR-C168-0041', 'source' => 'ANAF web form', 'message' => 'Pentru imobil, trebuie completate toate câmpurile de adresă: județ, localitate, bloc/scară/etaj/ap și cod poștal.'],
-                ['code' => 'BR-C168-005911', 'source' => 'ANAF web form', 'message' => 'Cif-ul chiriașului este obligatoriu și numeric dacă s-a selectat adresa în România. The e-guvernare portal upload (Storno Agent) accepts a termination without it when the CNP is genuinely unknown; the web form does not.'],
+                ['code' => 'BR-C168-005911 / G000', 'source' => 'ANAF web form + back-office processing', 'message' => 'The tenant CNP/CIF is mandatory. The portal upload passes DUK without it, but ANAF rejects the request in processing (recipisa: "Sectiunea B DATE DESPRE LOCATAR: CNP/NIF/CIF neprecizat"). Get it from the contract or the tenant; never invent it.'],
+                ['code' => 'R_MULTI_C168', 'source' => 'ANAF back-office processing', 'message' => 'Only one C168 per landlord CIF and period (an/luna=12) can be in processing at a time: a second upload is rejected ("Exista deja o declaratie C168 in curs de prelucrare pentru aceasta perioada"). Put every contract to register/amend/terminate in ONE request (contracte[]), or wait for the recipisa of the previous one before filing the next.'],
                 ['code' => 'BR-CNP-0002', 'source' => 'ANAF DUKIntegrator + web form', 'message' => 'Every CNP (locator, chiriaș, coproprietar) must have a correct control digit; ANAF rejects invented or padded CNPs.'],
                 ['code' => 'BR-C168-0031 / BR-C168-0088 / R77 / R9.2', 'source' => 'ANAF DUKIntegrator + web form', 'message' => 'Organul fiscal competent (ufisc) is filled only for a NIF (13 digits starting with 9, non-residents) and must be empty for a CNP or CUI. Storno drops it otherwise.'],
                 ['code' => 'R78', 'source' => 'ANAF DUKIntegrator', 'message' => 'fractie (n1/n2) and cotaBun (proc_n3P) exclude each other; give one of them per co-owner.'],
@@ -147,7 +148,7 @@ final class C168Form implements DeclarationFormInterface
             'filing' => [
                 '1' => 'declaration_build → fix issues until valid=true',
                 '2' => 'declaration_pdf with the contract scan (PDF/JPG) as attachment → DUK PDF with embedded XML + zip',
-                '3' => 'Storno Agent: agent_submit_declaration_pdf (qualified certificate) → ANAF index; or upload the PDF manually in SPV (persoane fizice: SPV cu user/parolă → Depunere declarații)',
+                '3' => 'Storno Agent: agent_submit_declaration_pdf (qualified certificate) → ANAF index; or upload the PDF manually in SPV (persoane fizice: SPV cu user/parolă → Depunere declarații). One C168 per period at a time (R_MULTI_C168): file all contracts together.',
                 '4' => 'anaf_declaration_status(index, cif) until ok/nok; the recipisa lands in the SPV inbox (spv_documents_list)',
             ],
             'example' => $this->example(),
@@ -339,8 +340,10 @@ final class C168Form implements DeclarationFormInterface
                     $err('BR-CNP-0002111', "$tp.cif", 'CNP-ul chiriașului are cifră de control greșită.');
                 }
                 $adrCh = $this->address($t['adresa'] ?? null, "$tp.adresa", 'Ch', $err, false);
-                if (($adrCh['RS_Ch'] ?? '1') === '1' && $tcif === null) {
-                    $warn('BR-C168-005911', "$tp.cif", 'Cif-ul chiriașului este obligatoriu și numeric dacă s-a selectat adresa în România (formularul web ANAF respinge; depunerea prin portal cu certificat acceptă când CNP-ul nu este cunoscut).');
+                if ($tcif === null) {
+                    // Verified on a real filing (recipisa G000): the portal accepts the upload, then rejects
+                    // the request in processing — "CNP/NIF/CIF neprecizat". Without the identifier there is no filing.
+                    $err('BR-C168-005911', "$tp.cif", 'CNP-ul/CIF-ul chiriașului este obligatoriu: ANAF respinge cererea la prelucrare (G000 „CNP/NIF/CIF neprecizat”), chiar dacă portalul acceptă încărcarea. Obține CNP-ul din contract sau de la chiriaș; nu îl inventa.');
                 }
                 $this->attrs($te, [
                     'ID_locatar' => (string) (int) ($t['id'] ?? ($j + 1)),

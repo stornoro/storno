@@ -64,7 +64,7 @@ final class C168FormTest extends TestCase
         self::assertContains('BR-C168-00991', $codes, 'quotas 50 + 30 != 100');
         self::assertContains('BR-C168-005911', $codes, 'tenant CNP missing with a Romanian address');
         $cnp = array_values(array_filter($result->issues, fn ($i) => $i['code'] === 'BR-C168-005911'))[0];
-        self::assertSame('warning', $cnp['level'], 'the portal upload accepts a termination without the tenant CNP');
+        self::assertSame('error', $cnp['level'], 'ANAF rejects the request in processing without the tenant CNP (G000)');
         self::assertTrue($result->hasErrors());
         self::assertStringContainsString('per1_C="01.12.2023"', $result->xml, 'ISO dates are converted to DD.MM.YYYY');
         self::assertStringNotContainsString('cif_Ch=', $result->xml, 'no placeholder identifiers are ever written');
