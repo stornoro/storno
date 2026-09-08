@@ -99,7 +99,7 @@ final class DosarService
     }
 
     /** A rental contract must be registered within 30 days of signing (or of the addendum / termination). */
-    private function setContractDeadline(Dosar $dosar): void
+    public function setContractDeadline(Dosar $dosar): void
     {
         $s = $dosar->getSubject();
         $ref = $s['dataIncetare'] ?? $s['dataModificare'] ?? $s['data'] ?? null;
@@ -527,8 +527,101 @@ final class DosarService
         if ($type === 'declaratie_incetare_contract') {
             $base['motiv'] = 'la termen';
         }
+        if ($type === 'act_aditional_inchiriere') {
+            $base['act'] = ['numar' => $s['modificareNumar'] ?? null, 'data' => $this->roDate($s['dataModificare'] ?? null)];
+            $base['prelungire'] = ['data_inceput' => null, 'data_sfarsit' => $this->roDate($s['modificarePanaLa'] ?? null)];
+            $base['chirie_noua'] = ['suma' => $s['modificareChirie'] ?? null, 'valuta' => $s['moneda'] ?? 'EUR', 'de_la' => $this->roDate($s['modificareDeLa'] ?? null)];
+        }
+        if ($type === 'notificare_incetare_inchiriere') {
+            $base['preaviz_zile'] = $s['preavizZile'] ?? null;
+        }
 
         return array_replace_recursive($base, $overrides);
+    }
+
+    // ── C168 from a dosar ──────────────────────────────────────────────
+
+    /**
+     * Input for the C168 form builder from a rental dosar and its company: the designated
+     * landlord (the company), the contract, the property and the tenant. Coded addresses
+     * (county / locality / street codes from the nomenclator) live in the subject as
+     * `adresaCod` (property), `chiriasAdresaCod` (tenant) and `locatorAdresaCod` (landlord);
+     * what is missing shows up as build issues for the user to fill in.
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    public function c168Input(Dosar $dosar, string $actiune, array $overrides = []): array
+    {
+        $s = $dosar->getSubject();
+        $company = $dosar->getCompany();
+        $name = trim((string) ($company?->getName() ?? ''));
+        $rep = method_exists($company, 'getRepresentative') ? trim((string) ($company->getRepresentative() ?? '')) : '';
+        $parts = preg_split('/\s+/', $rep !== '' ? $rep : $name) ?: [];
+        $declarant = ['nume' => $parts[0] ?? '', 'prenume' => implode(' ', array_slice($parts, 1)) ?: ($parts[0] ?? ''), 'calitate' => $rep !== '' && $rep !== $name ? 'Împuternicit' : 'Locator'];
+        $locatorAdresa = is_array($s['locatorAdresaCod'] ?? null) ? $s['locatorAdresaCod'] : ['tara' => 'RO'];
+        $contract = [
+            'actiune' => $actiune,
+            'cotaVenit' => $s['cotaVenit'] ?? 100,
+            'numar' => (string) ($s['numar'] ?? ''),
+            'data' => (string) ($s['data'] ?? ''),
+            'deLa' => (string) ($s['deLa'] ?? $s['data'] ?? ''),
+            'panaLa' => (string) ($s['panaLa'] ?? ''),
+            'bun' => ['tip' => 'imobil', 'adresa' => is_array($s['adresaCod'] ?? null) ? $s['adresaCod'] : ['tara' => 'RO', 'detalii' => (string) ($s['adresa'] ?? '')]],
+            'chirie' => ['suma' => $s['chirie'] ?? null, 'moneda' => $s['moneda'] ?? 'RON'],
+            'locatari' => [[
+                'denumire' => (string) ($s['chirias'] ?? ''),
+                'cif' => (string) ($s['chiriasCif'] ?? ''),
+                'adresa' => is_array($s['chiriasAdresaCod'] ?? null) ? $s['chiriasAdresaCod'] : ['tara' => 'RO'],
+            ]],
+        ];
+        if ($actiune === 'incetare') {
+            $when = (string) ($s['dataIncetare'] ?? $s['panaLa'] ?? '');
+            $contract['incetare'] = ['numar' => (string) ($s['incetareNumar'] ?? $s['numar'] ?? ''), 'data' => (string) ($s['incetareData'] ?? $s['data'] ?? ''), 'deLa' => $when, 'panaLa' => $when, 'motiv' => (string) ($s['incetareMotiv'] ?? 'Încetare la termen')];
+        }
+        if ($actiune === 'modificare') {
+            $contract['modificare'] = ['numar' => (string) ($s['modificareNumar'] ?? ''), 'data' => (string) ($s['dataModificare'] ?? ''), 'deLa' => (string) ($s['modificareDeLa'] ?? ''), 'panaLa' => (string) ($s['modificarePanaLa'] ?? ''), 'chirie' => ['suma' => $s['modificareChirie'] ?? $s['chirie'] ?? null, 'moneda' => $s['moneda'] ?? 'RON']];
+        }
+        $input = [
+            'an' => (int) date('Y'),
+            'declarant' => $declarant,
+            'locator' => ['tip' => (int) ($s['locatorTip'] ?? 1), 'denumire' => $name, 'cif' => (string) ($company?->getCif() ?? ''), 'adresa' => $locatorAdresa, 'email' => method_exists($company, 'getEmail') ? $company->getEmail() : null],
+            'contracte' => [$contract],
+        ];
+
+        return array_replace_recursive($input, $overrides);
+    }
+
+    /** Remember the reviewed C168 input in the dosar so the next filing starts from it. */
+    public function rememberC168Input(Dosar $dosar, array $input): void
+    {
+        $s = $dosar->getSubject();
+        $c = $input['contracte'][0] ?? [];
+        foreach ([['locatorAdresaCod', $input['locator']['adresa'] ?? null], ['adresaCod', $c['bun']['adresa'] ?? null], ['chiriasAdresaCod', $c['locatari'][0]['adresa'] ?? null]] as [$key, $val]) {
+            if (is_array($val) && $val !== []) {
+                $s[$key] = $val;
+            }
+        }
+        foreach ([['chiriasCif', $c['locatari'][0]['cif'] ?? null], ['chirias', $c['locatari'][0]['denumire'] ?? null], ['numar', $c['numar'] ?? null], ['data', $c['data'] ?? null], ['deLa', $c['deLa'] ?? null], ['panaLa', $c['panaLa'] ?? null]] as [$key, $val]) {
+            if (is_string($val) && trim($val) !== '') {
+                $s[$key] = $val;
+            }
+        }
+        if (($c['actiune'] ?? '') === 'incetare' && !empty($c['incetare']['deLa'])) {
+            $s['dataIncetare'] = $c['incetare']['deLa'];
+            $s['incetareNumar'] = $c['incetare']['numar'] ?? null;
+            $s['incetareData'] = $c['incetare']['data'] ?? null;
+            $s['incetareMotiv'] = $c['incetare']['motiv'] ?? null;
+        }
+        if (($c['actiune'] ?? '') === 'modificare' && !empty($c['modificare'])) {
+            $s['dataModificare'] = $c['modificare']['data'] ?? null;
+            $s['modificareNumar'] = $c['modificare']['numar'] ?? null;
+            $s['modificareDeLa'] = $c['modificare']['deLa'] ?? null;
+            $s['modificarePanaLa'] = $c['modificare']['panaLa'] ?? null;
+            $s['modificareChirie'] = $c['modificare']['chirie']['suma'] ?? null;
+        }
+        $dosar->setSubject($s);
+        $this->setContractDeadline($dosar);
+        $dosar->touch();
     }
 
     private function roDate(mixed $v): ?string

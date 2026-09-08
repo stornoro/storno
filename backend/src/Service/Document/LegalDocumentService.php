@@ -23,6 +23,18 @@ final class LegalDocumentService
             'required' => ['locator.nume', 'locator.adresa', 'locatar.nume', 'locatar.adresa', 'contract.numar', 'contract.data', 'contract.adresa_imobil', 'data_incetare'],
             'defaults' => ['termen_utilitati_zile' => 5, 'garantie' => ['suma' => null, 'valuta' => 'EUR', 'termen_zile' => 15]],
         ],
+        'act_aditional_inchiriere' => [
+            'title' => 'ACT ADIȚIONAL LA CONTRACTUL DE ÎNCHIRIERE',
+            'template' => 'documents/legal/act_aditional_inchiriere.html.twig',
+            'required' => ['locator.nume', 'locator.adresa', 'locatar.nume', 'locatar.adresa', 'contract.numar', 'contract.data', 'contract.adresa_imobil', 'act.data'],
+            'defaults' => ['act' => ['numar' => null, 'data' => null], 'prelungire' => ['data_inceput' => null, 'data_sfarsit' => null], 'chirie_noua' => ['suma' => null, 'valuta' => 'EUR', 'de_la' => null], 'alte_modificari' => null],
+        ],
+        'notificare_incetare_inchiriere' => [
+            'title' => 'NOTIFICARE DE ÎNCETARE A CONTRACTULUI DE ÎNCHIRIERE',
+            'template' => 'documents/legal/notificare_incetare_inchiriere.html.twig',
+            'required' => ['locator.nume', 'locatar.nume', 'contract.numar', 'contract.data', 'contract.adresa_imobil', 'data_incetare'],
+            'defaults' => ['preaviz_zile' => null, 'termen_predare_zile' => 5, 'motiv' => null, 'garantie' => ['suma' => null, 'valuta' => 'EUR', 'termen_zile' => 15]],
+        ],
         'declaratie_incetare_contract' => [
             'title' => 'DECLARAȚIE PE PROPRIA RĂSPUNDERE',
             'template' => 'documents/legal/declaratie_incetare_contract.html.twig',
@@ -78,12 +90,18 @@ final class LegalDocumentService
             'contract' => ['numar' => null, 'data' => null, 'adresa_imobil' => null, 'numar_inregistrare_anaf' => null, 'data_inregistrare_anaf' => null, 'chirie' => null, 'valuta' => 'EUR', 'data_inceput' => null, 'data_sfarsit' => null],
             'garantie' => ['suma' => null, 'valuta' => 'EUR', 'termen_zile' => 15],
             'data_incetare' => null, 'motiv' => null, 'motiv_detalii' => null, 'organ_fiscal' => null, 'termen_utilitati_zile' => 5,
+            'act' => ['numar' => null, 'data' => null], 'prelungire' => ['data_inceput' => null, 'data_sfarsit' => null], 'chirie_noua' => ['suma' => null, 'valuta' => 'EUR', 'de_la' => null], 'alte_modificari' => null,
+            'data_notificare' => null, 'preaviz_zile' => null, 'termen_predare_zile' => 5,
         ];
         $context = array_replace_recursive($shape, $def['defaults'], $fields, [
             'title' => $def['title'],
             'data_conventie' => $fields['data_conventie'] ?? $today,
             'data_declaratie' => $fields['data_declaratie'] ?? $today,
+            'data_notificare' => $fields['data_notificare'] ?? $today,
         ]);
+        if (($context['act']['data'] ?? null) === null) {
+            $context['act']['data'] = $fields['act']['data'] ?? $today;
+        }
 
         $html = $this->twig->render($def['template'], $context);
         $pdf = $this->snappy->getOutputFromHtml($html, [

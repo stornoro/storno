@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
-use App\Entity\SpvDocument;
-use App\Enum\SpvDocumentCategory;
-use App\Enum\SpvDocumentSeverity;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Dosare: create a rental-contract dosar with its 30-day C168 deadline, attach a
@@ -139,5 +137,68 @@ class DosarTest extends ApiTestCase
         $this->assertSame(1, $detail['counts']['documents'], 'the recipisa was linked through the upload index');
         $this->assertSame('RECIPISA', $detail['documents'][0]['messageType']);
         $this->apiDelete('/api/v1/dosare/' . $dosar['id'], $h);
+    }
+
+    public function testFilesC168AndDocumentsFromTheDosar(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $h = ['X-Company' => $companyId];
+        $adresa = ['tara' => 'RO', 'judet' => '40', 'localitate' => '6', 'localitateNume' => '6 Sector - Mun. Bucuresti', 'strada' => '412', 'stradaNume' => 'Bld. Iuliu Maniu', 'numar' => '7', 'detalii' => 'bl. 1, ap. 16', 'codPostal' => '061072'];
+        $dosar = $this->apiPost('/api/v1/dosare', ['type' => 'rental_contract', 'subject' => ['numar' => '12', 'data' => '01.03.2026', 'adresa' => 'Bld. Iuliu Maniu 7, ap. 16', 'chirias' => 'IONESCU MARIA', 'chiriasCif' => '2850505400014', 'chirie' => 2500, 'moneda' => 'RON', 'deLa' => '01.03.2026', 'panaLa' => '28.02.2027', 'adresaCod' => $adresa, 'chiriasAdresaCod' => $adresa + ['numar' => '9'], 'locatorAdresaCod' => $adresa]], $h)['dosar'];
+
+        // prefill: the C168 input from the dosar, with Storno's rule issues
+        $pre = $this->apiGet('/api/v1/dosare/' . $dosar['id'] . '/c168-prefill?actiune=inregistrare', $h);
+        $this->assertSame('12', $pre['input']['contracte'][0]['numar']);
+        $this->assertSame('412', $pre['input']['contracte'][0]['bun']['adresa']['strada']);
+        $this->assertSame('inregistrare', $pre['actiune']);
+
+        // no attachment → refused
+        $this->apiPost('/api/v1/dosare/' . $dosar['id'] . '/c168', ['actiune' => 'inregistrare', 'input' => $pre['input']], $h);
+        $this->assertResponseStatusCodeSame(422);
+
+        // upload the contract scan into the dosar
+        $tmp = tempnam(sys_get_temp_dir(), 'c168') . '.pdf';
+        file_put_contents($tmp, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF");
+        $this->client->request('POST', '/api/v1/dosare/' . $dosar['id'] . '/files', ['kind' => 'contract'], ['file' => new UploadedFile($tmp, 'contract.pdf', 'application/pdf', null, true)], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);
+        $this->assertResponseStatusCodeSame(201);
+        $detail = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $this->assertCount(1, $detail['files']);
+        $fileId = $detail['files'][0]['id'];
+        $this->assertSame('contract', $detail['files'][0]['kind']);
+
+        $this->client->request('GET', '/api/v1/dosare/' . $dosar['id'] . '/files/' . $fileId . '/download', [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertStringStartsWith('%PDF', (string) $this->client->getResponse()->getContent());
+
+        // C168 declaration created in the dosar with the file as attachment
+        $created = $this->apiPost('/api/v1/dosare/' . $dosar['id'] . '/c168', ['actiune' => 'inregistrare', 'input' => $pre['input'], 'fileIds' => [$fileId]], $h);
+        $this->assertResponseStatusCodeSame(201, json_encode($created));
+        $this->assertSame('c168', $created['declaration']['type']);
+        $this->assertSame($dosar['id'], $created['declaration']['dosarId']);
+        $this->assertStringContainsString('<c168 xmlns="mfp:anaf:dgti:c168:declaratie:v3"', $created['xml']);
+        $this->assertCount(1, $created['declaration']['data']['attachments']);
+
+        // termination: prefill carries the termination block and the addendum / notice documents prefill too
+        $this->apiPatch('/api/v1/dosare/' . $dosar['id'], ['subject' => ['dataIncetare' => '30.09.2026']], $h);
+        $inc = $this->apiGet('/api/v1/dosare/' . $dosar['id'] . '/c168-prefill?actiune=incetare', $h);
+        $this->assertSame('30.09.2026', $inc['input']['contracte'][0]['incetare']['deLa']);
+        $act = $this->apiGet('/api/v1/dosare/' . $dosar['id'] . '/document/act_aditional_inchiriere', $h);
+        $this->assertSame('12', $act['fields']['contract']['numar']);
+        $this->apiPost('/api/v1/dosare/' . $dosar['id'] . '/document/notificare_incetare_inchiriere', ['data_incetare' => '30.09.2026', 'preaviz_zile' => 30], $h);
+        $this->assertResponseStatusCodeSame(200);
+        $this->apiPost('/api/v1/dosare/' . $dosar['id'] . '/document/act_aditional_inchiriere', ['locatar' => ['adresa' => 'Bucuresti'], 'act' => ['numar' => '1', 'data' => '01.09.2026'], 'prelungire' => ['data_sfarsit' => '28.02.2028']], $h);
+        $this->assertResponseStatusCodeSame(200);
+
+        // CSV export of the portfolio
+        $this->client->request('GET', '/api/v1/dosare/stats?format=csv', [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertStringContainsString('text/csv', (string) $this->client->getResponse()->headers->get('Content-Type'));
+        $this->assertStringContainsString('Iuliu Maniu', (string) $this->client->getResponse()->getContent());
+
+        $this->apiDelete('/api/v1/dosare/' . $dosar['id'] . '/files/' . $fileId, $h);
+        $this->assertResponseStatusCodeSame(200);
+        $this->apiDelete('/api/v1/dosare/' . $dosar['id'], $h);
+        @unlink($tmp);
     }
 }

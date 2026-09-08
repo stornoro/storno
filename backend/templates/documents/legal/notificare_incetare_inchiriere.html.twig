@@ -1,0 +1,21 @@
+{% extends 'documents/legal/_layout.html.twig' %}
+{% block body %}
+<p>Către: <b>{{ locatar.nume }}</b>{% if locatar.adresa %}, {{ locatar.adresa }}{% endif %}</p>
+<p>De la: <b>{{ locator.nume }}</b>{% if locator.adresa %}, {{ locator.adresa }}{% endif %}</p>
+<p>Data: <b>{{ data_notificare }}</b></p>
+
+<p>Subsemnatul/Subsemnata <b>{{ locator.nume }}</b>, în calitate de locator în Contractul de închiriere nr. <b>{{ contract.numar }}</b> din <b>{{ contract.data }}</b>, având ca obiect imobilul situat în <b>{{ contract.adresa_imobil }}</b>, vă notific prin prezenta <b>încetarea contractului la data de {{ data_incetare }}</b>{% if motiv %}, {{ motiv }}{% endif %}.</p>
+
+<p>Prezenta notificare respectă termenul de preaviz prevăzut în contract{% if preaviz_zile %} ({{ preaviz_zile }} zile){% endif %}. Până la data încetării vă rugăm să achitați chiria și utilitățile datorate și să predați imobilul liber de bunuri și persoane, în starea în care l-ați primit, pe bază de proces-verbal de predare-primire{% if termen_predare_zile %}, în cel mult {{ termen_predare_zile }} zile de la data încetării{% endif %}.</p>
+
+{% if garantie.suma %}
+<p>Garanția de <b>{{ garantie.suma }} {{ garantie.valuta|default('EUR') }}</b> se restituie în termen de {{ garantie.termen_zile|default(15) }} zile de la predarea imobilului, după regularizarea eventualelor sume datorate.</p>
+{% endif %}
+
+<p>Încetarea va fi declarată la organul fiscal competent în termen de 30 de zile de la data încetării.</p>
+
+<table class="sig"><tr>
+<td><b>LOCATOR</b><br>{{ locator.nume }}<br><br><br>_______________________</td>
+<td><b>Am primit, LOCATAR</b><br>{{ locatar.nume }}<br>data: ______________<br><br>_______________________</td>
+</tr></table>
+{% endblock %}

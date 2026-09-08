@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DosarDetail, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
+import type { DosarDetail, DosarFile, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -138,11 +138,11 @@ async function buildD212() {
 
 // ── Documents from the dosar ───────────────────────────────────────
 const docOpen = ref(false)
-const docType = ref<'conventie_incetare_inchiriere' | 'declaratie_incetare_contract'>('conventie_incetare_inchiriere')
+const docType = ref<'conventie_incetare_inchiriere' | 'declaratie_incetare_contract' | 'act_aditional_inchiriere' | 'notificare_incetare_inchiriere'>('conventie_incetare_inchiriere')
 const docFields = ref<Record<string, any>>({})
 const docLoading = ref(false)
 const docRendering = ref(false)
-async function openDocument(type: 'conventie_incetare_inchiriere' | 'declaratie_incetare_contract') {
+async function openDocument(type: 'conventie_incetare_inchiriere' | 'declaratie_incetare_contract' | 'act_aditional_inchiriere' | 'notificare_incetare_inchiriere') {
   docType.value = type
   docOpen.value = true
   docLoading.value = true
@@ -151,6 +151,9 @@ async function openDocument(type: 'conventie_incetare_inchiriere' | 'declaratie_
     docFields.value = pre.fields
     docFields.value.locatar ??= {}
     docFields.value.contract ??= {}
+    docFields.value.act ??= {}
+    docFields.value.prelungire ??= {}
+    docFields.value.chirie_noua ??= {}
   } catch (e: any) {
     toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
     docOpen.value = false
@@ -178,6 +181,107 @@ async function renderDocument() {
     docRendering.value = false
   }
 }
+
+// ── Files ──────────────────────────────────────────────────────────
+const fileInput = ref<HTMLInputElement | null>(null)
+const fileKind = ref<DosarFile['kind']>('contract')
+const uploading = ref(false)
+const fileKindItems = computed(() => (['contract', 'act_aditional', 'incetare', 'declaratie', 'altele'] as const).map(k => ({ label: $t(`dosare.files.kinds.${k}`), value: k })))
+async function onFilePicked(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]
+  if (!f) return
+  uploading.value = true
+  try {
+    detail.value = await store.uploadFile(id.value, f, fileKind.value)
+    toast.add({ title: $t('dosare.files.uploaded'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+  } finally {
+    uploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+async function removeFile(f: DosarFile) {
+  try {
+    detail.value = await store.deleteFile(id.value, f.id)
+    toast.add({ title: $t('dosare.files.deleted'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+  }
+}
+async function downloadFile(f: DosarFile) {
+  try {
+    const blob = await store.downloadBlob(`/v1/dosare/${id.value}/files/${f.id}/download`)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = f.name
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('common.error'), color: 'error' })
+  }
+}
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+// ── C168 from the dosar ────────────────────────────────────────────
+const c168Open = ref(false)
+const c168Action = ref<'inregistrare' | 'modificare' | 'incetare'>('inregistrare')
+const c168Input = ref<Record<string, any>>({})
+const c168Issues = ref<Array<{ level: string, code: string, field: string, message: string }>>([])
+const c168FileIds = ref<string[]>([])
+const c168Loading = ref(false)
+const c168Creating = ref(false)
+const c168ActionItems = computed(() => (['inregistrare', 'modificare', 'incetare'] as const).map(a => ({ label: $t(`dosare.c168.actions.${a}`), value: a })))
+const c168FileItems = computed(() => (detail.value?.files ?? []).map(f => ({ label: `${f.name} · ${$t(`dosare.files.kinds.${f.kind}`)}`, value: f.id })))
+async function openC168(action: 'inregistrare' | 'modificare' | 'incetare' = 'inregistrare') {
+  c168Action.value = action
+  c168Open.value = true
+  await loadC168()
+}
+async function loadC168() {
+  c168Loading.value = true
+  try {
+    const pre = await store.c168Prefill(id.value, c168Action.value)
+    c168Input.value = pre.input
+    c168Issues.value = pre.issues
+    const c = c168Input.value.contracte[0]
+    c.bun ??= { tip: 'imobil', adresa: { tara: 'RO' } }
+    c.locatari ??= [{}]
+    c.locatari[0].adresa ??= { tara: 'RO' }
+    c.incetare ??= {}
+    c.modificare ??= { chirie: {} }
+    c168Input.value.locator.adresa ??= { tara: 'RO' }
+    const preferred = (detail.value?.files ?? []).filter(f => (c168Action.value === 'incetare' ? f.kind === 'incetare' || f.kind === 'declaratie' : c168Action.value === 'modificare' ? f.kind === 'act_aditional' : f.kind === 'contract'))
+    c168FileIds.value = preferred.map(f => f.id)
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+    c168Open.value = false
+  } finally {
+    c168Loading.value = false
+  }
+}
+watch(c168Action, () => { if (c168Open.value) loadC168() })
+async function createC168() {
+  c168Creating.value = true
+  try {
+    const res = await store.c168Create(id.value, c168Action.value, c168Input.value, c168FileIds.value)
+    c168Open.value = false
+    toast.add({ title: $t('dosare.c168.created'), description: $t('dosare.c168.oneAtATime'), color: 'success' })
+    await load()
+    router.push(`/declarations/${res.declaration.id}`)
+  } catch (e: any) {
+    if (e?.data?.issues) c168Issues.value = e.data.issues
+    toast.add({ title: e?.data?.error ?? e?.message ?? $t('common.error'), color: 'error' })
+  } finally {
+    c168Creating.value = false
+  }
+}
+const c168Errors = computed(() => c168Issues.value.filter(i => i.level === 'error'))
 
 // ── Presentation ───────────────────────────────────────────────────
 const statusColor: Record<string, 'success' | 'warning' | 'neutral'> = { active: 'success', attention: 'warning', closed: 'neutral' }
@@ -253,6 +357,12 @@ function summaryFor(doc: SpvDocument): string {
             <span class="text-xs text-muted">{{ $t('dosare.documents.title') }}:</span>
             <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-file-signature" @click="openDocument('conventie_incetare_inchiriere')">{{ $t('dosare.documents.conventie') }}</UButton>
             <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-file-check" @click="openDocument('declaratie_incetare_contract')">{{ $t('dosare.documents.declaratie') }}</UButton>
+            <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-file-plus" @click="openDocument('act_aditional_inchiriere')">{{ $t('dosare.documents.actAditional') }}</UButton>
+            <UButton size="xs" variant="outline" color="neutral" icon="i-lucide-mail-warning" @click="openDocument('notificare_incetare_inchiriere')">{{ $t('dosare.documents.notificare') }}</UButton>
+          </div>
+          <div v-if="detail.dosar.type === 'rental_contract'" class="mt-3 flex flex-wrap gap-2 items-center">
+            <UButton size="sm" icon="i-lucide-send" @click="openC168(detail.dosar.subject?.dataIncetare ? 'incetare' : 'inregistrare')">{{ $t('dosare.c168.file') }}</UButton>
+            <span class="text-xs text-muted">{{ $t('dosare.c168.oneAtATime') }}</span>
           </div>
           <UAlert v-if="prefillNotes.length" class="mt-3" color="warning" variant="soft" icon="i-lucide-alert-triangle" :title="$t('dosare.d212.prefillNotes')">
             <template #description><ul class="list-disc pl-4"><li v-for="n in prefillNotes" :key="n">{{ n }}</li></ul></template>
@@ -322,6 +432,32 @@ function summaryFor(doc: SpvDocument): string {
           <p v-else class="text-sm text-muted">—</p>
         </UCard>
 
+        <!-- Files -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-sm">{{ $t('dosare.files.title') }} ({{ detail.files.length }})</span>
+              <div class="flex items-center gap-2">
+                <USelectMenu v-model="fileKind" :items="fileKindItems" value-key="value" size="xs" class="w-52" />
+                <UButton size="xs" variant="soft" icon="i-lucide-upload" :loading="uploading" @click="fileInput?.click()">{{ $t('dosare.files.upload') }}</UButton>
+                <input ref="fileInput" type="file" accept="application/pdf,image/jpeg,image/png,image/tiff" class="hidden" @change="onFilePicked">
+              </div>
+            </div>
+          </template>
+          <ul v-if="detail.files.length" class="divide-y divide-default -my-2">
+            <li v-for="f in detail.files" :key="f.id" class="py-2 flex items-center gap-3">
+              <UIcon name="i-lucide-file" class="text-muted shrink-0" />
+              <div class="flex-1 min-w-0">
+                <span class="font-medium truncate">{{ f.name }}</span>
+                <span class="text-xs text-muted"> · {{ $t(`dosare.files.kinds.${f.kind}`) }} · {{ formatSize(f.size) }} · {{ formatDate(f.createdAt) }}</span>
+              </div>
+              <UButton icon="i-lucide-download" size="xs" color="neutral" variant="ghost" :aria-label="$t('dosare.files.download')" @click="downloadFile(f)" />
+              <UButton icon="i-lucide-trash-2" size="xs" color="neutral" variant="ghost" :aria-label="$t('common.delete')" @click="removeFile(f)" />
+            </li>
+          </ul>
+          <p v-else class="text-sm text-muted">{{ $t('dosare.files.empty') }}</p>
+        </UCard>
+
         <!-- ANAF messages -->
         <UCard>
           <template #header>
@@ -367,7 +503,7 @@ function summaryFor(doc: SpvDocument): string {
       </UModal>
 
       <!-- Document modal -->
-      <UModal v-model:open="docOpen" :title="$t(docType === 'conventie_incetare_inchiriere' ? 'dosare.documents.conventie' : 'dosare.documents.declaratie')">
+      <UModal v-model:open="docOpen" :title="$t(docType === 'conventie_incetare_inchiriere' ? 'dosare.documents.conventie' : docType === 'declaratie_incetare_contract' ? 'dosare.documents.declaratie' : docType === 'act_aditional_inchiriere' ? 'dosare.documents.actAditional' : 'dosare.documents.notificare')">
         <template #body>
           <div v-if="docLoading" class="space-y-2"><USkeleton class="h-8 w-full" /><USkeleton class="h-8 w-full" /></div>
           <form v-else class="space-y-3" @submit.prevent="renderDocument">
@@ -384,11 +520,80 @@ function summaryFor(doc: SpvDocument): string {
               <UFormField :label="$t('dosare.form.until')" :required="docType === 'declaratie_incetare_contract'"><UInput v-model="docFields.contract.data_sfarsit" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
             </div>
             <UFormField :label="$t('dosare.form.address')" required><UInput v-model="docFields.contract.adresa_imobil" class="w-full" /></UFormField>
-            <UFormField :label="$t('dosare.documents.terminationDate')" required><UInput v-model="docFields.data_incetare" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
-            <UFormField v-if="docType === 'declaratie_incetare_contract'" :label="$t('dosare.documents.reason')"><UInput v-model="docFields.motiv" class="w-full" /></UFormField>
+            <template v-if="docType === 'act_aditional_inchiriere'">
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField :label="$t('dosare.c168.addendumNumber')"><UInput v-model="docFields.act.numar" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.addendumDate')" required><UInput v-model="docFields.act.data" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.newUntil')"><UInput v-model="docFields.prelungire.data_sfarsit" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.newRent')"><UInput v-model="docFields.chirie_noua.suma" type="number" class="w-full" /></UFormField>
+              </div>
+            </template>
+            <template v-else>
+              <UFormField :label="$t('dosare.documents.terminationDate')" required><UInput v-model="docFields.data_incetare" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+              <UFormField v-if="docType !== 'conventie_incetare_inchiriere'" :label="$t('dosare.documents.reason')"><UInput v-model="docFields.motiv" class="w-full" /></UFormField>
+            </template>
             <div class="flex justify-end gap-2 pt-2">
               <UButton color="neutral" variant="ghost" @click="docOpen = false">{{ $t('common.cancel') }}</UButton>
               <UButton type="submit" :loading="docRendering" icon="i-lucide-download">{{ $t('dosare.documents.generate') }}</UButton>
+            </div>
+          </form>
+        </template>
+      </UModal>
+
+      <!-- C168 modal -->
+      <UModal v-model:open="c168Open" :title="$t('dosare.c168.title')" :ui="{ content: 'max-w-3xl' }">
+        <template #body>
+          <div v-if="c168Loading" class="space-y-2"><USkeleton class="h-8 w-full" /><USkeleton class="h-24 w-full" /></div>
+          <form v-else-if="c168Input.contracte" class="space-y-4" @submit.prevent="createC168">
+            <UFormField :label="$t('dosare.c168.action')" required>
+              <USelectMenu v-model="c168Action" :items="c168ActionItems" value-key="value" class="w-full" />
+            </UFormField>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField :label="$t('dosare.form.contractNumber')" required><UInput v-model="c168Input.contracte[0].numar" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.contractDate')" required><UInput v-model="c168Input.contracte[0].data" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.from')" required><UInput v-model="c168Input.contracte[0].deLa" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.until')"><UInput v-model="c168Input.contracte[0].panaLa" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.rent')" required><UInput v-model="c168Input.contracte[0].chirie.suma" type="number" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.currency')" required><UInput v-model="c168Input.contracte[0].chirie.moneda" class="w-full" /></UFormField>
+            </div>
+            <template v-if="c168Action === 'incetare'">
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField :label="$t('dosare.c168.terminationDate')" required><UInput v-model="c168Input.contracte[0].incetare.deLa" placeholder="zz.ll.aaaa" class="w-full" @change="c168Input.contracte[0].incetare.panaLa = c168Input.contracte[0].incetare.deLa" /></UFormField>
+                <UFormField :label="$t('dosare.c168.terminationReason')"><UInput v-model="c168Input.contracte[0].incetare.motiv" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.terminationDocNumber')" required><UInput v-model="c168Input.contracte[0].incetare.numar" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.terminationDocDate')" required><UInput v-model="c168Input.contracte[0].incetare.data" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+              </div>
+            </template>
+            <template v-if="c168Action === 'modificare'">
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField :label="$t('dosare.c168.addendumNumber')" required><UInput v-model="c168Input.contracte[0].modificare.numar" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.addendumDate')" required><UInput v-model="c168Input.contracte[0].modificare.data" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.form.from')"><UInput v-model="c168Input.contracte[0].modificare.deLa" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.newUntil')"><UInput v-model="c168Input.contracte[0].modificare.panaLa" placeholder="zz.ll.aaaa" class="w-full" /></UFormField>
+                <UFormField :label="$t('dosare.c168.newRent')"><UInput v-model="c168Input.contracte[0].modificare.chirie.suma" type="number" class="w-full" /></UFormField>
+              </div>
+            </template>
+            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('dosare.c168.propertyAddress') }}</h4>
+            <DosareAnafAddressPicker v-model="c168Input.contracte[0].bun.adresa" require-postal />
+            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('dosare.c168.tenant') }}</h4>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField :label="$t('dosare.form.tenant')" required><UInput v-model="c168Input.contracte[0].locatari[0].denumire" class="w-full" /></UFormField>
+              <UFormField :label="$t('dosare.form.tenantCif')" required><UInput v-model="c168Input.contracte[0].locatari[0].cif" class="w-full" /></UFormField>
+            </div>
+            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('dosare.c168.tenantAddress') }}</h4>
+            <DosareAnafAddressPicker v-model="c168Input.contracte[0].locatari[0].adresa" />
+            <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('dosare.c168.landlordAddress') }}</h4>
+            <DosareAnafAddressPicker v-model="c168Input.locator.adresa" />
+            <UFormField :label="$t('dosare.c168.attachments')" required>
+              <USelectMenu v-model="c168FileIds" :items="c168FileItems" value-key="value" multiple class="w-full" />
+              <template #hint><span v-if="!detail?.files.length">{{ $t('dosare.c168.noFiles') }}</span></template>
+            </UFormField>
+            <UAlert v-if="c168Errors.length" color="warning" variant="soft" icon="i-lucide-alert-triangle" :title="$t('dosare.c168.issues')">
+              <template #description><ul class="list-disc pl-4"><li v-for="i in c168Errors" :key="i.code + i.field"><b>{{ i.field }}</b>: {{ i.message }}</li></ul></template>
+            </UAlert>
+            <div class="flex justify-end gap-2 pt-2">
+              <UButton color="neutral" variant="ghost" @click="c168Open = false">{{ $t('common.cancel') }}</UButton>
+              <UButton type="submit" :loading="c168Creating" :disabled="!c168FileIds.length" icon="i-lucide-send">{{ $t('dosare.c168.create') }}</UButton>
             </div>
           </form>
         </template>

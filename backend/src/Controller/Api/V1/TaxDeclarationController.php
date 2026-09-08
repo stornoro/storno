@@ -2,7 +2,9 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\TaxDeclaration;
 use App\Enum\DeclarationStatus;
+use App\Enum\DeclarationType;
 use App\Manager\TaxDeclarationManager;
 use App\Message\Declaration\CheckDeclarationStatusMessage;
 use App\Repository\TaxDeclarationRepository;
@@ -544,6 +546,20 @@ class TaxDeclarationController extends AbstractController
 
         $company = $declaration->getCompany();
         $operation = $request->query->get('operation', 'submit');
+
+        // ANAF processes one C168 per landlord and period at a time (rule R_MULTI_C168, learned from a real rejection):
+        // a second upload while another is still in processing is refused outright.
+        if ($operation === 'submit' && $declaration->getType() === DeclarationType::C168) {
+            foreach ($this->entityManager->getRepository(TaxDeclaration::class)->findBy(['company' => $company, 'type' => DeclarationType::C168]) as $other) {
+                if ($other !== $declaration && in_array($other->getStatus(), [DeclarationStatus::SUBMITTED, DeclarationStatus::PROCESSING], true)) {
+                    return $this->json([
+                        'error' => sprintf('O altă C168 (index %s) este încă în prelucrare la ANAF. ANAF respinge a doua cerere pe aceeași perioadă (R_MULTI_C168): așteaptă recipisa ei, apoi depune.', $other->getAnafUploadId() ?? '—'),
+                        'code' => 'C168_IN_PROCESSING',
+                        'otherDeclarationId' => (string) $other->getId(),
+                    ], Response::HTTP_CONFLICT);
+                }
+            }
+        }
 
         try {
             // Resolve ANAF Bearer token

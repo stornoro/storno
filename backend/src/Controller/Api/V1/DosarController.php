@@ -3,6 +3,7 @@
 namespace App\Controller\Api\V1;
 
 use App\Entity\Dosar;
+use App\Entity\DosarFile;
 use App\Entity\SpvDocument;
 use App\Entity\SpvRequest;
 use App\Entity\TaxDeclaration;
@@ -13,7 +14,10 @@ use App\Repository\DosarRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Document\LegalDocumentService;
+use App\Service\Declaration\Forms\DeclarationFormRegistry;
 use App\Service\Dosar\DosarService;
+use League\Flysystem\FilesystemOperator;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -48,6 +52,8 @@ class DosarController extends AbstractController
         private readonly DosarService $service,
         private readonly TaxDeclarationManager $declarations,
         private readonly LegalDocumentService $documents,
+        private readonly DeclarationFormRegistry $forms,
+        private readonly FilesystemOperator $defaultStorage,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -87,7 +93,7 @@ class DosarController extends AbstractController
 
     /** Rental portfolio: properties, active contracts, monthly rent by currency, expected vs declared rent per year. */
     #[Route('/stats', methods: ['GET'])]
-    public function stats(Request $request): JsonResponse
+    public function stats(Request $request): Response
     {
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
@@ -97,7 +103,20 @@ class DosarController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        return $this->json($this->service->stats($company));
+        $stats = $this->service->stats($company);
+        if ($request->query->get('format') === 'csv') {
+            $out = fopen('php://temp', 'w+');
+            fputcsv($out, ['dosar', 'adresa', 'chirias', 'chirie', 'moneda', 'de_la', 'pana_la', 'activ', 'expira_in_zile', 'stare', 'declaratii']);
+            foreach ($stats['properties'] as $p) {
+                fputcsv($out, [$p['title'], $p['adresa'], $p['chirias'], $p['chirie'], $p['moneda'], $p['deLa'], $p['panaLa'], $p['active'] ? 'da' : 'nu', $p['expiresInDays'], $p['status'], $p['declarations']]);
+            }
+            rewind($out);
+            $csv = "\xEF\xBB\xBF" . stream_get_contents($out);
+
+            return new Response($csv, 200, ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Disposition' => 'attachment; filename="portofoliu-inchirieri.csv"']);
+        }
+
+        return $this->json($stats);
     }
 
     #[Route('', methods: ['POST'])]
@@ -121,7 +140,7 @@ class DosarController extends AbstractController
             return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        return $this->json($this->detail($dosar), Response::HTTP_CREATED, context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list']]);
+        return $this->json($this->detail($dosar), Response::HTTP_CREATED, context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
     }
 
     #[Route('/annual-return', methods: ['POST'])]
@@ -139,7 +158,7 @@ class DosarController extends AbstractController
         $user = $this->getUser();
         $dosar = $this->service->ensureAnnualReturnDosar($company, $year, $user instanceof User ? $user : null);
 
-        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list']]);
+        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
     }
 
     #[Route('/{uuid}', methods: ['GET'])]
@@ -150,7 +169,7 @@ class DosarController extends AbstractController
             return $dosar;
         }
 
-        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list']]);
+        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
     }
 
     #[Route('/{uuid}', methods: ['PATCH'])]
@@ -171,7 +190,7 @@ class DosarController extends AbstractController
         }
         $this->em->flush();
 
-        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list']]);
+        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
     }
 
     #[Route('/{uuid}', methods: ['DELETE'])]
@@ -273,12 +292,166 @@ class DosarController extends AbstractController
         if ($request->query->get('format') === 'pdf') {
             return new Response($doc['pdf'], 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => sprintf('attachment; filename="%s"', $fileName)]);
         }
-        if ($type === 'declaratie_incetare_contract' || $type === 'conventie_incetare_inchiriere') {
-            $dosar->setNextStep('Semnează documentul de încetare, apoi depune C168 încetare cu el atașat (termen 30 de zile).')->touch();
+        if (in_array($type, ['declaratie_incetare_contract', 'conventie_incetare_inchiriere', 'notificare_incetare_inchiriere'], true)) {
+            $dosar->setNextStep('Semnează documentul de încetare, încarcă-l în dosar și depune C168 încetare cu el atașat (termen 30 de zile).')->touch();
+        } elseif ($type === 'act_aditional_inchiriere') {
+            $dosar->setNextStep('Semnează actul adițional, încarcă-l în dosar și depune C168 modificare cu el atașat (termen 30 de zile).')->touch();
             $this->em->flush();
         }
 
         return $this->json(['type' => $type, 'title' => $doc['title'], 'fileName' => $fileName, 'pdfBase64' => base64_encode($doc['pdf'])]);
+    }
+
+    // ── Files ─────────────────────────────────────────────────────────
+
+    #[Route('/{uuid}/files', methods: ['POST'])]
+    public function uploadFile(string $uuid, Request $request): JsonResponse
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_SUBMIT);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+        $upload = $request->files->get('file');
+        if ($upload === null || !$upload->isValid()) {
+            return $this->json(['error' => 'Trimite fișierul în câmpul multipart "file".', 'code' => 'NO_FILE'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($upload->getSize() > 10 * 1024 * 1024) {
+            return $this->json(['error' => 'Fișierul depășește 10 MB.', 'code' => 'FILE_TOO_LARGE'], Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
+        }
+        $mime = (string) ($upload->getMimeType() ?? $upload->getClientMimeType());
+        if (!in_array($mime, ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'], true)) {
+            return $this->json(['error' => 'Doar PDF, JPG, PNG sau TIFF.', 'code' => 'FILE_TYPE'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        $kind = (string) $request->request->get('kind', DosarFile::KIND_ALTELE);
+        if (!in_array($kind, DosarFile::KINDS, true)) {
+            $kind = DosarFile::KIND_ALTELE;
+        }
+        $file = (new DosarFile())->setDosar($dosar)->setKind($kind)->setMime($mime)->setSize((int) $upload->getSize());
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $upload->getClientOriginalName()) ?: 'document';
+        $file->setName(mb_substr($upload->getClientOriginalName(), 0, 255));
+        $file->setPath(sprintf('dosare/%s/%s/%s-%s', $dosar->getCompany()?->getId(), $dosar->getId(), substr((string) $file->getId(), 0, 8), $safe));
+        $user = $this->getUser();
+        $file->setUploadedBy($user instanceof User ? $user : null);
+        $this->defaultStorage->write($file->getPath(), (string) file_get_contents($upload->getPathname()));
+        $this->em->persist($file);
+        $dosar->touch();
+        $this->em->flush();
+
+        return $this->json($this->detail($dosar), Response::HTTP_CREATED, context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
+    }
+
+    #[Route('/{uuid}/files/{fileId}/download', methods: ['GET'])]
+    public function downloadFile(string $uuid, string $fileId): Response
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_VIEW);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+        $file = $this->em->getRepository(DosarFile::class)->find($fileId);
+        if (!$file instanceof DosarFile || $file->getDosar() !== $dosar || !$this->defaultStorage->fileExists($file->getPath())) {
+            return $this->json(['error' => 'File not found.'], Response::HTTP_NOT_FOUND);
+        }
+        $content = $this->defaultStorage->read($file->getPath());
+
+        return new Response($content, 200, ['Content-Type' => $file->getMime(), 'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $file->getName(), 'document.pdf'), 'Content-Length' => (string) strlen($content)]);
+    }
+
+    #[Route('/{uuid}/files/{fileId}', methods: ['DELETE'])]
+    public function deleteFile(string $uuid, string $fileId): JsonResponse
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_SUBMIT);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+        $file = $this->em->getRepository(DosarFile::class)->find($fileId);
+        if (!$file instanceof DosarFile || $file->getDosar() !== $dosar) {
+            return $this->json(['error' => 'File not found.'], Response::HTTP_NOT_FOUND);
+        }
+        try {
+            $this->defaultStorage->delete($file->getPath());
+        } catch (\Throwable) {
+        }
+        $this->em->remove($file);
+        $dosar->touch();
+        $this->em->flush();
+
+        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
+    }
+
+    // ── C168 from the dosar ───────────────────────────────────────────
+
+    /** The C168 input prefilled from the dosar, with Storno's rule issues so the user sees what is missing (address codes, tenant CNP …). */
+    #[Route('/{uuid}/c168-prefill', methods: ['GET'])]
+    public function c168Prefill(string $uuid, Request $request): JsonResponse
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_VIEW);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+        if ($dosar->getType() !== Dosar::TYPE_RENTAL_CONTRACT) {
+            return $this->json(['error' => 'C168 se depune dintr-un dosar de contract de închiriere.', 'code' => 'WRONG_TYPE'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        $actiune = (string) $request->query->get('actiune', 'inregistrare');
+        if (!in_array($actiune, ['inregistrare', 'modificare', 'incetare'], true)) {
+            return $this->json(['error' => 'actiune: inregistrare, modificare sau incetare.', 'code' => 'INVALID_INPUT'], Response::HTTP_BAD_REQUEST);
+        }
+        $input = $this->service->c168Input($dosar, $actiune);
+        $result = $this->forms->get('C168')?->build($input);
+        $files = $this->em->getRepository(DosarFile::class)->findBy(['dosar' => $dosar], ['createdAt' => 'DESC']);
+
+        return $this->json(['actiune' => $actiune, 'input' => $input, 'issues' => $result?->issues ?? [], 'files' => $files, 'attachmentHint' => $actiune === 'incetare' ? 'Atașează documentul de încetare sau declarația pe propria răspundere semnată.' : ($actiune === 'modificare' ? 'Atașează actul adițional semnat.' : 'Atașează contractul scanat, semnat de ambele părți.')], context: ['groups' => ['dosar_file:list']]);
+    }
+
+    /** Create the C168 declaration in the dosar from the reviewed input, with the chosen dosar files as the zip attachment. */
+    #[Route('/{uuid}/c168', methods: ['POST'])]
+    public function createC168(string $uuid, Request $request): JsonResponse
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_SUBMIT);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Authentication required.'], Response::HTTP_UNAUTHORIZED);
+        }
+        $body = json_decode($request->getContent(), true) ?: [];
+        $actiune = (string) ($body['actiune'] ?? ($body['input']['contracte'][0]['actiune'] ?? 'inregistrare'));
+        $input = is_array($body['input'] ?? null) ? $body['input'] : $this->service->c168Input($dosar, $actiune);
+        $input['contracte'][0]['actiune'] = $actiune;
+        $result = $this->forms->get('C168')?->build($input);
+        if ($result === null) {
+            return $this->json(['error' => 'C168 form unavailable.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+        if ($result->hasErrors()) {
+            return $this->json(['error' => 'Datele C168 au erori; corectează-le și reia.', 'code' => 'VALIDATION_FAILED', 'issues' => $result->issues, 'input' => $input], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        $attachments = [];
+        foreach (is_array($body['fileIds'] ?? null) ? $body['fileIds'] : [] as $fid) {
+            $file = $this->em->getRepository(DosarFile::class)->find((string) $fid);
+            if ($file instanceof DosarFile && $file->getDosar() === $dosar && $this->defaultStorage->fileExists($file->getPath())) {
+                $attachments[] = ['name' => $file->getName(), 'contentBase64' => base64_encode($this->defaultStorage->read($file->getPath()))];
+            }
+        }
+        foreach (is_array($body['attachments'] ?? null) ? $body['attachments'] : [] as $a) {
+            if (is_array($a) && is_string($a['contentBase64'] ?? null)) {
+                $attachments[] = ['name' => (string) ($a['name'] ?? 'document.pdf'), 'contentBase64' => $a['contentBase64']];
+            }
+        }
+        if ($attachments === []) {
+            return $this->json(['error' => 'C168 are nevoie de un atașament: contractul scanat, actul adițional sau documentul de încetare (încarcă-l în dosar sau trimite-l în attachments).', 'code' => 'ATTACHMENT_REQUIRED', 'issues' => $result->issues], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        try {
+            $declaration = $this->declarations->create($dosar->getCompany(), ['type' => DeclarationType::C168->value, 'year' => (int) ($input['an'] ?? date('Y')), 'month' => 12, 'periodType' => 'annual'], $user);
+            $declaration->setData(['input' => $input, 'attachments' => $attachments]);
+            $this->service->attachDeclaration($dosar, $declaration);
+            $this->service->rememberC168Input($dosar, $input);
+            $dosar->setNextStep(sprintf('Validează și depune C168 (%s) prin agent; o singură C168 pe perioadă poate fi în prelucrare la ANAF.', $actiune));
+            $this->em->flush();
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return $this->json(['declaration' => $declaration, 'issues' => $result->issues, 'xml' => $result->xml], Response::HTTP_CREATED, context: ['groups' => ['declaration:detail']]);
     }
 
     private function link(string $uuid, Request $request, bool $attach): JsonResponse
@@ -314,7 +487,7 @@ class DosarController extends AbstractController
         $dosar->touch();
         $this->em->flush();
 
-        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list']]);
+        return $this->json($this->detail($dosar), context: ['groups' => ['dosar:detail', 'declaration:list', 'spv_request:list', 'spv_document:list', 'dosar_file:list']]);
     }
 
     /** @return array<string, mixed> */
@@ -326,6 +499,7 @@ class DosarController extends AbstractController
             'declarations' => $this->em->getRepository(TaxDeclaration::class)->findBy(['dosar' => $dosar], ['createdAt' => 'DESC']),
             'requests' => $this->em->getRepository(SpvRequest::class)->findBy(['dosar' => $dosar], ['createdAt' => 'DESC']),
             'documents' => $this->em->getRepository(SpvDocument::class)->findBy(['dosar' => $dosar], ['anafCreatedAt' => 'DESC']),
+            'files' => $this->em->getRepository(DosarFile::class)->findBy(['dosar' => $dosar], ['createdAt' => 'DESC']),
             'timeline' => $this->service->timeline($dosar),
         ];
     }

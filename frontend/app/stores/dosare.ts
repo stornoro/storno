@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Dosar, DosarActions, DosarCounts, DosarDetail, DosarStats, DosarType } from '~/types'
+import type { Dosar, DosarActions, DosarCounts, DosarDetail, DosarFile, DosarStats, DosarType } from '~/types'
 
 interface ListResponse {
   data: Dosar[]
@@ -78,6 +78,34 @@ export const useDosareStore = defineStore('dosare', () => {
     return await post(`/v1/dosare/${id}/document/${type}`, fields)
   }
 
+  async function uploadFile(id: string, file: File, kind: string): Promise<DosarDetail> {
+    const { apiFetch } = useApi()
+    const form = new FormData()
+    form.append('file', file)
+    form.append('kind', kind)
+    return await apiFetch<DosarDetail>(`/v1/dosare/${id}/files`, { method: 'POST', body: form })
+  }
+
+  async function downloadBlob(path: string): Promise<Blob> {
+    const { apiFetch } = useApi()
+    return await apiFetch<Blob>(path, { responseType: 'blob' })
+  }
+
+  async function deleteFile(id: string, fileId: string): Promise<DosarDetail> {
+    const { del } = useApi()
+    return await del<DosarDetail>(`/v1/dosare/${id}/files/${fileId}`)
+  }
+
+  async function c168Prefill(id: string, actiune: string): Promise<{ actiune: string, input: Record<string, any>, issues: Array<{ level: string, code: string, field: string, message: string }>, files: DosarFile[], attachmentHint: string }> {
+    const { get } = useApi()
+    return await get(`/v1/dosare/${id}/c168-prefill`, { actiune })
+  }
+
+  async function c168Create(id: string, actiune: string, input: Record<string, any>, fileIds: string[]): Promise<{ declaration: any, issues: any[], xml: string }> {
+    const { post } = useApi()
+    return await post(`/v1/dosare/${id}/c168`, { actiune, input, fileIds })
+  }
+
   async function fetchDosar(id: string): Promise<DosarDetail> {
     const { get } = useApi()
     return await get<DosarDetail>(`/v1/dosare/${id}`)
@@ -131,5 +159,5 @@ export const useDosareStore = defineStore('dosare', () => {
     return await post(`/v1/dosare/${id}/d212`, input ? { input } : {})
   }
 
-  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
+  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, uploadFile, deleteFile, downloadBlob, c168Prefill, c168Create, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
 })
