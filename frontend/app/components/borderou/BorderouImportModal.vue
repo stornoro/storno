@@ -125,6 +125,15 @@ const resolvedBankProvider = computed(() => {
     raiffeisen: ['raiffeisen'],
     revolut: ['revolut'],
     unicredit: ['unicredit'],
+    citi: ['citi'],
+    intesa: ['intesa'],
+    mypos: ['mypos', 'my pos'],
+    nexent: ['nexent'],
+    patria: ['patria'],
+    trezorerie: ['trezor'],
+    vista: ['vista'],
+    viva: ['viva'],
+    wise: ['wise', 'transferwise'],
   }
 
   for (const [key, keywords] of Object.entries(keywordMap)) {
@@ -183,15 +192,24 @@ async function handleImport() {
   )
 
   if (success) {
-    const description = isBankStatement.value
+    const parts = [isBankStatement.value
       ? `${store.summary.total} ${$t('bankStatement.transactionsImported')}`
-      : `${store.summary.total} ${$t('borderou.phaseImport').toLowerCase()}`
+      : `${store.summary.total} ${$t('borderou.phaseImport').toLowerCase()}`]
+    if (isBankStatement.value && store.summary.rowsInFile && store.summary.rowsInFile > store.summary.total) {
+      parts.push($t('bankStatement.rowsReadHint', { rows: store.summary.rowsInFile }))
+    }
+    if (store.lastDetectedBank) {
+      parts.push(`${$t('bankStatement.detectedBank')}: ${store.lastDetectedBank}`)
+    }
 
     toast.add({
       title: `${$t('borderou.importAction')} · ${file.value?.name ?? ''}`,
-      description,
+      description: parts.join(' · '),
       color: 'success',
     })
+    for (const warning of store.lastImportWarnings) {
+      toast.add({ title: $t('bankStatement.statementWarning'), description: warning, color: 'warning', duration: 12000 })
+    }
     if (isBankStatement.value && bankAccountId.value) {
       try { localStorage.setItem(lastAccountKey.value, bankAccountId.value) } catch { /* storage unavailable */ }
     }
@@ -300,7 +318,7 @@ onMounted(() => {
             <input
               ref="fileInput"
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx,.xls,.pdf"
               multiple
               class="hidden"
               @change="onFileSelect"
@@ -321,6 +339,9 @@ onMounted(() => {
               <UIcon name="i-lucide-upload" class="w-8 h-8 mx-auto text-(--ui-text-muted) mb-2" />
               <p class="text-sm text-(--ui-text-muted)">
                 {{ $t('borderou.fileDragHint') }}
+              </p>
+              <p v-if="isBankStatement" class="text-xs text-(--ui-text-muted) mt-1">
+                {{ $t('borderou.pdfHint') }}
               </p>
             </template>
           </div>

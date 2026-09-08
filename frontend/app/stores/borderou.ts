@@ -33,6 +33,9 @@ interface BorderouSummary {
   attention: number
   noMatch: number
   totalAmount: string
+  duplicatesSkipped?: number
+  rowsInFile?: number
+  rowsParsed?: number
 }
 
 interface AvailableInvoice {
@@ -66,6 +69,8 @@ export const useBordereauStore = defineStore('borderou', () => {
   const saving = ref(false)
   const error = ref<string | null>(null)
   const summary = ref<BorderouSummary>({ total: 0, certain: 0, attention: 0, noMatch: 0, totalAmount: '0.00' })
+  const lastImportWarnings = ref<string[]>([])
+  const lastDetectedBank = ref<string | null>(null)
   const providers = ref<BorderouProviders | null>(null)
   const currentImportJobId = ref<string | null>(null)
   const availableInvoices = ref<AvailableInvoice[]>([])
@@ -120,6 +125,8 @@ export const useBordereauStore = defineStore('borderou', () => {
         importJobId: string
         summary: BorderouSummary
         transactions: BorderouTransaction[]
+        warnings?: string[]
+        detectedBank?: string | null
       }>('/v1/borderou/upload', {
         method: 'POST',
         body: formData,
@@ -129,6 +136,8 @@ export const useBordereauStore = defineStore('borderou', () => {
       summary.value = res.summary
       transactions.value = res.transactions
       pagination.value.total = res.summary.total
+      lastImportWarnings.value = res.warnings ?? []
+      lastDetectedBank.value = res.detectedBank ?? null
       return true
     }
     catch (err: any) {
@@ -255,6 +264,8 @@ export const useBordereauStore = defineStore('borderou', () => {
     saving,
     error,
     summary,
+    lastImportWarnings,
+    lastDetectedBank,
     providers,
     currentImportJobId,
     availableInvoices,
