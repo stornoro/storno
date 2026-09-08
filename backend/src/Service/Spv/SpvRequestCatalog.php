@@ -35,6 +35,9 @@ final class SpvRequestCatalog
         'Istoric bilant' => ['group' => 'rapoarte', 'label' => 'Istoricul situatiilor financiare', 'params' => []],
         'Bilant anual' => ['group' => 'rapoarte', 'label' => 'Situatii financiare anuale', 'params' => ['an']],
         'Bilant semestrial' => ['group' => 'rapoarte', 'label' => 'Raportari financiare semestriale', 'params' => ['an']],
+        'Istoric declaratii PF' => ['group' => 'rapoarte', 'label' => 'Istoric declaratii depuse (PF)', 'params' => []],
+        'Detalii neconcordante D112 REVISAL' => ['group' => 'rapoarte', 'label' => 'Detalii neconcordante D112 - REVISAL (PF)', 'params' => []],
+        'Venituri Formular Banca' => ['group' => 'rapoarte', 'label' => 'Venituri - formular pentru banca (PF)', 'params' => []],
         'Istoric Spatiu Virtual' => ['group' => 'rapoarte', 'label' => 'Istoric activitati SPV (profil, descarcari)', 'params' => []],
         'Registru intrari-iesiri' => ['group' => 'rapoarte', 'label' => 'Registru intrari-iesiri documente SPV', 'params' => []],
         'InterogariBanci' => ['group' => 'rapoarte', 'label' => 'Interogari ale bancilor privind veniturile (PF)', 'params' => []],
@@ -66,6 +69,7 @@ final class SpvRequestCatalog
         'D205' => ['group' => 'declaratii', 'label' => 'D205 - impozit retinut la sursa', 'params' => ['an']],
         'D208' => ['group' => 'declaratii', 'label' => 'D208 - transfer proprietati (luna 6 sau 12)', 'params' => ['an', 'luna']],
         'D212' => ['group' => 'declaratii', 'label' => 'D212 - ultimele declaratii unice depuse (PF)', 'params' => ['an']],
+        'Duplicat declaratie unica' => ['group' => 'declaratii', 'label' => 'Duplicat declaratie unica (PF)', 'params' => ['an']],
         'D300' => ['group' => 'declaratii', 'label' => 'D300 - decont TVA (include D305)', 'params' => ['an', 'luna']],
         'D301' => ['group' => 'declaratii', 'label' => 'D301 - decont special TVA', 'params' => ['an', 'luna']],
         'D311' => ['group' => 'declaratii', 'label' => 'D311 - TVA colectata (cod anulat)', 'params' => ['an', 'luna']],
@@ -83,6 +87,7 @@ final class SpvRequestCatalog
      * these through the website form itself (www.anaf.ro/SNMD/solicitari.xhtml) with the certificate.
      */
     private const WEB_ONLY = [
+        'Istoric declaratii PF', 'Detalii neconcordante D112 REVISAL', 'Venituri Formular Banca', 'Duplicat declaratie unica',
         'C168', 'Reprezentanti SPV', 'Certificat', 'Certificat TVA', 'Certificat inregistrare fiscala',
         'Certificat de rezidenta fiscala, pentru persoane juridice rezidente in Romania',
         'Certificat de rezidenta fiscala, pentru persoane rezidente in Romania',
@@ -108,6 +113,39 @@ final class SpvRequestCatalog
         'Notificarea solutionarii cererii de reinregistrare TVA',
     ];
 
+
+    /**
+     * Who may ask for each type, exactly as the SPV web form decides it: the form swaps the whole
+     * type list on the identifier's length (13 digits → the CNP list, else the CUI list). Types not
+     * listed here are offered to both. Source: the form's PF/PJ lists and its `verificare()` rules.
+     */
+    private const CNP_ONLY = [
+        'D212', 'Duplicat declaratie unica', 'Adeverinte Venit', 'InterogariBanci', 'Venituri Formular Banca',
+        'Istoric declaratii PF', 'NeconcordanteD112CNP', 'Detalii neconcordante D112 REVISAL',
+        'Certificat de rezidenta fiscala, pentru persoane rezidente in Romania',
+    ];
+    private const CUI_ONLY = [
+        'Istoric declaratii', 'Istoric bilant', 'Bilant anual', 'Bilant semestrial', 'Reprezentanti SPV', 'D112Contrib',
+        'Neconcordante D394', 'NeconcordanteD394', 'Certificat inregistrare fiscala',
+        'Certificat de rezidenta fiscala, pentru persoane juridice rezidente in Romania',
+        'Certificat atestare activitate sediu permanent/desemnat PJ străine în România',
+        'Certificat privind atestarea impozitului plătit în RO de persoane juridice străine',
+        'D100', 'D101', 'D106', 'D112', 'D120', 'D130', 'D180', 'D205', 'D208', 'D300', 'D301', 'D311', 'D390', 'D392', 'D393', 'D394',
+        'Decont pe taxa de valoare adaugata (D300) proiect pilot SAFT',
+    ];
+
+    /** Types the web form takes without any period (`verificare()`: luna disabled, an readonly). */
+    private const WEB_NO_PERIOD = [
+        'Istoric bilant', 'DATE IDENTIFICARE', 'VECTOR FISCAL', 'Situatie Sintetica', 'D112Contrib', 'Obligatii de plata',
+        'Istoric declaratii PF', 'C168', 'Reprezentanti SPV', 'Nota obligatiilor de plata', 'Istoric Spatiu Virtual',
+        'Registru intrari-iesiri', 'InterogariBanci', 'Detalii neconcordante D112 REVISAL', 'Venituri Formular Banca',
+        'Fisa Rol Simplificata', 'Fisa Rol Completa', 'Rezumat Fisa Rol cu XLS atasat', 'Duplicat Recipisa',
+    ];
+    /** Types where the form fixes the month itself (annual → 12, half-year → 6). */
+    private const WEB_FIXED_MONTH = [
+        'Bilant anual' => 12, 'Istoric declaratii' => 12, 'D205' => 12, 'D101' => 12, 'D120' => 12, 'D130' => 12, 'D392' => 12, 'D393' => 12,
+        'D106' => 12, 'Duplicat declaratie unica' => 12, 'Bilant semestrial' => 6,
+    ];
 
     /** First year with data, from the SPV web form ("Perioada de la care sunt disponibile date"). */
     private const SINCE = [
@@ -162,15 +200,48 @@ final class SpvRequestCatalog
         'Institutie financiar bancara asigurare etc.', 'Executor judecatoresc', 'Autoritati straine', 'Altele',
     ];
 
-    /** @return list<array{type: string, group: string, label: string, params: list<string>, optional: list<string>, since: ?int, note: ?string}> */
-    public function types(): array
+    /** 'cnp' | 'cui' | 'both': who the SPV form offers the type to. */
+    public function audienceOf(string $type): string
+    {
+        if (in_array($type, self::CNP_ONLY, true)) {
+            return 'cnp';
+        }
+        if (in_array($type, self::CUI_ONLY, true) || in_array($type, self::NOTICE_TYPES, true)) {
+            return 'cui';
+        }
+
+        return 'both';
+    }
+
+    /** The form's rule for the identifier: 13 digits is a person (the form looks only at the length). */
+    public static function audienceForIdentifier(string $cif): string
+    {
+        return strlen(preg_replace('/\D/', '', $cif) ?? '') === 13 ? 'cnp' : 'cui';
+    }
+
+    /** Whether the type is offered to the holder of this identifier. */
+    public function offeredTo(string $type, string $cif): bool
+    {
+        $a = $this->audienceOf($type);
+
+        return $a === 'both' || $a === self::audienceForIdentifier($cif);
+    }
+
+    /**
+     * Catalog entries; with an identifier, only what the SPV form would list for it (CNP or CUI list).
+     * @return list<array{type: string, group: string, label: string, params: list<string>, optional: list<string>, since: ?int, note: ?string, wsSupported: bool, audience: string}>
+     */
+    public function types(?string $forCif = null): array
     {
         $out = [];
         foreach (self::TYPES as $type => $def) {
-            $out[] = ['type' => $type, 'group' => $def['group'], 'label' => $def['label'], 'params' => $def['params'], 'optional' => $def['optional'] ?? [], 'since' => self::SINCE[$type] ?? null, 'note' => self::NOTES[$type] ?? null, 'wsSupported' => $this->isWsSupported($type)];
+            $out[] = ['type' => $type, 'group' => $def['group'], 'label' => $def['label'], 'params' => $def['params'], 'optional' => $def['optional'] ?? [], 'since' => self::SINCE[$type] ?? null, 'note' => self::NOTES[$type] ?? null, 'wsSupported' => $this->isWsSupported($type), 'audience' => $this->audienceOf($type)];
         }
         foreach (self::NOTICE_TYPES as $type) {
-            $out[] = ['type' => $type, 'group' => 'decizii', 'label' => $type, 'params' => [], 'optional' => ['an'], 'since' => self::SINCE[$type] ?? null, 'note' => null, 'wsSupported' => false];
+            $out[] = ['type' => $type, 'group' => 'decizii', 'label' => $type, 'params' => [], 'optional' => ['an'], 'since' => self::SINCE[$type] ?? null, 'note' => null, 'wsSupported' => false, 'audience' => 'cui'];
+        }
+        if ($forCif !== null && $forCif !== '') {
+            $out = array_values(array_filter($out, fn (array $t) => $this->offeredTo($t['type'], $forCif)));
         }
 
         return $out;
@@ -208,6 +279,11 @@ final class SpvRequestCatalog
         if (!$this->has($type)) {
             throw new \InvalidArgumentException(sprintf('Tip de solicitare necunoscut: "%s".', $type));
         }
+        if (!$this->offeredTo($type, $cif)) {
+            throw new \InvalidArgumentException(self::audienceForIdentifier($cif) === 'cnp'
+                ? sprintf('În SPV, „%s” nu se poate solicita pentru o persoană fizică (CNP).', $type)
+                : sprintf('În SPV, „%s” se poate solicita doar pentru o persoană fizică (CNP).', $type));
+        }
         $channel = $this->isWsSupported($type) ? 'ws' : 'web';
         $def = self::TYPES[$type] ?? ['params' => [], 'optional' => ['an']];
         $required = $def['params'];
@@ -241,6 +317,14 @@ final class SpvRequestCatalog
         }
         if (isset($clean['lunai'], $clean['lunas']) && (int) $clean['lunai'] > (int) $clean['lunas']) {
             throw new \InvalidArgumentException('Luna de inceput trebuie sa fie inainte de luna de sfarsit.');
+        }
+        if ($channel === 'web') {
+            // the website form's own rules (verificare()): no period for some types, a fixed month for annual ones
+            if (in_array($type, self::WEB_NO_PERIOD, true)) {
+                unset($clean['an'], $clean['luna']);
+            } elseif (isset(self::WEB_FIXED_MONTH[$type])) {
+                $clean['luna'] = (string) self::WEB_FIXED_MONTH[$type];
+            }
         }
 
         $query = ['tip' => $type, 'cui' => preg_replace('/\D/', '', $cif) ?? ''];

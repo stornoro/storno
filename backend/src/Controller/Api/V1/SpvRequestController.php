@@ -65,10 +65,18 @@ class SpvRequestController extends AbstractController
 
     /** Catalog of request types with their parameters, notes and the reasons accepted for income certificates. */
     #[Route('/types', methods: ['GET'])]
-    public function types(): JsonResponse
+    public function types(Request $request): JsonResponse
     {
+        // the SPV form lists different types for a CNP (13 digits) than for a CUI; mirror it for the company
+        $company = $this->organizationContext->resolveCompany($request);
+        $cif = $company ? (string) $company->getCif() : null;
+        if ($request->query->getBoolean('all')) {
+            $cif = null;
+        }
+
         return $this->json([
-            'types' => $this->catalog->types(),
+            'types' => $this->catalog->types($cif),
+            'audience' => $cif !== null ? \App\Service\Spv\SpvRequestCatalog::audienceForIdentifier($cif) : 'all',
             'incomeCertificateReasons' => $this->catalog->incomeCertificateReasons(),
         ]);
     }

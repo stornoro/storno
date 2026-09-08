@@ -428,6 +428,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               </UFormField>
             </div>
             <p class="text-xs text-muted">{{ $t('spv.requests.agentHint') }}</p>
+            <p class="text-xs text-dimmed">{{ companyStore.currentCompany?.isIndividual || String(companyStore.currentCompany?.cif ?? '').length === 13 ? $t('spv.requests.listForCnp') : $t('spv.requests.listForCui') }}</p>
           </div>
         </template>
         <template #footer>

@@ -4269,6 +4269,8 @@ export default defineI18nLocale(async () => {
       viewAnswer: 'View answer',
       since: 'ANAF has data from {year}.',
       agentHint: 'The request goes through the local agent with the company certificate.',
+      listForCnp: 'The type list is the one SPV offers a CNP (natural person): no company returns, with the annual return, income certificates and C168.',
+      listForCui: 'The type list is the one SPV offers a CUI (company).',
       status: { pending: 'preparing', requested: 'sent to ANAF', answered: 'answered', error: 'error' },
       groups: { rapoarte: 'Reports', documente: 'Duplicates and certificates', declaratii: 'Copies of declarations', decizii: 'Decisions and notices' },
       params: { an: 'Year', luna: 'Month', lunai: 'From month', lunas: 'To month', motiv: 'Reason (exact ANAF wording)', numar_inregistrare: 'Registration number', cui_pui: 'Branch CUI' },
