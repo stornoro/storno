@@ -62,6 +62,7 @@ RUN apk add --no-cache \
     freetype \
     oniguruma \
     openjdk17-jre \
+    poppler-utils \
     curl \
     fontconfig \
     ttf-freefont \

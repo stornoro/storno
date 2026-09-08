@@ -67,10 +67,10 @@ class BorderouController extends AbstractController
             return $this->json(['error' => 'No file uploaded.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $allowedExtensions = ['csv', 'xlsx', 'xls'];
+        $allowedExtensions = ['csv', 'xlsx', 'xls', 'pdf'];
         $extension = strtolower($uploadedFile->getClientOriginalExtension());
         if (!in_array($extension, $allowedExtensions, true)) {
-            return $this->json(['error' => 'Unsupported file format. Allowed: csv, xlsx, xls'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            return $this->json(['error' => 'Unsupported file format. Allowed: csv, xlsx, xls, pdf'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $sourceType = $request->request->get('sourceType');
@@ -120,6 +120,8 @@ class BorderouController extends AbstractController
                 'importJobId' => $result['importJobId'],
                 'summary' => $result['summary'],
                 'transactions' => $result['transactions'],
+                'warnings' => $result['warnings'] ?? [],
+                'detectedBank' => $result['detectedBank'] ?? null,
             ], Response::HTTP_CREATED, [], ['groups' => ['borderou:list']]);
         } catch (\RuntimeException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);

@@ -7,6 +7,7 @@ imports:
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    env(PDFTOTEXT_BIN): ''   # optional path to poppler's pdftotext; auto-detected on PATH when empty
     env(AWS_ACCESS_KEY_ID): ''
     env(AWS_S3_BUCKET): ''
     app.jwt_refresh_token_cookie_name: "%env(JWT_REFRESH_COOKIE_NAME)%"
@@ -89,6 +90,9 @@ services:
         tags: ['app.import_parser']
 
     App\Service\Import\Parser\SagaXmlParser:
+        tags: ['app.import_parser']
+
+    App\Service\Import\Parser\PdfStatementFileParser:
         tags: ['app.import_parser']
 
     # Tag every ColumnMapperInterface implementation
@@ -223,6 +227,22 @@ services:
 
     App\Service\Borderou\Parser\EmagMarketplaceParser:
         tags: ['app.borderou_parser']
+
+    App\Service\Borderou\Parser\PdfBankStatementParser:
+        tags: ['app.borderou_parser']
+
+    # PDF bank statements: one parser per bank layout, picked by the dispatcher
+    App\Service\Borderou\Pdf\Bank\:
+        resource: '../src/Service/Borderou/Pdf/Bank/*PdfParser.php'
+        tags: ['app.pdf_statement_parser']
+
+    App\Service\Borderou\Pdf\PdfStatementDispatcher:
+        arguments:
+            $parsers: !tagged_iterator app.pdf_statement_parser
+
+    App\Service\Borderou\Pdf\PdfWordExtractor:
+        arguments:
+            $pdftotextBinary: '%env(PDFTOTEXT_BIN)%'
 
     # Wire the borderou import service with tagged parsers
     App\Service\Borderou\BorderouImportService:

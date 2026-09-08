@@ -88,8 +88,27 @@ class BorderouImportService
         $metadata = $preview['metadata'] ?? [];
         $rows = $fileParser->parse($filePath);
 
-        // 4. Find borderou parser
-        $bordParser = $this->findBordereauParser($provider, $sourceType, $headers);
+        // 4. Find borderou parser. PDFs are always handled by the PDF statement
+        //    parser: the bank is detected from the document itself, and the
+        //    provider the user picked only has to agree with it.
+        if ($fileFormat === 'pdf') {
+            $detectedBank = (string) ($metadata['bank'] ?? '');
+            if ($provider !== '' && $provider !== 'generic_bank' && $provider !== Parser\PdfBankStatementParser::PROVIDER
+                && $detectedBank !== '' && $provider !== $detectedBank) {
+                $job->setStatus('failed');
+                $job->setErrors([sprintf('Bank mismatch: file looks like %s, selected %s', $detectedBank, $provider)]);
+                $this->em->flush();
+                throw new \RuntimeException(sprintf(
+                    'Extrasul pare emis de %s, dar ati selectat alta banca. Selectati banca corecta sau "Alta banca".',
+                    $metadata['bank_label'] ?? $detectedBank,
+                ));
+            }
+            $provider = $detectedBank !== '' ? $detectedBank : $provider;
+            $job->setSource($provider);
+            $bordParser = $this->findBordereauParser(Parser\PdfBankStatementParser::PROVIDER, $sourceType, $headers);
+        } else {
+            $bordParser = $this->findBordereauParser($provider, $sourceType, $headers);
+        }
 
         // Pass file metadata (preamble key-value pairs) to the parser if supported
         if ($bordParser && method_exists($bordParser, 'setMetadata')) {
@@ -182,11 +201,23 @@ class BorderouImportService
         // 9. Build summary
         $summary = $this->txRepo->countByImportJobGroupedByStatus($job);
         $summary['duplicatesSkipped'] = $duplicatesSkipped;
+        $summary['rowsInFile'] = $fileParser->countRows($filePath);
+        $summary['rowsParsed'] = count($parsedRows);
+
+        // Statement-level warnings (e.g. a PDF whose printed closing balance does
+        // not match the transactions read) are surfaced to the user and kept on the job.
+        $warnings = array_values(array_filter((array) ($metadata['warnings'] ?? []), 'is_string'));
+        if ($warnings !== []) {
+            $job->setErrors($warnings);
+            $this->em->flush();
+        }
 
         return [
             'importJobId' => $job->getId()->toRfc4122(),
             'summary' => $summary,
             'transactions' => $transactions,
+            'warnings' => $warnings,
+            'detectedBank' => $metadata['bank_label'] ?? null,
         ];
     }
 
@@ -438,19 +469,28 @@ class BorderouImportService
             ],
             'bank_statement' => [
                 ['key' => 'alpha_bank', 'label' => 'Alpha Bank Romania', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'bcr', 'label' => 'Banca Comerciala Romana', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'bt', 'label' => 'Banca Transilvania', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'brd', 'label' => 'BRD - Groupe Societe Generale', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'cec', 'label' => 'CEC Bank', 'formats' => ['csv', 'xlsx']],
+                ['key' => 'bcr', 'label' => 'Banca Comerciala Romana', 'formats' => ['csv', 'xlsx', 'xls', 'pdf']],
+                ['key' => 'bt', 'label' => 'Banca Transilvania', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'brd', 'label' => 'BRD - Groupe Societe Generale', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'cec', 'label' => 'CEC Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'citi', 'label' => 'Citibank Europe', 'formats' => ['csv', 'xlsx', 'pdf']],
                 ['key' => 'first_bank', 'label' => 'First Bank Romania', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'garanti', 'label' => 'Garantibank International NV', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'ing', 'label' => 'ING Bank NV', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'libra', 'label' => 'Libra Bank', 'formats' => ['csv', 'xlsx']],
+                ['key' => 'garanti', 'label' => 'Garanti BBVA', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'ing', 'label' => 'ING Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'intesa', 'label' => 'Intesa Sanpaolo Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'libra', 'label' => 'Libra Internet Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'mypos', 'label' => 'myPOS', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'nexent', 'label' => 'Nexent Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
                 ['key' => 'otp', 'label' => 'OTP Bank Romania', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'raiffeisen', 'label' => 'Raiffeisen Bank', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'revolut', 'label' => 'Revolut', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'unicredit', 'label' => 'UniCredit Bank SA', 'formats' => ['csv', 'xlsx']],
-                ['key' => 'generic_bank', 'label' => 'Alta banca', 'formats' => ['csv', 'xlsx']],
+                ['key' => 'patria', 'label' => 'Patria Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'raiffeisen', 'label' => 'Raiffeisen Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'revolut', 'label' => 'Revolut', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'trezorerie', 'label' => 'Trezoreria Statului', 'formats' => ['pdf']],
+                ['key' => 'unicredit', 'label' => 'UniCredit Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'vista', 'label' => 'Vista Bank', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'viva', 'label' => 'Viva.com (Viva Wallet)', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'wise', 'label' => 'Wise', 'formats' => ['csv', 'xlsx', 'pdf']],
+                ['key' => 'generic_bank', 'label' => 'Alta banca', 'formats' => ['csv', 'xlsx', 'pdf']],
             ],
             'marketplace' => [
                 ['key' => 'emag', 'label' => 'eMag', 'formats' => ['xlsx']],
