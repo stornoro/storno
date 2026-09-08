@@ -365,6 +365,12 @@ services:
         arguments:
             $turnstileSecretKey: '%env(default::TURNSTILE_SECRET_KEY)%'
 
+    App\Service\Marketing\MetaConversionsApi:
+        arguments:
+            $pixelId: '%env(default::META_PIXEL_ID)%'
+            $accessToken: '%env(default::META_CAPI_ACCESS_TOKEN)%'
+            $testEventCode: '%env(default::META_CAPI_TEST_EVENT_CODE)%'
+
     App\Controller\Api\V1\ContactController:
         arguments:
             $turnstileSecretKey: '%env(default::TURNSTILE_SECRET_KEY)%'

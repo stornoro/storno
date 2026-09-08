@@ -26,6 +26,7 @@ when@prod:
                 'App\Message\ResetCompanyDataMessage': async
                 'App\Message\SendInvitationEmailMessage': async
                 'App\Message\SendEmailConfirmationMessage': async
+                'App\Message\SendMetaConversionMessage': async
                 'App\Message\ProcessImportMessage': async
                 'App\Message\DispatchWebhookMessage': async
                 'App\Message\Anaf\SubmitETransportMessage': async

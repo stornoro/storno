@@ -1,6 +1,29 @@
 import { defineStore } from 'pinia'
 import type { User } from '~/types'
 
+/**
+ * Click identifiers the attribution plugin stored as first-party cookies, sent
+ * with the registration so the backend can report the sign-up to Meta's
+ * Conversions API. Empty on the server and when no ad click preceded the visit.
+ */
+function readAttribution(): { fbc?: string; fbp?: string; fbclid?: string; source_url?: string; utm?: Record<string, string> } {
+  if (typeof document === 'undefined') return {}
+  const cookies = Object.fromEntries(document.cookie.split('; ').filter(Boolean).map((c) => {
+    const i = c.indexOf('=')
+    return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))]
+  }))
+  let utm: Record<string, string> | undefined
+  try { utm = cookies.storno_utm ? JSON.parse(cookies.storno_utm) : undefined } catch { utm = undefined }
+  const fbclid = new URLSearchParams(window.location.search).get('fbclid') ?? undefined
+  return {
+    fbc: cookies._fbc,
+    fbp: cookies._fbp,
+    fbclid,
+    source_url: utm?.landing ?? window.location.href.split('?')[0],
+    utm,
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
   // ── State ──────────────────────────────────────────────────────────
   // Tokens are plain refs. Cookie sync is handled by plugins/auth-cookies.ts
@@ -125,7 +148,7 @@ export const useAuthStore = defineStore('auth', () => {
       await fetchFn('/auth/register', {
         baseURL: apiBase,
         method: 'POST',
-        body: payload,
+        body: { ...payload, attribution: readAttribution() },
       })
 
       return true
