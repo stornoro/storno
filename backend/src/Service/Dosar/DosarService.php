@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace App\Service\Dosar;
 
+use App\Entity\Client;
 use App\Entity\Company;
+use App\Entity\Invoice;
+use App\Entity\RecurringInvoice;
+use App\Entity\Supplier;
 use App\Entity\Dosar;
 use App\Entity\SpvDocument;
 use App\Entity\SpvRequest;
 use App\Entity\TaxDeclaration;
 use App\Entity\User;
 use App\Enum\DeclarationStatus;
+use App\Enum\DocumentStatus;
+use App\Enum\InvoiceDirection;
 use App\Enum\DeclarationType;
 use App\Enum\SpvDocumentCategory;
 use App\Repository\DosarRepository;
@@ -426,6 +432,7 @@ final class DosarService
         $active = 0;
         $expiring = 0;
         $expected = [];
+        $invoiced = [];
         foreach ($this->dosare->findForCompany($company, Dosar::TYPE_RENTAL_CONTRACT) as $dosar) {
             $s = $dosar->getSubject();
             $start = $this->date($s['deLa'] ?? $s['data'] ?? null);
@@ -441,17 +448,21 @@ final class DosarService
             if ($expiry !== null && $expiry >= 0 && $expiry <= 60) {
                 $expiring++;
             }
-            // expected gross rent per income year from the contract terms (RON only)
-            if ($chirie > 0 && $start !== null) {
-                $last = $end ?? $today;
-                for ($y = (int) $start->format('Y'); $y <= (int) $last->format('Y'); $y++) {
-                    $from = max($start, new \DateTimeImmutable($y . '-01-01'));
-                    $to = min($last, new \DateTimeImmutable($y . '-12-31'));
-                    if ($from > $to) {
-                        continue;
-                    }
-                    $months = ((int) $to->format('n') - (int) $from->format('n')) + 1;
-                    $expected[$y][$moneda] = ($expected[$y][$moneda] ?? 0) + $chirie * $months;
+            // expected rent per year from the contract terms, by calendar month: from the month the
+            // rent is due (chirieDeLa, else the start), with the contractual increase (chirieMajorata
+            // from majorareDeLa) and up to the end / termination; the last year of a running contract
+            // is projected to December
+            $rentStart = $this->date($s['chirieDeLa'] ?? null) ?? $start;
+            $increaseFrom = $this->date($s['majorareDeLa'] ?? null);
+            $increased = isset($s['chirieMajorata']) && is_numeric($s['chirieMajorata']) ? (float) $s['chirieMajorata'] : null;
+            if ($chirie > 0 && $rentStart !== null) {
+                $last = $end ?? new \DateTimeImmutable($today->format('Y') . '-12-31');
+                $m = new \DateTimeImmutable($rentStart->format('Y-m-01'));
+                while ($m <= $last) {
+                    $rate = ($increaseFrom !== null && $increased !== null && $m >= new \DateTimeImmutable($increaseFrom->format('Y-m-01'))) ? $increased : $chirie;
+                    $y = (int) $m->format('Y');
+                    $expected[$y][$moneda] = ($expected[$y][$moneda] ?? 0) + $rate;
+                    $m = $m->modify('+1 month');
                 }
             }
             $properties[] = [
@@ -467,7 +478,19 @@ final class DosarService
                 'expiresInDays' => $expiry,
                 'status' => $dosar->getStatus(),
                 'declarations' => $this->em->getRepository(TaxDeclaration::class)->count(['dosar' => $dosar]),
+                'chiriasPersoanaJuridica' => !empty($s['chiriasPersoanaJuridica']),
+                'chirieDeLa' => $rentStart?->format('Y-m-d'),
             ];
+            // what was actually invoiced to this tenant (company landlords invoice the rent)
+            foreach ($this->tenantClients($company, (string) ($s['chiriasCif'] ?? '')) as $client) {
+                foreach ($this->em->getRepository(Invoice::class)->findBy(['company' => $company, 'client' => $client]) as $inv) {
+                    if ($inv->getDirection() === InvoiceDirection::INCOMING || in_array($inv->getStatus(), [DocumentStatus::DRAFT, DocumentStatus::CANCELLED], true) || $inv->getIssueDate() === null) {
+                        continue;
+                    }
+                    $y = (int) $inv->getIssueDate()->format('Y');
+                    $invoiced[$y][$inv->getCurrency()] = ($invoiced[$y][$inv->getCurrency()] ?? 0) + (float) $inv->getTotal();
+                }
+            }
         }
         // declared: D212 rent income per filing year (from the form input, accepted or not)
         $declared = [];
@@ -482,6 +505,8 @@ final class DosarService
         }
         ksort($expected);
         ksort($declared);
+        ksort($invoiced);
+        $cif = (string) $company->getCif();
 
         return [
             'properties' => $properties,
@@ -490,6 +515,9 @@ final class DosarService
             'monthlyRent' => $monthly,
             'expectedGrossByYear' => $expected,
             'declaredByIncomeYear' => $declared,
+            'invoicedByYear' => $invoiced,
+            // a natural person declares the rent in D212; a company invoices it
+            'landlordIsCompany' => !(strlen($cif) === 13 && $cif[0] !== '9'),
         ];
     }
 
@@ -622,6 +650,142 @@ final class DosarService
         $dosar->setSubject($s);
         $this->setContractDeadline($dosar);
         $dosar->touch();
+    }
+
+    // ── Billing: the tenant's invoices ─────────────────────────────────
+
+    /** Clients of the company with the tenant's CUI/CNP. @return list<Client> */
+    private function tenantClients(Company $company, string $cif): array
+    {
+        $cif = preg_replace('/\D+/', '', $cif) ?? '';
+        if ($cif === '') {
+            return [];
+        }
+        $out = [];
+        foreach ($this->em->getRepository(Client::class)->findBy(['company' => $company]) as $client) {
+            if ((preg_replace('/\D+/', '', (string) $client->getCui()) ?? '') === $cif) {
+                $out[] = $client;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Suppliers of the company with the tenant's CUI (the tenant invoicing works to the landlord). @return list<Supplier> */
+    private function tenantSuppliers(Company $company, string $cif): array
+    {
+        $cif = preg_replace('/\D+/', '', $cif) ?? '';
+        if ($cif === '') {
+            return [];
+        }
+        $out = [];
+        foreach ($this->em->getRepository(Supplier::class)->findBy(['company' => $company]) as $supplier) {
+            if ((preg_replace('/\D+/', '', (string) $supplier->getCif()) ?? '') === $cif) {
+                $out[] = $supplier;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Everything invoiced between the landlord and the tenant of a rental dosar: the recurring
+     * invoice, the invoices issued to the tenant with paid / unpaid / overdue state, the invoices
+     * received from the tenant (works compensated with the rent), and the compensation balance.
+     * @return array<string, mixed>
+     */
+    public function billing(Dosar $dosar): array
+    {
+        $company = $dosar->getCompany();
+        $s = $dosar->getSubject();
+        $cif = (string) ($s['chiriasCif'] ?? '');
+        $today = new \DateTimeImmutable('today');
+        $clients = $company ? $this->tenantClients($company, $cif) : [];
+        $suppliers = $company ? $this->tenantSuppliers($company, $cif) : [];
+        $money = fn (string $v) => round((float) $v, 2);
+
+        $issued = [];
+        $totals = ['invoiced' => [], 'paid' => [], 'unpaid' => [], 'overdue' => []];
+        foreach ($clients as $client) {
+            foreach ($this->em->getRepository(Invoice::class)->findBy(['company' => $company, 'client' => $client], ['issueDate' => 'DESC']) as $inv) {
+                if ($inv->getDirection() === InvoiceDirection::INCOMING || in_array($inv->getStatus(), [DocumentStatus::DRAFT, DocumentStatus::CANCELLED], true)) {
+                    continue;
+                }
+                $cur = $inv->getCurrency();
+                $balance = $money($inv->getBalance());
+                $overdue = $balance > 0 && $inv->getDueDate() !== null && $inv->getDueDate() < $today;
+                $issued[] = [
+                    'id' => (string) $inv->getId(), 'number' => $inv->getNumber(), 'issueDate' => $inv->getIssueDate()?->format('Y-m-d'), 'dueDate' => $inv->getDueDate()?->format('Y-m-d'),
+                    'total' => $money($inv->getTotal()), 'amountPaid' => $money($inv->getAmountPaid()), 'balance' => $balance, 'currency' => $cur,
+                    'status' => $inv->getStatus()->value, 'paymentState' => $balance <= 0 ? 'paid' : ($overdue ? 'overdue' : ((float) $inv->getAmountPaid() > 0 ? 'partial' : 'unpaid')),
+                    'daysOverdue' => $overdue ? (int) $inv->getDueDate()->diff($today)->format('%a') : 0,
+                ];
+                $totals['invoiced'][$cur] = ($totals['invoiced'][$cur] ?? 0) + $money($inv->getTotal());
+                $totals['paid'][$cur] = ($totals['paid'][$cur] ?? 0) + $money($inv->getAmountPaid());
+                $totals['unpaid'][$cur] = ($totals['unpaid'][$cur] ?? 0) + $balance;
+                if ($overdue) {
+                    $totals['overdue'][$cur] = ($totals['overdue'][$cur] ?? 0) + $balance;
+                }
+            }
+        }
+
+        $received = [];
+        $receivedTotals = [];
+        foreach ($suppliers as $supplier) {
+            foreach ($this->em->getRepository(Invoice::class)->findBy(['company' => $company, 'supplier' => $supplier], ['issueDate' => 'DESC']) as $inv) {
+                if ($inv->getDirection() !== InvoiceDirection::INCOMING || in_array($inv->getStatus(), [DocumentStatus::DRAFT, DocumentStatus::CANCELLED], true)) {
+                    continue;
+                }
+                $received[] = ['id' => (string) $inv->getId(), 'number' => $inv->getNumber(), 'issueDate' => $inv->getIssueDate()?->format('Y-m-d'), 'total' => $money($inv->getTotal()), 'currency' => $inv->getCurrency(), 'amountPaid' => $money($inv->getAmountPaid()), 'balance' => $money($inv->getBalance()), 'status' => $inv->getStatus()->value];
+                $receivedTotals[$inv->getCurrency()] = ($receivedTotals[$inv->getCurrency()] ?? 0) + $money($inv->getTotal());
+            }
+        }
+
+        $recurring = [];
+        foreach ($clients as $client) {
+            foreach ($this->em->getRepository(RecurringInvoice::class)->findBy(['company' => $company, 'client' => $client]) as $r) {
+                $recurring[] = [
+                    'id' => (string) $r->getId(), 'active' => method_exists($r, 'isActive') ? $r->isActive() : (method_exists($r, 'getIsActive') ? $r->getIsActive() : true),
+                    'frequency' => $r->getFrequency(), 'day' => $r->getFrequencyDay(), 'total' => $money($r->getTotal()), 'currency' => $r->getCurrency(),
+                    'nextIssuanceDate' => method_exists($r, 'getNextIssuanceDate') ? $r->getNextIssuanceDate()?->format('Y-m-d') : null,
+                    'lastIssuedAt' => method_exists($r, 'getLastIssuedAt') ? $r->getLastIssuedAt()?->format('Y-m-d') : null,
+                    'lastInvoiceNumber' => method_exists($r, 'getLastInvoiceNumber') ? $r->getLastInvoiceNumber() : null,
+                    'reference' => method_exists($r, 'getReference') ? $r->getReference() : null,
+                ];
+            }
+        }
+
+        // compensation of the tenant's investment with the rent (contract clause): works invoiced by
+        // the tenant versus rent invoiced since the compensation started
+        $compensation = null;
+        $inv = is_array($s['investitie'] ?? null) ? $s['investitie'] : null;
+        if ($inv !== null) {
+            $since = $this->date($inv['compensareDeLa'] ?? $s['chirieDeLa'] ?? null);
+            $rentSince = [];
+            foreach ($issued as $i) {
+                if ($since === null || ($i['issueDate'] !== null && new \DateTimeImmutable($i['issueDate']) >= $since)) {
+                    $rentSince[$i['currency']] = ($rentSince[$i['currency']] ?? 0) + $i['total'];
+                }
+            }
+            $compensation = [
+                'investitieEstimata' => $inv['estimata'] ?? null, 'plafon' => $inv['plafon'] ?? null, 'moneda' => $inv['moneda'] ?? 'EUR',
+                'compensareDeLa' => $since?->format('Y-m-d'),
+                'lucrariFacturateDeChirias' => $receivedTotals,
+                'chirieFacturataDeLaInceput' => $rentSince,
+                'chiriePlatitaDeChirias' => $totals['paid'],
+                'note' => 'Soldul de compensat = lucrări justificate − chiria compensată; se confirmă prin procesul-verbal de reconciliere semnat de părți.',
+            ];
+        }
+
+        return [
+            'tenant' => ['cif' => $cif, 'name' => $s['chirias'] ?? null, 'clientIds' => array_map(fn ($c) => (string) $c->getId(), $clients), 'supplierIds' => array_map(fn ($sp) => (string) $sp->getId(), $suppliers)],
+            'recurring' => $recurring,
+            'issued' => $issued,
+            'totals' => $totals,
+            'received' => $received,
+            'receivedTotals' => $receivedTotals,
+            'compensation' => $compensation,
+        ];
     }
 
     // ── Registry extract → proposed dosare ─────────────────────────────

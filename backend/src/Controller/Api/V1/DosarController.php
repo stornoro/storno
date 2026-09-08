@@ -95,6 +95,18 @@ class DosarController extends AbstractController
         return $this->json($this->service->actions($company));
     }
 
+    /** Everything invoiced with the tenant of a rental dosar: recurring invoice, issued invoices with payment state, received invoices, compensation balance. */
+    #[Route('/{uuid}/billing', methods: ['GET'])]
+    public function billing(string $uuid): JsonResponse
+    {
+        $dosar = $this->findOwned($uuid, Permission::DECLARATION_VIEW);
+        if ($dosar instanceof JsonResponse) {
+            return $dosar;
+        }
+
+        return $this->json($this->service->billing($dosar));
+    }
+
     /** Rental portfolio: properties, active contracts, monthly rent by currency, expected vs declared rent per year. */
     #[Route('/stats', methods: ['GET'])]
     public function stats(Request $request): Response

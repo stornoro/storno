@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DosarDetail, DosarFile, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
+import type { DosarBilling, DosarDetail, DosarFile, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -17,10 +17,14 @@ const saving = ref(false)
 
 useHead({ title: computed(() => detail.value?.dosar.title ?? $t('dosare.title')) })
 
+const billing = ref<DosarBilling | null>(null)
 async function load() {
   loading.value = true
   try {
     detail.value = await store.fetchDosar(id.value)
+    if (detail.value.dosar.type === 'rental_contract' && detail.value.dosar.subject?.chiriasCif) {
+      store.fetchBilling(id.value).then(b => { billing.value = b }).catch(() => { billing.value = null })
+    }
   } catch (e: any) {
     toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
     router.push('/dosare')
@@ -221,6 +225,9 @@ async function downloadFile(f: DosarFile) {
   } catch (e: any) {
     toast.add({ title: e?.message ?? $t('common.error'), color: 'error' })
   }
+}
+function fmtMoney(v: number, c: string): string {
+  return `${Number(v).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c}`
 }
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -430,6 +437,62 @@ function summaryFor(doc: SpvDocument): string {
             </li>
           </ul>
           <p v-else class="text-sm text-muted">—</p>
+        </UCard>
+
+        <!-- Billing with the tenant -->
+        <UCard v-if="billing">
+          <template #header>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="font-semibold text-sm">{{ $t('dosare.billing.title') }} · {{ billing.tenant.name }}</span>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <UBadge v-for="(v, c) in billing.totals.invoiced" :key="'i' + c" color="neutral" variant="outline">{{ $t('dosare.billing.invoiced') }} {{ fmtMoney(v, c) }}</UBadge>
+                <UBadge v-for="(v, c) in billing.totals.paid" :key="'p' + c" color="success" variant="subtle">{{ $t('dosare.billing.paid') }} {{ fmtMoney(v, c) }}</UBadge>
+                <UBadge v-for="(v, c) in billing.totals.unpaid" :key="'u' + c" :color="(billing.totals.overdue[c] ?? 0) > 0 ? 'error' : 'warning'" variant="subtle">{{ $t('dosare.billing.unpaid') }} {{ fmtMoney(v, c) }}<span v-if="(billing.totals.overdue[c] ?? 0) > 0"> · {{ $t('dosare.billing.overdue') }} {{ fmtMoney(billing.totals.overdue[c] ?? 0, c) }}</span></UBadge>
+              </div>
+            </div>
+          </template>
+          <div class="space-y-3">
+            <div v-if="billing.recurring.length" class="text-sm">
+              <span class="text-muted">{{ $t('dosare.billing.recurring') }}:</span>
+              <span v-for="r in billing.recurring" :key="r.id" class="ml-1">
+                <NuxtLink :to="`/recurring-invoices/${r.id}`" class="hover:underline">{{ fmtMoney(r.total, r.currency) }} · {{ $t(`dosare.billing.freq.${r.frequency}`, r.frequency) }} · {{ $t('dosare.billing.day', { day: r.day }) }}</NuxtLink>
+                <UBadge :color="r.active ? 'success' : 'neutral'" variant="subtle" size="xs" class="ml-1">{{ r.active ? $t('dosare.statuses.active') : $t('dosare.statuses.closed') }}</UBadge>
+                <span v-if="r.nextIssuanceDate" class="text-xs text-muted"> · {{ $t('dosare.billing.next') }} {{ formatDate(r.nextIssuanceDate) }}</span>
+              </span>
+            </div>
+            <p v-else-if="!billing.issued.length" class="text-sm text-muted">{{ $t('dosare.billing.none') }}</p>
+            <ul v-if="billing.issued.length" class="divide-y divide-default -my-1">
+              <li v-for="i in billing.issued" :key="i.id" class="py-1.5 flex items-center gap-3 text-sm">
+                <NuxtLink :to="`/invoices/${i.id}`" class="font-medium hover:underline w-24 shrink-0">{{ i.number }}</NuxtLink>
+                <span class="text-xs text-muted w-40 shrink-0">{{ formatDate(i.issueDate) }} → {{ formatDate(i.dueDate ?? null) }}</span>
+                <span class="flex-1 text-right tabular-nums">{{ fmtMoney(i.total, i.currency) }}</span>
+                <UBadge :color="i.paymentState === 'paid' ? 'success' : i.paymentState === 'overdue' ? 'error' : i.paymentState === 'partial' ? 'warning' : 'neutral'" variant="subtle" size="xs" class="w-32 justify-center">
+                  {{ $t(`dosare.billing.state.${i.paymentState}`) }}<span v-if="i.paymentState === 'overdue'"> · {{ i.daysOverdue }}z</span><span v-else-if="i.paymentState === 'partial'"> · {{ fmtMoney(i.balance, i.currency) }}</span>
+                </UBadge>
+              </li>
+            </ul>
+            <div v-if="billing.received.length" class="pt-2 border-t border-default">
+              <div class="text-xs text-muted mb-1">{{ $t('dosare.billing.received') }} · <span v-for="(v, c) in billing.receivedTotals" :key="c">{{ fmtMoney(v, c) }} </span></div>
+              <ul class="divide-y divide-default -my-1">
+                <li v-for="i in billing.received" :key="i.id" class="py-1.5 flex items-center gap-3 text-sm">
+                  <NuxtLink :to="`/invoices/${i.id}`" class="font-medium hover:underline w-24 shrink-0">{{ i.number }}</NuxtLink>
+                  <span class="text-xs text-muted w-40 shrink-0">{{ formatDate(i.issueDate) }}</span>
+                  <span class="flex-1 text-right tabular-nums">{{ fmtMoney(i.total, i.currency) }}</span>
+                  <UBadge :color="i.balance <= 0 ? 'success' : 'neutral'" variant="subtle" size="xs" class="w-32 justify-center">{{ i.balance <= 0 ? $t('dosare.billing.state.paid') : $t('dosare.billing.state.unpaid') }}</UBadge>
+                </li>
+              </ul>
+            </div>
+            <UAlert v-if="billing.compensation" color="primary" variant="soft" icon="i-lucide-scale" :title="$t('dosare.billing.compensationTitle')">
+              <template #description>
+                <div class="text-xs space-y-0.5">
+                  <div>{{ $t('dosare.billing.investment') }}: {{ billing.compensation.investitieEstimata }} {{ billing.compensation.moneda }} ({{ $t('dosare.billing.cap') }} {{ billing.compensation.plafon }} {{ billing.compensation.moneda }}) · {{ $t('dosare.billing.since') }} {{ formatDate(billing.compensation.compensareDeLa) }}</div>
+                  <div>{{ $t('dosare.billing.worksInvoiced') }}: <span v-for="(v, c) in billing.compensation.lucrariFacturateDeChirias" :key="c">{{ fmtMoney(v, c) }} </span><span v-if="!Object.keys(billing.compensation.lucrariFacturateDeChirias).length">—</span></div>
+                  <div>{{ $t('dosare.billing.rentInvoicedSince') }}: <span v-for="(v, c) in billing.compensation.chirieFacturataDeLaInceput" :key="c">{{ fmtMoney(v, c) }} </span><span v-if="!Object.keys(billing.compensation.chirieFacturataDeLaInceput).length">—</span></div>
+                  <div class="text-muted">{{ billing.compensation.note }}</div>
+                </div>
+              </template>
+            </UAlert>
+          </div>
         </UCard>
 
         <!-- Files -->

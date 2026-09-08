@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Dosar, DosarActions, DosarCounts, DosarDetail, DosarFile, DosarStats, DosarType, RegistryContract, RegistryProposals } from '~/types'
+import type { Dosar, DosarActions, DosarBilling, DosarCounts, DosarDetail, DosarFile, DosarStats, DosarType, RegistryContract, RegistryProposals } from '~/types'
 
 interface ListResponse {
   data: Dosar[]
@@ -123,6 +123,11 @@ export const useDosareStore = defineStore('dosare', () => {
     return res
   }
 
+  async function fetchBilling(id: string): Promise<DosarBilling> {
+    const { get } = useApi()
+    return await get<DosarBilling>(`/v1/dosare/${id}/billing`)
+  }
+
   async function fetchDosar(id: string): Promise<DosarDetail> {
     const { get } = useApi()
     return await get<DosarDetail>(`/v1/dosare/${id}`)
@@ -176,5 +181,5 @@ export const useDosareStore = defineStore('dosare', () => {
     return await post(`/v1/dosare/${id}/d212`, input ? { input } : {})
   }
 
-  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, uploadFile, deleteFile, downloadBlob, c168Prefill, c168Create, registryProposals, registryImport, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
+  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, uploadFile, deleteFile, downloadBlob, c168Prefill, c168Create, registryProposals, registryImport, fetchBilling, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
 })
