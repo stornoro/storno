@@ -62,6 +62,13 @@ notification:
       message: 'Ai emis o factura catre %counterparty% · %amount%'
     new_documents_multi:
       message: 'Ai %count% documente noi (%incoming% primite, %outgoing% emise)'
+  dosar:
+    deadline:
+      title: '%company%: termen in %days% zile'
+      message: '%dosar% — %label%: termenul este %date%. Deschide dosarul si depune inainte de termen.'
+    deadline_today:
+      title: '%company%: termen astazi'
+      message: '%dosar% — %label%: termenul este astazi (%date%).'
   spv:
     document_received:
       title: '%company%: %type%'

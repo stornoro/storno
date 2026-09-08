@@ -9,6 +9,7 @@ use App\Repository\OrganizationMembershipRepository;
 use App\Repository\SpvDocumentRepository;
 use App\Repository\SpvRequestRepository;
 use App\Entity\SpvRequest;
+use App\Service\Dosar\DosarService;
 use App\Service\NotificationService;
 use App\Service\Storage\OrganizationStorageResolver;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,6 +37,7 @@ final class SpvDocumentIngestionService
         private readonly SpvDocumentSummarizer $summarizer,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
+        private readonly DosarService $dosare,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly FilesystemOperator $defaultStorage,
         private readonly TranslatorInterface $translator,
@@ -93,6 +95,7 @@ final class SpvDocumentIngestionService
             $created[] = $doc;
 
             $this->linkRequest($company, $doc);
+            $this->dosare->linkDocument($company, $doc);
         }
 
         $company->setSpvDocumentsSyncedAt(new \DateTimeImmutable());

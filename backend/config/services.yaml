@@ -428,6 +428,9 @@ services:
         tags: ['app.declaration_data_populator']
 
     # XML generators
+    App\Service\Declaration\XmlGenerator\FormXmlGenerator:
+        tags: [{ name: 'app.declaration_xml_generator', priority: 10 }]
+
     App\Service\Declaration\XmlGenerator\D394XmlGenerator:
         tags: ['app.declaration_xml_generator']
 

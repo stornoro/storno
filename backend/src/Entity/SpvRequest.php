@@ -80,6 +80,11 @@ class SpvRequest
     #[Groups(['spv_request:list'])]
     private ?\DateTimeImmutable $answeredAt = null;
 
+    /** The dosar (case file) this belongs to, when the user or the inbox sync grouped it. */
+    #[ORM\ManyToOne(targetEntity: Dosar::class)]
+    #[ORM\JoinColumn(name: 'dosar_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Dosar $dosar = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -127,5 +132,13 @@ class SpvRequest
         $name = trim(((string) ($u->getFirstName() ?? '')) . ' ' . ((string) ($u->getLastName() ?? '')));
 
         return $name !== '' ? $name : $u->getEmail();
+    }
+    public function getDosar(): ?Dosar { return $this->dosar; }
+    public function setDosar(?Dosar $d): static { $this->dosar = $d; return $this; }
+
+    #[Groups(['spv_request:list'])]
+    public function getDosarId(): ?string
+    {
+        return $this->dosar?->getId()?->toRfc4122();
     }
 }
