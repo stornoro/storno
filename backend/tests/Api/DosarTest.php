@@ -201,4 +201,37 @@ class DosarTest extends ApiTestCase
         $this->apiDelete('/api/v1/dosare/' . $dosar['id'], $h);
         @unlink($tmp);
     }
+
+    public function testRegistryImportCreatesDosareWithTheRightState(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $h = ['X-Company' => $companyId];
+        $pages = json_decode((string) file_get_contents(__DIR__ . '/../Fixtures/c168-registry-items.json'), true);
+        $parsed = (new \App\Service\Dosar\C168RegistryParser())->parseItems($pages);
+
+        $res = $this->apiPost('/api/v1/dosare/registry-import', ['contracts' => $parsed['contracts']], $h);
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertSame(5, $res['created']);
+        $byTitle = [];
+        foreach ($res['dosare'] as $d) {
+            $byTitle[$d['subject']['chirias']] = $d;
+        }
+        $this->assertSame('closed', $byTitle['GEORGESCU ANA-MARIA']['status'], 'terminated in the registry');
+        $this->assertSame('04.04.2026', $byTitle['GEORGESCU ANA-MARIA']['subject']['dataIncetare']);
+        $this->assertSame('attention', $byTitle['DUMITRESCU ELENA']['status'], 'expired without a termination filing');
+        $this->assertSame('active', $byTitle['IONESCU MARIA']['status']);
+        $this->assertSame('1210000001', $byTitle['IONESCU MARIA']['subject']['registruIndex']);
+
+        // the same extract again: everything matches an existing dosar
+        $proposals = static::getContainer()->get(\App\Service\Dosar\DosarService::class)->registryProposals(
+            static::getContainer()->get('doctrine')->getRepository(\App\Entity\Company::class)->find($companyId),
+            $parsed
+        );
+        $this->assertSame(0, $proposals['missing']);
+
+        foreach ($res['dosare'] as $d) {
+            $this->apiDelete('/api/v1/dosare/' . $d['id'], $h);
+        }
+    }
 }

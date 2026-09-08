@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Dosar, DosarActionItem, DosarType } from '~/types'
+import type { Dosar, DosarActionItem, DosarType, RegistryContract, RegistryProposals } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -112,6 +112,50 @@ async function exportCsv() {
   }
 }
 
+// ── Registry extract → proposed dosare ─────────────────────────────
+const registryOpen = ref(false)
+const registryLoading = ref(false)
+const registryImporting = ref(false)
+const registry = ref<RegistryProposals | null>(null)
+const registryError = ref<string | null>(null)
+const registrySelected = ref<string[]>([])
+const registryFileInput = ref<HTMLInputElement | null>(null)
+function registryKey(c: RegistryContract) { return `${c.numar}|${c.data}|${c.chirias}` }
+async function openRegistry(file?: File) {
+  registryOpen.value = true
+  registryLoading.value = true
+  registryError.value = null
+  try {
+    registry.value = await store.registryProposals(file)
+    registrySelected.value = registry.value.contracts.filter(c => !c.existingDosarId).map(registryKey)
+  } catch (e: any) {
+    registry.value = null
+    registryError.value = e?.data?.error ?? e?.message ?? $t('common.error')
+  } finally {
+    registryLoading.value = false
+  }
+}
+function onRegistryFile(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]
+  if (f) openRegistry(f)
+  if (registryFileInput.value) registryFileInput.value.value = ''
+}
+async function importRegistry() {
+  if (!registry.value) return
+  registryImporting.value = true
+  try {
+    const chosen = registry.value.contracts.filter(c => registrySelected.value.includes(registryKey(c)))
+    const res = await store.registryImport(chosen)
+    toast.add({ title: $t('dosare.registry.imported', { count: res.created }), color: 'success' })
+    registryOpen.value = false
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+  } finally {
+    registryImporting.value = false
+  }
+}
+const registryStateColor: Record<string, 'success' | 'warning' | 'neutral'> = { activ: 'success', expirat: 'warning', incetat: 'neutral' }
+
 const groups = computed(() => TYPES.map(t => ({ type: t, items: store.byType[t] ?? [] })).filter(g => g.items.length > 0))
 const nextYear = computed(() => {
   const now = new Date()
@@ -127,6 +171,9 @@ const nextYear = computed(() => {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UButton icon="i-lucide-book-open-check" color="neutral" variant="ghost" @click="openRegistry()">
+            {{ $t('dosare.registry.button') }}
+          </UButton>
           <UButton icon="i-lucide-calendar-check" color="neutral" variant="outline" @click="openCreate('annual_return')">
             {{ $t('dosare.annualReturn') }}
           </UButton>
@@ -234,6 +281,46 @@ const nextYear = computed(() => {
           </UCard>
         </div>
       </div>
+
+      <!-- Registry modal -->
+      <UModal v-model:open="registryOpen" :title="$t('dosare.registry.title')" :ui="{ content: 'max-w-3xl' }">
+        <template #body>
+          <div class="space-y-3">
+            <p class="text-xs text-muted">{{ $t('dosare.registry.hint') }}</p>
+            <div v-if="registryLoading" class="space-y-2"><USkeleton class="h-6 w-full" /><USkeleton class="h-6 w-full" /></div>
+            <template v-else>
+              <UAlert v-if="registryError" color="warning" variant="soft" icon="i-lucide-info" :title="registryError" />
+              <div v-if="registry" class="text-xs text-muted">
+                {{ registry.locator.nume }} · {{ $t('dosare.registry.rows', { rows: registry.rows, contracts: registry.contracts.length, missing: registry.missing }) }}
+                <span v-if="registry.source?.date"> · {{ formatDate(registry.source.date) }}</span>
+              </div>
+              <ul v-if="registry" class="divide-y divide-default border border-default rounded">
+                <li v-for="c in registry.contracts" :key="registryKey(c)" class="p-2 flex items-start gap-3">
+                  <UCheckbox :model-value="registrySelected.includes(registryKey(c))" :disabled="!!c.existingDosarId" @update:model-value="(v: any) => { registrySelected = v ? [...registrySelected, registryKey(c)] : registrySelected.filter(k => k !== registryKey(c)) }" />
+                  <div class="flex-1 min-w-0 text-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-medium">{{ c.chirias }}</span>
+                      <UBadge :color="registryStateColor[c.stare] ?? 'neutral'" variant="subtle" size="xs">{{ $t(`dosare.registry.states.${c.stare}`) }}</UBadge>
+                      <UBadge v-if="c.existingDosarId" color="neutral" variant="outline" size="xs">{{ $t('dosare.registry.exists') }}: {{ c.existingDosarTitle }}</UBadge>
+                    </div>
+                    <div class="text-xs text-muted">nr. {{ c.numar }} / {{ c.data }} · {{ c.deLa }} → {{ c.dataIncetare ?? c.panaLa }} · {{ c.chirie }} {{ c.moneda }} · {{ c.adresa }}</div>
+                  </div>
+                </li>
+              </ul>
+            </template>
+            <div class="flex flex-wrap justify-between gap-2 pt-2">
+              <div>
+                <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-upload" @click="registryFileInput?.click()">{{ $t('dosare.registry.upload') }}</UButton>
+                <input ref="registryFileInput" type="file" accept="application/pdf" class="hidden" @change="onRegistryFile">
+              </div>
+              <div class="flex gap-2">
+                <UButton color="neutral" variant="ghost" @click="registryOpen = false">{{ $t('common.cancel') }}</UButton>
+                <UButton :loading="registryImporting" :disabled="!registrySelected.length" icon="i-lucide-folder-plus" @click="importRegistry">{{ $t('dosare.registry.import', { count: registrySelected.length }) }}</UButton>
+              </div>
+            </div>
+          </div>
+        </template>
+      </UModal>
 
       <!-- Create modal -->
       <UModal v-model:open="createOpen" :title="$t('dosare.new')">

@@ -15,7 +15,9 @@ use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Document\LegalDocumentService;
 use App\Service\Declaration\Forms\DeclarationFormRegistry;
+use App\Service\Dosar\C168RegistryParser;
 use App\Service\Dosar\DosarService;
+use App\Service\Spv\SpvDocumentIngestionService;
 use League\Flysystem\FilesystemOperator;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Doctrine\ORM\EntityManagerInterface;
@@ -54,6 +56,8 @@ class DosarController extends AbstractController
         private readonly LegalDocumentService $documents,
         private readonly DeclarationFormRegistry $forms,
         private readonly FilesystemOperator $defaultStorage,
+        private readonly C168RegistryParser $registryParser,
+        private readonly SpvDocumentIngestionService $ingestion,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -117,6 +121,85 @@ class DosarController extends AbstractController
         }
 
         return $this->json($stats);
+    }
+
+    /**
+     * Contracts from ANAF's registry extract (the answer to a C168 request), matched against
+     * the existing dosare. GET reads the newest extract archived in the SPV inbox (or
+     * ?documentId=); POST accepts the extract PDF as multipart "file" (downloaded by hand).
+     */
+    #[Route('/registry-proposals', methods: ['GET', 'POST'])]
+    public function registryProposals(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        $pdf = null;
+        $source = null;
+        $upload = $request->files->get('file');
+        if ($upload !== null && $upload->isValid()) {
+            $pdf = (string) file_get_contents($upload->getPathname());
+            $source = ['kind' => 'upload', 'name' => $upload->getClientOriginalName()];
+        } else {
+            $docs = $this->em->getRepository(SpvDocument::class)->findBy(['company' => $company], ['anafCreatedAt' => 'DESC'], 300);
+            $wanted = $request->query->get('documentId');
+            foreach ($docs as $doc) {
+                if ($wanted !== null && $doc->getId()?->toRfc4122() !== $wanted) {
+                    continue;
+                }
+                if ($wanted === null && !str_contains(mb_strtolower((string) $doc->getDetails()), 'registrul contractelor de locatiune')) {
+                    continue;
+                }
+                if (!$doc->getHasPdf() || $doc->getPdfPath() === null) {
+                    continue;
+                }
+                $storage = $this->ingestion->storageFor($doc);
+                if ($storage->fileExists((string) $doc->getPdfPath())) {
+                    $pdf = $storage->read((string) $doc->getPdfPath());
+                    $source = ['kind' => 'spv', 'documentId' => $doc->getId()?->toRfc4122(), 'date' => $doc->getAnafCreatedAt()?->format(DATE_ATOM)];
+                    break;
+                }
+            }
+        }
+        if ($pdf === null) {
+            return $this->json(['error' => 'Niciun extras de registru găsit. Solicită „Registrul contractelor de locațiune (C168)” din SPV sau încarcă PDF-ul primit.', 'code' => 'NO_REGISTRY'], Response::HTTP_NOT_FOUND);
+        }
+        try {
+            $parsed = $this->registryParser->parse($pdf);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'PDF-ul nu a putut fi citit ca extras de registru.', 'code' => 'PARSE_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        if ($parsed['rows'] === []) {
+            return $this->json(['error' => 'În PDF nu am găsit rânduri de registru (formatul ANAF așteptat: „Registrul contractelor de locațiune”).', 'code' => 'NO_ROWS'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return $this->json(['source' => $source] + $this->service->registryProposals($company, $parsed));
+    }
+
+    /** Create dosare for the registry contracts the user ticked (body: {contracts: [...]} as returned by registry-proposals). */
+    #[Route('/registry-import', methods: ['POST'])]
+    public function registryImport(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+        if (!$this->organizationContext->hasPermission(Permission::DECLARATION_SUBMIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+        $body = json_decode($request->getContent(), true);
+        $contracts = is_array($body['contracts'] ?? null) ? $body['contracts'] : [];
+        if ($contracts === []) {
+            return $this->json(['error' => 'Trimite contracts[] din registry-proposals.', 'code' => 'INVALID_INPUT'], Response::HTTP_BAD_REQUEST);
+        }
+        $user = $this->getUser();
+        $created = $this->service->importRegistryContracts($company, $contracts, $user instanceof User ? $user : null);
+
+        return $this->json(['created' => count($created), 'dosare' => $created], Response::HTTP_CREATED, context: ['groups' => ['dosar:list']]);
     }
 
     #[Route('', methods: ['POST'])]

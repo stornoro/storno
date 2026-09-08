@@ -798,6 +798,32 @@ export interface DosarStats {
   declaredByIncomeYear: Record<string, { venitBrut: number, status: string, declarationId: string }>
 }
 
+export interface RegistryContract {
+  numar: string | null
+  data: string | null
+  chirias: string | null
+  adresa: string | null
+  chirie: number | null
+  moneda: string | null
+  deLa: string | null
+  panaLa: string | null
+  dataIncetare: string | null
+  lastIndex: string | null
+  lastDataInregistrare: string | null
+  stare: 'activ' | 'expirat' | 'incetat'
+  existingDosarId: string | null
+  existingDosarTitle: string | null
+  filings: Array<{ index: string | null, data: string | null, tipDepunere: string | null, operatie: string | null }>
+}
+
+export interface RegistryProposals {
+  source: { kind: 'spv' | 'upload', documentId?: string, date?: string, name?: string } | null
+  locator: { cif: string | null, nume: string | null, adresa: string | null }
+  rows: number
+  contracts: RegistryContract[]
+  missing: number
+}
+
 export interface DosarActions {
   todo: DosarActionItem[]
   inProgress: DosarActionItem[]

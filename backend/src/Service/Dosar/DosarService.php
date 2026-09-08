@@ -624,6 +624,97 @@ final class DosarService
         $dosar->touch();
     }
 
+    // ── Registry extract → proposed dosare ─────────────────────────────
+
+    /**
+     * Contracts found in a C168 registry extract, each matched against the existing
+     * rental dosare (by contract number + date, else by tenant + property) so the user
+     * can create the missing ones in one go.
+     * @param array{locator: array<string, mixed>, rows: list<array<string, mixed>>, contracts: list<array<string, mixed>>} $parsed
+     * @return array<string, mixed>
+     */
+    public function registryProposals(Company $company, array $parsed): array
+    {
+        $existing = $this->dosare->findForCompany($company, Dosar::TYPE_RENTAL_CONTRACT);
+        $proposals = [];
+        foreach ($parsed['contracts'] as $c) {
+            $match = null;
+            foreach ($existing as $d) {
+                $s = $d->getSubject();
+                $sameNumber = (string) ($s['numar'] ?? '') === (string) ($c['numar'] ?? '') && $this->roDate($s['data'] ?? null) === ($c['data'] ?? null);
+                $sameTenant = $this->normalize((string) ($s['chirias'] ?? '')) !== '' && $this->normalize((string) ($s['chirias'] ?? '')) === $this->normalize((string) ($c['chirias'] ?? ''));
+                if ($sameNumber || ($sameTenant && $this->roDate($s['deLa'] ?? $s['data'] ?? null) === ($c['deLa'] ?? null))) {
+                    $match = $d;
+                    break;
+                }
+            }
+            $proposals[] = $c + ['existingDosarId' => $match?->getId()?->toRfc4122(), 'existingDosarTitle' => $match?->getTitle()];
+        }
+
+        return [
+            'locator' => $parsed['locator'],
+            'rows' => count($parsed['rows']),
+            'contracts' => $proposals,
+            'missing' => count(array_filter($proposals, fn ($p) => $p['existingDosarId'] === null)),
+        ];
+    }
+
+    /**
+     * Create rental dosare for the given registry contracts (the ones the user ticked).
+     * @param list<array<string, mixed>> $contracts
+     * @return list<Dosar>
+     */
+    public function importRegistryContracts(Company $company, array $contracts, ?User $user): array
+    {
+        $created = [];
+        foreach ($contracts as $c) {
+            if (!is_array($c) || ($c['numar'] ?? '') === '' || ($c['data'] ?? '') === '') {
+                continue;
+            }
+            $subject = [
+                'numar' => (string) $c['numar'],
+                'data' => (string) $c['data'],
+                'adresa' => (string) ($c['adresa'] ?? ''),
+                'chirias' => (string) ($c['chirias'] ?? ''),
+                'chiriasCif' => (string) ($c['chiriasCif'] ?? ''),
+                'chirie' => isset($c['chirie']) && is_numeric($c['chirie']) ? (float) $c['chirie'] : null,
+                'moneda' => strtoupper((string) ($c['moneda'] ?? 'RON')),
+                'deLa' => (string) ($c['deLa'] ?? $c['data']),
+                'panaLa' => (string) ($c['panaLa'] ?? ''),
+                'registruIndex' => $c['lastIndex'] ?? null,
+                'registruData' => $c['lastDataInregistrare'] ?? null,
+            ];
+            foreach (['dataIncetare', 'incetareNumar', 'incetareData', 'modificareNumar', 'dataModificare'] as $k) {
+                if (!empty($c[$k])) {
+                    $subject[$k] = $c[$k];
+                }
+            }
+            $dosar = (new Dosar())->setCompany($company)->setType(Dosar::TYPE_RENTAL_CONTRACT)->setCreatedBy($user)->setSubject($subject);
+            $dosar->setTitle(trim('Contract de închiriere ' . ($subject['adresa'] !== '' ? $subject['adresa'] : 'nr. ' . $subject['numar'])));
+            $stare = (string) ($c['stare'] ?? 'activ');
+            if ($stare === 'incetat') {
+                $dosar->setStatus(Dosar::STATUS_CLOSED)->setNextStep('Încetat conform registrului ANAF.');
+            } elseif ($stare === 'expirat') {
+                $dosar->setStatus(Dosar::STATUS_ATTENTION)->setNextStep('Contractul a expirat fără încetare declarată: depune C168 încetare (sau act adițional de prelungire).');
+            } else {
+                $dosar->setNextStep('Înregistrat la ANAF. Chiria intră în D212 pentru fiecare an.');
+            }
+            $this->em->persist($dosar);
+            $created[] = $dosar;
+        }
+        $this->em->flush();
+
+        return $created;
+    }
+
+    private function normalize(string $s): string
+    {
+        $s = mb_strtolower(trim($s));
+        $s = strtr($s, ['ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't']);
+
+        return preg_replace('/[^a-z0-9]+/', ' ', $s) ?? $s;
+    }
+
     private function roDate(mixed $v): ?string
     {
         $d = $this->date($v);

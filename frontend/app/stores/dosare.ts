@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Dosar, DosarActions, DosarCounts, DosarDetail, DosarFile, DosarStats, DosarType } from '~/types'
+import type { Dosar, DosarActions, DosarCounts, DosarDetail, DosarFile, DosarStats, DosarType, RegistryContract, RegistryProposals } from '~/types'
 
 interface ListResponse {
   data: Dosar[]
@@ -106,6 +106,23 @@ export const useDosareStore = defineStore('dosare', () => {
     return await post(`/v1/dosare/${id}/c168`, { actiune, input, fileIds })
   }
 
+  async function registryProposals(file?: File): Promise<RegistryProposals> {
+    const { get, apiFetch } = useApi()
+    if (file) {
+      const form = new FormData()
+      form.append('file', file)
+      return await apiFetch<RegistryProposals>('/v1/dosare/registry-proposals', { method: 'POST', body: form })
+    }
+    return await get<RegistryProposals>('/v1/dosare/registry-proposals')
+  }
+
+  async function registryImport(contracts: RegistryContract[]): Promise<{ created: number, dosare: Dosar[] }> {
+    const { post } = useApi()
+    const res = await post<{ created: number, dosare: Dosar[] }>('/v1/dosare/registry-import', { contracts })
+    await Promise.all([fetchDosare(), fetchStats(), fetchActions()])
+    return res
+  }
+
   async function fetchDosar(id: string): Promise<DosarDetail> {
     const { get } = useApi()
     return await get<DosarDetail>(`/v1/dosare/${id}`)
@@ -159,5 +176,5 @@ export const useDosareStore = defineStore('dosare', () => {
     return await post(`/v1/dosare/${id}/d212`, input ? { input } : {})
   }
 
-  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, uploadFile, deleteFile, downloadBlob, c168Prefill, c168Create, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
+  return { items, counts, actions, stats, loading, actionsLoading, error, byType, fetchDosare, fetchActions, fetchStats, documentPrefill, documentRender, uploadFile, deleteFile, downloadBlob, c168Prefill, c168Create, registryProposals, registryImport, fetchDosar, createDosar, updateDosar, deleteDosar, attach, detach, ensureAnnualReturn, d212Prefill, createD212 }
 })
