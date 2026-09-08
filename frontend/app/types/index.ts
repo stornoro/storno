@@ -796,6 +796,8 @@ export interface DosarStats {
   monthlyRent: Record<string, number>
   expectedGrossByYear: Record<string, Record<string, number>>
   declaredByIncomeYear: Record<string, { venitBrut: number, status: string, declarationId: string }>
+  invoicedByYear: Record<string, Record<string, number>>
+  landlordIsCompany: boolean
 }
 
 export interface RegistryContract {
@@ -822,6 +824,30 @@ export interface RegistryProposals {
   rows: number
   contracts: RegistryContract[]
   missing: number
+}
+
+export interface DosarBillingInvoice {
+  id: string
+  number: string | null
+  issueDate: string | null
+  dueDate?: string | null
+  total: number
+  amountPaid: number
+  balance: number
+  currency: string
+  status: string
+  paymentState?: 'paid' | 'partial' | 'unpaid' | 'overdue'
+  daysOverdue?: number
+}
+
+export interface DosarBilling {
+  tenant: { cif: string, name: string | null, clientIds: string[], supplierIds: string[] }
+  recurring: Array<{ id: string, active: boolean, frequency: string, day: number, total: number, currency: string, nextIssuanceDate: string | null, lastIssuedAt: string | null, lastInvoiceNumber: string | null, reference: string | null }>
+  issued: DosarBillingInvoice[]
+  totals: { invoiced: Record<string, number>, paid: Record<string, number>, unpaid: Record<string, number>, overdue: Record<string, number> }
+  received: DosarBillingInvoice[]
+  receivedTotals: Record<string, number>
+  compensation: { investitieEstimata: number | null, plafon: number | null, moneda: string, compensareDeLa: string | null, lucrariFacturateDeChirias: Record<string, number>, chirieFacturataDeLaInceput: Record<string, number>, chiriePlatitaDeChirias: Record<string, number>, note: string } | null
 }
 
 export interface DosarActions {

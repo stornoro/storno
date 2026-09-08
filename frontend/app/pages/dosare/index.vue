@@ -230,13 +230,14 @@ const nextYear = computed(() => {
             <div><div class="text-xs text-muted">{{ $t('dosare.stats.expiring') }}</div><div class="text-2xl font-bold" :class="store.stats.expiringWithin60Days > 0 ? 'text-warning' : ''">{{ store.stats.expiringWithin60Days }}</div></div>
             <div><div class="text-xs text-muted">{{ $t('dosare.stats.monthlyRent') }}</div><div class="text-2xl font-bold">{{ Object.entries(store.stats.monthlyRent).map(([c, v]) => `${v.toLocaleString('ro-RO')} ${c}`).join(' + ') || '—' }}</div></div>
             <div>
-              <div class="text-xs text-muted">{{ $t('dosare.stats.expectedVsDeclared') }}</div>
+              <div class="text-xs text-muted">{{ store.stats.landlordIsCompany ? $t('dosare.stats.expectedVsInvoiced') : $t('dosare.stats.expectedVsDeclared') }}</div>
               <ul class="text-sm mt-1 space-y-0.5">
                 <li v-for="(byCur, year) in store.stats.expectedGrossByYear" :key="year" class="flex items-center gap-2">
                   <span class="text-muted w-10">{{ year }}</span>
                   <span>{{ Object.entries(byCur).map(([c, v]) => `${Number(v).toLocaleString('ro-RO')} ${c}`).join(' + ') }} {{ $t('dosare.stats.expected') }}</span>
+                  <UBadge v-if="store.stats.invoicedByYear[year]" color="primary" variant="subtle" size="xs">{{ Object.entries(store.stats.invoicedByYear[year]).map(([c, v]) => `${Number(v).toLocaleString('ro-RO')} ${c}`).join(' + ') }} {{ $t('dosare.stats.invoiced') }}</UBadge>
                   <UBadge v-if="store.stats.declaredByIncomeYear[year]" :color="store.stats.declaredByIncomeYear[year].status === 'accepted' ? 'success' : 'primary'" variant="subtle" size="xs">{{ store.stats.declaredByIncomeYear[year].venitBrut.toLocaleString('ro-RO') }} RON {{ $t('dosare.stats.declared') }} · {{ $t(`dosare.declStatus.${store.stats.declaredByIncomeYear[year].status}`) }}</UBadge>
-                  <UBadge v-else-if="Number(year) < new Date().getFullYear()" color="warning" variant="subtle" size="xs">{{ $t('dosare.stats.notDeclared') }}</UBadge>
+                  <UBadge v-else-if="!store.stats.landlordIsCompany && Number(year) < new Date().getFullYear()" color="warning" variant="subtle" size="xs">{{ $t('dosare.stats.notDeclared') }}</UBadge>
                 </li>
               </ul>
             </div>

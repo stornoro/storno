@@ -98,6 +98,17 @@ class DosarTest extends ApiTestCase
         $this->assertGreaterThanOrEqual(2, count($stats['properties']));
         $this->assertArrayHasKey('monthlyRent', $stats);
         $this->assertSame(36000.0, (float) $stats['expectedGrossByYear'][2025]['RON'], 'expected rent 2025 from the RON contract');
+        $this->assertTrue($stats['landlordIsCompany'], 'the test company has a CUI');
+
+        // rent due from a later date than the contract, with a contractual increase mid-year
+        $inc = $this->apiPost('/api/v1/dosare', ['type' => 'rental_contract', 'subject' => ['numar' => '77', 'data' => '01.01.2025', 'adresa' => 'Hala, Bragadiru', 'chirias' => 'ALFA S.R.L.', 'chiriasCif' => '12345678', 'chiriasPersoanaJuridica' => true, 'chirie' => 1000, 'moneda' => 'RON', 'deLa' => '01.01.2025', 'panaLa' => '31.12.2025', 'chirieDeLa' => '01.03.2025', 'majorareDeLa' => '01.07.2025', 'chirieMajorata' => 1200]], $h)['dosar'];
+        $stats = $this->apiGet('/api/v1/dosare/stats', $h);
+        $this->assertSame(36000.0 + 4 * 1000 + 6 * 1200, (float) $stats['expectedGrossByYear'][2025]['RON'], 'March–June at 1000, July–December at 1200');
+        $billing = $this->apiGet('/api/v1/dosare/' . $inc['id'] . '/billing', $h);
+        $this->assertSame('12345678', $billing['tenant']['cif']);
+        $this->assertSame([], $billing['issued']);
+        $this->assertNull($billing['compensation']);
+        $this->apiDelete('/api/v1/dosare/' . $inc['id'], $h);
 
         $rental = array_values(array_filter($stats['properties'], fn ($p) => $p['adresa'] === 'Apartament, Bucuresti'))[0];
         $doc = $this->apiGet('/api/v1/dosare/' . $rental['dosarId'] . '/document/conventie_incetare_inchiriere', $h);
