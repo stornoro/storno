@@ -83,6 +83,11 @@ class TaxDeclaration
     #[Groups(['declaration:list', 'declaration:detail'])]
     private ?\DateTimeImmutable $acceptedAt = null;
 
+    /** The dosar (case file) this belongs to, when the user or the inbox sync grouped it. */
+    #[ORM\ManyToOne(targetEntity: Dosar::class)]
+    #[ORM\JoinColumn(name: 'dosar_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Dosar $dosar = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -273,5 +278,13 @@ class TaxDeclaration
     public function getCompanyId(): ?string
     {
         return $this->company?->getId()?->toRfc4122();
+    }
+    public function getDosar(): ?Dosar { return $this->dosar; }
+    public function setDosar(?Dosar $d): static { $this->dosar = $d; return $this; }
+
+    #[Groups(['declaration:list', 'declaration:detail'])]
+    public function getDosarId(): ?string
+    {
+        return $this->dosar?->getId()?->toRfc4122();
     }
 }

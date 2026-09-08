@@ -62,6 +62,13 @@ notification:
       message: 'You sent an invoice to %counterparty% · %amount%'
     new_documents_multi:
       message: 'You have %count% new documents (%incoming% incoming, %outgoing% outgoing)'
+  dosar:
+    deadline:
+      title: '%company%: deadline in %days% days'
+      message: '%dosar% — %label%: due on %date%. Open the case file and file before the deadline.'
+    deadline_today:
+      title: '%company%: deadline today'
+      message: '%dosar% — %label%: due today (%date%).'
   spv:
     document_received:
       title: '%company%: %type%'

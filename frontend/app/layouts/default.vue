@@ -74,6 +74,12 @@ const links = computed(() => {
       to: '/spv',
       onSelect: close,
     },
+    can(P.DECLARATION_VIEW) && {
+      label: $t('nav.dosare'),
+      icon: 'i-lucide-folder-kanban',
+      to: '/dosare',
+      onSelect: close,
+    },
     can(P.CLIENT_VIEW) && {
       label: $t('nav.clients'),
       icon: 'i-lucide-users',

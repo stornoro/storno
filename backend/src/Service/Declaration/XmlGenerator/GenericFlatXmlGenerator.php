@@ -14,7 +14,7 @@ use App\Service\Declaration\DeclarationXmlGeneratorInterface;
 class GenericFlatXmlGenerator implements DeclarationXmlGeneratorInterface
 {
     private const SUPPORTED_TYPES = [
-        'd106', 'd120', 'd130', 'd180', 'd205', 'd208', 'd212', 'd301', 'd311',
+        'd106', 'd120', 'd130', 'd180', 'd205', 'd208', 'd301', 'd311',
     ];
 
     private const ROOT_ELEMENTS = [

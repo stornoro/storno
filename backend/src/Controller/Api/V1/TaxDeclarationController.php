@@ -11,6 +11,7 @@ use App\Security\Permission;
 use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Declaration\AnafDeclarationClient;
+use App\Service\Declaration\DeclarationPdfService;
 use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DukIntegratorService;
 use App\Service\Declaration\DukUnavailableException;
@@ -33,6 +34,7 @@ class TaxDeclarationController extends AbstractController
 
     public function __construct(
         private readonly TaxDeclarationManager $manager,
+        private readonly DeclarationPdfService $declarationPdf,
         private readonly OrganizationContext $organizationContext,
         private readonly FilesystemOperator $defaultStorage,
         private readonly AnafTokenResolver $anafTokenResolver,
@@ -340,8 +342,17 @@ class TaxDeclarationController extends AbstractController
                 $this->defaultStorage->write($xmlPath, $xml);
                 $declaration->setXmlPath($xmlPath);
 
-                // Generate unsigned PDF via DUKIntegrator
-                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // Generate unsigned PDF via DUKIntegrator (with the attachment zip when the form carries files, e.g. C168)
+                $attachments = [];
+                foreach (is_array($declaration->getData()['attachments'] ?? null) ? $declaration->getData()['attachments'] : [] as $i => $a) {
+                    $bin = is_array($a) && is_string($a['contentBase64'] ?? null) ? base64_decode($a['contentBase64'], true) : false;
+                    if ($bin !== false && $bin !== '') {
+                        $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
+                    }
+                }
+                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
 
                 $pdfPath = sprintf(
                     'declarations/%s/%s/%s.pdf',
@@ -536,8 +547,9 @@ class TaxDeclarationController extends AbstractController
 
         try {
             // Resolve ANAF Bearer token
+            // The e-guvernare upload runs on the certificate (mTLS); the OAuth token only serves the SPV listing operations.
             $anafToken = $this->anafTokenResolver->resolveEntity($company);
-            if ($anafToken === null) {
+            if ($anafToken === null && $operation !== 'submit') {
                 return $this->json(['error' => 'No valid ANAF token available for this company.'], Response::HTTP_BAD_REQUEST);
             }
 
@@ -583,7 +595,7 @@ class TaxDeclarationController extends AbstractController
                     'uploadField' => 'linkdoc',
                     'fileName' => sprintf('%s_%s_%s.pdf', $type, $cif, substr((string) $declaration->getId(), 0, 8)),
                     'sessionUrl' => self::WAS6DUS_SESSION_URL,
-                    'anafToken' => $anafToken->getToken(),
+                    'anafToken' => $anafToken?->getToken(),
                     'declarationType' => $type,
                     'cif' => $cif,
                 ]);

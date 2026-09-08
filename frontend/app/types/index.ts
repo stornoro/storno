@@ -694,6 +694,7 @@ export interface SpvDocument {
   hasPdf: boolean
   purgedAt: string | null
   createdAt: string
+  dosarId?: string | null
 }
 
 export interface SpvDocumentStats {
@@ -709,6 +710,90 @@ export interface SpvDocumentStats {
 
 export type SpvRequestStatus = 'pending' | 'requested' | 'answered' | 'error'
 
+// ── Dosare (case files) ─────────────────────────────────────────────
+export type DosarType = 'rental_contract' | 'annual_return' | 'periodic' | 'fiscal_status' | 'generic'
+export type DosarStatus = 'active' | 'attention' | 'closed'
+
+export interface Dosar {
+  id: string
+  companyId: string
+  type: DosarType
+  title: string
+  subject: Record<string, any>
+  status: DosarStatus
+  nextStep: string | null
+  deadlineAt: string | null
+  deadlineLabel: string | null
+  daysToDeadline: number | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DosarCounts {
+  declarations: number
+  requests: number
+  documents: number
+}
+
+export interface DosarTimelineEvent {
+  date: string
+  kind: 'declaration' | 'request' | 'document'
+  id: string
+  title: string
+  status: string
+}
+
+export interface DosarDetail {
+  dosar: Dosar
+  counts: DosarCounts
+  declarations: TaxDeclaration[]
+  requests: SpvRequest[]
+  documents: SpvDocument[]
+  timeline: DosarTimelineEvent[]
+}
+
+export interface DosarActionItem {
+  kind: 'dosar' | 'deadline' | 'expiry' | 'declaration' | 'request' | 'document'
+  id: string
+  title: string
+  subtitle: string
+  dosarId: string | null
+  dosarTitle: string | null
+  date: string | null
+  severity: 'critical' | 'high' | 'normal' | 'low'
+}
+
+export interface DosarProperty {
+  dosarId: string
+  title: string
+  adresa: string | null
+  chirias: string | null
+  chirie: number
+  moneda: string
+  deLa: string | null
+  panaLa: string | null
+  active: boolean
+  expiresInDays: number | null
+  status: DosarStatus
+  declarations: number
+}
+
+export interface DosarStats {
+  properties: DosarProperty[]
+  activeContracts: number
+  expiringWithin60Days: number
+  monthlyRent: Record<string, number>
+  expectedGrossByYear: Record<string, Record<string, number>>
+  declaredByIncomeYear: Record<string, { venitBrut: number, status: string, declarationId: string }>
+}
+
+export interface DosarActions {
+  todo: DosarActionItem[]
+  inProgress: DosarActionItem[]
+  answers: DosarActionItem[]
+}
+
 export interface SpvRequest {
   id: string
   requestType: string
@@ -721,6 +806,7 @@ export interface SpvRequest {
   answeredAt: string | null
   answerDocumentId: string | null
   requestedByName: string | null
+  dosarId?: string | null
 }
 
 export interface SpvRequestType {
@@ -1880,6 +1966,7 @@ export interface TaxDeclaration {
   acceptedAt: string | null
   createdAt: string | null
   updatedAt: string | null
+  dosarId?: string | null
 }
 
 export interface CreateDeclarationPayload {
