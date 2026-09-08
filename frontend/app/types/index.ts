@@ -129,6 +129,9 @@ export interface Company {
   id: string
   name: string
   cif: number
+  /** company = CUI with ANAF registry data; individual = a natural person identified by CNP */
+  type?: 'company' | 'individual'
+  isIndividual?: boolean
   registrationNumber: string | null
   vatPayer: boolean
   vatCode: string | null
@@ -726,8 +729,30 @@ export interface Dosar {
   deadlineLabel: string | null
   daysToDeadline: number | null
   notes?: string | null
+  /** the other party as a client / supplier of the company, linked by hand or found by CUI/CNP */
+  client?: { id: string, name: string | null } | null
+  supplier?: { id: string, name: string | null } | null
   createdAt: string
   updatedAt: string
+}
+
+export type RelatedType = 'client' | 'supplier' | 'invoice' | 'recurring_invoice' | 'declaration' | 'spv_document' | 'spv_request' | 'dosar'
+
+export interface RelatedItem {
+  type: RelatedType
+  id: string
+  title: string | null
+  subtitle: string | null
+  status: string | null
+  date: string | null
+  href: string | null
+  direction?: string | null
+  balance?: number
+}
+
+export interface RelatedResponse {
+  source: RelatedItem
+  groups: Partial<Record<'dosare' | 'clients' | 'suppliers' | 'invoices' | 'recurringInvoices' | 'declarations' | 'spvRequests' | 'spvDocuments', RelatedItem[]>>
 }
 
 export interface DosarCounts {

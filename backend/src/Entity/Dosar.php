@@ -7,6 +7,7 @@ use App\Repository\DosarRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -80,6 +81,16 @@ class Dosar
     #[Groups(['dosar:detail'])]
     private ?string $notes = null;
 
+    /** The other party as a client of the company (the tenant the landlord invoices), when known */
+    #[ORM\ManyToOne(targetEntity: Client::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Client $client = null;
+
+    /** The other party as a supplier of the company (the tenant invoicing works, or the landlord when the company rents), when known */
+    #[ORM\ManyToOne(targetEntity: Supplier::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Supplier $supplier = null;
+
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $createdBy = null;
@@ -123,6 +134,18 @@ class Dosar
     public function markDeadlineNotified(int $daysBefore): static { $this->deadlineNotified = array_values(array_unique([...$this->deadlineNotified, $daysBefore])); return $this; }
     public function getNotes(): ?string { return $this->notes; }
     public function setNotes(?string $n): static { $this->notes = $n; return $this; }
+    public function getClient(): ?Client { return $this->client; }
+    public function setClient(?Client $c): static { $this->client = $c; return $this; }
+    public function getSupplier(): ?Supplier { return $this->supplier; }
+    public function setSupplier(?Supplier $s): static { $this->supplier = $s; return $this; }
+    /** @return array{id: string, name: ?string}|null */
+    #[Groups(['dosar:list', 'dosar:detail'])]
+    #[SerializedName('client')]
+    public function getClientSummary(): ?array { return $this->client ? ['id' => (string) $this->client->getId(), 'name' => $this->client->getName()] : null; }
+    /** @return array{id: string, name: ?string}|null */
+    #[Groups(['dosar:list', 'dosar:detail'])]
+    #[SerializedName('supplier')]
+    public function getSupplierSummary(): ?array { return $this->supplier ? ['id' => (string) $this->supplier->getId(), 'name' => $this->supplier->getName()] : null; }
     public function getCreatedBy(): ?User { return $this->createdBy; }
     public function setCreatedBy(?User $u): static { $this->createdBy = $u; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }

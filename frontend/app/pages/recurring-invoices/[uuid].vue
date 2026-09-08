@@ -208,6 +208,7 @@
           </UCard>
         </div>
 
+        <SharedRelatedCard v-if="recurringInvoice" type="recurring_invoice" :id="recurringInvoice.id" :exclude="['clients']" />
         <!-- Invoice settings -->
         <UCard>
           <template #header>

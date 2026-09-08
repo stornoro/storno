@@ -41,7 +41,8 @@
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="font-semibold text-lg">{{ company.name }}</h3>
-                <div class="text-sm text-muted">{{ $t('companies.cif') }}: {{ company.cif }}</div>
+                <div class="text-sm text-muted">{{ company.isIndividual ? $t('companies.cnpLabel') : $t('companies.cif') }}: {{ company.cif }}</div>
+                <UBadge v-if="company.isIndividual" color="neutral" variant="subtle" size="xs" class="mt-1">{{ $t('companies.individualBadge') }}</UBadge>
               </div>
               <UIcon
                 v-if="company.id === companyStore.currentCompanyId"
@@ -128,7 +129,28 @@
             @submit="onCreateSubmit"
           >
             <div class="space-y-4">
-              <div class="relative">
+              <UTabs v-model="createKind" :items="createKinds" :content="false" size="sm" />
+              <template v-if="createKind === 'individual'">
+                <p class="text-sm text-(--ui-text-muted)">{{ $t('companies.individualHelp') }}</p>
+                <UFormField name="cnp" :label="$t('companies.cnpLabel')" required>
+                  <UInput v-model="createState.cnp" inputmode="numeric" maxlength="13" class="w-full" :disabled="creating" />
+                </UFormField>
+                <UFormField name="name" :label="$t('companies.individualName')" required>
+                  <UInput v-model="createState.name" class="w-full" :disabled="creating" />
+                </UFormField>
+                <UFormField name="address" :label="$t('companies.individualAddress')">
+                  <UInput v-model="createState.address" class="w-full" :disabled="creating" />
+                </UFormField>
+                <div class="grid grid-cols-2 gap-3">
+                  <UFormField name="city" :label="$t('companies.individualCity')" required>
+                    <UInput v-model="createState.city" class="w-full" :disabled="creating" />
+                  </UFormField>
+                  <UFormField name="state" :label="$t('companies.individualState')" required>
+                    <UInput v-model="createState.state" class="w-full" :disabled="creating" />
+                  </UFormField>
+                </div>
+              </template>
+              <div v-else class="relative">
                 <!-- Click-outside overlay to close registry dropdown -->
                 <div
                   v-if="registryDropdownOpen"
@@ -174,7 +196,7 @@
                 </div>
               </div>
 
-              <div class="text-sm text-(--ui-text-muted)">
+              <div v-if="createKind === 'company'" class="text-sm text-(--ui-text-muted)">
                 {{ $t('companies.cifHelp') }}
               </div>
 
@@ -187,7 +209,7 @@
                 :loading="creating"
                 :disabled="creating"
               >
-                {{ $t('companies.create') }}
+                {{ createKind === 'individual' ? $t('companies.createIndividual') : $t('companies.create') }}
               </UButton>
             </div>
           </UForm>
@@ -207,7 +229,7 @@
                 <h4 class="text-sm font-semibold text-(--ui-text-muted) uppercase tracking-wide">{{ $t('companies.companyInfo') }}</h4>
                 <div class="flex items-center gap-1">
                   <UButton
-                    v-if="editingCompanyInfo"
+                    v-if="editingCompanyInfo && !editCompany.isIndividual"
                     icon="i-lucide-refresh-cw"
                     variant="ghost"
                     size="xs"
@@ -232,7 +254,7 @@
                 <!-- Identity -->
                 <div class="grid grid-cols-3 gap-x-4 gap-y-1.5">
                   <div>
-                    <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.cifLabel') }}</div>
+                    <div class="text-xs text-(--ui-text-muted)">{{ editCompany.isIndividual ? $t('companies.cnpLabel') : $t('companies.cifLabel') }}</div>
                     <div class="text-sm font-medium">{{ editCompany.cif }}</div>
                   </div>
                   <div v-if="editCompany.registrationNumber">
@@ -325,7 +347,7 @@
                   <UInput v-model="editForm.name" class="w-100" />
                 </UFormField>
                 <div class="grid grid-cols-3 gap-3">
-                  <UFormField :label="$t('companies.cifLabel')">
+                  <UFormField :label="editCompany.isIndividual ? $t('companies.cnpLabel') : $t('companies.cifLabel')">
                     <UInput :model-value="String(editCompany.cif)" disabled />
                   </UFormField>
                   <UFormField :label="$t('companies.registrationNumberLabel')">
@@ -717,11 +739,34 @@ const createOpen = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const showUpgrade = ref(false)
-const createState = reactive({ cif: '' })
+const createState = reactive({ cif: '', cnp: '', name: '', address: '', city: '', state: '' })
+const createKind = ref<'company' | 'individual'>('company')
+const createKinds = computed(() => [
+  { value: 'company', label: $t('companies.kind.company'), icon: 'i-lucide-building-2' },
+  { value: 'individual', label: $t('companies.kind.individual'), icon: 'i-lucide-user' },
+])
 
-const createSchema = computed(() => z.object({
-  cif: z.string().min(2, $t('validation.cifMin')).max(20, $t('validation.cifFormat')),
-}))
+function cnpValid(v: string): boolean {
+  const d = v.replace(/\D+/g, '')
+  if (!/^[1-8]\d{12}$/.test(d)) return false
+  const w = '279146358279'
+  let sum = 0
+  for (let i = 0; i < 12; i++) sum += Number(d[i]) * Number(w[i])
+  const c = sum % 11
+  return Number(d[12]) === (c === 10 ? 1 : c)
+}
+
+const createSchema = computed(() => createKind.value === 'individual'
+  ? z.object({
+      cnp: z.string().refine(cnpValid, $t('companies.cnpInvalid')),
+      name: z.string().min(3),
+      address: z.string().optional(),
+      city: z.string().min(2),
+      state: z.string().min(2),
+    })
+  : z.object({
+      cif: z.string().min(2, $t('validation.cifMin')).max(20, $t('validation.cifFormat')),
+    }))
 
 // ── Registry search ──────────────────────────────────────────────
 const { results: registryResults, loading: registryLoading, onRegistrySearch, clear: clearRegistry } = useRegistrySearch()
@@ -752,6 +797,12 @@ const maxCompanies = computed(() => {
 
 function openCreate() {
   createState.cif = ''
+  createState.cnp = ''
+  createState.name = ''
+  createState.address = ''
+  createState.city = ''
+  createState.state = ''
+  createKind.value = 'company'
   createError.value = null
   registryDropdownOpen.value = false
   clearRegistry()
@@ -763,7 +814,9 @@ async function onCreateSubmit() {
   createError.value = null
 
   try {
-    const company = await companyStore.createCompany(createState.cif)
+    const company = await companyStore.createCompany(createKind.value === 'individual'
+      ? { type: 'individual', cnp: createState.cnp.replace(/\D+/g, ''), name: createState.name.trim(), address: createState.address.trim() || undefined, city: createState.city.trim(), state: createState.state.trim() }
+      : createState.cif)
     if (company) {
       toast.add({ title: $t('companies.createSuccess'), color: 'success' })
       createOpen.value = false

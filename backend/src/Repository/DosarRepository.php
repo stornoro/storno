@@ -16,7 +16,7 @@ class DosarRepository extends ServiceEntityRepository
     }
 
     /** @return list<Dosar> */
-    public function findForCompany(Company $company, ?string $type = null, ?string $status = null): array
+    public function findForCompany(Company $company, ?string $type = null, ?string $status = null, ?string $clientId = null, ?string $supplierId = null): array
     {
         $qb = $this->createQueryBuilder('d')
             ->andWhere('d.company = :company')->setParameter('company', $company)
@@ -28,6 +28,12 @@ class DosarRepository extends ServiceEntityRepository
         }
         if ($status !== null && $status !== '') {
             $qb->andWhere('d.status = :status')->setParameter('status', $status);
+        }
+        if ($clientId !== null && $clientId !== '') {
+            $qb->andWhere('d.client = :client')->setParameter('client', \Symfony\Component\Uid\Uuid::fromString($clientId));
+        }
+        if ($supplierId !== null && $supplierId !== '') {
+            $qb->andWhere('d.supplier = :supplier')->setParameter('supplier', \Symfony\Component\Uid\Uuid::fromString($supplierId));
         }
 
         return $qb->getQuery()->getResult();

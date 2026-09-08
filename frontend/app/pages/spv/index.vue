@@ -464,6 +464,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               </dd>
             </dl>
             <UAlert v-if="detail.downloadError" color="warning" variant="soft" icon="i-lucide-triangle-alert" :description="detail.downloadError" />
+            <SharedRelatedCard type="spv_document" :id="detail.id" />
           </div>
         </template>
         <template #footer>

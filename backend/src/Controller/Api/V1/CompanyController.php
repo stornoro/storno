@@ -17,6 +17,7 @@ use App\Service\CompanyReadOnlyService;
 use App\Service\LicenseManager;
 use App\Service\Storage\OrganizationStorageResolver;
 use App\Util\AddressNormalizer;
+use App\Util\Cnp;
 use App\Service\Webhook\WebhookDispatcher;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
@@ -70,11 +71,12 @@ class CompanyController extends AbstractController
     #[Route('', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
-        $cif = $data['cif'] ?? null;
+        $data = json_decode($request->getContent(), true) ?: [];
+        $isIndividual = ($data['type'] ?? null) === Company::TYPE_INDIVIDUAL || (!empty($data['cnp']) && empty($data['cif']));
+        $cif = $isIndividual ? Cnp::normalize((string) ($data['cnp'] ?? $data['cif'] ?? '')) : ($data['cif'] ?? null);
 
         if (!$cif) {
-            return $this->json(['error' => 'CIF is required.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => $isIndividual ? 'CNP is required.' : 'CIF is required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $org = $this->organizationContext->getOrganization();
@@ -87,6 +89,13 @@ class CompanyController extends AbstractController
                 'error' => 'Limita de companii atinsa. Upgradati planul.',
                 'code' => 'PLAN_LIMIT',
             ], Response::HTTP_PAYMENT_REQUIRED);
+        }
+
+        if ($isIndividual) {
+            return $this->createIndividual($org, $cif, $data);
+        }
+        if (Cnp::looksLikeNaturalPerson((string) $cif)) {
+            return $this->json(['error' => 'Acesta este un CNP. Adaugă o persoană fizică (type = individual) cu nume și adresă.', 'code' => 'CNP_NOT_CIF'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         $companyData = $this->companyManager->getCompanyData((int) $cif);
@@ -115,6 +124,44 @@ class CompanyController extends AbstractController
         return $this->json(array_merge($this->serializeCompany($company), [
             'hasValidToken' => $hasToken,
         ]), Response::HTTP_CREATED);
+    }
+
+    /**
+     * A natural person (persoană fizică) has no ANAF registry record: identified by CNP, name and
+     * address typed by hand. Files D212 / C168 as a person and receives invoices in SPV.
+     * @param array<string, mixed> $data
+     */
+    private function createIndividual(\App\Entity\Organization $org, string $cnp, array $data): JsonResponse
+    {
+        if (!Cnp::isValid($cnp)) {
+            return $this->json(['error' => 'CNP-ul nu este valid (13 cifre, cifră de control corectă).', 'code' => 'INVALID_CNP'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        $name = trim((string) ($data['name'] ?? ''));
+        $city = trim((string) ($data['city'] ?? ''));
+        $state = trim((string) ($data['state'] ?? ''));
+        if ($name === '' || $city === '' || $state === '') {
+            return $this->json(['error' => 'Pentru o persoană fizică sunt obligatorii: name, city, state (județul).', 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        if ($this->companyRepository->findByOrganizationAndCif($org, (int) $cnp)) {
+            return $this->json([
+                'error' => 'This person is already added to your organization.',
+                'messageKey' => MessageKey::ERR_COMPANY_ALREADY_ADDED,
+                'code' => 'DUPLICATE_CIF',
+            ], Response::HTTP_CONFLICT);
+        }
+        $normalized = AddressNormalizer::normalizeBucharest($state, $city);
+        $company = Company::createIndividual($cnp, $name, trim((string) ($data['address'] ?? '')) ?: null, $normalized['city'], $normalized['county'], strtoupper(trim((string) ($data['country'] ?? 'RO'))) ?: 'RO');
+        if (!empty($data['email'])) {
+            $company->setEmail((string) $data['email']);
+        }
+        if (!empty($data['phone'])) {
+            $company->setPhone((string) $data['phone']);
+        }
+        $company->setOrganization($org);
+        $company = $this->companyManager->create($company);
+        $this->broadcastCompanyEvent($company, 'company.created');
+
+        return $this->json(array_merge($this->serializeCompany($company), ['hasValidToken' => false]), Response::HTTP_CREATED);
     }
 
     #[Route('/deleted', methods: ['GET'])]
@@ -377,6 +424,10 @@ class CompanyController extends AbstractController
 
         $this->denyAccessUnlessGranted('COMPANY_EDIT', $company);
 
+        if ($company->isIndividual()) {
+            return $this->json(['error' => 'O persoană fizică nu are date la ANAF de reîmprospătat; editează numele și adresa direct.', 'code' => 'INDIVIDUAL'], Response::HTTP_BAD_REQUEST);
+        }
+
         // Enforce 1-hour cooldown via cache (Redis in prod)
         $cacheKey = 'anaf_refresh_' . str_replace('-', '_', $uuid);
         $cacheItem = $this->cache->getItem($cacheKey);
@@ -610,6 +661,8 @@ class CompanyController extends AbstractController
             'id' => (string) $company->getId(),
             'name' => $company->getName(),
             'cif' => $company->getCif(),
+            'type' => $company->getType(),
+            'isIndividual' => $company->isIndividual(),
             'registrationNumber' => $company->getRegistrationNumber(),
             'vatPayer' => $company->isVatPayer(),
             'vatCode' => $company->getVatCode(),

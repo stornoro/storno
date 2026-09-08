@@ -147,6 +147,8 @@
         </dl>
       </UCard>
 
+      <SharedRelatedCard v-if="client" type="client" :id="String(route.params.uuid)" :exclude="['invoices', 'clients']" />
+
       <!-- Documents -->
       <UCard>
         <template #header>

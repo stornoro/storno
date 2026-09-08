@@ -2,3 +2,4 @@ doctrine:
     dbal:
         types:
             uuid: 'App\Doctrine\Type\UuidType'
+            bigint_int: 'App\Doctrine\Type\BigIntIntType'

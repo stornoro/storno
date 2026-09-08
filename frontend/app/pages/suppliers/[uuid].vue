@@ -89,6 +89,8 @@
           </dl>
         </UCard>
 
+        <SharedRelatedCard type="supplier" :id="String(route.params.uuid)" :exclude="['invoices', 'suppliers']" />
+
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">

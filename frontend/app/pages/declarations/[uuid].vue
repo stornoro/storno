@@ -108,6 +108,8 @@
           </UCard>
         </div>
 
+        <SharedRelatedCard type="declaration" :id="declaration.id" />
+
         <!-- D394: Sales/Purchases -->
         <template v-if="declaration.type === 'd394' && declaration.data">
           <!-- Totals -->

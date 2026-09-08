@@ -20,7 +20,9 @@ use App\Enum\InvoiceDirection;
 use App\Enum\DeclarationType;
 use App\Enum\SpvDocumentCategory;
 use App\Repository\DosarRepository;
+use App\Util\Cnp;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Dosare: grouping, automatic linking of ANAF messages to what they answer,
@@ -86,9 +88,71 @@ final class DosarService
         if (array_key_exists('notes', $input)) {
             $dosar->setNotes($input['notes'] !== null ? (string) $input['notes'] : null);
         }
+        foreach (['clientId' => Client::class, 'supplierId' => Supplier::class] as $key => $class) {
+            if (!array_key_exists($key, $input)) {
+                continue;
+            }
+            $entity = null;
+            if ($input[$key] !== null && $input[$key] !== '') {
+                $entity = $this->em->getRepository($class)->findOneBy(['id' => Uuid::fromString((string) $input[$key]), 'company' => $dosar->getCompany()]);
+                if ($entity === null) {
+                    throw new \InvalidArgumentException(sprintf('%s inexistent pentru această firmă: %s', $key === 'clientId' ? 'Client' : 'Furnizor', $input[$key]));
+                }
+            }
+            $key === 'clientId' ? $dosar->setClient($entity) : $dosar->setSupplier($entity);
+        }
+        $this->linkParties($dosar, array_key_exists('clientId', $input), array_key_exists('supplierId', $input));
         $dosar->touch();
 
         return $dosar;
+    }
+
+    /**
+     * Keep the dosar tied to the other party's records: when no client / supplier was chosen by
+     * hand, find them by the tenant's CUI or CNP so invoices, recurring invoices and payments show
+     * up on the dosar and the dosar shows up on the client. Never overrides an explicit link.
+     */
+    public function linkParties(Dosar $dosar, bool $clientChosen = false, bool $supplierChosen = false): void
+    {
+        $company = $dosar->getCompany();
+        if ($company === null) {
+            return;
+        }
+        $cif = (string) ($dosar->getSubject()['chiriasCif'] ?? '');
+        if (!$clientChosen && $dosar->getClient() === null) {
+            $dosar->setClient($this->tenantClients($company, $cif)[0] ?? null);
+        }
+        if (!$supplierChosen && $dosar->getSupplier() === null) {
+            $dosar->setSupplier($this->tenantSuppliers($company, $cif)[0] ?? null);
+        }
+    }
+
+    /** The tenant's client records: the linked one first, then any other with the same CUI/CNP. @return list<Client> */
+    public function partyClients(Dosar $dosar): array
+    {
+        $company = $dosar->getCompany();
+        $out = $dosar->getClient() ? [$dosar->getClient()] : [];
+        foreach ($company ? $this->tenantClients($company, (string) ($dosar->getSubject()['chiriasCif'] ?? '')) : [] as $c) {
+            if (!in_array($c, $out, true)) {
+                $out[] = $c;
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return list<Supplier> */
+    public function partySuppliers(Dosar $dosar): array
+    {
+        $company = $dosar->getCompany();
+        $out = $dosar->getSupplier() ? [$dosar->getSupplier()] : [];
+        foreach ($company ? $this->tenantSuppliers($company, (string) ($dosar->getSubject()['chiriasCif'] ?? '')) : [] as $sp) {
+            if (!in_array($sp, $out, true)) {
+                $out[] = $sp;
+            }
+        }
+
+        return $out;
     }
 
     private function defaultTitle(Dosar $dosar): string
@@ -388,11 +452,16 @@ final class DosarService
         }
         $nume = (string) ($company->getName() ?? '');
         $address = method_exists($company, 'getAddress') ? (string) ($company->getAddress() ?? '') : '';
+        $cnp = (string) $company->getCif();
+        if (!$company->isIndividual() && !Cnp::looksLikeNaturalPerson($cnp)) {
+            $cnp = '';
+            $notes[] = 'Declarația unică se depune de o persoană fizică: firma are CUI, nu CNP. Adaugă proprietarul ca persoană fizică (CNP) și construiește D212 de acolo, sau completează contribuabil.cnp de mână.';
+        }
 
         return [
             'input' => [
                 'an' => $filingYear,
-                'contribuabil' => ['nume' => $nume, 'cnp' => (string) $company->getCif(), 'adresa' => $address],
+                'contribuabil' => ['nume' => $nume, 'cnp' => $cnp, 'adresa' => $address],
                 'chirii' => $chirii,
             ],
             'notes' => $notes,
@@ -482,7 +551,7 @@ final class DosarService
                 'chirieDeLa' => $rentStart?->format('Y-m-d'),
             ];
             // what was actually invoiced to this tenant (company landlords invoice the rent)
-            foreach ($this->tenantClients($company, (string) ($s['chiriasCif'] ?? '')) as $client) {
+            foreach ($this->partyClients($dosar) as $client) {
                 foreach ($this->em->getRepository(Invoice::class)->findBy(['company' => $company, 'client' => $client]) as $inv) {
                     if ($inv->getDirection() === InvoiceDirection::INCOMING || in_array($inv->getStatus(), [DocumentStatus::DRAFT, DocumentStatus::CANCELLED], true) || $inv->getIssueDate() === null) {
                         continue;
@@ -517,7 +586,7 @@ final class DosarService
             'declaredByIncomeYear' => $declared,
             'invoicedByYear' => $invoiced,
             // a natural person declares the rent in D212; a company invoices it
-            'landlordIsCompany' => !(strlen($cif) === 13 && $cif[0] !== '9'),
+            'landlordIsCompany' => !$company->isIndividual() && !Cnp::looksLikeNaturalPerson($cif),
         ];
     }
 
@@ -663,7 +732,7 @@ final class DosarService
         }
         $out = [];
         foreach ($this->em->getRepository(Client::class)->findBy(['company' => $company]) as $client) {
-            if ((preg_replace('/\D+/', '', (string) $client->getCui()) ?? '') === $cif) {
+            if ((preg_replace('/\D+/', '', (string) $client->getCui()) ?? '') === $cif || (preg_replace('/\D+/', '', (string) $client->getCnp()) ?? '') === $cif) {
                 $out[] = $client;
             }
         }
@@ -700,8 +769,8 @@ final class DosarService
         $s = $dosar->getSubject();
         $cif = (string) ($s['chiriasCif'] ?? '');
         $today = new \DateTimeImmutable('today');
-        $clients = $company ? $this->tenantClients($company, $cif) : [];
-        $suppliers = $company ? $this->tenantSuppliers($company, $cif) : [];
+        $clients = $this->partyClients($dosar);
+        $suppliers = $this->partySuppliers($dosar);
         $money = fn (string $v) => round((float) $v, 2);
 
         $issued = [];
@@ -854,6 +923,7 @@ final class DosarService
                 }
             }
             $dosar = (new Dosar())->setCompany($company)->setType(Dosar::TYPE_RENTAL_CONTRACT)->setCreatedBy($user)->setSubject($subject);
+            $this->linkParties($dosar);
             $dosar->setTitle(trim('Contract de închiriere ' . ($subject['adresa'] !== '' ? $subject['adresa'] : 'nr. ' . $subject['numar'])));
             $stare = (string) ($c['stare'] ?? 'activ');
             if ($stare === 'incetat') {
