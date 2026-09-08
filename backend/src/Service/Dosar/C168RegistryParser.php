@@ -151,7 +151,7 @@ final class C168RegistryParser
             }
             $s = '';
             foreach ($parts as $p) {
-                // a hyphenated name split over two lines ("CETERAS MARIA-" + "ANDREEA") joins without a space
+                // a hyphenated name split over two lines ("GEORGESCU ANA-" + "MARIA") joins without a space
                 $s .= ($s === '' || $glue === '' || str_ends_with($s, '-')) ? $p['text'] : $glue . $p['text'];
             }
             $s = trim($s);
