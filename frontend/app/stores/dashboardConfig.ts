@@ -45,6 +45,7 @@ export const WIDGET_CATALOG: CatalogWidget[] = [
   { id: 'top-clients-revenue', name_key: 'dashboard.widgets.topClientsRevenue.name', description_key: 'dashboard.widgets.topClientsRevenue.description', size: 'lg', category: 'clients' },
   { id: 'top-products-revenue', name_key: 'dashboard.widgets.topProductsRevenue.name', description_key: 'dashboard.widgets.topProductsRevenue.description', size: 'lg', category: 'sales' },
   { id: 'top-outstanding-clients', name_key: 'dashboard.widgets.topOutstandingClients.name', description_key: 'dashboard.widgets.topOutstandingClients.description', size: 'lg', category: 'clients' },
+  { id: 'dosare-actions', name_key: 'dashboard.widgets.dosareActions.name', description_key: 'dashboard.widgets.dosareActions.description', size: 'md', category: 'activity' },
 ]
 
 // Default config: original 12 widgets visible, 3 new ones hidden
@@ -64,6 +65,7 @@ const DEFAULT_CONFIG: WidgetConfig[] = [
   { id: 'top-clients-revenue', position: 12, visible: false },
   { id: 'top-products-revenue', position: 13, visible: false },
   { id: 'top-outstanding-clients', position: 14, visible: false },
+  { id: 'dosare-actions', position: 15, visible: false },
 ]
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -111,14 +113,17 @@ export const useDashboardConfigStore = defineStore('dashboardConfig', () => {
     error.value = null
 
     try {
+      // the catalog depends on the company (a natural person gets fewer widgets), so load it first
+      await loadCatalog()
       const response = await get<DashboardConfigResponse>('/v1/dashboard/config')
       if (response.widgets?.length) {
         // Merge with catalog to ensure all known widgets are represented
+        const catalogIds = new Set(catalog.value.map(c => c.id))
         const serverIds = new Set(response.widgets.map(w => w.id))
-        const serverWidgets = [...response.widgets]
+        const serverWidgets = response.widgets.filter(w => catalogIds.has(w.id))
 
         // Add any catalog widgets not in server config as hidden
-        for (const catalogItem of WIDGET_CATALOG) {
+        for (const catalogItem of catalog.value) {
           if (!serverIds.has(catalogItem.id)) {
             serverWidgets.push({
               id: catalogItem.id,

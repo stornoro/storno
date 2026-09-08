@@ -371,6 +371,9 @@ export default defineI18nLocale(async () => {
         firstInvoice: 'Emite prima factura',
         firstInvoiceDesc: 'Creeaza si trimite prima factura electronica.',
         firstInvoiceTime: '~5 min',
+        firstDosar: 'Creeaza primul dosar',
+        firstDosarDesc: 'Inregistreaza un contract de inchiriere sau pregateste Declaratia unica; Storno tine termenele si depune.',
+        firstDosarTime: '~3 min',
         progress: '{completed} din {total} pasi finalizati',
         completed: 'Felicitari! Ai configurat totul.',
         completedDescription: 'Esti gata sa facturezi profesional.',
@@ -447,6 +450,13 @@ export default defineI18nLocale(async () => {
         },
       },
       widgets: {
+        dosareActions: {
+          name: 'Dosare: de facut',
+          description: 'Depuneri respinse, termene apropiate, contracte care expira si raspunsuri noi de la ANAF.',
+          nothing: 'Nimic de facut la ANAF acum.',
+          inProgress: '{count} la ANAF',
+          answers: '{count} raspunsuri noi',
+        },
         salesCard: {
           name: 'Vanzari',
           description: 'Urmareste vanzarile si evolutia lunara.',

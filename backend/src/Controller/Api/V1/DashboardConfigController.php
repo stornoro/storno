@@ -126,6 +126,22 @@ class DashboardConfigController extends AbstractController
             'size' => 'lg',
             'category' => 'clients',
         ],
+        [
+            'id' => 'dosare-actions',
+            'name_key' => 'dashboard.widgets.dosareActions.name',
+            'description_key' => 'dashboard.widgets.dosareActions.description',
+            'size' => 'md',
+            'category' => 'activity',
+        ],
+    ];
+
+    /**
+     * A natural person (persoană fizică) neither sells nor has clients, products or VAT: the
+     * dashboard keeps only what concerns them — the dosare to act on, the invoices received in
+     * SPV, activity and the sync state — in this order.
+     */
+    private const INDIVIDUAL_WIDGET_IDS = [
+        'dosare-actions', 'sync-status', 'amounts-to-pay-card', 'expenses-card', 'activity-card', 'recent-invoices-table',
     ];
 
     /** Widget IDs that default to visible: false for existing users. */
@@ -133,6 +149,7 @@ class DashboardConfigController extends AbstractController
         'top-clients-revenue',
         'top-products-revenue',
         'top-outstanding-clients',
+        'dosare-actions',
     ];
 
     public function __construct(
@@ -156,8 +173,12 @@ class DashboardConfigController extends AbstractController
 
         if ($config !== null) {
             $widgets = $config->getWidgets();
+            if ($company->isIndividual()) {
+                $allowed = self::INDIVIDUAL_WIDGET_IDS;
+                $widgets = array_values(array_filter($widgets, fn (array $w) => in_array($w['id'] ?? '', $allowed, true)));
+            }
         } else {
-            $widgets = $this->buildDefaultConfig();
+            $widgets = $company->isIndividual() ? $this->buildIndividualDefaultConfig() : $this->buildDefaultConfig();
         }
 
         $response = $this->json(['widgets' => $widgets]);
@@ -184,7 +205,7 @@ class DashboardConfigController extends AbstractController
             return $this->json(['error' => 'Field "widgets" must be an array.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $knownIds = array_column(self::WIDGET_CATALOG, 'id');
+        $knownIds = $company->isIndividual() ? self::INDIVIDUAL_WIDGET_IDS : array_column(self::WIDGET_CATALOG, 'id');
         $validationError = $this->validateWidgets($data['widgets'], $knownIds);
         if ($validationError !== null) {
             return $this->json(['error' => $validationError], Response::HTTP_BAD_REQUEST);
@@ -209,13 +230,36 @@ class DashboardConfigController extends AbstractController
     }
 
     #[Route('/widgets/catalog', methods: ['GET'])]
-    public function catalog(): JsonResponse
+    public function catalog(Request $request): JsonResponse
     {
-        $response = $this->json(['widgets' => self::WIDGET_CATALOG]);
-        $response->setPublic();
-        $response->setMaxAge(86400);
+        // with a company header the catalog is the one for that company (a person sees fewer widgets)
+        $company = $this->organizationContext->resolveCompany($request);
+        if ($company !== null && $company->isIndividual()) {
+            $allowed = self::INDIVIDUAL_WIDGET_IDS;
+            $widgets = array_values(array_filter(self::WIDGET_CATALOG, fn (array $w) => in_array($w['id'], $allowed, true)));
+            $response = $this->json(['widgets' => $widgets, 'audience' => 'individual']);
+            $response->setPrivate();
+            $response->headers->addCacheControlDirective('no-store');
+
+            return $response;
+        }
+
+        $response = $this->json(['widgets' => self::WIDGET_CATALOG, 'audience' => 'company']);
+        $response->setPrivate();
+        $response->setMaxAge(3600);
 
         return $response;
+    }
+
+    /** @return list<array{id: string, position: int, visible: bool}> */
+    private function buildIndividualDefaultConfig(): array
+    {
+        $widgets = [];
+        foreach (self::INDIVIDUAL_WIDGET_IDS as $position => $id) {
+            $widgets[] = ['id' => $id, 'position' => $position, 'visible' => true];
+        }
+
+        return $widgets;
     }
 
     private function buildDefaultConfig(): array
