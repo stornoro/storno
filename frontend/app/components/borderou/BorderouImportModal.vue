@@ -21,6 +21,39 @@ const referenceNumber = ref('')
 const bankAccountId = ref<string | null>(null)
 const file = ref<File | null>(null)
 const dragOver = ref(false)
+/** Files dropped on the page beyond the first one: imported one after another with the same settings. */
+const queue = ref<File[]>([])
+const companyStore = useCompanyStore()
+const lastAccountKey = computed(() => `borderou.lastBankAccount.${companyStore.currentCompanyId ?? ''}`)
+
+function takeFiles(list: FileList | File[] | null | undefined) {
+  const files = Array.from(list ?? [])
+  if (!files.length) return
+  file.value = files[0] ?? null
+  queue.value = files.slice(1)
+}
+
+/** Preselect the bank account when there is only one, or the one used last time on this computer. */
+function preselectBankAccount() {
+  if (!isBankStatement.value || bankAccountId.value) return
+  const items = bankAccountStore.items
+  if (items.length === 1) { bankAccountId.value = items[0]!.id; return }
+  try {
+    const last = localStorage.getItem(lastAccountKey.value)
+    if (last && items.some(b => b.id === last)) bankAccountId.value = last
+  } catch { /* storage unavailable */ }
+}
+
+/** Open the modal with files dropped on the page; the import needs one click (or none: Enter). */
+async function openWith(files: FileList | File[]) {
+  if (isBankStatement.value && bankAccountStore.items.length === 0) {
+    await bankAccountStore.fetchBankAccounts()
+  }
+  takeFiles(files)
+  preselectBankAccount()
+  open.value = true
+}
+defineExpose({ openWith })
 
 // ── Courier logos ──
 const courierLogos: Record<string, string> = {
@@ -124,16 +157,12 @@ const modalTitle = computed(() =>
 // ── File handling ──
 function onFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
-  if (target.files?.length) {
-    file.value = target.files[0] ?? null
-  }
+  takeFiles(target.files)
 }
 
 function onDrop(event: DragEvent) {
   dragOver.value = false
-  if (event.dataTransfer?.files?.length) {
-    file.value = event.dataTransfer.files[0] ?? null
-  }
+  takeFiles(event.dataTransfer?.files)
 }
 
 function clearFile() {
@@ -159,10 +188,19 @@ async function handleImport() {
       : `${store.summary.total} ${$t('borderou.phaseImport').toLowerCase()}`
 
     toast.add({
-      title: $t('borderou.importAction'),
+      title: `${$t('borderou.importAction')} · ${file.value?.name ?? ''}`,
       description,
       color: 'success',
     })
+    if (isBankStatement.value && bankAccountId.value) {
+      try { localStorage.setItem(lastAccountKey.value, bankAccountId.value) } catch { /* storage unavailable */ }
+    }
+    // more files dropped together: keep the settings, move to the next one
+    if (queue.value.length) {
+      file.value = queue.value.shift() ?? null
+      referenceNumber.value = ''
+      return
+    }
     open.value = false
     resetForm()
   }
@@ -177,8 +215,11 @@ function resetForm() {
   referenceNumber.value = ''
   bankAccountId.value = null
   file.value = null
+  queue.value = []
   dragOver.value = false
 }
+
+watch(open, (v) => { if (v) preselectBankAccount() })
 
 onMounted(() => {
   fetchDefaults()
@@ -260,12 +301,14 @@ onMounted(() => {
               ref="fileInput"
               type="file"
               accept=".csv,.xlsx,.xls"
+              multiple
               class="hidden"
               @change="onFileSelect"
             >
             <template v-if="file">
               <UIcon name="i-lucide-file-check" class="w-8 h-8 mx-auto text-primary mb-2" />
               <p class="text-sm font-medium">{{ file.name }}</p>
+              <p v-if="queue.length" class="text-xs text-(--ui-text-muted) mt-0.5">{{ $t('borderou.queueRemaining', { count: queue.length }) }}</p>
               <button
                 type="button"
                 class="text-xs text-(--ui-text-muted) hover:text-primary mt-1 underline"

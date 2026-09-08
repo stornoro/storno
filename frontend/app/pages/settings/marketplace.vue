@@ -9,6 +9,9 @@ const store = useBordereauStore()
 const companyStore = useCompanyStore()
 
 const importModalOpen = ref(false)
+const importModal = ref<{ openWith: (files: File[]) => Promise<void> } | null>(null)
+const dropEnabled = computed(() => !importModalOpen.value)
+const { dragging } = usePageFileDrop(files => importModal.value?.openWith(files), { accept: ['.csv', '.xlsx', '.xls'], enabled: dropEnabled })
 const editModalOpen = ref(false)
 const editTransaction = ref<any>(null)
 const selectedRows = ref<string[]>([])
@@ -59,6 +62,17 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
+    <!-- Whole-page drop zone: dropping a file opens the import with it already attached -->
+    <div
+      v-if="dragging"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-[2px] border-4 border-dashed border-primary pointer-events-none"
+    >
+      <div class="rounded-xl bg-(--ui-bg) px-8 py-6 shadow-lg text-center">
+        <UIcon name="i-lucide-file-down" class="size-10 text-primary mx-auto mb-2" />
+        <p class="text-lg font-semibold">{{ $t('borderou.dropOverlay') }}</p>
+        <p class="text-sm text-(--ui-text-muted)">.csv, .xlsx, .xls</p>
+      </div>
+    </div>
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
@@ -122,6 +136,7 @@ onMounted(() => {
 
     <!-- Modals -->
     <BorderouImportModal
+      ref="importModal"
       v-model:open="importModalOpen"
       source-type="marketplace"
     />
