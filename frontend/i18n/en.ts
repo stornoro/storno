@@ -4200,6 +4200,17 @@ export default defineI18nLocale(async () => {
       oneAtATime: 'ANAF processes one C168 per period: file the second one after the recipisa of the first.',
     },
     exportCsv: 'Export CSV',
+    registry: {
+      button: 'From the ANAF registry',
+      title: 'Contracts in the ANAF registry',
+      hint: 'Storno reads the “Registrul contractelor de locațiune” extract received in SPV (the answer to a C168 request) and proposes case files for the contracts that have none yet. You can also upload the PDF downloaded by hand.',
+      rows: '{rows} entries · {contracts} contracts · {missing} without a case file',
+      states: { activ: 'active', expirat: 'expired, no termination filed', incetat: 'terminated' },
+      exists: 'Has a case file',
+      upload: 'Upload the extract (PDF)',
+      import: 'Create {count} case files',
+      imported: '{count} case files created from the registry',
+    },
     ensureAnnual: 'Open the {year} annual return case file',
   },
 

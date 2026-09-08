@@ -4201,6 +4201,17 @@ export default defineI18nLocale(async () => {
       oneAtATime: 'ANAF prelucreaza o singura C168 pe perioada: a doua depunere se face dupa recipisa primei.',
     },
     exportCsv: 'Export CSV',
+    registry: {
+      button: 'Din registrul ANAF',
+      title: 'Contracte din registrul ANAF',
+      hint: 'Storno citeste extrasul „Registrul contractelor de locatiune” primit in SPV (raspunsul la solicitarea C168) si propune dosare pentru contractele care nu au inca unul. Poti incarca si PDF-ul descarcat manual.',
+      rows: '{rows} inregistrari · {contracts} contracte · {missing} fara dosar',
+      states: { activ: 'activ', expirat: 'expirat, fara incetare declarata', incetat: 'incetat' },
+      exists: 'Are dosar',
+      upload: 'Incarca extrasul (PDF)',
+      import: 'Creeaza {count} dosare',
+      imported: '{count} dosare create din registru',
+    },
     ensureAnnual: 'Deschide dosarul Declaratia unica {year}',
   },
 
