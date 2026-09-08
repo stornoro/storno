@@ -135,7 +135,7 @@
     {% endif %}
     <div class="company-name">{{ company.name|upper }}</div>
     <div class="company-meta">
-        {% if company.cif %}{{ 'cui'|trans({}, 'pdf', locale|default('ro')) }}: {{ company.cif }}{% endif %}
+        {% if company.cif %}{{ ((company.isIndividual is defined and company.isIndividual) ? 'cnp' : 'cui')|trans({}, 'pdf', locale|default('ro')) }}: {{ company.cif }}{% endif %}
         {% if company.registrationNumber %} · {{ company.registrationNumber }}{% endif %}<br>
         {% if company.address %}{{ company.address }}<br>{% endif %}
         {% set city = company.city|default('') %}

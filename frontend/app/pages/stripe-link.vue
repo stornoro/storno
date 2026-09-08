@@ -20,7 +20,7 @@ const selectedCompanyId = ref<string | null>(companyStore.currentCompanyId)
 
 const companyOptions = computed(() =>
   companyStore.companies.map(c => ({
-    label: `${c.name} (CIF ${c.cif})`,
+    label: `${c.name} (${c.isIndividual ? 'CNP' : 'CIF'} ${c.cif})`,
     value: c.id,
   })),
 )

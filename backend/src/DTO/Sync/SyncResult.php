@@ -8,6 +8,7 @@ class SyncResult
 {
     /** @var string[] */
     private array $errors = [];
+    private int $expired = 0;
 
     /**
      * Lightweight per-invoice summaries captured during the sync.
@@ -80,6 +81,17 @@ class SyncResult
         $this->errors[] = $error;
     }
 
+    /** Messages ANAF no longer serves (60-day window passed): not errors, just gone. */
+    public function incrementExpired(): void
+    {
+        $this->expired++;
+    }
+
+    public function getExpired(): int
+    {
+        return $this->expired;
+    }
+
     public function getNewInvoices(): int
     {
         return $this->newInvoices;
@@ -124,6 +136,7 @@ class SyncResult
             'newClients' => $this->newClients,
             'newProducts' => $this->newProducts,
             'newSeries' => $this->newSeries,
+            'expired' => $this->expired,
             'errors' => $this->errors,
         ];
     }

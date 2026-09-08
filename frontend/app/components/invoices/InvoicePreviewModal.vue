@@ -28,12 +28,12 @@
           <div>
             <h3 class="text-sm font-semibold text-(--ui-text-muted) uppercase tracking-wide mb-2">{{ $t('invoices.seller') }}</h3>
             <div class="text-base font-medium">{{ invoice.senderName || '-' }}</div>
-            <div class="text-sm text-(--ui-text-muted)">CIF: {{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</div>
+            <div class="text-sm text-(--ui-text-muted)">{{ idLabel(invoice.senderCif) }}: {{ formatCif(invoice.senderCif, invoice.direction === 'outgoing' ? companyStore.currentCompany?.vatPayer : invoice.supplier?.isVatPayer) || '-' }}</div>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-(--ui-text-muted) uppercase tracking-wide mb-2">{{ $t('invoices.buyer') }}</h3>
             <div class="text-base font-medium">{{ invoice.receiverName || '-' }}</div>
-            <div class="text-sm text-(--ui-text-muted)">CIF: {{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || '-' }}</div>
+            <div class="text-sm text-(--ui-text-muted)">{{ idLabel(invoice.receiverCif) }}: {{ formatCif(invoice.receiverCif, invoice.direction === 'outgoing' ? invoice.client?.isVatPayer : companyStore.currentCompany?.vatPayer) || '-' }}</div>
           </div>
         </div>
 
@@ -110,6 +110,11 @@ const { t: $t } = useI18n()
 const { formatMoney, formatNumber } = useMoney()
 const { formatDate } = useDate()
 const companyStore = useCompanyStore()
+/** A 13-digit identifier is a person's CNP (a non-resident NIF starts with 9); a CUI has at most 10 digits. */
+function idLabel(v: string | null | undefined): string {
+  const d = String(v ?? '').replace(/\D+/g, '')
+  return d.length === 13 && d[0] !== '9' ? 'CNP' : 'CIF'
+}
 
 const open = ref(false)
 

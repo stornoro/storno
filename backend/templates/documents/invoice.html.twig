@@ -57,7 +57,7 @@
                 <div class="party-label">Furnizor</div>
                 {% set company = invoice.company %}
                 <div class="party-name">{{ company.name }}</div>
-                <div class="party-detail">CUI: {{ company.cif }}</div>
+                <div class="party-detail">{{ (company.isIndividual is defined and company.isIndividual) ? 'CNP' : 'CUI' }}: {{ company.cif }}</div>
                 {% if company.registrationNumber %}
                     <div class="party-detail">Nr. Reg. Com.: {{ company.registrationNumber }}</div>
                 {% endif %}

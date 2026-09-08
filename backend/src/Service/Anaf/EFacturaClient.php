@@ -2,6 +2,7 @@
 
 namespace App\Service\Anaf;
 
+use App\Exception\AnafDownloadExpiredException;
 use App\DTO\Anaf\EFacturaStatusResponse;
 use App\DTO\Anaf\EFacturaUploadResponse;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -97,6 +98,9 @@ class EFacturaClient
         // Verify we got a ZIP (starts with PK magic bytes) and not an error response
         if (strlen($content) < 4 || !str_starts_with($content, "PK")) {
             $errorDetail = $this->extractAnafError($content) ?? sprintf('invalid response (%d bytes)', strlen($content));
+            if (preg_match('/nu mai poate fi desc[aă]rcat|perioada de 60 de zile/iu', $errorDetail)) {
+                throw new AnafDownloadExpiredException($id, $errorDetail);
+            }
             throw new \RuntimeException(sprintf(
                 'ANAF download for message %s returned non-ZIP response: %s',
                 $id,

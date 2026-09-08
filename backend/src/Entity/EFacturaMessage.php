@@ -46,7 +46,7 @@ class EFacturaMessage
 
     #[ORM\Column(length: 50)]
     #[Groups(['efactura_message:list', 'efactura_message:detail'])]
-    private string $status = 'received'; // received, processed, error
+    private string $status = 'received'; // received, processed, error, expired (ANAF no longer serves the file after 60 days)
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['efactura_message:list', 'efactura_message:detail'])]

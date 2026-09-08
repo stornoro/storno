@@ -3,7 +3,7 @@
         <div class="party-label">{{ supplierLabel|default(pdf_label('supplier', labelOverrides|default(null), locale|default('ro'), 'supplier')) }}</div>
         <div class="party-name">{{ company.name }}</div>
         {% if pdf_visible('supplier_cui', labelOverrides|default(null)) %}
-            <div class="party-detail">{{ pdf_label('supplier_cui', labelOverrides|default(null), locale|default('ro'), 'cui') }}: {% if company.vatPayer is defined and company.vatPayer and company.country is defined and company.country and company.cif matches '/^\\d+$/' %}{{ company.country }}{% endif %}{{ company.cif }}</div>
+            <div class="party-detail">{{ (company.isIndividual is defined and company.isIndividual) ? ('cnp'|trans({}, 'pdf', locale|default('ro'))) : pdf_label('supplier_cui', labelOverrides|default(null), locale|default('ro'), 'cui') }}: {% if company.vatPayer is defined and company.vatPayer and company.country is defined and company.country and company.cif matches '/^\\d+$/' %}{{ company.country }}{% endif %}{{ company.cif }}</div>
         {% endif %}
         {% if company.registrationNumber %}
             {% if pdf_visible('supplier_reg_number', labelOverrides|default(null)) %}
