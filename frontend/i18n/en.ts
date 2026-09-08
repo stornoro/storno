@@ -371,6 +371,9 @@ export default defineI18nLocale(async () => {
         firstInvoice: 'Issue your first invoice',
         firstInvoiceDesc: 'Create and send your first electronic invoice.',
         firstInvoiceTime: '~5 min',
+        firstDosar: 'Create the first case file',
+        firstDosarDesc: 'Register a rental contract or prepare the annual return; Storno keeps the deadlines and files.',
+        firstDosarTime: '~3 min',
         progress: '{completed} of {total} steps completed',
         completed: 'Congratulations! You\'ve set everything up.',
         completedDescription: 'You\'re ready to invoice professionally.',
@@ -447,6 +450,13 @@ export default defineI18nLocale(async () => {
         },
       },
       widgets: {
+        dosareActions: {
+          name: 'Case files: to do',
+          description: 'Rejected filings, upcoming deadlines, expiring contracts and new answers from ANAF.',
+          nothing: 'Nothing to do with ANAF right now.',
+          inProgress: '{count} at ANAF',
+          answers: '{count} new answers',
+        },
         salesCard: {
           name: 'Sales',
           description: 'Track your sales and monthly evolution.',

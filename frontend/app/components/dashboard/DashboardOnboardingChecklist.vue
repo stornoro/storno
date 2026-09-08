@@ -14,6 +14,9 @@ const { hasValidToken } = storeToRefs(syncStore)
 const { lastSyncedAt, outgoingInvoices } = storeToRefs(dashboardStore)
 const { items: bankItems } = storeToRefs(bankAccountStore)
 const { history: importHistory } = storeToRefs(importStore)
+const dosareStore = useDosareStore()
+const isIndividual = computed(() => !!currentCompany.value?.isIndividual)
+watch(isIndividual, (v) => { if (v) dosareStore.fetchDosare().catch(() => {}) }, { immediate: true })
 
 // Allow user to dismiss permanently (use localStorage for persistence)
 const DISMISS_KEY = 'onboarding_checklist_dismissed'
@@ -53,7 +56,7 @@ interface OnboardingStep {
   isInvoiceStep?: boolean
 }
 
-const steps = computed<OnboardingStep[]>(() => [
+const allSteps = computed<OnboardingStep[]>(() => [
   {
     key: 'company',
     label: $t('dashboard.onboarding.addCompany'),
@@ -103,7 +106,19 @@ const steps = computed<OnboardingStep[]>(() => [
     to: '/invoices?create=true',
     isInvoiceStep: true,
   },
+  {
+    key: 'dosar',
+    label: $t('dashboard.onboarding.firstDosar'),
+    description: $t('dashboard.onboarding.firstDosarDesc'),
+    time: $t('dashboard.onboarding.firstDosarTime'),
+    done: dosareStore.items.length > 0,
+    to: '/dosare',
+  },
 ])
+// a natural person neither imports a ledger nor issues invoices: company, ANAF, first dosar, SPV sync
+const steps = computed<OnboardingStep[]>(() => allSteps.value.filter(s => isIndividual.value
+  ? ['company', 'anaf', 'dosar', 'sync'].includes(s.key)
+  : s.key !== 'dosar'))
 
 const completedCount = computed(() => steps.value.filter(s => s.done).length)
 const allDone = computed(() => completedCount.value === steps.value.length)

@@ -127,6 +127,9 @@ const { isModuleEnabled } = useModules()
       :loading="loading"
     />
 
+    <!-- Dosare: what to do with ANAF -->
+    <DashboardDosareActionsCard v-else-if="id === 'dosare-actions'" />
+
     <!-- Due Today Card -->
     <DashboardDueTodayCard
       v-else-if="id === 'due-today-card'"

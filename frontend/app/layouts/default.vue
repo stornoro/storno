@@ -12,6 +12,7 @@ const companyStore = useCompanyStore()
 const { can } = usePermissions()
 const { logoSrc, appName } = useWhiteLabel()
 const { isModuleEnabled, MODULE_KEYS } = useModules()
+const { visibleForCompany } = useIndividual()
 const open = ref(false)
 
 // Primary navigation links (array-of-arrays for grouped display)
@@ -98,7 +99,7 @@ const links = computed(() => {
       to: '/suppliers',
       onSelect: close,
     },
-  ].filter(truthy)
+  ].filter(truthy).filter(visibleForCompany)
 
   // Settings children
   const settingsChildren = [
@@ -231,7 +232,7 @@ const links = computed(() => {
       to: '/settings/license-keys',
       onSelect: close,
     },
-  ].filter(truthy)
+  ].filter(truthy).filter(visibleForCompany)
 
   // Group 2: Management — reports, settings, data, integrations
   const group2 = [
@@ -274,7 +275,7 @@ const links = computed(() => {
       type: 'trigger' as const,
       children: integrationsChildren,
     },
-  ].filter(truthy)
+  ].filter(truthy).filter(visibleForCompany)
 
   const group3 = authStore.isSuperAdmin ? [{
     label: $t('nav.admin'),
