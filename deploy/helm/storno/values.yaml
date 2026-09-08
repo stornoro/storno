@@ -108,6 +108,10 @@ backend:
     # ── Cloudflare Turnstile ──────────────────────────────────────────────────
     TURNSTILE_SECRET_KEY: ""
 
+    # ── Meta Conversions API (optional, server-side sign-up attribution) ──────
+    META_PIXEL_ID: ""
+    META_CAPI_ACCESS_TOKEN: ""
+
     # ── Registration ─────────────────────────────────────────────────────────
     REGISTRATION_ENABLED: "1"
 

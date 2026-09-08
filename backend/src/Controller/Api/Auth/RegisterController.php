@@ -7,8 +7,10 @@ use App\Entity\OrganizationMembership;
 use App\Entity\User;
 use App\Enum\OrganizationRole;
 use App\Message\SendEmailConfirmationMessage;
+use App\Message\SendMetaConversionMessage;
 use App\Service\LicenseManager;
 use App\Service\LicenseValidationService;
+use App\Service\Marketing\RegistrationAttribution;
 use App\Service\TurnstileVerifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -135,6 +137,23 @@ class RegisterController extends AbstractController
 
         // Send email confirmation
         $this->messageBus->dispatch(new SendEmailConfirmationMessage((string) $user->getId()));
+
+        // Report the sign-up to Meta's Conversions API (no-op unless configured).
+        // The user id doubles as event_id so a browser pixel firing the same
+        // event later is deduplicated instead of counted twice.
+        $attribution = RegistrationAttribution::fromRequest($request, is_array($data) ? $data : []);
+        $this->messageBus->dispatch(new SendMetaConversionMessage(
+            eventName: 'CompleteRegistration',
+            eventId: (string) $user->getId(),
+            eventTime: time(),
+            email: $user->getEmail(),
+            externalId: (string) $user->getId(),
+            clientIp: $request->getClientIp(),
+            clientUserAgent: $request->headers->get('User-Agent'),
+            eventSourceUrl: $attribution['source_url'],
+            fbc: $attribution['fbc'],
+            fbp: $attribution['fbp'],
+        ));
 
         return $this->json([
             'message' => 'Registration successful. Please check your email to confirm your account.',
