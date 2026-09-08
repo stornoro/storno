@@ -72,7 +72,9 @@ class DosarController extends AbstractController
         }
         $type = $request->query->get('type');
         $status = $request->query->get('status');
-        $items = $this->repository->findForCompany($company, is_string($type) ? $type : null, is_string($status) ? $status : null);
+        $clientId = $request->query->get('clientId');
+        $supplierId = $request->query->get('supplierId');
+        $items = $this->repository->findForCompany($company, is_string($type) ? $type : null, is_string($status) ? $status : null, is_string($clientId) ? $clientId : null, is_string($supplierId) ? $supplierId : null);
         $counts = [];
         foreach ($items as $d) {
             $counts[$d->getId()->toRfc4122()] = $this->counts($d);

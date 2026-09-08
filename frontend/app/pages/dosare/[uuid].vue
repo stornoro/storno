@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DosarBilling, DosarDetail, DosarFile, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
+import type { Client, DosarBilling, DosarDetail, DosarFile, SpvDocument, SpvRequest, TaxDeclaration } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -33,6 +33,51 @@ async function load() {
   }
 }
 onMounted(load)
+
+// ── Party link (the tenant as a client of the company) ─────────────
+const partyOpen = ref(false)
+const partySearch = ref('')
+const partyOptions = ref<Client[]>([])
+const partyLoading = ref(false)
+const partyPick = ref<string | null>(null)
+const relatedCard = ref<{ reload: () => Promise<void> } | null>(null)
+let partyTimer: ReturnType<typeof setTimeout> | null = null
+async function searchParty() {
+  partyLoading.value = true
+  try {
+    const { get } = useApi()
+    const res = await get<{ data: Client[] }>('/v1/clients', { search: partySearch.value || undefined, limit: 20, sort: 'name' })
+    partyOptions.value = res.data ?? []
+  } catch {
+    partyOptions.value = []
+  } finally {
+    partyLoading.value = false
+  }
+}
+watch(partySearch, () => {
+  if (partyTimer) clearTimeout(partyTimer)
+  partyTimer = setTimeout(searchParty, 250)
+})
+function openParty() {
+  partyPick.value = detail.value?.dosar.client?.id ?? null
+  partySearch.value = detail.value?.dosar.subject?.chirias ?? ''
+  partyOpen.value = true
+  searchParty()
+}
+async function saveParty(clientId: string | null) {
+  saving.value = true
+  try {
+    detail.value = await store.updateDosar(id.value, { clientId } as any)
+    partyOpen.value = false
+    toast.add({ title: clientId ? $t('dosare.party.linked') : $t('dosare.party.unlinked'), color: 'success' })
+    if (detail.value.dosar.type === 'rental_contract') store.fetchBilling(id.value).then(b => { billing.value = b }).catch(() => {})
+    relatedCard.value?.reload()
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+  } finally {
+    saving.value = false
+  }
+}
 
 // ── Edit ───────────────────────────────────────────────────────────
 const editOpen = ref(false)
@@ -353,6 +398,18 @@ function summaryFor(doc: SpvDocument): string {
                 </template>
               </dl>
               <p v-if="detail.dosar.nextStep" class="text-sm pt-1"><span class="text-muted">{{ $t('dosare.nextStep') }}:</span> {{ detail.dosar.nextStep }}</p>
+              <div v-if="detail.dosar.type === 'rental_contract' || detail.dosar.client || detail.dosar.supplier" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm pt-1">
+                <span class="text-muted">{{ $t('dosare.party.client') }}:</span>
+                <NuxtLink v-if="detail.dosar.client" :to="`/clients/${detail.dosar.client.id}`" class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                  <UIcon name="i-lucide-user" class="size-3.5" />{{ detail.dosar.client.name }}
+                </NuxtLink>
+                <span v-else class="text-muted">{{ $t('dosare.party.none') }}</span>
+                <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-link-2" @click="openParty">{{ detail.dosar.client ? $t('common.edit') : $t('dosare.party.link') }}</UButton>
+                <template v-if="detail.dosar.supplier">
+                  <span class="text-muted">· {{ $t('dosare.party.supplier') }}:</span>
+                  <NuxtLink :to="`/suppliers/${detail.dosar.supplier.id}`" class="font-medium text-primary hover:underline">{{ detail.dosar.supplier.name }}</NuxtLink>
+                </template>
+              </div>
             </div>
             <div class="text-xs text-muted text-right">{{ $t('dosare.counts', detail.counts) }}</div>
           </div>
@@ -390,11 +447,14 @@ function summaryFor(doc: SpvDocument): string {
             </ol>
           </UCard>
 
-          <!-- Notes -->
-          <UCard>
-            <template #header><span class="font-semibold text-sm">{{ $t('dosare.notes') }}</span></template>
-            <p class="text-sm whitespace-pre-line" :class="!detail.dosar.notes ? 'text-muted' : ''">{{ detail.dosar.notes || '—' }}</p>
-          </UCard>
+          <!-- Notes + links -->
+          <div class="space-y-4">
+            <UCard>
+              <template #header><span class="font-semibold text-sm">{{ $t('dosare.notes') }}</span></template>
+              <p class="text-sm whitespace-pre-line" :class="!detail.dosar.notes ? 'text-muted' : ''">{{ detail.dosar.notes || '—' }}</p>
+            </UCard>
+            <SharedRelatedCard ref="relatedCard" type="dosar" :id="detail.dosar.id" :exclude="['declarations', 'spvRequests', 'spvDocuments']" />
+          </div>
         </div>
 
         <!-- Declarations -->
@@ -670,6 +730,27 @@ function summaryFor(doc: SpvDocument): string {
             <div class="flex justify-end gap-2">
               <UButton color="neutral" variant="ghost" @click="attachOpen = false">{{ $t('common.cancel') }}</UButton>
               <UButton :disabled="!attachValue" @click="submitAttach">{{ $t('dosare.attach') }}</UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
+      <!-- Link the case file to a client -->
+      <UModal v-model:open="partyOpen" :title="$t('dosare.party.linkTitle')">
+        <template #body>
+          <div class="space-y-3">
+            <p class="text-sm text-muted">{{ $t('dosare.party.linkHelp') }}</p>
+            <UInput v-model="partySearch" icon="i-lucide-search" :placeholder="$t('dosare.party.pick')" :loading="partyLoading" class="w-full" />
+            <URadioGroup v-model="partyPick" :items="partyOptions.map(c => ({ value: c.id, label: c.name, description: c.cui || c.cnp || '' }))" />
+            <p v-if="!partyLoading && !partyOptions.length" class="text-sm text-muted">—</p>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-between w-full">
+            <UButton v-if="detail?.dosar.client" color="error" variant="ghost" :loading="saving" @click="saveParty(null)">{{ $t('dosare.party.unlink') }}</UButton>
+            <span v-else />
+            <div class="flex gap-2">
+              <UButton color="neutral" variant="ghost" @click="partyOpen = false">{{ $t('common.cancel') }}</UButton>
+              <UButton :disabled="!partyPick" :loading="saving" @click="saveParty(partyPick)">{{ $t('common.save') }}</UButton>
             </div>
           </div>
         </template>

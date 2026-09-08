@@ -10,6 +10,7 @@ use App\Repository\CompanyRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Doctrine\Type\BigIntIntType;
 use App\Doctrine\Type\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
@@ -18,6 +19,9 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\UniqueConstraint(name: 'uniq_company_org_cif', columns: ['organization_id', 'cif'])]
 class Company
 {
+    public const TYPE_COMPANY = 'company';
+    public const TYPE_INDIVIDUAL = 'individual';
+
     use AuditableTrait;
     use SoftDeletableTrait;
 
@@ -44,9 +48,14 @@ class Company
     #[Groups(['company', 'invoice'])]
     private ?string $name = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(type: BigIntIntType::NAME)]
     #[Groups(['company', 'invoice'])]
     private int $cif;
+
+    /** company (CUI, data from ANAF) or individual (a natural person identified by CNP, entered by hand) */
+    #[ORM\Column(length: 16, options: ['default' => self::TYPE_COMPANY])]
+    #[Groups(['company', 'invoice'])]
+    private string $type = self::TYPE_COMPANY;
 
     #[ORM\Column(length: 50, nullable: true)]
     #[Groups(['company', 'invoice'])]
@@ -267,6 +276,24 @@ class Company
     public function getCif(): int
     {
         return $this->cif;
+    }
+
+    public function getType(): string
+    {
+        return $this->type;
+    }
+
+    public function setType(string $type): static
+    {
+        $this->type = $type === self::TYPE_INDIVIDUAL ? self::TYPE_INDIVIDUAL : self::TYPE_COMPANY;
+
+        return $this;
+    }
+
+    /** A natural person (persoană fizică) identified by CNP: no ANAF registry data, no VAT, files D212 / C168 as a person. */
+    public function isIndividual(): bool
+    {
+        return $this->type === self::TYPE_INDIVIDUAL;
     }
 
     public function setCif(int $cif): static
@@ -796,5 +823,21 @@ class Company
     public static function createFromAnaf(CompanyInfo $company): self
     {
         return new self(companyInfo: $company);
+    }
+
+    /** A natural person: identified by CNP, address typed by hand, never a VAT payer. */
+    public static function createIndividual(string $cnp, string $name, ?string $address, string $city, string $state, string $country = 'RO'): self
+    {
+        $c = new self();
+        $c->setType(self::TYPE_INDIVIDUAL);
+        $c->setCif((int) $cnp);
+        $c->setName($name);
+        $c->setAddress($address);
+        $c->setCity($city);
+        $c->setState($state);
+        $c->setCountry($country);
+        $c->setVatPayer(false);
+
+        return $c;
     }
 }

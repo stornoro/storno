@@ -73,14 +73,14 @@ export const useCompanyStore = defineStore('company', () => {
     useProformaInvoiceStore().$reset()
   }
 
-  async function createCompany(cif: string): Promise<Company | null> {
+  async function createCompany(input: string | { type: 'individual', cnp: string, name: string, address?: string, city: string, state: string, country?: string }): Promise<Company | null> {
     const { post } = useApi()
     loading.value = true
     error.value = null
     errorCode.value = null
 
     try {
-      const company = await post<Company>('/v1/companies', { cif })
+      const company = await post<Company>('/v1/companies', typeof input === 'string' ? { cif: input } : input)
       companies.value.push(company)
 
       // Auto-select if it is the first company

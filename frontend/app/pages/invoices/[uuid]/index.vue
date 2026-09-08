@@ -497,6 +497,7 @@
               </div>
 
             </div>
+            <SharedRelatedCard v-if="invoice" class="mt-4" type="invoice" :id="invoice.id" />
           </template>
 
           <template #xml>
