@@ -97,7 +97,7 @@
             <div class="space-y-3">
               <div>
                 <h3 class="font-semibold text-lg">{{ company.name }}</h3>
-                <div class="text-sm text-muted">{{ $t('companies.cif') }}: {{ company.cif }}</div>
+                <div class="text-sm text-muted">{{ company.isIndividual ? $t('companies.cnpLabel') : $t('companies.cif') }}: {{ company.cif }}</div>
               </div>
               <div class="text-sm text-warning-600 dark:text-warning-400 font-medium">
                 {{ $t('companies.daysRemaining', getDaysRemaining(company.hardDeleteAt), { count: getDaysRemaining(company.hardDeleteAt) }) }}

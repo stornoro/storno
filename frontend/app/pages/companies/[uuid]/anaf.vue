@@ -475,7 +475,7 @@
       <template #body>
         <div class="space-y-4">
           <p class="text-sm text-(--ui-text-muted)">{{ $t('anaf.cifValidateDescription') }}</p>
-          <UFormField label="CIF">
+          <UFormField :label="$t('anaf.selectCompany')">
             <USelectMenu
               v-model="selectedCifForValidation"
               :items="companyOptions"

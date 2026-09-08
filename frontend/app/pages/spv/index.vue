@@ -455,7 +455,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               <dt class="text-muted">{{ $t('spv.detail.anafDate') }}</dt><dd>{{ formatDate(detail.anafCreatedAt) }}</dd>
               <dt class="text-muted">{{ $t('spv.detail.anafId') }}</dt><dd class="font-mono">{{ detail.anafMessageId }}</dd>
               <dt v-if="detail.idSolicitare" class="text-muted">{{ $t('spv.detail.requestId') }}</dt><dd v-if="detail.idSolicitare" class="font-mono">{{ detail.idSolicitare }}</dd>
-              <dt class="text-muted">{{ $t('spv.detail.cif') }}</dt><dd>{{ detail.cif }}</dd>
+              <dt class="text-muted">{{ companyStore.currentCompany?.isIndividual ? 'CNP' : $t('spv.detail.cif') }}</dt><dd>{{ detail.cif }}</dd>
               <dt class="text-muted">{{ $t('spv.detail.archived') }}</dt>
               <dd>
                 <template v-if="detail.hasPdf">{{ formatDate(detail.downloadedAt) }} · {{ formatSize(detail.fileSize) }}</template>

@@ -101,12 +101,13 @@ const statusOptions = computed(() => [
   { label: $t('spvMessages.statusProcessed'), value: 'processed' },
   { label: $t('spvMessages.statusError'), value: 'error' },
   { label: $t('spvMessages.statusReceived'), value: 'received' },
+  { label: $t('spvMessages.statusExpired'), value: 'expired' },
 ])
 
 const columns = [
   { accessorKey: 'createdAt', header: $t('spvMessages.createdAt') },
   { accessorKey: 'messageType', header: $t('spvMessages.messageType') },
-  { accessorKey: 'cif', header: 'CIF' },
+  { accessorKey: 'cif', header: companyStore.currentCompany?.isIndividual ? 'CNP' : 'CIF' },
   { accessorKey: 'invoice', header: $t('spvMessages.invoice') },
   { accessorKey: 'ids', header: 'Upload / Index' },
   { accessorKey: 'status', header: $t('spvMessages.status') },
@@ -133,6 +134,7 @@ function statusColor(status: string) {
   switch (status) {
     case 'processed': return 'success'
     case 'error': return 'error'
+    case 'expired': return 'warning'
     default: return 'neutral'
   }
 }
@@ -142,6 +144,7 @@ function statusLabel(status: string) {
     case 'processed': return $t('spvMessages.statusProcessed')
     case 'error': return $t('spvMessages.statusError')
     case 'received': return $t('spvMessages.statusReceived')
+    case 'expired': return $t('spvMessages.statusExpired')
     default: return status
   }
 }

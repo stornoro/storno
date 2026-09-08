@@ -36,6 +36,7 @@ use App\Util\AddressNormalizer;
 use App\Utils\Functions;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use App\Exception\AnafDownloadExpiredException;
 use App\Exception\AnafRateLimitException;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -355,8 +356,8 @@ class EFacturaSyncService
             return false;
         }
 
-        // Skip messages already processed or permanently failed (avoids re-downloading from ANAF)
-        if ($spvMessage && in_array($spvMessage->getStatus(), ['processed', 'error'], true)) {
+        // Skip messages already processed, permanently failed or expired at ANAF (avoids re-downloading)
+        if ($spvMessage && in_array($spvMessage->getStatus(), ['processed', 'error', 'expired'], true)) {
             $result->incrementSkippedDuplicates();
             return false;
         }
@@ -430,6 +431,16 @@ class EFacturaSyncService
 
             $result->recordNewInvoice($invoice);
             return true;
+        } catch (AnafDownloadExpiredException $e) {
+            // Not a failure of ours: ANAF discards the file 60 days after publishing it. Typical on a
+            // first sync with a long window (a person's SPV, a company added late). Terminal, quiet.
+            $result->incrementExpired();
+            $this->logger->info('ANAF message no longer downloadable (60-day window passed)', ['messageId' => $messageId]);
+            if ($spvMessage) {
+                $spvMessage->setStatus('expired');
+                $spvMessage->setErrorMessage('Fișierul nu mai este disponibil în SPV: au trecut 60 de zile de la publicare. Factura se poate cere emitentului.');
+            }
+            return false;
         } catch (AnafRateLimitException $e) {
             $result->addError("ANAF rate limit hit for message $messageId (retry after {$e->retryAfter}s)");
             if ($spvMessage) {
@@ -1300,6 +1311,9 @@ class EFacturaSyncService
                     }
                 }
             }
+        } catch (AnafDownloadExpiredException) {
+            $spvMessage->setStatus('expired');
+            $spvMessage->setErrorMessage('Detaliile erorii nu mai sunt disponibile în SPV (au trecut 60 de zile).');
         } catch (\Throwable $e) {
             $this->logger->error('Failed to process error message from ANAF', [
                 'messageId' => $messageId,

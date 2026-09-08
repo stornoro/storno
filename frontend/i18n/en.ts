@@ -1905,6 +1905,7 @@ export default defineI18nLocale(async () => {
     statusProcessed: 'Processed',
     statusError: 'Error',
     statusReceived: 'Received',
+    statusExpired: 'Expired at ANAF (60 days)',
   },
 
   // ── Email Templates ──────────────────────────────────────────
