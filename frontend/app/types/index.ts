@@ -744,12 +744,22 @@ export interface DosarTimelineEvent {
   status: string
 }
 
+export interface DosarFile {
+  id: string
+  kind: 'contract' | 'act_aditional' | 'incetare' | 'declaratie' | 'altele'
+  name: string
+  size: number
+  mime: string
+  createdAt: string
+}
+
 export interface DosarDetail {
   dosar: Dosar
   counts: DosarCounts
   declarations: TaxDeclaration[]
   requests: SpvRequest[]
   documents: SpvDocument[]
+  files: DosarFile[]
   timeline: DosarTimelineEvent[]
 }
 

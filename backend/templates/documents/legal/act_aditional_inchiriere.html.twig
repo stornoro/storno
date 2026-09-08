@@ -1,0 +1,40 @@
+{% extends 'documents/legal/_layout.html.twig' %}
+{% block body %}
+<p>la Contractul de închiriere nr. <b>{{ contract.numar }}</b> din <b>{{ contract.data }}</b>, încheiat astăzi, <b>{{ act.data }}</b>, între:</p>
+<div class="parties">
+<p>1. <b>{{ locator.nume }}</b>, domiciliat în {{ locator.adresa }}{% if locator.cnp %}, CNP {{ locator.cnp }}{% endif %}, în calitate de <b>LOCATOR</b>,</p>
+<p>și</p>
+<p>2. <b>{{ locatar.nume }}</b>, domiciliat în {{ locatar.adresa }}{% if locatar.cnp %}, CNP {{ locatar.cnp }}{% endif %}, în calitate de <b>LOCATAR</b>,</p>
+</div>
+<p>având ca obiect imobilul situat în <b>{{ contract.adresa_imobil }}</b>{% if contract.numar_inregistrare_anaf %}, contract înregistrat la ANAF sub nr. {{ contract.numar_inregistrare_anaf }}{% if contract.data_inregistrare_anaf %} din {{ contract.data_inregistrare_anaf }}{% endif %}{% endif %}.</p>
+<p>Părțile au convenit, de comun acord, modificarea contractului după cum urmează:</p>
+
+{% set n = 1 %}
+{% if prelungire.data_sfarsit %}
+<h2>Art. {{ n }}. Durata contractului</h2>
+<p>Durata contractului se prelungește{% if prelungire.data_inceput %} începând cu data de <b>{{ prelungire.data_inceput }}</b>{% endif %} până la data de <b>{{ prelungire.data_sfarsit }}</b>. Celelalte condiții privind durata rămân neschimbate.</p>
+{% set n = n + 1 %}
+{% endif %}
+
+{% if chirie_noua.suma %}
+<h2>Art. {{ n }}. Chiria</h2>
+<p>Începând cu data de <b>{{ chirie_noua.de_la|default(act.data) }}</b>, chiria lunară este de <b>{{ chirie_noua.suma }} {{ chirie_noua.valuta|default('EUR') }}</b>{% if contract.chirie %} (anterior {{ contract.chirie }} {{ contract.valuta|default('EUR') }}){% endif %}, plătibilă în aceleași condiții ca în contract.</p>
+{% set n = n + 1 %}
+{% endif %}
+
+{% if alte_modificari %}
+<h2>Art. {{ n }}. Alte modificări</h2>
+<p>{{ alte_modificari }}</p>
+{% set n = n + 1 %}
+{% endif %}
+
+<h2>Art. {{ n }}. Dispoziții finale</h2>
+<p>Celelalte clauze ale contractului rămân neschimbate. Prezentul act adițional face parte integrantă din contract și se înregistrează la organul fiscal competent în termen de 30 de zile de la încheiere.</p>
+
+<p>Încheiat astăzi, {{ act.data }}, în 2 exemplare originale, câte unul pentru fiecare parte.</p>
+
+<table class="sig"><tr>
+<td><b>LOCATOR</b><br>{{ locator.nume }}<br><br><br>_______________________</td>
+<td><b>LOCATAR</b><br>{{ locatar.nume }}<br><br><br>_______________________</td>
+</tr></table>
+{% endblock %}

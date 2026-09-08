@@ -98,6 +98,20 @@ function openAction(item: DosarActionItem) {
   if (item.kind === 'document' || item.kind === 'request') return router.push('/spv')
 }
 
+async function exportCsv() {
+  try {
+    const blob = await store.downloadBlob('/v1/dosare/stats?format=csv')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'portofoliu-inchirieri.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.add({ title: e?.message ?? $t('common.error'), color: 'error' })
+  }
+}
+
 const groups = computed(() => TYPES.map(t => ({ type: t, items: store.byType[t] ?? [] })).filter(g => g.items.length > 0))
 const nextYear = computed(() => {
   const now = new Date()
@@ -158,7 +172,12 @@ const nextYear = computed(() => {
 
         <!-- Rental portfolio -->
         <UCard v-if="store.stats && store.stats.properties.length">
-          <template #header><span class="font-semibold text-sm">{{ $t('dosare.stats.title') }}</span></template>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-sm">{{ $t('dosare.stats.title') }}</span>
+              <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-download" @click="exportCsv">{{ $t('dosare.exportCsv') }}</UButton>
+            </div>
+          </template>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div><div class="text-xs text-muted">{{ $t('dosare.stats.activeContracts') }}</div><div class="text-2xl font-bold">{{ store.stats.activeContracts }}</div></div>
             <div><div class="text-xs text-muted">{{ $t('dosare.stats.expiring') }}</div><div class="text-2xl font-bold" :class="store.stats.expiringWithin60Days > 0 ? 'text-warning' : ''">{{ store.stats.expiringWithin60Days }}</div></div>
