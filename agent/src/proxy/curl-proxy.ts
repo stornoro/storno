@@ -188,6 +188,28 @@ function verifyPkcs11Login(toolchain: Pkcs11Toolchain, pin: string): Promise<{ o
   });
 }
 
+/** Drop the in-memory copy of a PIN (used when the user forgets a remembered PIN). */
+export function forgetCachedPin(certificateId: string): void {
+  pinCache.delete(certificateId);
+}
+
+/**
+ * Check a PIN once against the token before remembering it, so a mistyped PIN
+ * is never stored (and never burns retry attempts later). Certificates that
+ * live in the macOS Keychain or the Windows store cannot be checked without a
+ * real request; those PINs are accepted as given.
+ */
+export async function verifyPinForCertificate(certificateId: string, pin: string, config: AgentConfig): Promise<{ ok: boolean; message: string }> {
+  const toolchain = pkcs11ToolchainFor({ certificateId, pin, url: '', method: 'GET', headers: {}, body: '' }, config);
+  if (!toolchain) return { ok: true, message: 'not a PKCS#11 certificate; PIN not checked' };
+  const login = await verifyPkcs11Login(toolchain, pin);
+  if (!login.ok) return { ok: false, message: login.message };
+  if (certificateId !== PKCS11_AUTO_ID && login.certIds.length > 0 && !login.certIds.some((id) => id.toUpperCase() === certificateId.toUpperCase())) {
+    return { ok: false, message: 'certificate not found on the token that accepted this PIN' };
+  }
+  return { ok: true, message: login.message };
+}
+
 export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise<ProxyResponse> {
   // Cache PIN in-memory when provided so subsequent requests don't need it from frontend
   if (req.pin) {

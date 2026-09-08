@@ -72,24 +72,93 @@ export function useAnafAgent() {
     }
   }
 
+  /** Name of the OS secure store the agent keeps PINs in (null until an agent ≥ 1.7.8 answered). */
+  const agentSecretStore = useState<string | null>('agent-secret-store', () => null)
+  /** Certificates the agent has a remembered PIN for (filled by listCertificates / hasStoredPin). */
+  const pinStoredIds = useState<string[]>('agent-pin-stored-ids', () => [])
+  function markPinStored(certificateId: string, stored: boolean) {
+    const rest = pinStoredIds.value.filter(id => id !== certificateId)
+    pinStoredIds.value = stored ? [...rest, certificateId] : rest
+  }
+
   async function listCertificates(): Promise<AgentCertificate[]> {
     const res = await agentFetch('/certificates', {
       signal: AbortSignal.timeout(5000),
     })
     const data = await res.json()
-    return data.certificates ?? []
+    if (typeof data.secretStore === 'string') agentSecretStore.value = data.secretStore
+    const certs: AgentCertificate[] = data.certificates ?? []
+    for (const c of certs) markPinStored(c.id, !!c.pinStored)
+    return certs
   }
 
   /** Every ANAF call with the certificate needs the token PIN: never fall back to "no PIN". */
-  const PIN_REQUIRED_MESSAGE = 'PIN-ul certificatului lipseste. Introdu PIN-ul in Companie → ANAF → Agent si salveaza preferinta, apoi reia operatiunea.'
-  function requirePin(certificateId: string, pin?: string): string {
+  const PIN_REQUIRED_MESSAGE = 'PIN-ul certificatului lipseste. Introdu PIN-ul in Companie → ANAF → Agent si salveaza preferinta (este retinut pe acest calculator), apoi reia operatiunea.'
+  /**
+   * The PIN to send: the one given, the one kept for this browser session, or
+   * `undefined` when the agent remembers it in the OS secure store and fills it
+   * in itself. Throws when none of these exists.
+   */
+  async function requirePin(certificateId: string, pin?: string): Promise<string | undefined> {
     const value = pin || getSavedPin(certificateId)
-    if (!value) throw new Error(PIN_REQUIRED_MESSAGE)
-    return value
+    if (value) return value
+    if (await hasStoredPin(certificateId)) return undefined
+    throw new Error(PIN_REQUIRED_MESSAGE)
+  }
+
+  /** Does the agent keep this certificate's PIN? Older agents (no /pin route) and an offline agent answer no. */
+  async function hasStoredPin(certificateId: string): Promise<boolean> {
+    if (pinStoredIds.value.includes(certificateId)) return true
+    try {
+      const res = await agentFetch(`/pin/${encodeURIComponent(certificateId)}`, { signal: AbortSignal.timeout(3000) })
+      if (!res.ok) return false
+      const data = await res.json()
+      if (typeof data.store === 'string') agentSecretStore.value = data.store
+      if (data.stored) {
+        markPinStored(certificateId, true)
+        return true
+      }
+    } catch {
+      // agent offline: the caller's own request fails with a typed error
+    }
+    return false
+  }
+
+  /** Remember the PIN on this computer: the agent checks it on the token, then keeps it in the OS secure store. */
+  async function storePinOnAgent(certificateId: string, pin: string): Promise<{ stored: boolean, store?: string, unsupported?: boolean, error?: string }> {
+    const res = await agentFetch('/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Storno-Agent': '1' },
+      body: JSON.stringify({ certificateId, pin }),
+      signal: AbortSignal.timeout(90_000), // PKCS#11 middleware can take ~15 s to log in
+    })
+    if (res.status === 404) return { stored: false, unsupported: true }
+    let data: any = null
+    try { data = await res.json() } catch { data = null }
+    if (!res.ok || !data?.stored) return { stored: false, error: data?.error || `Agent HTTP ${res.status}` }
+    if (typeof data.store === 'string') agentSecretStore.value = data.store
+    markPinStored(certificateId, true)
+    return { stored: true, store: data.store }
+  }
+
+  /** Delete the remembered PIN from the agent's secure store (and from this browser session). */
+  async function forgetPinOnAgent(certificateId: string): Promise<boolean> {
+    clearPin(certificateId)
+    markPinStored(certificateId, false)
+    try {
+      const res = await agentFetch(`/pin/${encodeURIComponent(certificateId)}`, {
+        method: 'DELETE',
+        headers: { 'X-Storno-Agent': '1' },
+        signal: AbortSignal.timeout(10_000),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
   }
 
   async function proxyToAnaf(req: AnafProxyRequest): Promise<AnafProxyResponse> {
-    const payload = { ...req, pin: requirePin(req.certificateId, req.pin) }
+    const payload = { ...req, pin: await requirePin(req.certificateId, req.pin) }
 
     const res = await agentFetch('/proxy', {
       method: 'POST',
@@ -111,7 +180,8 @@ export function useAnafAgent() {
   async function batchProxyToAnaf(requests: AnafProxyRequest[]): Promise<AnafProxyResponse[]> {
     if (requests.length === 0) return []
 
-    const enriched = requests.map((req) => ({ ...req, pin: requirePin(req.certificateId, req.pin) }))
+    const pin = await requirePin(requests[0]!.certificateId, requests[0]!.pin)
+    const enriched = requests.map((req) => ({ ...req, pin: req.pin || pin }))
 
     const res = await agentFetch('/batch', {
       method: 'POST',
@@ -144,7 +214,7 @@ export function useAnafAgent() {
     fileName?: string
     sessionUrl?: string
   }): Promise<AnafProxyResponse> {
-    const payload = { ...req, pin: requirePin(req.certificateId, req.pin) }
+    const payload = { ...req, pin: await requirePin(req.certificateId, req.pin) }
 
     const res = await agentFetch('/sign-and-submit', {
       method: 'POST',
@@ -553,7 +623,7 @@ export function useAnafAgent() {
       const r = await agentFetch('/spv-web-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Storno-Agent': '1' },
-        body: JSON.stringify({ certificateId, pin: requirePin(certificateId), cif: prepared.form.cif, tipDocument: prepared.form.tipDocument, params: prepared.form.params }),
+        body: JSON.stringify({ certificateId, pin: await requirePin(certificateId), cif: prepared.form.cif, tipDocument: prepared.form.tipDocument, params: prepared.form.params }),
         signal: AbortSignal.timeout(180_000),
       })
       const data = await r.json()
@@ -579,7 +649,8 @@ export function useAnafAgent() {
     cif: string
     name?: string
     certificateId: string
-    pin: string
+    /** Optional when the agent already remembers the PIN of this certificate (agent ≥ 1.7.8). */
+    pin?: string
     apiKey: string
     apiTokenId?: string | null
     apiBase: string
@@ -644,6 +715,10 @@ export function useAnafAgent() {
     getSavedPin,
     savePin,
     clearPin,
+    agentSecretStore,
+    hasStoredPin,
+    storePinOnAgent,
+    forgetPinOnAgent,
     tryAutoStart,
     triggerAgentUpdate,
     certDisplayName,

@@ -92,12 +92,18 @@ Proxy an mTLS request to ANAF. Requires `X-Storno-Agent: 1` header.
 }
 ```
 
+## Remembered PIN (1.7.8+)
+
+`POST /pin {certificateId, pin}` checks the PIN on the token (PKCS#11: one `pkcs11-tool --login`; Keychain/Windows certificates are accepted as given) and stores it in the OS secure store under `pin:cert:<id>` (see `monitor/secrets.ts`). `GET /pin/:certificateId` → `{stored, store}`, `DELETE /pin/:certificateId` forgets it (and the in-memory copy). `GET /certificates` adds `pinStored` per certificate and `secretStore`.
+
+Every certificate route (`/proxy`, `/batch`, `/sign`, `/sign-and-submit`, `/batch-sign-and-submit`, `/spv-web-request`) and monitor enrollment fill a missing `pin` from the store (`pin-store.ts: withStoredPin`); a monitor enrollment's own `pin:<companyId>` counts for its certificate too. Without a PIN from either source the proxy still answers `PIN_REQUIRED` — nothing goes to ANAF unauthenticated.
+
 ## Automatic SPV monitoring (1.7.0+)
 
 The agent can poll the ANAF SPV inbox on a schedule while the web app is closed. Enrollment happens from the web app (Company → ANAF → *Monitorizare SPV automată*), which posts the company, certificate id, PIN and a scoped Storno API key (`declaration.view`, `declaration.submit`) to the agent.
 
 - Secrets go to the OS secure store: macOS Keychain (`security`), Windows DPAPI (PowerShell `ConvertFrom-SecureString`), Linux `secret-tool`, or `~/.storno-agent/secrets.json` (mode 0600) as a fallback. Only the schedule lives in `~/.storno-agent/monitor.json`.
-- Scheduler: first tick 90 s after start, then every 15 min it runs any entry whose interval (1–24 h) has elapsed. Failures back off (interval × (1 + failures), capped at 24 h). One company syncs at a time.
+- Scheduler: first tick 90 s after start, then every 15 min it runs any entry whose interval (1–24 h) has elapsed. A tick that arrives much later than scheduled means the machine slept: the run waits 60 s for the USB token to re-enumerate. "Token not ready" errors (`pkcs11 engine::object not found`, `CKR_TOKEN_NOT_PRESENT`, …) are retried after 20/40/90 s before counting as a failure (`isTransientTokenError`). Failures back off (interval × (1 + failures), capped at 24 h). One company syncs at a time.
 - One cycle = `POST /api/v1/spv/sync-prepare` → `listaMesaje` with the certificate → `POST /api/v1/spv/sync-agent-result` → `descarcare` for each pending PDF → `POST /api/v1/spv/documents/{id}/agent-document`.
 - Endpoints: `GET /monitor`, `POST /monitor`, `DELETE /monitor/:companyId`, `POST /monitor/:companyId/run` (all require `X-Storno-Agent: 1`; CORS restricted to app.storno.ro). `apiBase` must be a storno.ro host.
 

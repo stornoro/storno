@@ -3,7 +3,8 @@ import { createServer } from 'node:https';
 import { execSync } from 'node:child_process';
 import { loadConfig, type AgentConfig } from './config.js';
 import { discoverCertificates } from './certificates/discovery.js';
-import { curlProxy, curlBatch, type ProxyRequest } from './proxy/curl-proxy.js';
+import { curlProxy, curlBatch, verifyPinForCertificate, forgetCachedPin, type ProxyRequest } from './proxy/curl-proxy.js';
+import { storePin, forgetPin, hasStoredPin, pinStoreName, withStoredPin } from './pin-store.js';
 import { bestLocalBundle, startTlsRefresh, isExpired } from './tls.js';
 import { startCertificateCache, getCachedCertificates } from './certificates/cache.js';
 import { submitSpvWebRequest } from './spv-web.js';
@@ -88,6 +89,12 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
     handleSign(req, res, config);
   } else if (url === '/spv-web-request' && req.method === 'POST') {
     handleSpvWebRequest(req, res, config);
+  } else if (url === '/pin' && req.method === 'POST') {
+    handlePinStore(req, res, config);
+  } else if (pinMatch(url) && req.method === 'GET') {
+    handlePinStatus(res, pinMatch(url)!);
+  } else if (pinMatch(url) && req.method === 'DELETE') {
+    handlePinForget(res, pinMatch(url)!);
   } else if (url === '/monitor' && req.method === 'GET') {
     json(res, 200, { entries: monitorStatus() });
   } else if (url === '/monitor' && req.method === 'POST') {
@@ -119,7 +126,8 @@ async function handleSpvWebRequest(req: IncomingMessage, res: ServerResponse, co
     return;
   }
   try {
-    const result = await submitSpvWebRequest({ certificateId: payload.certificateId, pin: payload.pin, cif: payload.cif, tipDocument: payload.tipDocument, params: payload.params }, config);
+    const auth = withStoredPin({ certificateId: payload.certificateId, pin: payload.pin });
+    const result = await submitSpvWebRequest({ certificateId: auth.certificateId, pin: auth.pin, cif: payload.cif, tipDocument: payload.tipDocument, params: payload.params }, config);
     json(res, 200, { statusCode: result.statusCode, headers: { 'content-type': 'application/json' }, body: result.body });
   } catch (err) {
     const msg = (err as Error).message;
@@ -128,6 +136,63 @@ async function handleSpvWebRequest(req: IncomingMessage, res: ServerResponse, co
     } else {
       json(res, 502, { error: `SPV web request failed: ${msg}` });
     }
+  }
+}
+
+// ── Remembered PIN (per certificate, OS secret store) ────────────────
+
+/** /pin/{certificateId} */
+function pinMatch(url: string): string | null {
+  const m = url.match(/^\/pin\/([A-Za-z0-9._-]{4,160})$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function handlePinStatus(res: ServerResponse, certificateId: string): void {
+  json(res, 200, { certificateId, stored: hasStoredPin(certificateId), store: pinStoreName() });
+}
+
+/**
+ * Remember a certificate PIN on this computer. The PIN is checked on the token
+ * first (PKCS#11 tokens) so a typo is never stored; a rejected PIN answers 400
+ * with the same messages the proxy uses (the web app classifies them).
+ */
+async function handlePinStore(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
+  if (req.headers['x-storno-agent'] !== '1') {
+    json(res, 403, { error: 'Missing X-Storno-Agent header' });
+    return;
+  }
+  let payload: { certificateId?: string; pin?: string };
+  try {
+    payload = JSON.parse(await readBody(req));
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' });
+    return;
+  }
+  if (!payload.certificateId || !payload.pin) {
+    json(res, 400, { error: 'Missing required fields: certificateId, pin' });
+    return;
+  }
+  try {
+    const check = await verifyPinForCertificate(payload.certificateId, payload.pin, config);
+    if (!check.ok) {
+      json(res, 400, { error: check.message, pinError: true });
+      return;
+    }
+    storePin(payload.certificateId, payload.pin);
+    console.log(`[pin] remembered for certificate ${payload.certificateId.slice(0, 12)}… in ${pinStoreName()}`);
+    json(res, 200, { certificateId: payload.certificateId, stored: true, store: pinStoreName() });
+  } catch (err) {
+    json(res, 500, { error: `Could not store the PIN: ${(err as Error).message}` });
+  }
+}
+
+function handlePinForget(res: ServerResponse, certificateId: string): void {
+  try {
+    forgetPin(certificateId);
+    forgetCachedPin(certificateId);
+    json(res, 200, { certificateId, stored: hasStoredPin(certificateId), removed: true, store: pinStoreName() });
+  } catch (err) {
+    json(res, 500, { error: `Could not forget the PIN: ${(err as Error).message}` });
   }
 }
 
@@ -196,7 +261,8 @@ function handleCertificates(res: ServerResponse, _config: AgentConfig): void {
   // Served from the background cache: some PKCS#11 middleware needs ~12s to
   // initialise, while the frontend waits at most 5s for this endpoint.
   const { certificates, refreshedAt } = getCachedCertificates();
-  json(res, 200, { certificates, refreshedAt });
+  const withPin = certificates.map((c) => ({ ...c, pinStored: hasStoredPin(c.id) }));
+  json(res, 200, { certificates: withPin, refreshedAt, secretStore: pinStoreName() });
 }
 
 async function handleProxy(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
@@ -241,7 +307,7 @@ async function handleProxy(req: IncomingMessage, res: ServerResponse, config: Ag
   }
 
   try {
-    const result = await curlProxy(proxyReq, config);
+    const result = await curlProxy(withStoredPin(proxyReq), config);
     json(res, 200, result);
   } catch (err) {
     json(res, 502, {
@@ -316,7 +382,7 @@ async function handleBatch(req: IncomingMessage, res: ServerResponse, config: Ag
     && payload.requests.every((r) => r.certificateId === first.certificateId && (r.method || 'GET').toUpperCase() === 'GET' && !r.body);
   if (batchable) {
     try {
-      for (const item of await curlBatch(payload.requests, config)) {
+      for (const item of await curlBatch(payload.requests.map((r) => withStoredPin(r)), config)) {
         if (!item.result) continue;
         results.push({ index: item.index, statusCode: item.result.statusCode, headers: item.result.headers, body: item.result.body, bodyEncoding: item.result.bodyEncoding });
         done.add(item.index);
@@ -408,6 +474,8 @@ async function handleSign(req: IncomingMessage, res: ServerResponse, config: Age
     json(res, 400, { error: 'Missing required fields: certificateId and pdf or items[]' });
     return;
   }
+  const certificateId = payload.certificateId;
+  payload = { ...payload, ...withStoredPin({ certificateId, pin: payload.pin }) };
   const items = payload.items?.length ? payload.items : [{ name: 'document.pdf', pdf: payload.pdf as string }];
   // Visible signature box: "Semnat digital de <name>" + date + certificate issuer, in the page footer
   let options: SignPdfOptions = {};
@@ -427,7 +495,7 @@ async function handleSign(req: IncomingMessage, res: ServerResponse, config: Age
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     try {
-      const signed = await signPdf(Buffer.from(item.pdf, 'base64'), payload.certificateId, payload.pin, config, options);
+      const signed = await signPdf(Buffer.from(item.pdf, 'base64'), certificateId, payload.pin, config, options);
       results.push({ index: i, name: item.name || `document-${i + 1}.pdf`, pdf: signed.toString('base64'), bytes: signed.length });
       console.log(`[sign] ${item.name || i + 1}: signed (${signed.length} bytes)`);
     } catch (err) {
@@ -468,6 +536,7 @@ async function handleSignAndSubmit(req: IncomingMessage, res: ServerResponse, co
     json(res, 400, { error: 'Missing required fields: pdf, certificateId, uploadUrl' });
     return;
   }
+  payload = withStoredPin(payload);
 
   // Validate upload URL
   try {
@@ -602,6 +671,7 @@ async function handleBatchSignAndSubmit(req: IncomingMessage, res: ServerRespons
     json(res, 400, { error: 'Missing required field: certificateId' });
     return;
   }
+  payload = withStoredPin(payload);
 
   // Validate all upload URLs
   for (let i = 0; i < payload.requests.length; i++) {
