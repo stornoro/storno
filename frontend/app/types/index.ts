@@ -905,6 +905,8 @@ export interface SpvRequestType {
   since: number | null
   note: string | null
   wsSupported: boolean
+  /** who the SPV form offers the type to: a CNP (13 digits) sees a different list than a CUI */
+  audience?: 'cnp' | 'cui' | 'both'
 }
 
 // ── VAT Report ──────────────────────────────────────────────────────

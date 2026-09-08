@@ -4270,6 +4270,8 @@ export default defineI18nLocale(async () => {
       viewAnswer: 'Vezi raspunsul',
       since: 'ANAF are date incepand cu {year}.',
       agentHint: 'Solicitarea se trimite prin agentul local, cu certificatul digital al companiei.',
+      listForCnp: 'Lista tipurilor este cea pe care SPV o ofera unui CNP (persoana fizica): fara declaratii de firma, cu Declaratia unica, adeverinte de venit si C168.',
+      listForCui: 'Lista tipurilor este cea pe care SPV o ofera unui CUI (firma).',
       status: { pending: 'in pregatire', requested: 'trimisa la ANAF', answered: 'raspuns primit', error: 'eroare' },
       groups: { rapoarte: 'Rapoarte', documente: 'Duplicate si certificate', declaratii: 'Copii dupa declaratii', decizii: 'Decizii si notificari' },
       params: { an: 'An', luna: 'Luna', lunai: 'Luna de la', lunas: 'Luna pana la', motiv: 'Motiv (exact ca la ANAF)', numar_inregistrare: 'Numar de inregistrare', cui_pui: 'CUI punct de lucru' },
