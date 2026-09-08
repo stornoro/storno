@@ -429,7 +429,7 @@ class TaxDeclarationController extends AbstractController
     }
 
     #[Route('/declarations/{uuid}/pdf', methods: ['GET'])]
-    public function downloadPdf(string $uuid): Response
+    public function downloadPdf(string $uuid, Request $request): Response
     {
         if (!$this->organizationContext->hasPermission(Permission::DECLARATION_VIEW)) {
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
@@ -447,16 +447,47 @@ class TaxDeclarationController extends AbstractController
                 'code' => 'PLAN_LIMIT',
             ], Response::HTTP_PAYMENT_REQUIRED);
         }
+        // The PDF ANAF accepts (DUKIntegrator's rendering with the XML embedded, plus the attachment
+        // zip where required) is produced on demand, so a person can download it and upload it in
+        // SPV by hand — no agent, no certificate on this computer needed. Refreshed while still a draft.
+        $refresh = $request->query->getBoolean('refresh') || !$declaration->getPdfPath() || !$this->defaultStorage->fileExists($declaration->getPdfPath());
+        if ($refresh && in_array($declaration->getStatus(), [DeclarationStatus::DRAFT, DeclarationStatus::VALIDATED, DeclarationStatus::REJECTED, DeclarationStatus::ERROR], true)) {
+            try {
+                $xml = $this->manager->generateXml($declaration);
+                $attachments = [];
+                foreach (is_array($declaration->getData()['attachments'] ?? null) ? $declaration->getData()['attachments'] : [] as $i => $a) {
+                    $bin = is_array($a) && is_string($a['contentBase64'] ?? null) ? base64_decode($a['contentBase64'], true) : false;
+                    if ($bin !== false && $bin !== '') {
+                        $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
+                    }
+                }
+                $pdfBinary = $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments);
+                $company = $declaration->getCompany();
+                $xmlPath = sprintf('declarations/%s/%s/%s.xml', $company->getId(), $declaration->getType()->value, $declaration->getId());
+                $pdfPath = sprintf('declarations/%s/%s/%s.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
+                $this->defaultStorage->write($xmlPath, $xml);
+                $this->defaultStorage->write($pdfPath, $pdfBinary);
+                $declaration->setXmlPath($xmlPath)->setPdfPath($pdfPath);
+                $this->entityManager->flush();
+            } catch (DukUnavailableException $e) {
+                return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATOR_UNAVAILABLE'], Response::HTTP_SERVICE_UNAVAILABLE);
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            } catch (\Throwable $e) {
+                return $this->json(['error' => 'PDF-ul nu a putut fi generat: ' . $e->getMessage(), 'code' => 'PDF_FAILED'], Response::HTTP_BAD_GATEWAY);
+            }
+        }
         if (!$declaration->getPdfPath() || !$this->defaultStorage->fileExists($declaration->getPdfPath())) {
             return $this->json(['error' => 'PDF not available. Validate or prepare the declaration first.'], Response::HTTP_NOT_FOUND);
         }
 
         $content = $this->defaultStorage->read($declaration->getPdfPath());
         $filename = sprintf('%s_%d_%02d.pdf', $declaration->getType()->value, $declaration->getYear(), $declaration->getMonth());
+        $disposition = $request->query->getBoolean('inline') ? 'inline' : 'attachment';
 
         return new Response($content, Response::HTTP_OK, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+            'Content-Disposition' => sprintf('%s; filename="%s"', $disposition, $filename),
         ]);
     }
 

@@ -26,6 +26,9 @@
             <UButton v-if="isDraft" icon="i-lucide-refresh-cw" variant="outline" :loading="actionLoading" @click="recalculate">
               {{ $t('declarations.recalculate') }}
             </UButton>
+            <UButton icon="i-lucide-file-text" variant="outline" color="neutral" :loading="pdfBusy" :title="$t('declarations.manualFilingHint')" @click="viewPdf">
+              {{ $t('declarations.pdfForSpv') }}
+            </UButton>
             <UButton v-if="isDraft" icon="i-lucide-check-circle" variant="outline" color="primary" :loading="actionLoading" @click="validate">
               {{ $t('declarations.validate') }}
             </UButton>
@@ -663,9 +666,8 @@ const purchasesData = computed(() =>
 const documentMenuItems = computed(() => [
   [
     { label: $t('declarations.downloadXml'), icon: 'i-lucide-download', onSelect: () => downloadXml() },
-    ...(['validated', 'submitted', 'processing', 'accepted', 'rejected'].includes(declaration.value?.status ?? '')
-      ? [{ label: $t('declarations.downloadPdf'), icon: 'i-lucide-file-text', onSelect: () => downloadPdf() }]
-      : []),
+    { label: $t('declarations.downloadPdf'), icon: 'i-lucide-file-text', onSelect: () => downloadPdf() },
+    { label: $t('declarations.viewPdf'), icon: 'i-lucide-eye', onSelect: () => viewPdf() },
     ...(declaration.value?.status === 'accepted'
       ? [{ label: $t('declarations.downloadRecipisa'), icon: 'i-lucide-file-check-2', onSelect: () => downloadRecipisa() }]
       : []),
@@ -758,8 +760,26 @@ async function downloadXml() {
   }
 }
 
+/** The PDF ANAF accepts, generated on demand for drafts: what a person uploads by hand in SPV. */
+const pdfBusy = ref(false)
+async function viewPdf() {
+  const { apiFetch } = useApi()
+  pdfBusy.value = true
+  try {
+    const blob = await apiFetch<Blob>(`/v1/declarations/${uuid}/pdf`, { responseType: 'blob', query: { inline: 1 } })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? e?.message ?? $t('common.error'), color: 'error' })
+  } finally {
+    pdfBusy.value = false
+  }
+}
+
 async function downloadPdf() {
   const { apiFetch } = useApi()
+  pdfBusy.value = true
   try {
     const blob = await apiFetch<Blob>(`/v1/declarations/${uuid}/pdf`, { responseType: 'blob' })
     const url = URL.createObjectURL(blob)
@@ -769,7 +789,9 @@ async function downloadPdf() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {
-    toast.add({ title: e?.message ?? 'Download failed.', color: 'error' })
+    toast.add({ title: e?.data?.error ?? e?.message ?? $t('common.error'), color: 'error' })
+  } finally {
+    pdfBusy.value = false
   }
 }
 

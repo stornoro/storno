@@ -14,6 +14,14 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  */
 class DosarTest extends ApiTestCase
 {
+    /** API tests share one database without rollback: start from an empty dosar list. */
+    private function deleteAllDosare(array $h): void
+    {
+        foreach ($this->apiGet('/api/v1/dosare', $h)['data'] ?? [] as $d) {
+            $this->apiDelete('/api/v1/dosare/' . $d['id'], $h);
+        }
+    }
+
     public function testRentalDosarDeclarationsAndActions(): void
     {
         $this->login();
@@ -66,6 +74,7 @@ class DosarTest extends ApiTestCase
         $this->login();
         $companyId = $this->getFirstCompanyId();
         $h = ['X-Company' => $companyId];
+        $this->deleteAllDosare($h);
 
         $this->apiPost('/api/v1/dosare', ['type' => 'rental_contract', 'subject' => ['numar' => '2', 'data' => '01.12.2023', 'adresa' => 'Apartament, Bucuresti', 'chirie' => 3000, 'moneda' => 'RON', 'deLa' => '01.12.2023']], $h);
         $this->apiPost('/api/v1/dosare', ['type' => 'rental_contract', 'subject' => ['numar' => '9', 'data' => '15.06.2025', 'adresa' => 'Garsoniera, Cluj', 'chirie' => 400, 'moneda' => 'EUR', 'deLa' => '01.07.2025']], $h);
@@ -103,6 +112,12 @@ class DosarTest extends ApiTestCase
         $decl = $this->apiPost('/api/v1/dosare/' . $annual['dosar']['id'] . '/d212', [], $h);
         $this->assertResponseStatusCodeSame(201);
         $this->assertSame('d212', $decl['type']);
+
+        // the test company is a firm (CUI), so the D212 built from it fails Storno's rules before any PDF:
+        // the on-demand PDF answers 422 with the reasons instead of a broken file
+        $this->client->request('GET', '/api/v1/declarations/' . $decl['id'] . '/pdf?inline=1', [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertStringContainsString('VALIDATION_FAILED', (string) $this->client->getResponse()->getContent());
         $this->assertSame(2026, $decl['year']);
         $this->assertSame($annual['dosar']['id'], $decl['dosarId']);
         $this->assertGreaterThanOrEqual(2, count($decl['data']['input']['chirii']));
@@ -179,6 +194,15 @@ class DosarTest extends ApiTestCase
         $this->assertStringContainsString('<c168 xmlns="mfp:anaf:dgti:c168:declaratie:v3"', $created['xml']);
         $this->assertCount(1, $created['declaration']['data']['attachments']);
 
+        // the ANAF PDF (with the attachment zip) is produced on demand for the draft, for manual filing in SPV
+        $this->client->request('GET', '/api/v1/declarations/' . $created['declaration']['id'] . '/pdf?inline=1', [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);
+        $status = $this->client->getResponse()->getStatusCode();
+        $this->assertContains($status, [200, 503], (string) $this->client->getResponse()->getContent());
+        if ($status === 200) {
+            $this->assertStringStartsWith('%PDF', (string) $this->client->getResponse()->getContent());
+            $this->assertStringContainsString('inline', (string) $this->client->getResponse()->headers->get('Content-Disposition'));
+        }
+
         // termination: prefill carries the termination block and the addendum / notice documents prefill too
         $this->apiPatch('/api/v1/dosare/' . $dosar['id'], ['subject' => ['dataIncetare' => '30.09.2026']], $h);
         $inc = $this->apiGet('/api/v1/dosare/' . $dosar['id'] . '/c168-prefill?actiune=incetare', $h);
@@ -207,6 +231,7 @@ class DosarTest extends ApiTestCase
         $this->login();
         $companyId = $this->getFirstCompanyId();
         $h = ['X-Company' => $companyId];
+        $this->deleteAllDosare($h);
         $pages = json_decode((string) file_get_contents(__DIR__ . '/../Fixtures/c168-registry-items.json'), true);
         $parsed = (new \App\Service\Dosar\C168RegistryParser())->parseItems($pages);
 
