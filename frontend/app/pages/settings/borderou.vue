@@ -11,7 +11,12 @@ const companyStore = useCompanyStore()
 const importModalOpen = ref(false)
 const importModal = ref<{ openWith: (files: File[]) => Promise<void> } | null>(null)
 const dropEnabled = computed(() => !importModalOpen.value)
-const { dragging } = usePageFileDrop(files => importModal.value?.openWith(files), { accept: ['.csv', '.xlsx', '.xls'], enabled: dropEnabled })
+const toast = useToast()
+const { dragging } = usePageFileDrop(files => importModal.value?.openWith(files), {
+  accept: ['.csv', '.xlsx', '.xls', '.pdf'],
+  enabled: dropEnabled,
+  onRejected: files => toast.add({ title: $t('borderou.dropRejected', { names: files.map(f => f.name).join(', ') }), color: 'warning' }),
+})
 const editModalOpen = ref(false)
 const editTransaction = ref<any>(null)
 const selectedRows = ref<string[]>([])
@@ -70,7 +75,7 @@ onMounted(() => {
       <div class="rounded-xl bg-(--ui-bg) px-8 py-6 shadow-lg text-center">
         <UIcon name="i-lucide-file-down" class="size-10 text-primary mx-auto mb-2" />
         <p class="text-lg font-semibold">{{ $t('borderou.dropOverlay') }}</p>
-        <p class="text-sm text-(--ui-text-muted)">.csv, .xlsx, .xls</p>
+        <p class="text-sm text-(--ui-text-muted)">.csv, .xlsx, .xls, .pdf</p>
       </div>
     </div>
     <!-- Header -->

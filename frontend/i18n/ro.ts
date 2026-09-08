@@ -3648,6 +3648,7 @@ export default defineI18nLocale(async () => {
       fileDragHint: 'Click sau trage fisierul aici (.csv, .xlsx, .xls, .pdf)',
       pdfHint: 'PDF: extrasul original descarcat din internet banking (nu scanat). Banca este recunoscuta automat: BT, BRD, ING, CEC, Raiffeisen, UniCredit, BCR, Revolut, Garanti, Libra, Patria, Intesa, Citi, Vista, Wise, myPOS, Viva, Nexent, Trezorerie.',
       dropOverlay: 'Lasa fisierele aici pentru import',
+      dropRejected: 'Fisiere ignorate (doar .csv, .xlsx, .xls, .pdf): {names}',
       dropPageHint: 'Sau trage extrasele direct pe pagina: importul porneste cu fisierul atasat si contul selectat.',
       queueRemaining: 'Inca {count} fisiere in asteptare, se importa pe rand cu aceleasi setari',
       importAction: 'Importa',

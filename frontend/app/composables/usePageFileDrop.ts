@@ -3,7 +3,7 @@
  * an overlay, and dropping hands the files to the caller (bank statements, borderouri, marketplace
  * exports). Nested drag events are counted so moving over child elements does not flicker.
  */
-export function usePageFileDrop(onFiles: (files: File[]) => void, options: { accept?: string[], enabled?: Ref<boolean> } = {}) {
+export function usePageFileDrop(onFiles: (files: File[]) => void, options: { accept?: string[], enabled?: Ref<boolean>, onRejected?: (files: File[]) => void } = {}) {
   const dragging = ref(false)
   const accept = (options.accept ?? []).map(e => e.toLowerCase())
   let depth = 0
@@ -40,7 +40,10 @@ export function usePageFileDrop(onFiles: (files: File[]) => void, options: { acc
     e.preventDefault()
     depth = 0
     dragging.value = false
-    const files = Array.from(e.dataTransfer?.files ?? []).filter(accepted)
+    const all = Array.from(e.dataTransfer?.files ?? [])
+    const files = all.filter(accepted)
+    const rejected = all.filter(f => !accepted(f))
+    if (rejected.length) options.onRejected?.(rejected)
     if (files.length) onFiles(files)
   }
 

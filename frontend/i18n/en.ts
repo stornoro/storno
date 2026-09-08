@@ -3649,6 +3649,7 @@ export default defineI18nLocale(async () => {
     fileDragHint: 'Click or drag the file here (.csv, .xlsx, .xls, .pdf)',
     pdfHint: 'PDF: the original statement downloaded from internet banking (not a scan). The bank is detected automatically: BT, BRD, ING, CEC, Raiffeisen, UniCredit, BCR, Revolut, Garanti, Libra, Patria, Intesa, Citi, Vista, Wise, myPOS, Viva, Nexent, Treasury.',
     dropOverlay: 'Drop the files here to import them',
+    dropRejected: 'Files ignored (only .csv, .xlsx, .xls, .pdf): {names}',
     dropPageHint: 'Or drag the statements onto the page: the import opens with the file attached and the account selected.',
     queueRemaining: '{count} more files waiting, imported one by one with the same settings',
     importAction: 'Import',
