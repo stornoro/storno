@@ -7,6 +7,7 @@ use App\Entity\UserDevice;
 use App\Repository\UserDeviceRepository;
 use App\Security\OrganizationContext;
 use App\Service\LicenseManager;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -81,10 +82,35 @@ class DeviceController extends AbstractController
         $device->setToken($token);
         $device->setPlatform($platform);
 
-        $this->entityManager->persist($device);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($device);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException) {
+            // Lost a race with a concurrent registration of the same token: on a
+            // fresh install the app fires the initial registration and the FCM
+            // token-refresh registration at the same moment, both miss the lookup
+            // above and the second INSERT trips `unique_device_token`. The
+            // EntityManager is closed after a failed flush, so re-read the winner
+            // straight from the connection and answer as if we had found it.
+            $ownerId = $this->entityManager->getConnection()->fetchOne(
+                'SELECT user_id FROM user_device WHERE token = :token',
+                ['token' => $token],
+            );
+
+            if ($ownerId !== false && $this->sameUser($ownerId, $user)) {
+                return $this->json(['status' => 'updated']);
+            }
+
+            return $this->json(['error' => 'Device token is already registered.'], Response::HTTP_CONFLICT);
+        }
 
         return $this->json(['status' => 'registered'], Response::HTTP_CREATED);
+    }
+
+    /** Uuid columns are stored as CHAR(36) RFC 4122 strings (see App\Doctrine\Type\UuidType). */
+    private function sameUser(mixed $rawUserId, User $user): bool
+    {
+        return (string) $rawUserId === $user->getId()->toRfc4122();
     }
 
     #[Route('', methods: ['DELETE'])]
