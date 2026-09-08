@@ -127,22 +127,33 @@
             </label>
           </div>
 
-          <!-- PIN input -->
+          <!-- PIN input: remembered permanently by the agent (OS secure store), or for this browser session on older agents -->
           <div v-if="agentSelectedCertId" class="space-y-2">
+            <div v-if="selectedCertPinStored" class="flex flex-wrap items-center gap-2">
+              <UBadge color="success" variant="subtle" icon="i-lucide-key-round">
+                {{ $t('anaf.agentPinStored', { store: agentSecretStore || '' }) }}
+              </UBadge>
+              <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-trash-2" :loading="pinForgetting" @click="forgetStoredPin">
+                {{ $t('anaf.agentPinForget') }}
+              </UButton>
+            </div>
             <UInput
               v-model="agentPin"
               type="password"
-              :placeholder="$t('anaf.agentPinPlaceholder')"
+              :placeholder="selectedCertPinStored ? $t('anaf.agentPinPlaceholderStored') : $t('anaf.agentPinPlaceholder')"
               class="max-w-56"
               autocomplete="off"
             />
-            <p class="text-xs text-(--ui-text-muted)">{{ $t('anaf.agentPinHint') }}</p>
+            <p class="text-xs text-(--ui-text-muted)">
+              {{ agentSecretStore ? $t('anaf.agentPinHint', { store: agentSecretStore }) : $t('anaf.agentPinHintSession') }}
+            </p>
           </div>
 
           <UButton
             v-if="agentCerts.length > 0"
             icon="i-lucide-save"
             :disabled="!agentSelectedCertId"
+            :loading="pinSaving"
             @click="saveAgentCertPreference"
           >
             {{ $t('anaf.agentSaveCert') }}
@@ -223,13 +234,13 @@
               <UButton
                 icon="i-lucide-radar"
                 :loading="monitorSaving"
-                :disabled="!agentSelectedCertId || !agentPin"
+                :disabled="!agentSelectedCertId || (!agentPin && !selectedCertPinStored)"
                 @click="enableMonitor()"
               >
                 {{ $t('anaf.monitorEnable') }}
               </UButton>
             </div>
-            <p v-if="!agentSelectedCertId || !agentPin" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorNeedsCertAndPin') }}</p>
+            <p v-if="!agentSelectedCertId || (!agentPin && !selectedCertPinStored)" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorNeedsCertAndPin') }}</p>
             <p class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorSecurityNote') }}</p>
           </template>
         </div>
@@ -510,7 +521,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, clearPin, agentSecretStore, storePinOnAgent, forgetPinOnAgent, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor } = useAnafAgent()
 const { describeAgentError } = useAgentError()
 const agentUpdating = ref(false)
 
@@ -538,6 +549,11 @@ const loadingAgentCerts = ref(false)
 const agentSelectedCertId = ref<string | null>(null)
 const agentStarting = ref(false)
 const agentPin = ref('')
+const pinSaving = ref(false)
+const pinForgetting = ref(false)
+const selectedCert = computed(() => agentCerts.value.find(c => c.id === agentSelectedCertId.value) ?? null)
+/** The agent keeps the PIN of the selected certificate in the OS secure store: no PIN needed in the browser. */
+const selectedCertPinStored = computed(() => !!selectedCert.value?.pinStored)
 
 const agentDownloadUrl = 'https://get.storno.ro/agent'
 
@@ -583,7 +599,7 @@ async function loadMonitorStatus() {
 
 async function enableMonitor(verificationToken?: string) {
   const company = monitorCompany.value
-  if (!company || !agentSelectedCertId.value || !agentPin.value) return
+  if (!company || !agentSelectedCertId.value || (!agentPin.value && !selectedCertPinStored.value)) return
   monitorSaving.value = true
   try {
     const key = await apiKeyStore.createApiKey({
@@ -609,7 +625,8 @@ async function enableMonitor(verificationToken?: string) {
         cif: String(company.cif),
         name: company.name,
         certificateId: agentSelectedCertId.value,
-        pin: agentPin.value,
+        // Empty when the agent already remembers the PIN of this certificate (it copies it for the monitor)
+        pin: agentPin.value || undefined,
         apiKey: key.token,
         apiTokenId: key.id,
         apiBase: useApiBase().replace(/\/api$/, ''),
@@ -681,14 +698,51 @@ async function loadAgentCerts() {
   }
 }
 
-function saveAgentCertPreference() {
-  if (!agentSelectedCertId.value) return
-  setPreferredCertId(uuid.value, agentSelectedCertId.value)
-  // Persist PIN in sessionStorage (cleared on browser close)
-  if (agentPin.value) {
-    savePin(agentSelectedCertId.value, agentPin.value)
+async function saveAgentCertPreference() {
+  const certId = agentSelectedCertId.value
+  if (!certId) return
+  setPreferredCertId(uuid.value, certId)
+  if (!agentPin.value) {
+    toast.add({ title: $t('anaf.agentCertSaved'), color: 'success' })
+    return
   }
-  toast.add({ title: $t('anaf.agentCertSaved'), color: 'success' })
+  // The agent checks the PIN on the token and keeps it in the OS secure store
+  // (Keychain / DPAPI / libsecret). Older agents have no /pin route: keep the
+  // sessionStorage behaviour for them (cleared when the browser closes).
+  pinSaving.value = true
+  try {
+    const r = await storePinOnAgent(certId, agentPin.value)
+    if (r.stored) {
+      clearPin(certId)
+      agentPin.value = ''
+      const cert = agentCerts.value.find(c => c.id === certId)
+      if (cert) cert.pinStored = true
+      toast.add({ title: $t('anaf.agentPinSaved', { store: r.store || agentSecretStore.value || '' }), color: 'success' })
+    } else if (r.unsupported) {
+      savePin(certId, agentPin.value)
+      toast.add({ title: $t('anaf.agentCertSaved'), description: $t('anaf.agentPinHintSession'), color: 'success' })
+    } else {
+      toast.add({ title: $t('anaf.agentPinSaveFailed'), description: describeAgentError(new Error(r.error || '')).description || r.error, color: 'error' })
+    }
+  } catch (err: any) {
+    toast.add({ title: $t('anaf.agentPinSaveFailed'), description: describeAgentError(err).description, color: 'error' })
+  } finally {
+    pinSaving.value = false
+  }
+}
+
+async function forgetStoredPin() {
+  const certId = agentSelectedCertId.value
+  if (!certId) return
+  pinForgetting.value = true
+  try {
+    await forgetPinOnAgent(certId)
+    const cert = agentCerts.value.find(c => c.id === certId)
+    if (cert) cert.pinStored = false
+    toast.add({ title: $t('anaf.agentPinForgotten'), color: 'success' })
+  } finally {
+    pinForgetting.value = false
+  }
 }
 
 async function onRecheckAgent() {

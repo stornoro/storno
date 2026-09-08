@@ -981,6 +981,8 @@ export interface AgentCertificate {
   issuer: string
   notAfter: string | null
   source: 'keychain' | 'windows-store' | 'pkcs11'
+  /** The agent keeps this certificate's PIN in the OS secure store (agent ≥ 1.7.8). */
+  pinStored?: boolean
 }
 
 export interface AnafProxyRequest {

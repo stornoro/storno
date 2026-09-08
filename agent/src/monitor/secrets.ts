@@ -19,6 +19,15 @@ import { getConfigDir } from '../config.js';
 
 const SERVICE = 'storno-agent';
 
+/**
+ * Secret-store account under which the PIN of one certificate is remembered
+ * permanently ("Retine PIN-ul pe acest calculator" in the web app). Monitor
+ * enrollments keep their own copy under `pin:<companyId>`.
+ */
+export function certPinAccount(certificateId: string): string {
+  return `pin:cert:${certificateId.trim().toUpperCase()}`;
+}
+
 function fallbackFile(): string {
   return join(getConfigDir(), 'secrets.json');
 }

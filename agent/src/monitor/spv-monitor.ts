@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import type { AgentConfig } from '../config.js';
 import { getConfigDir } from '../config.js';
 import { curlProxy, curlBatch, type ProxyResponse } from '../proxy/curl-proxy.js';
-import { getSecret, setSecret, deleteSecret, secretStoreName } from './secrets.js';
+import { getSecret, setSecret, deleteSecret, secretStoreName, certPinAccount } from './secrets.js';
 
 export interface MonitorEntry {
   companyId: string;
@@ -56,6 +56,9 @@ interface MonitorFile {
 const FILE = () => join(getConfigDir(), 'monitor.json');
 const TICK_MS = 15 * 60 * 1000;          // scheduler wakes every 15 min
 const BOOT_DELAY_MS = 90 * 1000;         // let the token/middleware settle after boot
+const WAKE_SETTLE_MS = 60 * 1000;        // same after the computer wakes from sleep (USB re-enumeration)
+/** Retries when the token answers but does not expose the certificate yet (typical right after wake). */
+const TOKEN_RETRY_DELAYS_MS = [20_000, 40_000, 90_000];
 const MIN_INTERVAL_HOURS = 1;
 const MAX_INTERVAL_HOURS = 24 * 7;
 const DAYS_BACK = 60;
@@ -118,7 +121,12 @@ export function enroll(input: EnrollInput): MonitorEntry {
   if (input.apiKey) setSecret(`apikey:${input.companyId}`, input.apiKey);
   else if (!existing && !getSecret(`apikey:${input.companyId}`)) throw new Error('apiKey is required on first enrollment');
   if (input.pin) setSecret(`pin:${input.companyId}`, input.pin);
-  else if (!existing && !getSecret(`pin:${input.companyId}`)) throw new Error('pin is required on first enrollment');
+  else if (!existing && !getSecret(`pin:${input.companyId}`)) {
+    // The PIN remembered for this certificate ("Retine PIN-ul pe acest calculator") is enough.
+    const remembered = getSecret(certPinAccount(input.certificateId));
+    if (!remembered) throw new Error('pin is required on first enrollment');
+    setSecret(`pin:${input.companyId}`, remembered);
+  }
 
   const interval = Math.min(MAX_INTERVAL_HOURS, Math.max(MIN_INTERVAL_HOURS, Number(input.intervalHours ?? existing?.intervalHours ?? 6)));
   const entry: MonitorEntry = {
@@ -221,6 +229,41 @@ async function api<T>(entry: MonitorEntry, apiKey: string, method: string, path:
 
 // ── One sync run ───────────────────────────────────────────────────
 
+/**
+ * Errors that mean "the token is plugged in but not usable right now": the
+ * PKCS#11 middleware has not re-enumerated the USB device after sleep, or
+ * curl's engine could not find the certificate object. They pass after a few
+ * seconds, so a run is retried before it counts as a failure.
+ */
+export function isTransientTokenError(message: string): boolean {
+  return /object not found|cannot load client cert|failed to load private key|CKR_TOKEN_NOT_PRESENT|CKR_DEVICE_REMOVED|CKR_DEVICE_ERROR|CKR_SLOT_ID_INVALID|CKR_CRYPTOKI_NOT_INITIALIZED|CKR_FUNCTION_FAILED|CKR_GENERAL_ERROR|no slot with a token|token not present|Token-ul nu a raspuns/i.test(message);
+}
+
+/** Romanian explanation shown on the ANAF page when every retry failed the same way. */
+export function describeTokenError(message: string): string {
+  return `Token-ul nu a raspuns: middleware-ul nu a gasit certificatul pe token (se intampla imediat dupa sleep sau dupa reconectarea token-ului). Verifica sa fie conectat; agentul reincearca la urmatoarea rulare. Detalii: ${message}`;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function withTokenRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const message = (err as Error).message;
+      if (!isTransientTokenError(message) || attempt >= TOKEN_RETRY_DELAYS_MS.length) throw err;
+      const delay = TOKEN_RETRY_DELAYS_MS[attempt];
+      console.warn(`[spv-monitor] ${label}: token not ready (${redactPin(message).split('\n')[0]}); retry ${attempt + 1}/${TOKEN_RETRY_DELAYS_MS.length} in ${delay / 1000}s`);
+      await sleep(delay);
+    }
+  }
+}
+
+function redactPin(message: string): string {
+  return message.replace(/pin-value=[^;'"\s]*/g, 'pin-value=<redacted>').replace(/--pin\s+\S+/g, '--pin <redacted>');
+}
+
 export async function runSync(companyId: string, config: AgentConfig): Promise<SpvSyncResult> {
   const data = loadMonitor();
   const entry = data.entries.find((e) => e.companyId === companyId);
@@ -239,14 +282,14 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
   try {
     const prepared = await api<{ anafUrl: string }>(entry, apiKey, 'POST', '/spv/sync-prepare', { days: DAYS_BACK });
 
-    const listing = await curlProxy({
+    const listing = await withTokenRetry(entry.cif, () => curlProxy({
       url: prepared.anafUrl,
       method: 'GET',
       headers: {},
       body: '',
       certificateId: entry.certificateId,
       pin,
-    }, config);
+    }, config));
 
     const result = await api<{
       stats: { created: number; skipped: number; received: number };
@@ -290,7 +333,8 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
     console.log(`[spv-monitor] ${entry.cif}: ${summary.received} messages, ${summary.created} new, ${downloaded} PDFs archived, ${failed} failed`);
     return summary;
   } catch (err) {
-    const message = (err as Error).message.replace(/pin-value=[^;'"\s]*/g, 'pin-value=<redacted>');
+    const raw = redactPin((err as Error).message);
+    const message = isTransientTokenError(raw) && !raw.startsWith('Token-ul nu a raspuns') ? describeTokenError(raw) : raw;
     persistRun(companyId, { lastRunAt: startedAt, lastError: message, consecutiveFailures: (entry.consecutiveFailures ?? 0) + 1 });
     console.error(`[spv-monitor] ${entry.cif}: sync failed: ${message}`);
     throw new Error(message);
@@ -308,17 +352,35 @@ function persistRun(companyId: string, patch: Partial<MonitorEntry>): void {
 // ── Scheduler ──────────────────────────────────────────────────────
 
 let timer: NodeJS.Timeout | null = null;
+let lastTickAt = 0;
+let ticking = false;
 
 export function startSpvMonitor(config: AgentConfig): void {
   if (timer) return;
   const tick = async () => {
-    for (const entry of loadMonitor().entries) {
-      if (!entry.enabled || !isDue(entry)) continue;
-      try {
-        await runSync(entry.companyId, config);
-      } catch {
-        // already logged and persisted
+    if (ticking) return;
+    ticking = true;
+    try {
+      // A tick much later than scheduled means the computer slept: the USB
+      // token is re-enumerated on wake and the middleware needs a moment.
+      const now = Date.now();
+      const slept = lastTickAt > 0 && now - lastTickAt > TICK_MS * 2;
+      lastTickAt = now;
+      const due = loadMonitor().entries.filter((e) => e.enabled && isDue(e));
+      if (due.length === 0) return;
+      if (slept) {
+        console.log(`[spv-monitor] resumed after sleep; waiting ${WAKE_SETTLE_MS / 1000}s for the token`);
+        await sleep(WAKE_SETTLE_MS);
       }
+      for (const entry of due) {
+        try {
+          await runSync(entry.companyId, config);
+        } catch {
+          // already logged and persisted
+        }
+      }
+    } finally {
+      ticking = false;
     }
   };
   setTimeout(() => { void tick(); }, BOOT_DELAY_MS).unref();
