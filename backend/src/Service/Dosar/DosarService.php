@@ -178,7 +178,10 @@ final class DosarService
             return;
         }
         $deadline = $date->modify('+' . self::C168_DAYS . ' days');
-        if ($deadline >= new \DateTimeImmutable('today')) {
+        // A deadline that passed recently is still shown (as overdue, in the "to do" feed): the
+        // contract was added late and the C168 may not have been filed. Older contracts are
+        // assumed registered long ago; the registry import is the way to bring their state.
+        if ($deadline >= (new \DateTimeImmutable('today'))->modify('-365 days')) {
             $label = isset($s['dataIncetare']) ? 'C168 încetare: 30 de zile de la încetare' : (isset($s['dataModificare']) ? 'C168 modificare: 30 de zile de la actul adițional' : 'C168 înregistrare: 30 de zile de la semnarea contractului');
             $dosar->setDeadlineAt($deadline)->setDeadlineLabel($label);
         }
