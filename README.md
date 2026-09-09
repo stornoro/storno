@@ -19,29 +19,35 @@
 
 ---
 
-Storno is a full-stack invoicing platform built for Romanian companies. It handles invoice creation, ANAF e-Factura submission, payment tracking, recurring billing, team collaboration, and financial reporting — available as a managed cloud service or self-hosted on your own infrastructure.
+Storno is a full-stack invoicing and ANAF platform built for Romanian companies and natural persons. It handles invoice creation, ANAF e-Factura submission, tax declarations filed straight from the app, SPV messages and requests, rental-contract case files, payment tracking, recurring billing, team collaboration, and financial reporting — available as a managed cloud service or self-hosted on your own infrastructure.
 
 ## Features
 
-- **Invoicing** — Invoices, proforma invoices, delivery notes, receipts, recurring invoices
-- **e-Factura** — Automatic submission to ANAF, SPV message handling, OAuth integration
-- **Payments** — Payment tracking, bank statement import & reconciliation, multi-currency
-- **Clients & Products** — Client/supplier management, product catalog, VAT rates
-- **Reports** — VAT reports, revenue dashboards, financial analytics
+- **Invoicing** — Invoices, proforma invoices, delivery notes, receipts, recurring invoices, cash register / POS
+- **e-Factura** — Automatic submission to ANAF, inbox sync of received invoices, OAuth integration, e-Transport
+- **Tax declarations** — D300, D390, D394, D100, D112, D101 built from your data; D212 (Declarația unică) and C168 (rental contracts) from plain input; validated with DUKIntegrator and ANAF's online validator, signed and filed through the local [Storno Agent](agent/) with the qualified certificate, or downloaded as the ANAF PDF for manual upload
+- **SPV** — Inbox of ANAF messages with plain-language summaries (somații, decizii, recipise…), requests for documents and reports (fișa rol, vector fiscal, certificates, registry extracts) with the type lists and rules of the SPV form
+- **Dosare (case files)** — Rental contracts, the yearly Declarația unică, periodic returns and the fiscal standing grouped with their declarations, SPV requests and ANAF answers; deadlines with reminders, the "what do I have to do" feed, rental portfolio, billing with the tenant, termination agreements and addenda generated from the file, contracts imported from ANAF's C168 registry extract
+- **Natural persons** — A person identified by CNP works like a company: receives invoices in SPV, files D212 and C168 as a person, sees a dashboard and menu trimmed to what concerns them
+- **Related records** — Every client, supplier, invoice, recurring invoice, declaration, SPV message and case file links to what it is connected with
+- **Payments** — Payment tracking, bank statement import from CSV/XLSX or the bank's own PDF (19 banks), reconciliation, multi-currency
+- **Clients & Products** — Client/supplier management (companies by CUI, persons by CNP), product catalog, VAT rates
+- **Reports** — VAT reports, revenue dashboards, financial analytics, customizable dashboard widgets
 - **Team collaboration** — Multi-company support, role-based access control (40+ permissions)
-- **Data import** — Migrate from 12+ systems (SmartBill, Ciel, eMag, Bolt, and more)
+- **Data import** — Migrate from 12+ systems (SmartBill, Ciel, eMag, Bolt, and more); drag & drop imports
 - **Authentication** — Email/password, Google Sign-In, passkeys, two-factor authentication
 - **Real-time** — WebSocket-powered live updates across all platforms
-- **API & Webhooks** — REST API with API keys and webhook delivery
-- **Mobile** — Native iOS & Android apps with biometric auth
+- **API, Webhooks & AI** — REST API with API keys and webhook delivery; [storno-cli](https://github.com/stornoro/storno-cli) exposes the whole API as MCP tools for AI assistants (hosted at mcp.storno.ro or local)
+- **Mobile** — Native iOS & Android apps with biometric auth, SPV inbox, case files and push notifications
 - **Self-hosted** — One-command install, Docker Compose, optional Kubernetes (Helm)
 
 ## Architecture
 
 ```
 storno/
-├── backend/        PHP 8.2 · Symfony 7.4 · Doctrine ORM · MySQL 8 · Redis
+├── backend/        PHP 8.2 · Symfony 7.4 · Doctrine ORM · MySQL 8 · Redis · Java (DUKIntegrator service)
 ├── frontend/       Nuxt 4 · Vue 3 · Pinia · Nuxt UI · Tailwind CSS
+├── agent/          Storno Agent — local Node.js mTLS proxy for ANAF SPV with the qualified certificate (USB tokens via PKCS#11)
 └── deploy/         Docker Compose · Nginx · Helm charts
 ```
 
