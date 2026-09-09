@@ -129,7 +129,7 @@ export interface Company {
   id: string
   name: string
   cif: number
-  /** company = CUI with ANAF registry data; individual = a natural person identified by CNP */
+  /** company = CUI with ANAF registry data; individual = an individual person identified by CNP */
   type?: 'company' | 'individual'
   isIndividual?: boolean
   registrationNumber: string | null

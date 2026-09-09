@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Declaration\Forms;
 
 /**
- * D212 — Declarația unică (income tax and social contributions of natural persons),
+ * D212 — Declarația unică (income tax and social contributions of individual persons),
  * scenario "venituri din chirii" (rent income, categ_venit 1015): chapter I.1 with one
  * entry per contract, the obligations summary and the CASS section when the income
  * reaches the thresholds. Schema mfp:anaf:dgti:d212:declaratie:v11 (campaigns 2025 and
@@ -37,7 +37,7 @@ final class D212Form implements DeclarationFormInterface
         return [
             'type' => 'D212',
             'title' => 'D212 — Declarația unică (venituri din chirii)',
-            'titleEn' => 'D212 — Single tax return of natural persons (rent income scenario)',
+            'titleEn' => 'D212 — Single tax return of individual persons (rent income scenario)',
             'description' => 'Impozitul pe veniturile din chirii realizate anul trecut (cap. I.1, cotă forfetară 20 %, impozit 10 %) și CASS când venitul depășește 6 salarii minime. Alte categorii de venit nu sunt încă acoperite.',
             'descriptionEn' => 'Income tax on last year\'s rent income (chapter I.1, 20 % forfait, 10 % tax) and the health contribution when the income reaches 6 minimum wages. Other income categories are not covered yet.',
         ];

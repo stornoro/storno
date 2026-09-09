@@ -28,7 +28,7 @@ final class Cnp
         return (int) $d[12] === ($c === 10 ? 1 : $c);
     }
 
-    /** A 13-digit identifier is a natural person (CNP) or a non-resident NIF (starts with 9); a CUI has at most 10 digits. */
+    /** A 13-digit identifier is an individual person (CNP) or a non-resident NIF (starts with 9); a CUI has at most 10 digits. */
     public static function looksLikeNaturalPerson(?string $value): bool
     {
         $d = self::normalize($value);

@@ -2,7 +2,7 @@
 
 namespace App\Tests\Api;
 
-/** A natural person's dashboard keeps only the widgets about them; the catalog, the default config and PUT follow. */
+/** An individual person's dashboard keeps only the widgets about them; the catalog, the default config and PUT follow. */
 class DashboardIndividualTest extends ApiTestCase
 {
     public function testIndividualDashboardIsTrimmed(): void

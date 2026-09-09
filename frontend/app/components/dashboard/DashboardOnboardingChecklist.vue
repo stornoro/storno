@@ -115,7 +115,7 @@ const allSteps = computed<OnboardingStep[]>(() => [
     to: '/dosare',
   },
 ])
-// a natural person neither imports a ledger nor issues invoices: company, ANAF, first dosar, SPV sync
+// an individual person neither imports a ledger nor issues invoices: company, ANAF, first dosar, SPV sync
 const steps = computed<OnboardingStep[]>(() => allSteps.value.filter(s => isIndividual.value
   ? ['company', 'anaf', 'dosar', 'sync'].includes(s.key)
   : s.key !== 'dosar'))

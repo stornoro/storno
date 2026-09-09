@@ -588,7 +588,7 @@ final class DosarService
             'expectedGrossByYear' => $expected,
             'declaredByIncomeYear' => $declared,
             'invoicedByYear' => $invoiced,
-            // a natural person declares the rent in D212; a company invoices it
+            // an individual person declares the rent in D212; a company invoices it
             'landlordIsCompany' => !$company->isIndividual() && !Cnp::looksLikeNaturalPerson($cif),
         ];
     }

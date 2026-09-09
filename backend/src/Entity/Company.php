@@ -52,7 +52,7 @@ class Company
     #[Groups(['company', 'invoice'])]
     private int $cif;
 
-    /** company (CUI, data from ANAF) or individual (a natural person identified by CNP, entered by hand) */
+    /** company (CUI, data from ANAF) or individual (an individual person identified by CNP, entered by hand) */
     #[ORM\Column(length: 16, options: ['default' => self::TYPE_COMPANY])]
     #[Groups(['company', 'invoice'])]
     private string $type = self::TYPE_COMPANY;
@@ -290,7 +290,7 @@ class Company
         return $this;
     }
 
-    /** A natural person (persoană fizică) identified by CNP: no ANAF registry data, no VAT, files D212 / C168 as a person. */
+    /** An individual person (persoană fizică) identified by CNP: no ANAF registry data, no VAT, files D212 / C168 as a person. */
     public function isIndividual(): bool
     {
         return $this->type === self::TYPE_INDIVIDUAL;
@@ -825,7 +825,7 @@ class Company
         return new self(companyInfo: $company);
     }
 
-    /** A natural person: identified by CNP, address typed by hand, never a VAT payer. */
+    /** An individual person: identified by CNP, address typed by hand, never a VAT payer. */
     public static function createIndividual(string $cnp, string $name, ?string $address, string $city, string $state, string $country = 'RO'): self
     {
         $c = new self();

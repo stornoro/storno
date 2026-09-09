@@ -11,7 +11,7 @@ final class Version20260908150000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Natural persons as companies (CNP needs BIGINT, type column) and explicit dosar links to the tenant client / supplier';
+        return 'Individual persons as companies (CNP needs BIGINT, type column) and explicit dosar links to the tenant client / supplier';
     }
 
     public function up(Schema $schema): void

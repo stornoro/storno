@@ -136,7 +136,7 @@ class DashboardConfigController extends AbstractController
     ];
 
     /**
-     * A natural person (persoană fizică) neither sells nor has clients, products or VAT: the
+     * An individual person (persoană fizică) neither sells nor has clients, products or VAT: the
      * dashboard keeps only what concerns them — the dosare to act on, the invoices received in
      * SPV, activity and the sync state — in this order.
      */
