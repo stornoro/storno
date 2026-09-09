@@ -56,7 +56,7 @@ final class C168Form implements DeclarationFormInterface
         ];
         $persoana = fn (string $rol) => [
             'denumire' => ['type' => 'string', 'required' => true, 'maxLength' => 200, 'hint' => "Nume și prenume ($rol persoană fizică) sau denumirea (persoană juridică)"],
-            'cif' => ['type' => 'string', 'pattern' => '[1-9]\\d{12} (CNP) | [1-9]\\d{1,9} (CUI/NIF)', 'hint' => 'CNP for natural persons, CUI for companies. Never invent or pad it: ANAF rejects placeholders and a wrong identifier is a false declaration.'],
+            'cif' => ['type' => 'string', 'pattern' => '[1-9]\\d{12} (CNP) | [1-9]\\d{1,9} (CUI/NIF)', 'hint' => 'CNP for individual persons, CUI for companies. Never invent or pad it: ANAF rejects placeholders and a wrong identifier is a false declaration.'],
             'adresa' => ['type' => 'object', 'fields' => $adresa],
             'telefon' => ['type' => 'string', 'hint' => 'digits only'],
             'email' => ['type' => 'string', 'maxLength' => 200],

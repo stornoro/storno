@@ -113,7 +113,7 @@ export const useDashboardConfigStore = defineStore('dashboardConfig', () => {
     error.value = null
 
     try {
-      // the catalog depends on the company (a natural person gets fewer widgets), so load it first
+      // the catalog depends on the company (an individual person gets fewer widgets), so load it first
       await loadCatalog()
       const response = await get<DashboardConfigResponse>('/v1/dashboard/config')
       if (response.widgets?.length) {

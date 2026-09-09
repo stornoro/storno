@@ -1,4 +1,4 @@
-/** A natural person's company has no selling pages: send them back to the dashboard. */
+/** An individual person's company has no selling pages: send them back to the dashboard. */
 export default defineNuxtRouteMiddleware((to) => {
   const companyStore = useCompanyStore()
   if (!companyStore.currentCompany?.isIndividual) return

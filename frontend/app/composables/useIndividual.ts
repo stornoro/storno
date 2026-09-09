@@ -1,5 +1,5 @@
 /**
- * A natural person (persoană fizică, company type "individual") neither sells nor keeps a
+ * An individual person (persoană fizică, company type "individual") neither sells nor keeps a
  * ledger: the pages about issuing documents, products, series, VAT and sales reports are
  * hidden for them, in the sidebar and by the global route guard alike. The rest stays:
  * invoices received, e-Factura, declarations, SPV, dosare, clients, suppliers, settings.

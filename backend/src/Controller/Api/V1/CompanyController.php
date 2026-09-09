@@ -127,7 +127,7 @@ class CompanyController extends AbstractController
     }
 
     /**
-     * A natural person (persoană fizică) has no ANAF registry record: identified by CNP, name and
+     * An individual person (persoană fizică) has no ANAF registry record: identified by CNP, name and
      * address typed by hand. Files D212 / C168 as a person and receives invoices in SPV.
      * @param array<string, mixed> $data
      */

@@ -4,7 +4,7 @@ namespace App\Tests\Api;
 
 /**
  * A rental dosar, its tenant as a client, the invoice issued to that client and the declaration
- * attached to the dosar all point at each other through GET /related/{type}/{id}; a natural person
+ * attached to the dosar all point at each other through GET /related/{type}/{id}; an individual person
  * (CNP) can be added as a "company" and is what D212 needs.
  */
 class RelatedTest extends ApiTestCase
