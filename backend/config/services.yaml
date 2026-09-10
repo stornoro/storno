@@ -7,6 +7,7 @@ imports:
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    env(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON): ''   # path to a Play Console service-account key; empty = read the public listing
     env(PDFTOTEXT_BIN): ''   # optional path to poppler's pdftotext; auto-detected on PATH when empty
     env(AWS_ACCESS_KEY_ID): ''
     env(AWS_S3_BUCKET): ''
@@ -239,6 +240,10 @@ services:
     App\Service\Borderou\Pdf\PdfStatementDispatcher:
         arguments:
             $parsers: !tagged_iterator app.pdf_statement_parser
+
+    App\Service\AppVersion\StoreVersionProbe:
+        arguments:
+            $googlePlayServiceAccountJson: '%env(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON)%'
 
     App\Service\Borderou\Pdf\PdfWordExtractor:
         arguments:
