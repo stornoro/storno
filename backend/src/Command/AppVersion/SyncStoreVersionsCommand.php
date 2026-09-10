@@ -122,8 +122,21 @@ class SyncStoreVersionsCommand extends Command
     private function highestReportedVersion(string $platform): ?string
     {
         $since = (new \DateTimeImmutable())->sub(new \DateInterval('P' . self::REPORT_WINDOW_DAYS . 'D'))->format('Y-m-d H:i:s');
+        // Older app builds report platform "mobile"; map those rows to ios/android
+        // through the push-token registration of the same user.
         $rows = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT app_version FROM telemetry_event WHERE platform = :platform AND created_at >= :since AND app_version IS NOT NULL',
+            <<<'SQL'
+                SELECT DISTINCT t.app_version
+                FROM telemetry_event t
+                WHERE t.created_at >= :since
+                  AND t.app_version IS NOT NULL
+                  AND (
+                    t.platform = :platform
+                    OR (t.platform = 'mobile' AND EXISTS (
+                        SELECT 1 FROM user_device d WHERE d.user_id = t.user_id AND d.platform = :platform
+                    ))
+                  )
+                SQL,
             ['platform' => $platform, 'since' => $since],
         );
         $best = null;

@@ -105,12 +105,18 @@ class BroadcastVersionGateHandler
             INNER JOIN (
                 SELECT user_id, MAX(created_at) AS most_recent
                 FROM telemetry_event
-                WHERE platform = :platform
+                WHERE (platform = :platform OR platform = 'mobile')
                   AND created_at >= :since
                   AND app_version IS NOT NULL
                 GROUP BY user_id
             ) latest ON latest.user_id = t.user_id AND latest.most_recent = t.created_at
-            WHERE t.platform = :platform
+            WHERE (
+                t.platform = :platform
+                -- builds before 1.1.12 report platform "mobile": resolve ios/android through the push registration
+                OR (t.platform = 'mobile' AND EXISTS (
+                    SELECT 1 FROM user_device d WHERE d.user_id = t.user_id AND d.platform = :platform
+                ))
+            )
         SQL;
 
         $since = (new \DateTimeImmutable())
