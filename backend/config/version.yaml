@@ -17,7 +17,10 @@ parameters:
         # link. `storeUrl` is the deep link the Update button opens.
         mobile:
             ios:
-                latest: '1.5.1'
+                # Must be the version the newest binary reports about itself
+                # (Constants.expoConfig.version = mobile/package.json), not the
+                # App Store Connect label.
+                latest: '1.1.11'
                 min: '1.0.0'
                 storeUrl: 'https://apps.apple.com/app/storno-ro/id6761785908'
                 releaseNotesUrl: null
