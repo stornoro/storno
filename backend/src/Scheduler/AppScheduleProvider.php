@@ -30,6 +30,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('0 */12 * * *', new RunCommandMessage('app:anaf:refresh-tokens')))
             ->add(RecurringMessage::cron('15 4 * * 0', new RunCommandMessage('app:anaf:update-validators')))
             ->add(RecurringMessage::cron('45 4 * * 0', new RunCommandMessage('app:anaf:nomenclator:sync')))
+            // Mobile update gate follows the app stores — hourly
+            ->add(RecurringMessage::cron('20 * * * *', new RunCommandMessage('app:mobile:sync-store-versions')))
             // License sync — every 6 hours
             ->add(RecurringMessage::cron('0 */6 * * *', new RunCommandMessage('app:license:sync')))
             // Recurring invoices — daily 1 AM
