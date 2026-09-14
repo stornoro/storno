@@ -6,21 +6,60 @@ use App\Entity\TaxDeclaration;
 use App\Service\Declaration\DeclarationXmlGeneratorInterface;
 
 /**
- * Generates ANAF-compliant D394 XML per the official XSD schema (d394_20250917.xml).
+ * Generates the D394 XML (namespace mfp:anaf:dgti:d394:declaratie:v5, applied afterwards by
+ * DeclarationNamespaceResolver): the <declaratie394> header, then <informatii>, <rezumat1>,
+ * <rezumat2>, <serieFacturi> and <op1> in the order the schema fixes.
  *
- * Root element: <declaratie394> with attributes:
- *   luna, an, d_rec, tip_D394, sistemTVA, op_efectuate,
- *   cui, den, adresa, telefon, fax, mail, caen,
- *   totalPlata_A (total sales VAT), totalPlata_B (total purchases VAT)
- *
- * Child elements:
- *   <op1> - operations per partner (livrari L / achizitii A)
- *     attributes: tip, tip_partener, cuiP, denP, taraP, locP, judP, nrFact, baza, tva, cota
- *   <rezumat1> - summary of op1 by rate
- *   <serieFacturi> - invoice series used
+ * Everything is written from `data` as the populator (or the user) left it, in whole lei;
+ * empty optional attributes are left out. `totalPlata_A` — the control sum ANAF checks
+ * (Σ nrCui1..4 + Σ rezumat2 bazaL + bazaA + bazaAI) — is recomputed from the data written.
  */
 class D394XmlGenerator implements DeclarationXmlGeneratorInterface
 {
+    private const HEADER = [
+        'luna', 'an', 'tip_D394', 'sistemTVA', 'op_efectuate', 'cui', 'caen', 'den', 'adresa', 'telefon', 'fax', 'mail', 'totalPlata_A',
+        'cifR', 'denR', 'functie_reprez', 'adresaR', 'telefonR', 'faxR', 'mailR',
+        'tip_intocmit', 'den_intocmit', 'cif_intocmit', 'calitate_intocmit', 'functie_intocmit',
+        'optiune', 'schimb_optiune', 'prsAfiliat',
+    ];
+
+    private const INFORMATII = [
+        'nrCui1', 'nrCui2', 'nrCui3', 'nrCui4', 'nr_BF_i1', 'incasari_i1', 'incasari_i2', 'nrFacturi_terti', 'nrFacturi_benef', 'nrFacturi',
+        'nrFacturiL_PF', 'nrFacturiLS_PF', 'val_LS_PF',
+        'tvaDed24', 'tvaDed21', 'tvaDed11', 'tvaDed20', 'tvaDed19', 'tvaDed9', 'tvaDed5',
+        'tvaDedAI24', 'tvaDedAI21', 'tvaDedAI11', 'tvaDedAI20', 'tvaDedAI19', 'tvaDedAI9', 'tvaDedAI5',
+        'tvaCol24', 'tvaCol21', 'tvaCol11', 'tvaCol20', 'tvaCol19', 'tvaCol9', 'tvaCol5',
+        'incasari_ag', 'costuri_ag', 'marja_ag', 'tva_ag', 'pret_vanzare', 'pret_cumparare', 'marja_antic', 'tva_antic',
+        'solicit',
+    ];
+
+    /** Written only when `solicit` = 1 (refund requested through the VAT return). */
+    private const REFUND_BLOCK = [
+        'achizitiiPE', 'achizitiiCR', 'achizitiiCB', 'achizitiiCI', 'achizitiiA',
+        'achizitiiB24', 'achizitiiB21', 'achizitiiB11', 'achizitiiB20', 'achizitiiB19', 'achizitiiB9', 'achizitiiB5',
+        'achizitiiS24', 'achizitiiS21', 'achizitiiS11', 'achizitiiS20', 'achizitiiS19', 'achizitiiS9', 'achizitiiS5',
+        'importB', 'acINecorp', 'livrariBI',
+        'BUN24', 'BUN21', 'BUN11', 'BUN20', 'BUN19', 'BUN9', 'BUN5', 'valoareScutit', 'BunTI',
+        'Prest24', 'Prest21', 'Prest11', 'Prest20', 'Prest19', 'Prest9', 'Prest5', 'PrestScutit',
+        'LIntra', 'PrestIntra', 'Export', 'livINecorp', 'efectuat',
+    ];
+
+    private const REZUMAT1 = [
+        'tip_partener', 'cota', 'facturiL', 'bazaL', 'tvaL', 'facturiLS', 'bazaLS', 'facturiA', 'bazaA', 'tvaA',
+        'facturiAI', 'bazaAI', 'tvaAI', 'facturiAS', 'bazaAS', 'facturiV', 'bazaV', 'facturiC', 'bazaC', 'tvaC',
+        'facturiN', 'document_N', 'bazaN',
+    ];
+
+    private const REZUMAT2 = [
+        'cota', 'bazaFSLcod', 'TVAFSLcod', 'bazaFSL', 'TVAFSL', 'bazaFSA', 'TVAFSA', 'bazaFSAI', 'TVAFSAI', 'bazaBFAI', 'TVABFAI',
+        'nrFacturiL', 'bazaL', 'tvaL', 'nrFacturiA', 'bazaA', 'tvaA', 'nrFacturiAI', 'bazaAI', 'tvaAI',
+        'baza_incasari_i1', 'tva_incasari_i1', 'baza_incasari_i2', 'tva_incasari_i2', 'bazaL_PF', 'tvaL_PF',
+    ];
+
+    private const SERIE_FACTURI = ['tip', 'serieI', 'nrI', 'nrF', 'den', 'cui'];
+
+    private const OP1 = ['tip', 'tip_partener', 'cota', 'cuiP', 'denP', 'taraP', 'locP', 'judP', 'strP', 'nrP', 'blP', 'apP', 'detP', 'tip_document', 'nrFact', 'baza', 'tva'];
+
     public function supportsType(string $type): bool
     {
         return $type === 'd394';
@@ -28,143 +67,102 @@ class D394XmlGenerator implements DeclarationXmlGeneratorInterface
 
     public function generate(TaxDeclaration $declaration): string
     {
-        $data = $declaration->getData();
+        $data = $declaration->getData() ?? [];
         $company = $declaration->getCompany();
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->formatOutput = true;
 
-        // Root element with all required attributes
         $root = $dom->createElement('declaratie394');
         $root->setAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
-        $root->setAttribute('luna', (string) $declaration->getMonth());
-        $root->setAttribute('an', (string) $declaration->getYear());
-        $root->setAttribute('d_rec', '0'); // 0 = original, 1 = rectificativa
-        $root->setAttribute('tip_D394', 'I'); // I = informatia initiala
-        $root->setAttribute('sistemTVA', '0'); // 0 = normal, 1 = TVA la incasare
-        $root->setAttribute('cui', (string) $company->getCif());
-        $root->setAttribute('den', $company->getName() ?? '');
-        $root->setAttribute('adresa', $company->getAddress() ?? '');
-        $root->setAttribute('telefon', $company->getPhone() ?? '');
-        $root->setAttribute('fax', '');
-        $root->setAttribute('mail', $company->getEmail() ?? '');
 
-        // Determine what operations are present
-        $hasSales = !empty($data['sales']);
-        $hasPurchases = !empty($data['purchases']);
-        $opEffects = '0'; // 0=none
-        if ($hasSales && $hasPurchases) {
-            $opEffects = '3'; // 3=both
-        } elseif ($hasSales) {
-            $opEffects = '1'; // 1=sales only
-        } elseif ($hasPurchases) {
-            $opEffects = '2'; // 2=purchases only
+        $header = array_merge([
+            'luna' => $declaration->getMonth(),
+            'an' => $declaration->getYear(),
+            'tip_D394' => $declaration->getPeriodType() === 'quarterly' ? 'T' : 'L',
+            'sistemTVA' => $company->isVatOnCollection() ? 1 : 0,
+            'op_efectuate' => !empty($data['partners']) ? 1 : 0,
+            'cui' => (string) $company->getCif(),
+            'caen' => (string) ($company->getCaenCode() ?? ''),
+            'den' => (string) ($company->getName() ?? ''),
+            'adresa' => (string) ($company->getAddress() ?? ''),
+            'telefon' => (string) ($company->getPhone() ?? ''),
+            'mail' => (string) ($company->getEmail() ?? ''),
+            'tip_intocmit' => 0,
+            'cif_intocmit' => (string) $company->getCif(),
+            'optiune' => 0,
+            'prsAfiliat' => 0,
+        ], $data['header'] ?? []);
+
+        $informatii = $data['informatii'] ?? [];
+        $rezumat2 = $data['rezumat2'] ?? [];
+        $controlSum = 0;
+        foreach (['nrCui1', 'nrCui2', 'nrCui3', 'nrCui4'] as $attr) {
+            $controlSum += (int) ($informatii[$attr] ?? 0);
         }
-        $root->setAttribute('op_efectuate', $opEffects);
+        foreach ($rezumat2 as $r) {
+            $controlSum += (int) ($r['bazaL'] ?? 0) + (int) ($r['bazaA'] ?? 0) + (int) ($r['bazaAI'] ?? 0);
+        }
+        $header['totalPlata_A'] = $controlSum;
 
-        // Total VAT amounts
-        $root->setAttribute('totalPlata_A', $data['totals']['sales']['vatAmount'] ?? '0');
-        $root->setAttribute('totalPlata_B', $data['totals']['purchases']['vatAmount'] ?? '0');
-
+        $this->writeAttributes($root, self::HEADER, $header);
         $dom->appendChild($root);
 
-        // ── op1: Sales partners (tip=L) ─────────────────────────────────
-        if ($hasSales) {
-            foreach ($data['sales'] as $partner) {
-                $this->appendOp1($dom, $root, $partner, 'L');
-            }
+        $info = $dom->createElement('informatii');
+        $this->writeAttributes($info, self::INFORMATII, $informatii);
+        if ((int) ($informatii['solicit'] ?? 0) === 1) {
+            $this->writeAttributes($info, self::REFUND_BLOCK, $informatii, true);
         }
+        $root->appendChild($info);
 
-        // ── op1: Purchase partners (tip=A) ──────────────────────────────
-        if ($hasPurchases) {
-            foreach ($data['purchases'] as $partner) {
-                $this->appendOp1($dom, $root, $partner, 'A');
-            }
+        foreach ($data['rezumat1'] ?? [] as $row) {
+            $el = $dom->createElement('rezumat1');
+            $this->writeAttributes($el, self::REZUMAT1, $row);
+            $root->appendChild($el);
         }
-
-        // ── rezumat1: Summary by VAT rate ───────────────────────────────
-        if (!empty($data['rezumat'])) {
-            if (!empty($data['rezumat']['sales'])) {
-                foreach ($data['rezumat']['sales'] as $rateSummary) {
-                    $this->appendRezumat1($dom, $root, $rateSummary, 'L');
-                }
-            }
-            if (!empty($data['rezumat']['purchases'])) {
-                foreach ($data['rezumat']['purchases'] as $rateSummary) {
-                    $this->appendRezumat1($dom, $root, $rateSummary, 'A');
-                }
-            }
+        foreach ($rezumat2 as $row) {
+            $el = $dom->createElement('rezumat2');
+            $this->writeAttributes($el, self::REZUMAT2, $row);
+            $root->appendChild($el);
         }
-
-        // ── serieFacturi: Invoice series used ───────────────────────────
-        if (!empty($data['serieFacturi'])) {
-            foreach ($data['serieFacturi'] as $series) {
-                $sf = $dom->createElement('serieFacturi');
-                $sf->setAttribute('serie', $series['serie'] ?? '');
-                $sf->setAttribute('nrI', $series['firstNumber'] ?? '');
-                $sf->setAttribute('nrF', $series['lastNumber'] ?? '');
-                $sf->setAttribute('nrT', (string) ($series['count'] ?? 0));
-                $root->appendChild($sf);
-            }
+        foreach ($data['serieFacturi'] ?? [] as $row) {
+            $el = $dom->createElement('serieFacturi');
+            $this->writeAttributes($el, self::SERIE_FACTURI, $row);
+            $root->appendChild($el);
+        }
+        foreach ($data['partners'] ?? [] as $row) {
+            $el = $dom->createElement('op1');
+            $this->writeAttributes($el, self::OP1, $row);
+            $root->appendChild($el);
         }
 
         return $dom->saveXML();
     }
 
     /**
-     * Append an <op1> element for a single partner.
+     * Writes the listed attributes that have a value; with $zeroWhenMissing every listed
+     * attribute is written (0 when absent), for blocks the validator wants complete.
      *
-     * Per XSD: each partner × VAT rate combination is a separate <op1> row.
+     * @param string[] $attributes
+     * @param array<string, mixed> $values
      */
-    private function appendOp1(\DOMDocument $dom, \DOMElement $root, array $partner, string $tip): void
+    private function writeAttributes(\DOMElement $el, array $attributes, array $values, bool $zeroWhenMissing = false): void
     {
-        if (empty($partner['byRate'])) {
-            // Single op1 with totals only
-            $op1 = $dom->createElement('op1');
-            $op1->setAttribute('tip', $tip);
-            $op1->setAttribute('tip_partener', (string) ($partner['tipPartener'] ?? 1));
-            $op1->setAttribute('cuiP', $partner['partnerCif'] ?? '');
-            $op1->setAttribute('denP', $partner['partnerName'] ?? '');
-            $op1->setAttribute('taraP', $partner['partnerCountry'] ?? 'RO');
-            $op1->setAttribute('locP', $partner['partnerCity'] ?? '');
-            $op1->setAttribute('judP', $partner['partnerCounty'] ?? '');
-            $op1->setAttribute('nrFact', (string) ($partner['invoiceCount'] ?? 0));
-            $op1->setAttribute('baza', $partner['total']['taxableBase'] ?? '0');
-            $op1->setAttribute('tva', $partner['total']['vatAmount'] ?? '0');
-            $root->appendChild($op1);
-
-            return;
+        foreach ($attributes as $attr) {
+            $value = $values[$attr] ?? null;
+            if ($value === null || $value === '' || $value === false) {
+                if (!$zeroWhenMissing) {
+                    continue;
+                }
+                $value = 0;
+            }
+            if (is_bool($value)) {
+                $value = $value ? 1 : 0;
+            }
+            if (is_float($value)) {
+                $value = (int) round($value);
+            }
+            $el->setAttribute($attr, (string) $value);
         }
-
-        // One <op1> per VAT rate for this partner
-        foreach ($partner['byRate'] as $rateKey => $amounts) {
-            $op1 = $dom->createElement('op1');
-            $op1->setAttribute('tip', $tip);
-            $op1->setAttribute('tip_partener', (string) ($partner['tipPartener'] ?? 1));
-            $op1->setAttribute('cuiP', $partner['partnerCif'] ?? '');
-            $op1->setAttribute('denP', $partner['partnerName'] ?? '');
-            $op1->setAttribute('taraP', $partner['partnerCountry'] ?? 'RO');
-            $op1->setAttribute('locP', $partner['partnerCity'] ?? '');
-            $op1->setAttribute('judP', $partner['partnerCounty'] ?? '');
-            $op1->setAttribute('nrFact', (string) ($partner['invoiceCount'] ?? 0));
-            $op1->setAttribute('cota', (string) ($amounts['cota'] ?? $rateKey));
-            $op1->setAttribute('baza', $amounts['taxableBase'] ?? '0');
-            $op1->setAttribute('tva', $amounts['vatAmount'] ?? '0');
-            $root->appendChild($op1);
-        }
-    }
-
-    /**
-     * Append a <rezumat1> element (summary by VAT rate and operation type).
-     */
-    private function appendRezumat1(\DOMDocument $dom, \DOMElement $root, array $rateSummary, string $tip): void
-    {
-        $rez = $dom->createElement('rezumat1');
-        $rez->setAttribute('tip', $tip);
-        $rez->setAttribute('cota', (string) ($rateSummary['cota'] ?? 0));
-        $rez->setAttribute('baza', $rateSummary['taxableBase'] ?? '0');
-        $rez->setAttribute('tva', $rateSummary['vatAmount'] ?? '0');
-        $rez->setAttribute('nrParteneri', (string) ($rateSummary['partnerCount'] ?? 0));
-        $root->appendChild($rez);
     }
 }

@@ -28,6 +28,9 @@ notification:
   anaf_deadline:
     title: '%company%'
     message: 'Trimite factura %number% la ANAF pana maine. Emisa pe %date%.'
+  fiscal_deadline:
+    title: '%company% — %code% pana pe %date%'
+    message: '{1} %label% pentru %period% se depune maine, pe %date%.|]1,19] %label% pentru %period% se depune in %count% zile, pana pe %date%.|]19,Inf[ %label% pentru %period% se depune in %count% de zile, pana pe %date%.'
   anaf_missing_token:
     title: '%company%'
     message: 'Factura %number% emisa pe %date% nu poate fi trimisa la ANAF — niciun token SPV nu este configurat. Conecteaza-te la SPV pana pe %deadline% pentru a evita amenzile.'

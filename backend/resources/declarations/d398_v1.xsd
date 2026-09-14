@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- D398 (OSS VAT return) structure as checked by ANAF's D398Validator; the namespace is the one the validator expects. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="mfp:anaf:dgti:d398:declaratie:v1" targetNamespace="mfp:anaf:dgti:d398:declaratie:v1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0" xml:lang="ro">
+	<xs:element name="d398" type="D398Type"/>
+	<xs:complexType name="D398Type">
+		<xs:sequence>
+			<xs:element name="MS" type="MSType" minOccurs="0" maxOccurs="unbounded"/>
+		</xs:sequence>
+		<xs:attribute name="an_r" type="xs:integer" use="required"/>
+		<xs:attribute name="luna_r" type="xs:integer" use="required"/>
+		<xs:attribute name="d_rec" type="xs:integer" use="required"/>
+		<xs:attribute name="totalPlata_A" type="xs:integer" use="required"/>
+		<xs:attribute name="moes_voes_imp" type="xs:integer" use="required"/>
+		<xs:attribute name="e_int" type="xs:integer"/>
+		<xs:attribute name="period_start_date" type="xs:string"/>
+		<xs:attribute name="period_end_date" type="xs:string"/>
+		<xs:attribute name="nil_vat_return" type="xs:integer" use="required"/>
+		<xs:attribute name="currency" type="xs:string" use="required"/>
+		<xs:attribute name="vat_id_no" type="xs:string" use="required"/>
+		<xs:attribute name="intermediary_id" type="xs:string"/>
+		<xs:attribute name="name" type="xs:string" use="required"/>
+		<xs:attribute name="grand_total_vat_due" type="xs:decimal" use="required"/>
+		<xs:attribute name="vat_return_reference" type="xs:string"/>
+	</xs:complexType>
+	<xs:complexType name="MSType">
+		<xs:sequence>
+			<xs:element name="SUPPLY" type="SUPPLYType" minOccurs="1" maxOccurs="unbounded"/>
+			<xs:element name="CORRECTION" type="CORRECTIONType" minOccurs="0" maxOccurs="unbounded"/>
+		</xs:sequence>
+		<xs:attribute name="mscon_state" type="xs:string" use="required"/>
+		<xs:attribute name="grand_total" type="xs:decimal" use="required"/>
+		<xs:attribute name="vat_total_services_msid" type="xs:decimal"/>
+		<xs:attribute name="vat_total_goods_msid" type="xs:decimal"/>
+		<xs:attribute name="vat_total_services_msest" type="xs:decimal"/>
+		<xs:attribute name="vat_total_goods_msest" type="xs:decimal"/>
+		<xs:attribute name="due_balance" type="xs:decimal" use="required"/>
+	</xs:complexType>
+	<xs:complexType name="SUPPLYType">
+		<xs:attribute name="trade_type" type="xs:integer" use="required"/>
+		<xs:attribute name="vat_id_no_msest" type="xs:string"/>
+		<xs:attribute name="supply_type" type="xs:integer" use="required"/>
+		<xs:attribute name="vat_rate_type" type="xs:integer" use="required"/>
+		<xs:attribute name="vat_rate" type="xs:decimal" use="required"/>
+		<xs:attribute name="taxable_amount" type="xs:decimal" use="required"/>
+		<xs:attribute name="vat_amount" type="xs:decimal" use="required"/>
+	</xs:complexType>
+	<xs:complexType name="CORRECTIONType">
+		<xs:attribute name="mscon_state_correction" type="xs:string" use="required"/>
+		<xs:attribute name="vat_return_correction_period" type="xs:integer" use="required"/>
+		<xs:attribute name="year" type="xs:integer" use="required"/>
+		<xs:attribute name="vat_amount_correction" type="xs:decimal" use="required"/>
+	</xs:complexType>
+</xs:schema>

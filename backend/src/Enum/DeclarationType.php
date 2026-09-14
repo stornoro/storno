@@ -24,6 +24,7 @@ enum DeclarationType: string
     case D212 = 'd212';
     case D301 = 'd301';
     case D311 = 'd311';
+    case D398 = 'd398';
     case C168 = 'c168';
 
     public function label(): string
@@ -45,6 +46,7 @@ enum DeclarationType: string
             self::D208 => 'D208 - Declaratie informativa transferuri imobiliare',
             self::D212 => 'D212 - Declaratie unica PF',
             self::D301 => 'D301 - Decont special TVA',
+            self::D398 => 'D398 - Declaratie speciala TVA (OSS, regimul UE)',
             self::D311 => 'D311 - Declaratie TVA colectat (cod anulat)',
             self::C168 => 'C168 - Cerere inregistrare contracte de locatiune',
         };
@@ -55,7 +57,7 @@ enum DeclarationType: string
         return match ($this) {
             self::D394, self::D300, self::D390, self::D392, self::D393 => 'monthly',
             self::D100, self::D112, self::D130, self::D180, self::D301 => 'monthly',
-            self::D101, self::D106, self::D120, self::D311 => 'quarterly',
+            self::D101, self::D106, self::D120, self::D311, self::D398 => 'quarterly',
             self::D205, self::D208, self::D212, self::C168 => 'annual',
         };
     }
@@ -63,7 +65,7 @@ enum DeclarationType: string
     public function canAutoPopulate(): bool
     {
         return match ($this) {
-            self::D394, self::D300, self::D390, self::D392, self::D393 => true,
+            self::D394, self::D300, self::D390, self::D392, self::D393, self::D301, self::D398 => true,
             default => false,
         };
     }

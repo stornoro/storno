@@ -454,6 +454,12 @@ services:
     App\Service\Declaration\Populator\D393Populator:
         tags: ['app.declaration_data_populator']
 
+    App\Service\Declaration\Populator\D301Populator:
+        tags: ['app.declaration_data_populator']
+
+    App\Service\Declaration\Populator\D398Populator:
+        tags: ['app.declaration_data_populator']
+
     # Manual entry types
     App\Service\Declaration\Populator\ManualPopulator:
         tags: ['app.declaration_data_populator']
@@ -466,6 +472,12 @@ services:
         tags: ['app.declaration_xml_generator']
 
     App\Service\Declaration\XmlGenerator\D300XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D301XmlGenerator:
+        tags: ['app.declaration_xml_generator']
+
+    App\Service\Declaration\XmlGenerator\D398XmlGenerator:
         tags: ['app.declaration_xml_generator']
 
     App\Service\Declaration\XmlGenerator\D390XmlGenerator:

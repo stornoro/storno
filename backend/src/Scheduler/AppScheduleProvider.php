@@ -42,6 +42,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('0 8 * * *', new RunCommandMessage('app:notifications:token-expiry')))
             ->add(RecurringMessage::cron('30 8 * * *', new RunCommandMessage('app:notifications:anaf-deadline')))
             ->add(RecurringMessage::cron('45 8 * * *', new RunCommandMessage('app:notifications:anaf-missing-token')))
+            // Fiscal calendar — 7 / 3 / 1 days before an unfiled declaration deadline
+            ->add(RecurringMessage::cron('20 8 * * *', new RunCommandMessage('app:notifications:fiscal-deadlines')))
             ->add(RecurringMessage::cron('15 8 * * *', new RunCommandMessage('app:dosare:remind')))
             ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:notifications:due-invoices')))
             ->add(RecurringMessage::cron('0 10 * * *', new RunCommandMessage('app:proforma:process-expiry')))

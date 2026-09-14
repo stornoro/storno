@@ -9,12 +9,12 @@ use App\Service\Declaration\DeclarationXmlGeneratorInterface;
  * Generic flat XML generator for declaration types that follow the pattern:
  * root element with all data as attributes from $data['rows'].
  *
- * Supports: D106, D120, D130, D180, D205, D208, D212, D301, D311.
+ * Supports: D106, D120, D130, D180, D205, D208, D212, D311 (D301 has its own generator).
  */
 class GenericFlatXmlGenerator implements DeclarationXmlGeneratorInterface
 {
     private const SUPPORTED_TYPES = [
-        'd106', 'd120', 'd130', 'd180', 'd205', 'd208', 'd301', 'd311',
+        'd106', 'd120', 'd130', 'd180', 'd205', 'd208', 'd311',
     ];
 
     private const ROOT_ELEMENTS = [
@@ -25,7 +25,6 @@ class GenericFlatXmlGenerator implements DeclarationXmlGeneratorInterface
         'd205' => 'declaratie205',
         'd208' => 'declaratie208',
         'd212' => 'declaratie212',
-        'd301' => 'declaratie301',
         'd311' => 'declaratie311',
     ];
 

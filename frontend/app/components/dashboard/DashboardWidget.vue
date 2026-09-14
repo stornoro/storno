@@ -130,6 +130,9 @@ const { isModuleEnabled } = useModules()
     <!-- Dosare: what to do with ANAF -->
     <DashboardDosareActionsCard v-else-if="id === 'dosare-actions'" />
 
+    <!-- Fiscal calendar: the next declaration deadlines -->
+    <DashboardFiscalCalendarCard v-else-if="id === 'fiscal-calendar-card'" />
+
     <!-- Due Today Card -->
     <DashboardDueTodayCard
       v-else-if="id === 'due-today-card'"

@@ -9,6 +9,7 @@ const { can } = usePermissions()
 const store = useDeclarationStore()
 const toast = useToast()
 const router = useRouter()
+const route = useRoute()
 
 useHead({ title: $t('declarations.title') })
 
@@ -22,6 +23,15 @@ const formOutdated = computed(() => store.formVersions?.localOutdated ?? [])
 onMounted(() => {
   store.fetchFormVersions()
   store.fetchDeclarations()
+  // /declarations?create=d300&year=2026&month=9&periodType=monthly — from the fiscal calendar
+  const create = route.query.create
+  if (typeof create === 'string' && createTypeOptions.flat().some(o => o.value === create)) {
+    createForm.type = create
+    if (typeof route.query.year === 'string' && Number(route.query.year) > 2000) createForm.year = Number(route.query.year)
+    if (typeof route.query.month === 'string' && Number(route.query.month) >= 1 && Number(route.query.month) <= 12) createForm.month = Number(route.query.month)
+    if (route.query.periodType === 'quarterly' || route.query.periodType === 'monthly') createForm.periodType = route.query.periodType
+    createOpen.value = true
+  }
 })
 
 watch([() => store.filters, () => store.page], () => {
@@ -221,6 +231,8 @@ const createTypeOptions = [
     { label: 'D390 - Declaratie recapitulativa VIES', value: 'd390' },
     { label: 'D392 - Operatiuni intracomunitare', value: 'd392' },
     { label: 'D393 - VIES servicii', value: 'd393' },
+    { label: 'D301 - Decont special TVA (neplatitori)', value: 'd301' },
+    { label: 'D398 - Declaratie speciala TVA (OSS, regimul UE)', value: 'd398' },
   ],
   [
     { label: 'D100 - Obligatii plata buget de stat', value: 'd100' },
@@ -233,7 +245,6 @@ const createTypeOptions = [
     { label: 'D205 - Informativa retineri la sursa', value: 'd205' },
     { label: 'D208 - Declaratie informativa transferuri imobiliare', value: 'd208' },
     { label: 'D212 - Declaratie unica PF', value: 'd212' },
-    { label: 'D301 - Decont special TVA', value: 'd301' },
     { label: 'D311 - Declaratie TVA colectat (cod anulat)', value: 'd311' },
   ],
 ]
@@ -383,6 +394,7 @@ const typeOptions = [
   { label: 'D212', value: 'd212' },
   { label: 'D301', value: 'd301' },
   { label: 'D311', value: 'd311' },
+  { label: 'D398', value: 'd398' },
 ]
 
 const statusOptions = [

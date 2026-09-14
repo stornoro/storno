@@ -277,6 +277,56 @@ class InvoiceRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * True when an invoice issued in the period has a counterparty (client of a sale, supplier of a
+     * purchase) established in one of the given countries — the intra-community operations that
+     * make a D390 due. Draft, cancelled, rejected and converted documents do not count.
+     *
+     * @param list<string> $countries ISO country codes
+     */
+    public function hasIntraCommunityOperations(Company $company, \DateTimeInterface $from, \DateTimeInterface $to, array $countries): bool
+    {
+        $count = $this->periodCounterpartyQuery($company, $from, $to)
+            ->andWhere('(i.direction = :outgoing AND c.country IN (:countries)) OR (i.direction = :incoming AND s.country IN (:countries))')
+            ->setParameter('outgoing', InvoiceDirection::OUTGOING)
+            ->setParameter('incoming', InvoiceDirection::INCOMING)
+            ->setParameter('countries', $countries)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $count > 0;
+    }
+
+    /** True when a supplier established outside Romania issued an invoice to the company in the period (D301 for non-VAT payers). */
+    public function hasForeignSupplierInvoices(Company $company, \DateTimeInterface $from, \DateTimeInterface $to): bool
+    {
+        $count = $this->periodCounterpartyQuery($company, $from, $to)
+            ->andWhere('i.direction = :incoming')
+            ->andWhere('s.country IS NOT NULL AND s.country <> :ro')
+            ->setParameter('incoming', InvoiceDirection::INCOMING)
+            ->setParameter('ro', 'RO')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $count > 0;
+    }
+
+    private function periodCounterpartyQuery(Company $company, \DateTimeInterface $from, \DateTimeInterface $to): \Doctrine\ORM\QueryBuilder
+    {
+        return $this->createQueryBuilder('i')
+            ->select('COUNT(i.id)')
+            ->leftJoin('i.client', 'c')
+            ->leftJoin('i.supplier', 's')
+            ->where('i.company = :company')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.status NOT IN (:excluded)')
+            ->andWhere('i.issueDate BETWEEN :from AND :to')
+            ->setParameter('company', $company)
+            ->setParameter('excluded', [DocumentStatus::DRAFT, DocumentStatus::CANCELLED, DocumentStatus::REJECTED, DocumentStatus::CONVERTED])
+            ->setParameter('from', $from)
+            ->setParameter('to', $to);
+    }
+
     public function findByCompanyFiltered(Company $company, array $filters = [], ?int $limit = 500): array
     {
         $qb = $this->createQueryBuilder('i')

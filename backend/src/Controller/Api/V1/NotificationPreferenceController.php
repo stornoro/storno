@@ -30,6 +30,7 @@ class NotificationPreferenceController extends AbstractController
         'spv.new_documents',
         'token.expiring_soon',
         'token.refresh_failed',
+        'fiscal.deadline',
         'export_ready',
         'report.monthly_summary',
         'backup_ready',
