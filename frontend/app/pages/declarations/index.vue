@@ -316,7 +316,7 @@ function removeUploadFile(index: number) {
 function onUploadDrop(event: DragEvent) {
   event.preventDefault()
   if (event.dataTransfer?.files) {
-    const xmlFiles = Array.from(event.dataTransfer.files).filter(f => f.name.endsWith('.xml'))
+    const xmlFiles = Array.from(event.dataTransfer.files).filter(f => /\.(xml|pdf)$/i.test(f.name))
     uploadFiles.value = [...uploadFiles.value, ...xmlFiles]
   }
 }
@@ -681,7 +681,7 @@ function onRowClick(_e: Event, row: any) {
               <input
                 ref="uploadFileInput"
                 type="file"
-                accept=".xml"
+                accept=".xml,.pdf"
                 multiple
                 class="hidden"
                 @change="onUploadFileChange"
@@ -692,7 +692,7 @@ function onRowClick(_e: Event, row: any) {
             <div v-if="uploadFiles.length" class="space-y-2">
               <div v-for="(file, i) in uploadFiles" :key="i" class="flex items-center justify-between p-2 rounded-lg bg-elevated">
                 <div class="flex items-center gap-2">
-                  <UIcon name="i-lucide-file-code" class="text-muted" />
+                  <UIcon :name="file.name.toLowerCase().endsWith('.pdf') ? 'i-lucide-file-text' : 'i-lucide-file-code'" class="text-muted" />
                   <span class="text-sm">{{ file.name }}</span>
                   <span class="text-xs text-dimmed">({{ (file.size / 1024).toFixed(1) }} KB)</span>
                 </div>

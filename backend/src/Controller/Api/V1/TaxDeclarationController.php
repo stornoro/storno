@@ -35,6 +35,7 @@ class TaxDeclarationController extends AbstractController
     public const WAS6DUS_UPLOAD_URL = 'https://decl.anaf.mfinante.gov.ro/WAS6DUS/displayFile.do';
 
     public function __construct(
+        private readonly \App\Service\Declaration\PdfEmbeddedXmlExtractor $pdfXml,
         private readonly TaxDeclarationManager $manager,
         private readonly DeclarationPdfService $declarationPdf,
         private readonly OrganizationContext $organizationContext,
@@ -257,8 +258,22 @@ class TaxDeclarationController extends AbstractController
         }
 
         try {
-            $xmlContent = file_get_contents($file->getPathname());
-            $declaration = $this->manager->createFromXml($company, $xmlContent, $user);
+            $content = (string) file_get_contents($file->getPathname());
+            $isPdf = str_starts_with($content, '%PDF') || strtolower((string) $file->getClientOriginalExtension()) === 'pdf';
+            if ($isPdf) {
+                // a declaration PDF from another program (SAGA, ANAF's own form): the XML travels inside it
+                $xmlContent = $this->pdfXml->extract($content);
+                if ($xmlContent === null) {
+                    return $this->json(['error' => 'PDF-ul nu conține o declarație ANAF (niciun XML atașat sau formular XFA).', 'code' => 'NO_DECLARATION_XML'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+                $declaration = $this->manager->createFromXml($company, $xmlContent, $user, 'pdf_upload');
+                $uploadedPath = sprintf('declarations/%s/%s/%s_uploaded.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
+                $this->defaultStorage->write($uploadedPath, $content);
+                $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['uploadedPdfPath' => $uploadedPath, 'uploadedFileName' => $file->getClientOriginalName()]));
+                $this->entityManager->flush();
+            } else {
+                $declaration = $this->manager->createFromXml($company, $content, $user);
+            }
 
             return $this->json($declaration, Response::HTTP_CREATED, context: ['groups' => ['declaration:detail']]);
         } catch (\InvalidArgumentException $e) {
