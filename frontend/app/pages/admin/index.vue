@@ -64,7 +64,41 @@
       </UCard>
     </div>
 
-    <UCard class="mt-4">
+    <!-- shrink-0: the panel body is a flex column, and UCard's overflow-hidden lets flex squeeze the
+         cards to a few pixels when the content is taller than the viewport (the header was all that
+         remained of "recent activity"). -->
+    <UCard class="mt-4 shrink-0">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold">{{ $t('admin.activity.topUsers', { days: 30 }) }}</h3>
+          <UButton variant="ghost" size="sm" to="/admin/activity">{{ $t('common.viewAll') }}</UButton>
+        </div>
+      </template>
+      <div v-if="activityLoading" class="text-muted text-center py-4">{{ $t('common.loading') }}</div>
+      <div v-else-if="!activeUsers.length" class="text-muted text-center py-4">{{ $t('common.noData') }}</div>
+      <ul v-else class="divide-y divide-default">
+        <li v-for="row in activeUsers" :key="row.user.id" class="flex items-center gap-3 py-2.5 text-sm">
+          <NuxtLink to="/admin/activity" class="font-medium truncate text-primary hover:underline">{{ row.user.email }}</NuxtLink>
+          <span v-if="row.user.fullName" class="text-muted truncate hidden sm:inline">{{ row.user.fullName }}</span>
+          <NuxtLink
+            v-if="row.organizations[0]"
+            :to="`/admin/organizations/${row.organizations[0].id}`"
+            class="text-muted truncate hidden md:inline hover:underline"
+          >{{ row.organizations[0].name }}</NuxtLink>
+          <span class="ml-auto flex items-center gap-2 whitespace-nowrap text-xs">
+            <UBadge color="success" variant="subtle" size="xs" :title="$t('admin.activity.invoicesIssued')">
+              {{ row.invoicesIssued }} {{ $t('admin.activity.issuedShort') }}
+            </UBadge>
+            <UBadge color="neutral" variant="subtle" size="xs" :title="$t('admin.activity.activeDays')">
+              {{ row.activeDays }} {{ $t('admin.activity.daysShort') }}
+            </UBadge>
+            <span class="text-muted">{{ formatRelative(row.lastActiveAt) }}</span>
+          </span>
+        </li>
+      </ul>
+    </UCard>
+
+    <UCard class="mt-4 shrink-0">
       <template #header>
         <div class="flex items-center justify-between">
           <h3 class="font-semibold">{{ $t('admin.emailLog.title') }}</h3>
@@ -74,7 +108,7 @@
       <p class="text-sm text-muted">{{ $t('admin.emailLog.description') }}</p>
     </UCard>
 
-    <UCard class="mt-4">
+    <UCard class="mt-4 shrink-0">
       <template #header>
         <div class="flex items-center justify-between">
           <h3 class="font-semibold">{{ $t('admin.recentActivity') }}</h3>
@@ -114,6 +148,11 @@ const recentUsers = ref<any[]>([])
 const usersLoading = ref(true)
 const recentOrgs = ref<any[]>([])
 const orgsLoading = ref(true)
+const activeUsers = ref<any[]>([])
+const activityLoading = ref(true)
+// Same persisted exclude list as /admin/audit-logs and /admin/activity, so the
+// admin's own account does not drown out real customers on the dashboard either.
+const auditExclude = useAdminAuditExclude()
 
 function actionColor(action: string): string {
   switch (action) {
@@ -159,12 +198,17 @@ onMounted(async () => {
   // Fire all four admin lookups in parallel — they're independent and the
   // page is already rendered, so blocking one card behind another just adds
   // perceived latency.
+  const exclude = auditExclude.value || undefined
   await Promise.all([
     get<any>('/v1/admin/stats').then((d) => { stats.value = d }).catch(() => {}),
-    get<any>('/v1/admin/audit-logs', { page: 1, limit: 8 })
+    get<any>('/v1/admin/audit-logs', { page: 1, limit: 8, exclude })
       .then((d) => { recent.value = d.data || [] })
       .catch(() => {})
       .finally(() => { recentLoading.value = false }),
+    get<any>('/v1/admin/activity', { days: 30, limit: 5, exclude })
+      .then((d) => { activeUsers.value = d.data || [] })
+      .catch(() => {})
+      .finally(() => { activityLoading.value = false }),
     get<any>('/v1/admin/users', { page: 1, limit: 5 })
       .then((d) => { recentUsers.value = d.data || [] })
       .catch(() => {})

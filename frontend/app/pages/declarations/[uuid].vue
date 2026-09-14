@@ -32,6 +32,9 @@
             <UButton v-if="isDraft" icon="i-lucide-check-circle" variant="outline" color="primary" :loading="actionLoading" @click="validate">
               {{ $t('declarations.validate') }}
             </UButton>
+            <UButton v-if="canRecordExternal" icon="i-lucide-badge-check" variant="outline" color="neutral" @click="openExternalFiling">
+              {{ $t('declarations.external.button') }}
+            </UButton>
             <UButton v-if="canSubmit" icon="i-lucide-send" color="primary" :loading="actionLoading" @click="agentSubmitModalOpen = true">
               {{ $t('declarations.submit') }}
             </UButton>
@@ -481,6 +484,30 @@
           </div>
         </template>
       </UModal>
+      <!-- Filed outside Storno: record the number and follow its state -->
+      <UModal v-model:open="externalOpen" :title="$t('declarations.external.title')">
+        <template #body>
+          <div class="space-y-4">
+            <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.external.help') }}</p>
+            <UFormField :label="$t('declarations.external.index')" required>
+              <UInput v-model="external.index" placeholder="INTERNT-1216000000-2026" class="w-full" />
+            </UFormField>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium">{{ $t('declarations.external.ghiseu') }}</div>
+                <div class="text-xs text-(--ui-text-muted)">{{ $t('declarations.external.ghiseuHelp') }}</div>
+              </div>
+              <USwitch v-model="external.ghiseu" />
+            </div>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2 w-full">
+            <UButton color="neutral" variant="ghost" @click="externalOpen = false">{{ $t('common.cancel') }}</UButton>
+            <UButton :disabled="!external.index.trim()" :loading="externalSaving" @click="saveExternalFiling">{{ $t('declarations.external.save') }}</UButton>
+          </div>
+        </template>
+      </UModal>
     </template>
   </UDashboardPanel>
 </template>
@@ -564,6 +591,29 @@ useHead({ title: computed(() => declaration.value ? `${declaration.value.type.to
 const isDraft = computed(() => declaration.value?.status === 'draft')
 const isValidated = computed(() => declaration.value?.status === 'validated')
 const canSubmit = computed(() => isDraft.value || isValidated.value)
+// filed outside Storno (portal by hand, another program, at the counter): record ANAF's number and follow it
+const canRecordExternal = computed(() => ['draft', 'validated', 'rejected', 'error'].includes(declaration.value?.status))
+const externalOpen = ref(false)
+const externalSaving = ref(false)
+const external = reactive({ index: '', ghiseu: false })
+function openExternalFiling() {
+  external.index = ''
+  external.ghiseu = false
+  externalOpen.value = true
+}
+async function saveExternalFiling() {
+  externalSaving.value = true
+  try {
+    const { patch } = useApi()
+    declaration.value = await patch<any>(`/v1/declarations/${route.params.uuid}`, { filedExternally: { index: external.index.trim(), ghiseu: external.ghiseu } })
+    externalOpen.value = false
+    toast.add({ title: $t('declarations.external.saved'), color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.error ?? $t('common.error'), color: 'error' })
+  } finally {
+    externalSaving.value = false
+  }
+}
 const isTerminal = computed(() => ['accepted', 'rejected', 'error'].includes(declaration.value?.status))
 const isAutoPopulated = computed(() => declaration.value && AUTO_POPULATED_TYPES.includes(declaration.value.type as DeclarationType))
 const isManualType = computed(() => !isAutoPopulated.value)

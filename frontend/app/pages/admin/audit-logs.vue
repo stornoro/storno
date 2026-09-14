@@ -8,6 +8,8 @@ const logs = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
 const actionFilter = ref('all')
+const entityTypeFilter = ref('all')
+const exclude = useAdminAuditExclude()
 const page = ref(1)
 const total = ref(0)
 const limit = ref(PAGINATION.DEFAULT_LIMIT)
@@ -34,6 +36,15 @@ const actionOptions = computed(() => [
   { label: 'Update', value: 'update' },
   { label: 'Delete', value: 'delete' },
   { label: 'Impersonate', value: 'impersonate' },
+])
+
+// Distinct entity types seen in the audit log, most frequent first.
+const entityTypeOptions = computed(() => [
+  { label: $t('common.all'), value: 'all' },
+  ...['Invoice', 'Client', 'Company', 'Product', 'Supplier', 'DocumentSeries', 'ApiToken', 'Organization', 'User',
+    'OrganizationMembership', 'RecurringInvoice', 'ProformaInvoice', 'DeliveryNote', 'Receipt', 'LicenseKey',
+    'EmailTemplate', 'BankAccount', 'Payment', 'Declaration', 'Dosar']
+    .map(v => ({ label: v, value: v })),
 ])
 
 function actionColor(action: string): string {
@@ -76,6 +87,8 @@ async function fetchLogs() {
     }
     if (search.value) params.search = search.value
     if (actionFilter.value !== 'all') params.action = actionFilter.value
+    if (entityTypeFilter.value !== 'all') params.entityType = entityTypeFilter.value
+    if (exclude.value.trim()) params.exclude = exclude.value.trim()
 
     const data = await get<any>('/v1/admin/audit-logs', params)
     logs.value = data.data || []
@@ -92,7 +105,12 @@ const onSearchInput = useDebounceFn(() => {
   fetchLogs()
 }, 300)
 
-watch(actionFilter, () => {
+const onExcludeInput = useDebounceFn(() => {
+  page.value = 1
+  fetchLogs()
+}, 400)
+
+watch([actionFilter, entityTypeFilter], () => {
   page.value = 1
   fetchLogs()
 })
@@ -121,11 +139,23 @@ onMounted(() => fetchLogs())
     </div>
 
     <UDashboardToolbar class="mb-4">
+      <template #left>
+        <UInput
+          v-model="exclude"
+          :placeholder="$t('admin.auditExcludePlaceholder')"
+          icon="i-lucide-filter-x"
+          class="w-80"
+          :title="$t('admin.auditExcludeHint')"
+          @update:model-value="onExcludeInput"
+        />
+      </template>
       <template #right>
+        <USelectMenu v-model="entityTypeFilter" :items="entityTypeOptions" value-key="value" :placeholder="$t('admin.auditEntityType')" class="w-48" />
         <USelectMenu v-model="actionFilter" :items="actionOptions" value-key="value" :placeholder="$t('admin.auditAction')" class="w-40" />
         <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-64" @update:model-value="onSearchInput" />
       </template>
     </UDashboardToolbar>
+    <p v-if="exclude.trim()" class="text-xs text-muted -mt-2 mb-4">{{ $t('admin.auditExcludeActive', { list: exclude.trim() }) }}</p>
 
     <UTable :data="logs" :columns="columns" :loading="loading">
       <template #user-cell="{ row }">

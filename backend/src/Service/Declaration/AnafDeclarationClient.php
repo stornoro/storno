@@ -25,6 +25,11 @@ class AnafDeclarationClient
     private const EPATRIM_D112_URL = 'https://epatrim.anaf.ro/StareD112';
     /** Public status page for declarations filed on the e-guvernare portal (no auth). */
     public const STARE_D112_URL = 'https://www.anaf.ro/StareD112';
+    /**
+     * The StareD112 application is served from three hosts that go down independently (the
+     * one on www.anaf.ro was unreachable for days in September 2026); ask them in turn.
+     */
+    public const STARE_D112_HOSTS = ['https://www.anaf.ro/StareD112', 'https://stare.anaf.ro/StareD112', 'https://epatrim.anaf.ro/StareD112'];
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -293,51 +298,91 @@ class AnafDeclarationClient
 
     /**
      * Status of a declaration filed through the e-guvernare portal, by upload index
-     * and CUI/CNP. Public: no certificate, no token. Returns
-     * ['stare' => 'ok'|'nok'|'processing'|'unknown', 'text' => <ANAF wording>, 'raw' => <html>].
+     * and CUI/CNP. Public: no certificate, no token. $ghiseu = true when the number is the
+     * registration number given at the counter (ghiseu) instead of the online upload index.
+     * Every StareD112 host is tried before giving up. Returns
+     * ['stare' => 'ok'|'nok'|'processing'|'unknown', 'text' => <ANAF wording>, 'index' => …, 'host' => …, 'raw' => <text>].
      */
-    public function checkPortalStatus(string $uploadIndex, string $cui): array
+    public function checkPortalStatus(string $uploadIndex, string $cui, bool $ghiseu = false): array
     {
         $this->rateLimiter->consumeGlobal();
-        $response = $this->httpClient->request('POST', self::STARE_D112_URL . '/vizualizareStare.do', [
-            'body' => ['ghiseu' => 'N', 'id' => preg_replace('/\D/', '', $uploadIndex), 'cui' => preg_replace('/\D/', '', $cui)],
-            'headers' => ['Accept' => 'text/html'],
-            'timeout' => 30,
-        ]);
-        $html = $response->getContent(false);
-        $text = html_entity_decode(strip_tags(preg_replace('/\s+/', ' ', $html) ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-
-        $stare = 'unknown';
-        $wording = null;
-        foreach ([
-            'Documentul este valid' => 'ok',
-            'Documentul are erori de validare' => 'nok',
-            'Fişierul depus nu este un document valid' => 'nok',
-            'Fisierul depus nu este un document valid' => 'nok',
-            'In prelucrare' => 'processing',
-            'În prelucrare' => 'processing',
-            'Nu a fost identificata nicio declaratie' => 'unknown',
-        ] as $needle => $state) {
-            if (mb_stripos($text, $needle) !== false) {
-                $stare = $state;
-                $wording = $needle;
-                break;
+        $body = ['ghiseu' => $ghiseu ? 'Y' : 'N', 'id' => self::indexNumber($uploadIndex), 'cui' => preg_replace('/\D/', '', $cui)];
+        $last = null;
+        foreach (self::STARE_D112_HOSTS as $host) {
+            try {
+                $response = $this->httpClient->request('POST', $host . '/vizualizareStare.do', [
+                    'body' => $body,
+                    'headers' => ['Accept' => 'text/html'],
+                    'timeout' => 30,
+                ]);
+                $status = $response->getStatusCode();
+                $html = $response->getContent(false);
+                if ($status >= 500 || trim($html) === '') {
+                    $last = new \RuntimeException(sprintf('%s answered HTTP %d', $host, $status));
+                    continue;
+                }
+            } catch (\Throwable $e) {
+                $last = $e;
+                continue;
             }
+            $text = html_entity_decode(strip_tags(preg_replace('/\s+/', ' ', $html) ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+            $stare = 'unknown';
+            $wording = null;
+            foreach ([
+                'Documentul este valid' => 'ok',
+                'Documentul are erori de validare' => 'nok',
+                'Fişierul depus nu este un document valid' => 'nok',
+                'Fisierul depus nu este un document valid' => 'nok',
+                'In prelucrare' => 'processing',
+                'În prelucrare' => 'processing',
+                'Nu a fost identificata nicio declaratie' => 'unknown',
+            ] as $needle => $state) {
+                if (mb_stripos($text, $needle) !== false) {
+                    $stare = $state;
+                    $wording = $needle;
+                    break;
+                }
+            }
+
+            return ['stare' => $stare, 'text' => $wording, 'index' => $uploadIndex, 'ghiseu' => $ghiseu, 'host' => $host, 'raw' => mb_substr($text, 0, 2000)];
         }
 
-        return ['stare' => $stare, 'text' => $wording, 'index' => $uploadIndex, 'raw' => mb_substr($text, 0, 2000)];
+        throw new \RuntimeException('ANAF StareD112 unavailable on every host: ' . ($last?->getMessage() ?? 'no answer'), 0, $last);
     }
 
-    /** Signed recipisa PDF for a portal filing; empty string when ANAF has none (or after 60 days). */
+    /** "INTERNT-1216000000-2026" (as ANAF prints it) or a bare number → the number StareD112 wants. */
+    public static function indexNumber(string $uploadIndex): string
+    {
+        return preg_match('/INTERNT-(\d+)-\d{4}/i', $uploadIndex, $m) ? $m[1] : (preg_replace('/\D/', '', $uploadIndex) ?? '');
+    }
+
+    /** Signed recipisa PDF for a portal filing; empty string when ANAF has none (or after 60 days). Tries every host. */
     public function downloadPortalRecipisa(string $uploadIndex): string
     {
         $this->rateLimiter->consumeGlobal();
-        $response = $this->httpClient->request('GET', self::STARE_D112_URL . '/ObtineRecipisa', [
-            'query' => ['numefisier' => preg_replace('/\D/', '', $uploadIndex) . '.pdf'],
-            'timeout' => 30,
-        ]);
-        $pdf = $response->getContent(false);
+        $query = ['numefisier' => self::indexNumber($uploadIndex) . '.pdf'];
+        $sawAnswer = false;
+        foreach (self::STARE_D112_HOSTS as $host) {
+            try {
+                $response = $this->httpClient->request('GET', $host . '/ObtineRecipisa', ['query' => $query, 'timeout' => 30]);
+                $status = $response->getStatusCode();
+                $pdf = $response->getContent(false);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($status >= 500) {
+                continue;
+            }
+            $sawAnswer = true;
+            if (str_starts_with($pdf, '%PDF')) {
+                return $pdf;
+            }
+        }
+        if (!$sawAnswer) {
+            throw new \RuntimeException('ANAF StareD112 unavailable on every host (recipisa).');
+        }
 
-        return str_starts_with($pdf, '%PDF') ? $pdf : '';
+        return '';
     }
 }
