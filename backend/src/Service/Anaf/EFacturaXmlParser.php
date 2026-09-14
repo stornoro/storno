@@ -59,7 +59,7 @@ class EFacturaXmlParser
             }
         }
 
-        $lines = $this->parseLines($root, $lineTag);
+        $lines = $this->repartitionVat($this->parseLines($root, $lineTag), $root);
 
         $monetaryTotal = $this->getFirstElement($root, self::NS_CAC, 'LegalMonetaryTotal');
 
@@ -297,6 +297,16 @@ class EFacturaXmlParser
             // Parse line-level UBL extensions
             $lineUblExtensions = $this->parseLineUblExtensions($lineEl);
 
+            // Item identifiers (BT-155/156/157): the keys the supplier will reuse on the next invoice
+            $barcode = $sellerItemCode = $buyerItemCode = null;
+            if ($itemEl) {
+                $stdEl = $this->getFirstElement($itemEl, self::NS_CAC, 'StandardItemIdentification');
+                $barcode = $stdEl ? $this->cleanIdentifier($this->getElementValue($stdEl, self::NS_CBC, 'ID')) : null;
+                $sellEl = $this->getFirstElement($itemEl, self::NS_CAC, 'SellersItemIdentification');
+                $sellerItemCode = $sellEl ? $this->cleanIdentifier($this->getElementValue($sellEl, self::NS_CBC, 'ID')) : null;
+                $buyEl = $this->getFirstElement($itemEl, self::NS_CAC, 'BuyersItemIdentification');
+                $buyerItemCode = $buyEl ? $this->cleanIdentifier($this->getElementValue($buyEl, self::NS_CBC, 'ID')) : null;
+            }
             $lines[] = new ParsedInvoiceLine(
                 description: $description,
                 quantity: $quantity,
@@ -307,10 +317,89 @@ class EFacturaXmlParser
                 vatAmount: $vatAmount,
                 lineTotal: $lineTotal,
                 ublExtensions: $lineUblExtensions,
+                barcode: $barcode,
+                sellerItemCode: $sellerItemCode,
+                buyerItemCode: $buyerItemCode,
             );
         }
 
         return $lines;
+    }
+
+    /** Max. absolute difference (document currency) between the lines' VAT and the TaxSubtotal that is treated as rounding. */
+    public const VAT_ROUNDING_TOLERANCE = '3.00';
+
+    /**
+     * Line VAT is recomputed from LineExtensionAmount × rate, so the sum can differ by a few
+     * bani from the issuer's TaxSubtotal (issuers round per document, per line or per unit).
+     * When the gap for a category+rate is below VAT_ROUNDING_TOLERANCE the difference is put
+     * on the largest line of that group, so the lines add up to the declared VAT; a larger gap
+     * is left alone (it is a real inconsistency the user should see).
+     *
+     * @param ParsedInvoiceLine[] $lines
+     * @return ParsedInvoiceLine[]
+     */
+    private function repartitionVat(array $lines, \DOMElement $root): array
+    {
+        $taxTotal = $this->getFirstElement($root, self::NS_CAC, 'TaxTotal');
+        if (!$taxTotal || $lines === []) {
+            return $lines;
+        }
+
+        $declared = [];
+        foreach ($taxTotal->getElementsByTagNameNS(self::NS_CAC, 'TaxSubtotal') as $sub) {
+            $cat = $this->getFirstElement($sub, self::NS_CAC, 'TaxCategory');
+            if (!$cat) {
+                continue;
+            }
+            $key = ($this->getElementValue($cat, self::NS_CBC, 'ID') ?? 'S') . '|' . $this->normalizeRate($this->getElementValue($cat, self::NS_CBC, 'Percent') ?? '0');
+            $declared[$key] = bcadd($declared[$key] ?? '0.00', $this->getElementValue($sub, self::NS_CBC, 'TaxAmount') ?? '0.00', 2);
+        }
+
+        $groups = [];
+        foreach ($lines as $i => $line) {
+            $groups[$line->vatCategoryCode . '|' . $this->normalizeRate($line->vatRate)][] = $i;
+        }
+
+        foreach ($groups as $key => $indexes) {
+            if (!isset($declared[$key])) {
+                continue;
+            }
+            $computed = '0.00';
+            foreach ($indexes as $i) {
+                $computed = bcadd($computed, $lines[$i]->vatAmount, 2);
+            }
+            $diff = bcsub($declared[$key], $computed, 2);
+            if (bccomp($diff, '0.00', 2) === 0 || bccomp(self::absDecimal($diff), self::VAT_ROUNDING_TOLERANCE, 2) >= 0) {
+                continue;
+            }
+            // Largest line (by absolute net amount) absorbs the rounding difference
+            $largest = $indexes[0];
+            foreach ($indexes as $i) {
+                if (bccomp(self::absDecimal($lines[$i]->lineTotal), self::absDecimal($lines[$largest]->lineTotal), 2) > 0) {
+                    $largest = $i;
+                }
+            }
+            $lines[$largest] = $lines[$largest]->withVatAmount(bcadd($lines[$largest]->vatAmount, $diff, 2));
+        }
+
+        return array_values($lines);
+    }
+
+    private function normalizeRate(string $rate): string
+    {
+        return number_format((float) $rate, 2, '.', '');
+    }
+
+    private static function absDecimal(string $value): string
+    {
+        return str_starts_with($value, '-') ? substr($value, 1) : $value;
+    }
+
+    private function cleanIdentifier(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        return $value === '' ? null : mb_substr($value, 0, 100);
     }
 
     private function getFirstElement(\DOMElement $parent, string $ns, string $localName): ?\DOMElement

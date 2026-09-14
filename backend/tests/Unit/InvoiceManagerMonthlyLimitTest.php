@@ -16,6 +16,7 @@ use App\Service\Anaf\AnafTokenResolver;
 use App\Service\EuVatRateService;
 use App\Service\LicenseManager;
 use App\Validator\UblExtensionsValidator;
+use App\Service\Product\SupplierProductMatcher;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -77,6 +78,7 @@ class InvoiceManagerMonthlyLimitTest extends TestCase
             $this->createMock(AnafTokenResolver::class),
             $this->createMock(EuVatRateService::class),
             $this->createMock(UblExtensionsValidator::class),
+            $this->createMock(SupplierProductMatcher::class),
             $dispatcher,
             $license,
         );
@@ -147,6 +149,7 @@ class InvoiceManagerMonthlyLimitTest extends TestCase
             $this->createMock(AnafTokenResolver::class),
             $this->createMock(EuVatRateService::class),
             $this->createMock(UblExtensionsValidator::class),
+            $this->createMock(SupplierProductMatcher::class),
             $this->createMock(EventDispatcherInterface::class),
             $license,
         );

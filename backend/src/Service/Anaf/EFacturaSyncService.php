@@ -27,6 +27,7 @@ use App\Repository\InvoiceRepository;
 use App\Repository\OrganizationMembershipRepository;
 use App\Repository\ProductRepository;
 use App\Repository\SupplierRepository;
+use App\Service\Product\SupplierProductMatcher;
 use App\Enum\DocumentType;
 use App\Manager\DocumentSeriesManager;
 use App\Service\Centrifugo\CentrifugoService;
@@ -62,6 +63,7 @@ class EFacturaSyncService
         private readonly ClientRepository $clientRepository,
         private readonly ProductRepository $productRepository,
         private readonly SupplierRepository $supplierRepository,
+        private readonly SupplierProductMatcher $supplierProductMatcher,
         private readonly BankAccountRepository $bankAccountRepository,
         private readonly EFacturaMessageRepository $eFacturaMessageRepository,
         EntityManagerInterface $entityManager,
@@ -650,10 +652,19 @@ class EFacturaSyncService
             if ($parsedLine->ublExtensions) {
                 $line->setUblExtensions($parsedLine->ublExtensions);
             }
+            if ($parsedLine->sellerItemCode && !$line->getProductCode()) {
+                $line->setProductCode(mb_substr($parsedLine->sellerItemCode, 0, 50));
+            }
+            if ($parsedLine->buyerItemCode) {
+                $line->setBuyerItemIdentification(mb_substr($parsedLine->buyerItemCode, 0, 100));
+            }
+            if ($parsedLine->barcode) {
+                $line->setStandardItemIdentification(mb_substr($parsedLine->barcode, 0, 100));
+            }
 
-            // Find-or-create product
+            // Find-or-create product; for received invoices the supplier's own identifiers are remembered
             if ($parsedLine->description) {
-                $product = $this->findOrCreateProduct($company, $parsedLine, $result);
+                $product = $this->findOrCreateProduct($company, $parsedLine, $result, $direction === InvoiceDirection::INCOMING ? $supplier : null);
                 $line->setProduct($product);
             }
 
@@ -1140,8 +1151,19 @@ class EFacturaSyncService
         return (bool) preg_match('/^[1-9]\d{12}$/', $clean);
     }
 
-    private function findOrCreateProduct(Company $company, ParsedInvoiceLine $line, SyncResult $result): Product
+    private function findOrCreateProduct(Company $company, ParsedInvoiceLine $line, SyncResult $result, ?Supplier $supplier = null): Product
     {
+        $identifiers = ['barcode' => $line->barcode, 'sellerCode' => $line->sellerItemCode, 'buyerCode' => $line->buyerItemCode];
+
+        // What this supplier called the product last time (barcode → supplier code → description → our code)
+        if ($supplier) {
+            $remembered = $this->supplierProductMatcher->match($company, $supplier, $identifiers, $line->description);
+            if ($remembered) {
+                $remembered->setLastSyncedAt(new \DateTimeImmutable());
+                return $remembered;
+            }
+        }
+
         // Lookup by name + unit + company
         $existing = $this->productRepository->findOneBy([
             'company' => $company,
@@ -1151,6 +1173,9 @@ class EFacturaSyncService
 
         if ($existing) {
             $existing->setLastSyncedAt(new \DateTimeImmutable());
+            if ($supplier) {
+                $this->supplierProductMatcher->learn($company, $supplier, $existing, $identifiers, $line->description);
+            }
             return $existing;
         }
 
@@ -1166,6 +1191,9 @@ class EFacturaSyncService
 
         $this->entityManager->persist($product);
         $result->incrementNewProducts();
+        if ($supplier) {
+            $this->supplierProductMatcher->learn($company, $supplier, $product, $identifiers, $line->description);
+        }
 
         return $product;
     }

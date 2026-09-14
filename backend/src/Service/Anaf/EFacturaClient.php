@@ -47,6 +47,44 @@ class EFacturaClient
         return EFacturaUploadResponse::fromResponse($data);
     }
 
+    /** Longest message ANAF accepts in a RASP header. */
+    public const RASP_MAX_LENGTH = 4000;
+
+    /**
+     * Send a message to the issuer of a received invoice through SPV (standard "RASP"):
+     * ANAF forwards it to the seller as a message attached to their upload index. The body
+     * is the reqMesaj header (no UBL involved); the answer has the same shape as an upload.
+     */
+    public function sendMessageToIssuer(string $uploadIndex, string $message, string $cif, string $token): EFacturaUploadResponse
+    {
+        $message = trim($message);
+        if ($message === '' || mb_strlen($message) > self::RASP_MAX_LENGTH) {
+            throw new \InvalidArgumentException(sprintf('The message must have between 1 and %d characters.', self::RASP_MAX_LENGTH));
+        }
+        if (!preg_match('/^\d+$/', $uploadIndex)) {
+            throw new \InvalidArgumentException('The upload index must be numeric.');
+        }
+
+        $this->rateLimiter->consumeGlobal();
+
+        $body = sprintf(
+            '<?xml version="1.0" encoding="UTF-8"?><header xmlns="mfp:anaf:dgti:spv:reqMesaj:v1" message="%s" index_incarcare="%s"/>',
+            htmlspecialchars($message, ENT_XML1 | ENT_QUOTES, 'UTF-8'),
+            $uploadIndex,
+        );
+
+        $response = $this->httpClient->request('POST', $this->baseUrl . '/upload', [
+            'headers' => $this->buildHeaders($token),
+            'query' => [
+                'standard' => 'RASP',
+                'cif' => $cif,
+            ],
+            'body' => $body,
+        ]);
+
+        return EFacturaUploadResponse::fromResponse($this->parseXmlResponse($response->getContent(false)));
+    }
+
     /**
      * Check the processing status of a previously uploaded invoice.
      */

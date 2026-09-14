@@ -134,6 +134,11 @@
               <UButton icon="i-lucide-mail" variant="outline" @click="emailModalOpen = true" />
             </UTooltip>
 
+            <!-- Message to the issuer through SPV (received e-Factura with an upload index) -->
+            <UTooltip v-if="invoice.direction === 'incoming' && invoice.anafUploadId" :text="$t('invoices.issuerMessage.button')">
+              <UButton icon="i-lucide-message-square-reply" variant="outline" @click="openIssuerMessage" />
+            </UTooltip>
+
             <!-- Verify signature -->
             <UTooltip v-if="invoice.anafMessageId" :text="signatureLabel">
               <UButton
@@ -980,6 +985,36 @@
           </template>
         </UModal>
 
+        <!-- Message to the issuer (SPV RASP) -->
+        <UModal v-model:open="issuerMessageOpen">
+          <template #header>
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-message-square-reply" class="size-5 shrink-0 text-(--ui-primary)" />
+              <h3 class="font-semibold">{{ $t('invoices.issuerMessage.title') }}</h3>
+            </div>
+          </template>
+          <template #body>
+            <div class="space-y-3">
+              <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.issuerMessage.description', { index: invoice.anafUploadId }) }}</p>
+              <UTextarea
+                v-model="issuerMessageText"
+                :rows="5"
+                :maxlength="4000"
+                autoresize
+                class="w-full"
+                :placeholder="$t('invoices.issuerMessage.placeholder')"
+              />
+              <p class="text-xs text-(--ui-text-muted) text-right">{{ issuerMessageText.length }} / 4000</p>
+            </div>
+          </template>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" color="neutral" @click="issuerMessageOpen = false">{{ $t('common.cancel') }}</UButton>
+              <UButton icon="i-lucide-send" :loading="sendingIssuerMessage" :disabled="!issuerMessageText.trim()" @click="sendIssuerMessage">{{ $t('invoices.issuerMessage.send') }}</UButton>
+            </div>
+          </template>
+        </UModal>
+
         <!-- Edit Invoice Slideover -->
         <USlideover
           v-model:open="editSlideoverOpen"
@@ -1101,6 +1136,33 @@ const issueModalOpen = ref(false)
 const issuing = ref(false)
 const submitModalOpen = ref(false)
 const markUnpaidModalOpen = ref(false)
+
+// Message to the issuer of a received e-Factura (ANAF forwards it in SPV under the upload index)
+const issuerMessageOpen = ref(false)
+const issuerMessageText = ref('')
+const sendingIssuerMessage = ref(false)
+function openIssuerMessage() {
+  issuerMessageText.value = ''
+  issuerMessageOpen.value = true
+}
+async function sendIssuerMessage() {
+  if (!invoice.value || !issuerMessageText.value.trim()) return
+  sendingIssuerMessage.value = true
+  try {
+    await apiPost(`/v1/invoices/${invoice.value.id}/efactura-message`, { message: issuerMessageText.value.trim() })
+    issuerMessageOpen.value = false
+    useToast().add({ title: $t('invoices.issuerMessage.sent'), color: 'success' })
+    await refreshInvoiceData()
+  } catch (err: any) {
+    const code = err?.data?.code
+    const description = code === 'ANAF_TOKEN_REQUIRED'
+      ? $t('invoices.issuerMessage.tokenRequired')
+      : (err?.data?.error || err?.message || '')
+    useToast().add({ title: $t('invoices.issuerMessage.failed'), description, color: 'error' })
+  } finally {
+    sendingIssuerMessage.value = false
+  }
+}
 const submitting = ref(false)
 const cancelModalOpen = ref(false)
 const cancelling = ref(false)

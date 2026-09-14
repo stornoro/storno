@@ -239,7 +239,7 @@ class UblXmlGenerator
         $allowanceTotal = '0.00';
         $chargeTotal = '0.00';
         if (!empty($extensions['allowanceCharges'])) {
-            [$allowanceTotal, $chargeTotal] = $this->addDocumentAllowanceCharges($dom, $root, $extensions['allowanceCharges'], $invoice->getCurrency());
+            [$allowanceTotal, $chargeTotal] = $this->addDocumentAllowanceCharges($dom, $root, $extensions['allowanceCharges'], $invoice->getCurrency(), $invoice);
         }
 
         // === Tax ===
@@ -685,9 +685,9 @@ class UblXmlGenerator
 
             // [BR-E-10, BR-AE-10, BR-O-10, BR-IC-10, BR-G-10] VAT exemption reason
             // [BR-S-10, BR-Z-10] Must NOT have exemption reason for S and Z categories
-            $exemptionReason = $this->getVatExemptionReason($group['categoryCode']);
+            $exemptionReason = $this->getVatExemptionReason($group['categoryCode'], $invoice);
             if ($exemptionReason !== null) {
-                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($group['categoryCode']));
+                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($group['categoryCode'], $invoice));
                 $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReason', $exemptionReason);
             }
 
@@ -1016,7 +1016,7 @@ class UblXmlGenerator
     /**
      * @return array{0: string, 1: string} [allowanceTotal, chargeTotal]
      */
-    private function addDocumentAllowanceCharges(\DOMDocument $dom, \DOMElement $root, array $allowanceCharges, string $currency): array
+    private function addDocumentAllowanceCharges(\DOMDocument $dom, \DOMElement $root, array $allowanceCharges, string $currency, ?Invoice $invoice = null): array
     {
         $allowanceTotal = '0.00';
         $chargeTotal = '0.00';
@@ -1058,9 +1058,9 @@ class UblXmlGenerator
                 $this->addElement($dom, $taxCat, 'cbc:Percent', $ac['taxRate'] ?? '0.00');
             }
             // [BR-E-10, BR-AE-10, BR-O-10, BR-IC-10, BR-G-10] TaxExemptionReason in BG-20/BG-21 TaxCategory
-            $exemptionReason = $this->getVatExemptionReason($catCode);
+            $exemptionReason = $this->getVatExemptionReason($catCode, $invoice);
             if ($exemptionReason !== null) {
-                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($catCode));
+                $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReasonCode', $this->getVatexCode($catCode, $invoice));
                 $this->addElement($dom, $taxCat, 'cbc:TaxExemptionReason', $exemptionReason);
             }
             $taxScheme = $dom->createElement('cac:TaxScheme');
@@ -1101,20 +1101,56 @@ class UblXmlGenerator
     /**
      * Map Romanian unit-of-measure abbreviations to UN/ECE Recommendation 20 codes.
      */
+    /**
+     * Romanian unit label → UN/ECE Recommendation 20 code (BT-130). The list mirrors
+     * InvoiceDefaultsController::unitsOfMeasure and the mobile app; unknown labels
+     * fall back to H87 (piece). A value that already is a UN/ECE code passes through.
+     */
+    public const UNIT_CODES = [
+        'buc' => 'H87', 'bucata' => 'H87', 'bucati' => 'H87',
+        'kg' => 'KGM', 'kilogram' => 'KGM',
+        'g' => 'GRM', 'gram' => 'GRM', 'grame' => 'GRM',
+        'l' => 'LTR', 'litru' => 'LTR', 'litri' => 'LTR',
+        'ml' => 'MLT',
+        'm' => 'MTR', 'metru' => 'MTR', 'metri' => 'MTR',
+        'cm' => 'CMT',
+        'km' => 'KMT',
+        'mp' => 'MTK', 'm2' => 'MTK',
+        'mc' => 'MTQ', 'm3' => 'MTQ',
+        't' => 'TNE', 'tona' => 'TNE', 'tone' => 'TNE',
+        'ora' => 'HUR', 'ore' => 'HUR', 'h' => 'HUR',
+        'min' => 'MIN', 'minut' => 'MIN', 'minute' => 'MIN',
+        'zi' => 'DAY', 'zile' => 'DAY',
+        'sapt' => 'WEE', 'saptamana' => 'WEE', 'saptamani' => 'WEE',
+        'luna' => 'MON', 'luni' => 'MON',
+        'an' => 'ANN', 'ani' => 'ANN',
+        'set' => 'SET',
+        'pereche' => 'PR', 'perechi' => 'PR', 'per' => 'PR',
+        'pachet' => 'XPK', 'pachete' => 'XPK', 'pac' => 'XPK',
+        'cutie' => 'XBX', 'cutii' => 'XBX',
+        'kwh' => 'KWH',
+        'serv' => 'E48', 'serviciu' => 'E48', 'servicii' => 'E48',
+        'proc' => 'P1', '%' => 'P1',
+    ];
+
+    /** Legacy/alias UN/ECE inputs that must be rewritten before they reach ANAF. */
+    private const UNIT_CODE_ALIASES = ['PK' => 'XPK', 'C62' => 'H87', 'EA' => 'H87'];
+
     private function mapUnitOfMeasure(string $unit): string
     {
-        return match (mb_strtolower($unit)) {
-            'buc', 'bucata', 'bucati' => 'H87', // Piece
-            'kg', 'kilogram' => 'KGM',
-            'l', 'litru', 'litri' => 'LTR',
-            'm', 'metru', 'metri' => 'MTR',
-            'ora', 'ore', 'h' => 'HUR',
-            'zi', 'zile' => 'DAY',
-            'luna', 'luni' => 'MON',
-            'set' => 'SET',
-            'pachet' => 'PK',
-            default => 'H87', // Default to piece
-        };
+        $key = mb_strtolower(trim($unit));
+        if (isset(self::UNIT_CODES[$key])) {
+            return self::UNIT_CODES[$key];
+        }
+        $upper = strtoupper(trim($unit));
+        if (isset(self::UNIT_CODE_ALIASES[$upper])) {
+            return self::UNIT_CODE_ALIASES[$upper];
+        }
+        // Already a UN/ECE code (2-3 upper-case letters/digits) that we know how to read back
+        if (in_array($upper, self::UNIT_CODES, true)) {
+            return $upper;
+        }
+        return 'H87';
     }
 
     /**
@@ -1123,16 +1159,31 @@ class UblXmlGenerator
      */
     public static function reverseMapUnitOfMeasure(string $uneceCode): string
     {
-        return match (strtoupper($uneceCode)) {
-            'H87', 'C62' => 'buc',
+        return match (strtoupper(trim($uneceCode))) {
+            'H87', 'C62', 'EA' => 'buc',
             'KGM' => 'kg',
+            'GRM' => 'g',
             'LTR' => 'l',
+            'MLT' => 'ml',
             'MTR' => 'm',
+            'CMT' => 'cm',
+            'KMT' => 'km',
+            'MTK' => 'mp',
+            'MTQ' => 'mc',
+            'TNE' => 't',
             'HUR' => 'ora',
+            'MIN' => 'min',
             'DAY' => 'zi',
+            'WEE' => 'sapt',
             'MON' => 'luna',
+            'ANN' => 'an',
             'SET' => 'set',
-            'PK' => 'pachet',
+            'PR' => 'pereche',
+            'XPK', 'PK' => 'pachet',
+            'XBX' => 'cutie',
+            'KWH' => 'kwh',
+            'E48' => 'serv',
+            'P1' => 'proc',
             default => 'buc',
         };
     }
@@ -1211,8 +1262,16 @@ class UblXmlGenerator
     /**
      * BT-121 TaxExemptionReasonCode — VATEX code per ANAF e-Factura guide v2.9.
      */
-    private function getVatexCode(string $categoryCode): ?string
+    private function getVatexCode(string $categoryCode, ?Invoice $invoice = null): ?string
     {
+        if ($categoryCode === 'E') {
+            // Special regimes carry their own VATEX code (ANAF guide): art. 311 travel agents → 309, art. 312 margin scheme → F
+            return match ($invoice?->getInvoiceTypeCode()) {
+                InvoiceTypeCode::SERVICES_ART_311->value => 'VATEX-EU-309',
+                InvoiceTypeCode::SALES_ART_312->value => 'VATEX-EU-F',
+                default => 'VATEX-EU-132',
+            };
+        }
         return match ($categoryCode) {
             'E' => 'VATEX-EU-132',
             'AE' => 'VATEX-EU-AE',
@@ -1229,8 +1288,15 @@ class UblXmlGenerator
      *
      * Returns null for categories that must not have an exemption reason.
      */
-    private function getVatExemptionReason(string $categoryCode): ?string
+    private function getVatExemptionReason(string $categoryCode, ?Invoice $invoice = null): ?string
     {
+        if ($categoryCode === 'E') {
+            return match ($invoice?->getInvoiceTypeCode()) {
+                InvoiceTypeCode::SERVICES_ART_311->value => 'Regim special pentru agentiile de turism (art. 311)',
+                InvoiceTypeCode::SALES_ART_312->value => 'Regim special pentru bunuri second-hand, opere de arta, obiecte de colectie si antichitati (art. 312)',
+                default => 'Scutit de TVA',
+            };
+        }
         return match ($categoryCode) {
             'E' => 'Scutit de TVA',
             'AE' => 'Taxare inversa',

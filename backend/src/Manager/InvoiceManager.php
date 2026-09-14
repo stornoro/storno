@@ -26,6 +26,7 @@ use App\Service\EuVatRateService;
 use App\Service\LicenseManager;
 use App\Service\ReverseChargeHelper;
 use App\Validator\UblExtensionsValidator;
+use App\Service\Product\SupplierProductMatcher;
 use App\Event\Invoice\InvoiceCreatedEvent;
 use App\Event\Invoice\InvoiceIssuedEvent;
 use App\Event\Invoice\InvoiceSentToProviderEvent;
@@ -56,6 +57,7 @@ class InvoiceManager
         private readonly AnafTokenResolver $anafTokenResolver,
         private readonly EuVatRateService $euVatRateService,
         private readonly UblExtensionsValidator $ublExtensionsValidator,
+        private readonly SupplierProductMatcher $supplierProductMatcher,
         private readonly EventDispatcherInterface $eventDispatcher,
         private readonly LicenseManager $licenseManager,
     ) {}
@@ -1132,10 +1134,34 @@ class InvoiceManager
 
             if ($product) {
                 $line->setProduct($product);
+                $this->rememberSupplierProduct($invoice, $line, $lineData, $product);
             }
 
             $invoice->addLine($line);
         }
+    }
+
+    /**
+     * On a received invoice, the product chosen for a line (explicitly, by id) becomes the
+     * supplier's mapping for that barcode / supplier code / description, so the next sync
+     * from the same supplier lands on it instead of creating a duplicate.
+     */
+    private function rememberSupplierProduct(Invoice $invoice, InvoiceLine $line, array $lineData, Product $product): void
+    {
+        if ($invoice->getDirection() !== InvoiceDirection::INCOMING || empty($lineData['productId'])) {
+            return;
+        }
+        $supplier = $invoice->getSupplier();
+        $company = $invoice->getCompany();
+        if (!$supplier || !$company) {
+            return;
+        }
+        $ids = [
+            'barcode' => $line->getStandardItemIdentification(),
+            'sellerCode' => $line->getProductCode(),
+            'buyerCode' => $line->getBuyerItemIdentification(),
+        ];
+        $this->supplierProductMatcher->learn($company, $supplier, $product, $ids, $line->getDescription(), true);
     }
 
     private function findOrCreateProductFromLine(Company $company, InvoiceLine $line): Product
