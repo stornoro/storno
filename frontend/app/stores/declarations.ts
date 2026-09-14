@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { TaxDeclaration, CreateDeclarationPayload } from '~/types'
+import type { TaxDeclaration, CreateDeclarationPayload, AnafFormVersions } from '~/types'
 import type { DeclarationType, DeclarationStatus } from '~/types/enums'
 import { PAGINATION } from '~/utils/constants'
 
@@ -13,6 +13,16 @@ export interface DeclarationFilters {
 export const useDeclarationStore = defineStore('declarations', () => {
   // ── State ──────────────────────────────────────────────────────────
   const items = ref<TaxDeclaration[]>([])
+  /** ANAF form versions (validator/PDF) and what changed lately; public, cached */
+  const formVersions = ref<AnafFormVersions | null>(null)
+  async function fetchFormVersions(): Promise<void> {
+    try {
+      const { get } = useApi()
+      formVersions.value = await get<AnafFormVersions>('/v1/public/declarations/form-versions')
+    } catch {
+      formVersions.value = null
+    }
+  }
   const loading = ref(true)
   const error = ref<string | null>(null)
 
@@ -141,6 +151,8 @@ export const useDeclarationStore = defineStore('declarations', () => {
     items,
     loading,
     error,
+    formVersions,
+    fetchFormVersions,
     filters,
     page,
     limit,

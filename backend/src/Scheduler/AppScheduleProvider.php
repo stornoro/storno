@@ -29,6 +29,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // ANAF token refresh — every 12 hours (tokens last ~7 days, refresh when < 5 days remaining)
             ->add(RecurringMessage::cron('0 */12 * * *', new RunCommandMessage('app:anaf:refresh-tokens')))
             ->add(RecurringMessage::cron('15 4 * * 0', new RunCommandMessage('app:anaf:update-validators')))
+            // ANAF form versions (versiuni.xml) — daily, so a changed form is known before a filing is rejected
+            ->add(RecurringMessage::cron('30 5 * * *', new RunCommandMessage('app:anaf:form-versions')))
             ->add(RecurringMessage::cron('45 4 * * 0', new RunCommandMessage('app:anaf:nomenclator:sync')))
             // Mobile update gate follows the app stores — hourly
             ->add(RecurringMessage::cron('20 * * * *', new RunCommandMessage('app:mobile:sync-store-versions')))

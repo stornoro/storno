@@ -12,7 +12,15 @@ const router = useRouter()
 
 useHead({ title: $t('declarations.title') })
 
+const intlLocale = useIntlLocale()
+function formatDate(d: string | null): string {
+  return d ? new Date(d).toLocaleDateString(intlLocale, { day: 'numeric', month: 'long', year: 'numeric' }) : ''
+}
+const formChanges = computed(() => (store.formVersions?.forms ?? []).filter(f => store.formVersions?.changedRecently.includes(f.form)))
+const formOutdated = computed(() => store.formVersions?.localOutdated ?? [])
+
 onMounted(() => {
+  store.fetchFormVersions()
   store.fetchDeclarations()
 })
 
@@ -471,6 +479,15 @@ function onRowClick(_e: Event, row: any) {
     </template>
 
     <template #body>
+      <!-- ANAF changed a form lately, or this installation's validators lag behind ANAF -->
+      <div v-if="formChanges.length || formOutdated.length" class="flex items-start gap-3 p-3 rounded-lg bg-info/10 border border-info/20">
+        <UIcon name="i-lucide-file-diff" class="text-info shrink-0 mt-0.5" />
+        <div class="text-sm flex-1 space-y-1">
+          <p v-for="c in formChanges" :key="c.form">{{ $t('declarations.formVersions.changed', { form: c.form, date: formatDate(c.changedAt), from: c.previousP ?? c.previousJ ?? '?', to: c.versionP }) }}</p>
+          <p v-if="formOutdated.length">{{ $t('declarations.formVersions.outdated', { forms: formOutdated.join(', ') }) }}</p>
+        </div>
+      </div>
+
       <!-- Agent update banner -->
       <div v-if="agentAvailable && agentUpdateAvailable" class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
         <UIcon name="i-lucide-download" class="text-warning shrink-0" />
