@@ -83,8 +83,9 @@ class SupplierProductMatcherTest extends KernelTestCase
 
     public function testOurOwnCodeFromBuyersItemIdentificationMatchesTheProduct(): void
     {
-        $ours = $this->product('Cablu UTP', 'CAB-UTP-1');
-        self::assertSame($ours->getId()->toRfc4122(), $this->matcher->match($this->company, $this->supplier, ['buyerCode' => 'CAB-UTP-1'], 'Cablu retea')?->getId()?->toRfc4122());
+        $code = 'CAB-' . substr(Uuid::v4()->toBase32(), 0, 8);
+        $ours = $this->product('Cablu UTP', $code);
+        self::assertSame($ours->getId()->toRfc4122(), $this->matcher->match($this->company, $this->supplier, ['buyerCode' => $code], 'Cablu retea')?->getId()?->toRfc4122());
     }
 
     public function testMappingsBelongToTheirSupplier(): void

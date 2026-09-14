@@ -248,6 +248,35 @@ class InvoiceRepository extends ServiceEntityRepository
         }
     }
 
+    /**
+     * Invoices that belong to a VAT period: sales by issue date, purchases by the date they
+     * were recorded (a supplier invoice dated earlier but received now is deductible now,
+     * as a regularisation). Drafts, cancelled, rejected and converted documents are out.
+     *
+     * @return Invoice[]
+     */
+    public function findForVatReturn(Company $company, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('i')
+            ->leftJoin('i.lines', 'l')->addSelect('l')
+            ->leftJoin('l.product', 'p')->addSelect('p')
+            ->leftJoin('i.client', 'c')->addSelect('c')
+            ->leftJoin('i.supplier', 's')->addSelect('s')
+            ->where('i.company = :company')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.status NOT IN (:excluded)')
+            ->andWhere('(i.direction = :outgoing AND i.issueDate BETWEEN :from AND :to) OR (i.direction = :incoming AND i.createdAt BETWEEN :from AND :to)')
+            ->setParameter('company', $company)
+            ->setParameter('excluded', [DocumentStatus::DRAFT, DocumentStatus::CANCELLED, DocumentStatus::REJECTED, DocumentStatus::CONVERTED])
+            ->setParameter('outgoing', InvoiceDirection::OUTGOING)
+            ->setParameter('incoming', InvoiceDirection::INCOMING)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('i.issueDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findByCompanyFiltered(Company $company, array $filters = [], ?int $limit = 500): array
     {
         $qb = $this->createQueryBuilder('i')

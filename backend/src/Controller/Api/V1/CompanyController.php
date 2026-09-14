@@ -255,6 +255,7 @@ class CompanyController extends AbstractController
         if (isset($data['eoriCode'])) $company->setEoriCode($data['eoriCode'] ?: null);
         if (isset($data['representative'])) $company->setRepresentative($data['representative'] ?: null);
         if (isset($data['representativeRole'])) $company->setRepresentativeRole($data['representativeRole'] ?: null);
+        if (array_key_exists('caenCode', $data)) $company->setCaenCode($data['caenCode'] ?: null);
         if (isset($data['bankName'])) $company->setBankName($data['bankName']);
         if (isset($data['bankAccount'])) $company->setBankAccount($data['bankAccount']);
         if (isset($data['bankBic'])) $company->setBankBic($data['bankBic']);
@@ -680,6 +681,7 @@ class CompanyController extends AbstractController
             'eoriCode' => $company->getEoriCode(),
             'representative' => $company->getRepresentative(),
             'representativeRole' => $company->getRepresentativeRole(),
+            'caenCode' => $company->getCaenCode(),
             'bankName' => $company->getBankName(),
             'bankAccount' => $company->getBankAccount(),
             'bankBic' => $company->getBankBic(),

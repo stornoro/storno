@@ -150,6 +150,7 @@ export interface Company {
   eoriCode: string | null
   representative: string | null
   representativeRole: string | null
+  caenCode?: string | null
   bankName: string | null
   bankAccount: string | null
   bankBic: string | null

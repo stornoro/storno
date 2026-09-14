@@ -129,6 +129,11 @@ class Company
     #[Groups(['company'])]
     private ?string $representativeRole = null;
 
+    /** Main activity code (CAEN Rev. 3), 4 digits; asked for by the VAT return (D300) and SAF-T. */
+    #[ORM\Column(length: 10, nullable: true)]
+    #[Groups(['company'])]
+    private ?string $caenCode = null;
+
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['company'])]
     private ?string $bankName = null;
@@ -510,6 +515,18 @@ class Company
     public function getRepresentativeRole(): ?string
     {
         return $this->representativeRole;
+    }
+
+    public function getCaenCode(): ?string
+    {
+        return $this->caenCode;
+    }
+
+    public function setCaenCode(?string $caenCode): static
+    {
+        $clean = preg_replace('/\D/', '', (string) $caenCode);
+        $this->caenCode = $clean === '' ? null : substr($clean, 0, 10);
+        return $this;
     }
 
     public function setRepresentativeRole(?string $representativeRole): static
