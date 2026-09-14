@@ -42,14 +42,15 @@ class PublicDeclarationValidateController extends AbstractController
         if (!preg_match('/^\d{1,15}$/', $index) || !preg_match('/^\d{2,13}$/', $cui)) {
             return $this->json(['error' => 'index si cui trebuie sa fie numerice.', 'code' => 'INVALID_INPUT'], Response::HTTP_BAD_REQUEST);
         }
+        $ghiseu = $request->query->getBoolean('ghiseu');
         try {
-            $r = $this->anafClient->checkPortalStatus($index, $cui);
+            $r = $this->anafClient->checkPortalStatus($index, $cui, $ghiseu);
         } catch (\Throwable $e) {
             return $this->json(['error' => 'ANAF StareD112 nu a raspuns.', 'code' => 'ANAF_UNAVAILABLE'], Response::HTTP_BAD_GATEWAY);
         }
         $labels = ['ok' => 'Documentul este valid: declaratia a fost acceptata.', 'nok' => 'Documentul are erori de validare: depunerea nu este valida, vezi recipisa.', 'processing' => 'In prelucrare la ANAF.', 'unknown' => 'Nicio declaratie gasita pentru acest index si CUI (inca neindexata sau date gresite).'];
 
-        return $this->json(['index' => $index, 'cui' => $cui, 'state' => $r['stare'], 'message' => $labels[$r['stare']] ?? $r['stare'], 'anafText' => $r['text'], 'recipisaUrl' => $r['stare'] === 'unknown' ? null : sprintf('https://www.anaf.ro/StareD112/ObtineRecipisa?numefisier=%s.pdf', $index)]);
+        return $this->json(['index' => $index, 'cui' => $cui, 'ghiseu' => $ghiseu, 'state' => $r['stare'], 'message' => $labels[$r['stare']] ?? $r['stare'], 'anafText' => $r['text'], 'host' => $r['host'], 'recipisaUrl' => $r['stare'] === 'unknown' ? null : sprintf('%s/ObtineRecipisa?numefisier=%s.pdf', $r['host'], $index)]);
     }
 
     #[Route('/api/v1/public/declarations/validate', methods: ['POST'])]

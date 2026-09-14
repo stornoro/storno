@@ -8,6 +8,9 @@ use App\Doctrine\Type\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
+#[ORM\Index(name: 'idx_audit_log_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_audit_log_user_created', columns: ['user_id', 'created_at'])]
+#[ORM\Index(name: 'idx_audit_log_entity_created', columns: ['entity_type', 'created_at'])]
 class AuditLog
 {
     #[ORM\Id]

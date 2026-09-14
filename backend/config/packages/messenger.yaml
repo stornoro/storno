@@ -16,6 +16,7 @@ when@prod:
             routing:
                 'App\Message\EInvoice\SubmitEInvoiceMessage': async
                 'App\Message\EInvoice\CheckEInvoiceStatusMessage': async
+                'App\Message\Declaration\CheckDeclarationStatusMessage': async
                 'App\Message\Anaf\SyncCompanyMessage': async
                 'App\Message\GeneratePdfMessage': async
                 'App\Message\GenerateZipExportMessage': async

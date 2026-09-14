@@ -286,6 +286,7 @@ const links = computed(() => {
     children: [
       { label: $t('admin.title'), to: '/admin', exact: true, onSelect: close },
       { label: $t('admin.users'), to: '/admin/users', onSelect: close },
+      { label: $t('admin.activity.title'), to: '/admin/activity', onSelect: close },
       { label: $t('admin.organizations'), to: '/admin/organizations', onSelect: close },
       { label: $t('admin.revenue'), to: '/admin/revenue', onSelect: close },
       { label: $t('admin.auditLogs'), to: '/admin/audit-logs', onSelect: close },

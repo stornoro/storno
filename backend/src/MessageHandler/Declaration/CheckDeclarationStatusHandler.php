@@ -15,6 +15,7 @@ use League\Flysystem\FilesystemOperator;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -22,6 +23,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 final class CheckDeclarationStatusHandler
 {
     private const MAX_ATTEMPTS = 10;
+    /** ANAF indexes a filing within minutes; ask again every 5 minutes instead of at once. */
+    private const RETRY_DELAY_MS = 300_000;
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -71,10 +74,13 @@ final class CheckDeclarationStatusHandler
 
             // Filed on the e-guvernare portal (agent + certificate): the public StareD112
             // page answers by index + CUI without any token.
-            $viaPortal = ($declaration->getMetadata()['uploadResult']['source'] ?? null) === 'was6dus'
-                || ($declaration->getMetadata()['submittedViaAgent'] ?? false) === true;
+            $meta = $declaration->getMetadata() ?? [];
+            $viaPortal = ($meta['uploadResult']['source'] ?? null) === 'was6dus'
+                || ($meta['submittedViaAgent'] ?? false) === true
+                || ($meta['filedExternally'] ?? false) === true;
             if ($viaPortal) {
-                $portal = $this->anafClient->checkPortalStatus($declaration->getAnafUploadId(), $company->getCif());
+                // ghiseu: the number is the registration number from the counter, not an upload index
+                $portal = $this->anafClient->checkPortalStatus($declaration->getAnafUploadId(), $company->getCif(), ($meta['ghiseu'] ?? false) === true);
                 $this->applyPortalStatus($declaration, $portal, $message, $company);
 
                 return;
@@ -130,12 +136,7 @@ final class CheckDeclarationStatusHandler
                 $this->eventDispatcher->dispatch(new DeclarationRejectedEvent($declaration));
             } else {
                 // Still processing — retry
-                $this->messageBus->dispatch(
-                    new CheckDeclarationStatusMessage(
-                        declarationId: $message->declarationId,
-                        attempt: $message->attempt + 1,
-                    )
-                );
+                $this->messageBus->dispatch(new CheckDeclarationStatusMessage(declarationId: $message->declarationId, attempt: $message->attempt + 1), [new DelayStamp(self::RETRY_DELAY_MS)]);
             }
         } catch (\Throwable $e) {
             $this->logger->error('CheckDeclarationStatusHandler: Status check failed.', [
@@ -144,12 +145,7 @@ final class CheckDeclarationStatusHandler
             ]);
 
             if ($message->attempt < self::MAX_ATTEMPTS - 1) {
-                $this->messageBus->dispatch(
-                    new CheckDeclarationStatusMessage(
-                        declarationId: $message->declarationId,
-                        attempt: $message->attempt + 1,
-                    )
-                );
+                $this->messageBus->dispatch(new CheckDeclarationStatusMessage(declarationId: $message->declarationId, attempt: $message->attempt + 1), [new DelayStamp(self::RETRY_DELAY_MS)]);
             } else {
                 $declaration->setStatus(DeclarationStatus::ERROR);
                 $declaration->setErrorMessage($e->getMessage());
@@ -203,10 +199,7 @@ final class CheckDeclarationStatusHandler
         }
 
         // processing / not yet indexed: retry later
-        $this->messageBus->dispatch(new CheckDeclarationStatusMessage(
-            declarationId: $message->declarationId,
-            attempt: $message->attempt + 1,
-        ));
+        $this->messageBus->dispatch(new CheckDeclarationStatusMessage(declarationId: $message->declarationId, attempt: $message->attempt + 1), [new DelayStamp(self::RETRY_DELAY_MS)]);
     }
 
     private function resolveToken(\App\Entity\Company $company): string

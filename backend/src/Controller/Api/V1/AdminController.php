@@ -382,6 +382,8 @@ class AdminController extends AbstractController
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
         $search = $request->query->get('search');
         $action = $request->query->get('action');
+        $entityType = trim((string) $request->query->get('entityType', ''));
+        $exclude = self::parseExcludeList($request->query->get('exclude'));
 
         $qb = $this->entityManager->createQueryBuilder()
             ->select('a', 'u')
@@ -397,6 +399,24 @@ class AdminController extends AbstractController
         if ($action) {
             $qb->andWhere('a.action = :action')
                 ->setParameter('action', $action);
+        }
+
+        if ($entityType !== '') {
+            // Old rows carry the FQCN ("App\Entity\Invoice"), newer ones the short name.
+            $qb->andWhere('a.entityType = :entityType OR a.entityType = :entityTypeFqcn')
+                ->setParameter('entityType', $entityType)
+                ->setParameter('entityTypeFqcn', 'App\\Entity\\' . $entityType);
+        }
+
+        // "exclude" hides the noise the admin already knows about: a comma-separated
+        // list of user emails, plus the keyword "system" for rows without a user
+        // (workers, webhooks, CLI). Rows without a user survive an email-only exclude.
+        if ($exclude['system']) {
+            $qb->andWhere('a.user IS NOT NULL');
+        }
+        if ($exclude['emails']) {
+            $qb->andWhere('u.email IS NULL OR LOWER(u.email) NOT IN (:excludedEmails)')
+                ->setParameter('excludedEmails', $exclude['emails']);
         }
 
         $countQb = clone $qb;
@@ -428,6 +448,144 @@ class AdminController extends AbstractController
             'page' => $page,
             'limit' => $limit,
         ]);
+    }
+
+    /**
+     * Who actually uses the platform: per-user activity aggregated from the audit
+     * log over the last N days (events, active days, invoices created / issued),
+     * so the admin can spot recurring invoicers instead of one-off sign-ups.
+     */
+    #[Route('/activity', methods: ['GET'])]
+    public function activity(Request $request, Connection $connection): JsonResponse
+    {
+        $days = max(1, min(365, $request->query->getInt('days', 30)));
+        $limit = Pagination::clamp($request->query->getInt('limit', 25));
+        $exclude = self::parseExcludeList($request->query->get('exclude'));
+        $since = (new \DateTimeImmutable("-{$days} days"))->setTime(0, 0)->format('Y-m-d H:i:s');
+
+        $params = [
+            'since' => $since,
+            'invoice' => 'Invoice',
+            'invoiceFqcn' => 'App\\Entity\\Invoice',
+        ];
+        $types = [];
+        $where = 'a.created_at >= :since AND a.user_id IS NOT NULL';
+        if ($exclude['emails']) {
+            $where .= ' AND LOWER(u.email) NOT IN (:excludedEmails)';
+            $params['excludedEmails'] = $exclude['emails'];
+            $types['excludedEmails'] = \Doctrine\DBAL\ArrayParameterType::STRING;
+        }
+
+        $isInvoice = '(a.entity_type = :invoice OR a.entity_type = :invoiceFqcn)';
+        $isIssued = "JSON_UNQUOTE(JSON_EXTRACT(a.changes, '$.status.new')) = 'issued'";
+
+        $rows = $connection->fetchAllAssociative(
+            "SELECT a.user_id,
+                COUNT(*) AS events,
+                COUNT(DISTINCT DATE(a.created_at)) AS active_days,
+                MAX(a.created_at) AS last_active_at,
+                SUM({$isInvoice} AND a.action = 'create') AS invoices_created,
+                SUM({$isInvoice} AND a.action = 'update' AND {$isIssued}) AS invoices_issued,
+                MAX(CASE WHEN {$isInvoice} THEN a.created_at END) AS last_invoice_at
+            FROM audit_log a
+            INNER JOIN user u ON u.id = a.user_id
+            WHERE {$where}
+            GROUP BY a.user_id
+            ORDER BY invoices_issued DESC, invoices_created DESC, active_days DESC, events DESC
+            LIMIT " . (int) $limit,
+            $params,
+            $types
+        );
+
+        $summary = $connection->fetchAssociative(
+            "SELECT COUNT(DISTINCT a.user_id) AS active_users,
+                SUM({$isInvoice} AND a.action = 'create') AS invoices_created,
+                SUM({$isInvoice} AND a.action = 'update' AND {$isIssued}) AS invoices_issued
+            FROM audit_log a
+            INNER JOIN user u ON u.id = a.user_id
+            WHERE {$where}",
+            $params,
+            $types
+        ) ?: [];
+
+        $userIds = array_map(fn (array $r) => Uuid::fromString($r['user_id']), $rows);
+        $users = [];
+        $orgsByUser = [];
+        if ($userIds) {
+            foreach ($this->userRepository->findBy(['id' => $userIds]) as $u) {
+                $users[(string) $u->getId()] = $u;
+            }
+            $memberships = $this->entityManager->createQuery(
+                'SELECT m, o, mu FROM App\Entity\OrganizationMembership m JOIN m.organization o JOIN m.user mu WHERE mu.id IN (:ids)'
+            )->setParameter('ids', $userIds)->getResult();
+            foreach ($memberships as $m) {
+                $orgsByUser[(string) $m->getUser()->getId()][] = [
+                    'id' => (string) $m->getOrganization()->getId(),
+                    'name' => $m->getOrganization()->getName(),
+                    'plan' => $m->getOrganization()->getPlan(),
+                    'role' => $m->getRole()->value,
+                ];
+            }
+        }
+
+        $toIso = static fn (?string $dt): ?string => $dt ? (new \DateTimeImmutable($dt))->format('c') : null;
+
+        return $this->json([
+            'days' => $days,
+            'since' => (new \DateTimeImmutable($since))->format('c'),
+            'summary' => [
+                'activeUsers' => (int) ($summary['active_users'] ?? 0),
+                'invoicesCreated' => (int) ($summary['invoices_created'] ?? 0),
+                'invoicesIssued' => (int) ($summary['invoices_issued'] ?? 0),
+            ],
+            'data' => array_values(array_filter(array_map(function (array $r) use ($users, $orgsByUser, $toIso): ?array {
+                $u = $users[$r['user_id']] ?? null;
+                if (!$u) {
+                    return null;
+                }
+
+                return [
+                    'user' => [
+                        'id' => (string) $u->getId(),
+                        'email' => $u->getEmail(),
+                        'fullName' => $u->getFullName(),
+                        'lastConnectedAt' => $u->getLastConnectedAt()?->format('c'),
+                        'createdAt' => $u->getCreatedAt()?->format('c'),
+                    ],
+                    'organizations' => $orgsByUser[$r['user_id']] ?? [],
+                    'events' => (int) $r['events'],
+                    'activeDays' => (int) $r['active_days'],
+                    'invoicesCreated' => (int) $r['invoices_created'],
+                    'invoicesIssued' => (int) $r['invoices_issued'],
+                    'lastActiveAt' => $toIso($r['last_active_at']),
+                    'lastInvoiceAt' => $toIso($r['last_invoice_at']),
+                ];
+            }, $rows))),
+        ]);
+    }
+
+    /**
+     * @return array{emails: list<string>, system: bool}
+     */
+    private static function parseExcludeList(mixed $raw): array
+    {
+        $emails = [];
+        $system = false;
+        foreach (explode(',', (string) $raw) as $term) {
+            $term = mb_strtolower(trim($term));
+            if ($term === '') {
+                continue;
+            }
+            if ($term === 'system') {
+                $system = true;
+                continue;
+            }
+            if (\count($emails) < 50) {
+                $emails[] = $term;
+            }
+        }
+
+        return ['emails' => array_values(array_unique($emails)), 'system' => $system];
     }
 
     #[Route('/email-logs', methods: ['GET'])]

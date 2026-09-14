@@ -9,6 +9,7 @@ use App\Enum\DeclarationStatus;
 use App\Enum\DeclarationType;
 use App\Event\Declaration\DeclarationCreatedEvent;
 use App\Message\Declaration\RefreshDeclarationStatusesMessage;
+use App\Message\Declaration\CheckDeclarationStatusMessage;
 use App\Message\Declaration\SubmitDeclarationMessage;
 use App\Message\Declaration\SyncDeclarationsMessage;
 use App\Repository\TaxDeclarationRepository;
@@ -21,6 +22,7 @@ use App\Service\Declaration\DukUnavailableException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\TaggedIterator;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\DelayStamp;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -117,8 +119,43 @@ class TaxDeclarationManager
         return $declaration;
     }
 
+    /**
+     * The declaration was filed outside Storno (portal by hand, another program, or at the
+     * counter): remember ANAF's number and follow its state on StareD112 like any other filing.
+     * `index` is the online upload index, or the registration number from the counter with `ghiseu: true`.
+     * @param array{index?: string, ghiseu?: bool} $filing
+     */
+    public function recordExternalFiling(TaxDeclaration $declaration, array $filing): TaxDeclaration
+    {
+        // "INTERNT-1216000000-2026" is how ANAF prints the upload index; only the middle number identifies the filing
+        $raw = trim((string) ($filing['index'] ?? ''));
+        $index = preg_match('/INTERNT-(\d+)-\d{4}/i', $raw, $m) ? $m[1] : (preg_replace('/\D/', '', $raw) ?? '');
+        if ($index === '') {
+            throw new \InvalidArgumentException('filedExternally.index: numarul de inregistrare (index de incarcare sau numar de la ghiseu) este obligatoriu.');
+        }
+        if (in_array($declaration->getStatus(), [DeclarationStatus::ACCEPTED, DeclarationStatus::PROCESSING, DeclarationStatus::SUBMITTED], true)) {
+            throw new \InvalidArgumentException('Declaratia este deja depusa si urmarita.');
+        }
+        $declaration->setAnafUploadId($index);
+        $declaration->setStatus(DeclarationStatus::SUBMITTED);
+        $declaration->setErrorMessage(null);
+        $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+            'filedExternally' => true,
+            'ghiseu' => ($filing['ghiseu'] ?? false) === true,
+        ]));
+        $declaration->setUpdatedAt(new \DateTimeImmutable());
+        $this->entityManager->flush();
+        // the portal needs a little while to index the number
+        $this->messageBus->dispatch(new CheckDeclarationStatusMessage(declarationId: (string) $declaration->getId()), [new DelayStamp(120_000)]);
+
+        return $declaration;
+    }
+
     public function update(TaxDeclaration $declaration, array $data): TaxDeclaration
     {
+        if (isset($data['filedExternally']) && is_array($data['filedExternally'])) {
+            return $this->recordExternalFiling($declaration, $data['filedExternally']);
+        }
         if ($declaration->getStatus() !== DeclarationStatus::DRAFT) {
             throw new \InvalidArgumentException('Only draft declarations can be edited.');
         }
