@@ -21,6 +21,7 @@ import type { AgentConfig } from '../config.js';
 import { getConfigDir } from '../config.js';
 import { curlProxy, curlBatch, type ProxyResponse } from '../proxy/curl-proxy.js';
 import { getSecret, setSecret, deleteSecret, secretStoreName, certPinAccount } from './secrets.js';
+import { certificateKind, isPinlessCertificate } from '../certificates/discovery.js';
 
 export interface MonitorEntry {
   companyId: string;
@@ -110,7 +111,7 @@ export interface EnrollInput {
   pin?: string;
 }
 
-export function enroll(input: EnrollInput): MonitorEntry {
+export function enroll(input: EnrollInput, config?: AgentConfig): MonitorEntry {
   if (!input.companyId || !input.cif || !input.certificateId) {
     throw new Error('companyId, cif and certificateId are required');
   }
@@ -118,10 +119,19 @@ export function enroll(input: EnrollInput): MonitorEntry {
   const data = loadMonitor();
   const existing = data.entries.find((e) => e.companyId === input.companyId);
 
+  // Unattended runs cannot answer a vendor approval prompt, so cloud certificates
+  // are not enrollable; software certificates need no PIN at all.
+  const kind = config ? certificateKind(input.certificateId, config) : 'token';
+  if (kind === 'cloud') {
+    throw new Error('CLOUD_CERTIFICATE: automatic monitoring needs a certificate the agent can use without a person approving each operation; this cloud certificate asks for approval in the vendor app. Use it from the web app or the MCP tools instead.');
+  }
+
   if (input.apiKey) setSecret(`apikey:${input.companyId}`, input.apiKey);
   else if (!existing && !getSecret(`apikey:${input.companyId}`)) throw new Error('apiKey is required on first enrollment');
   if (input.pin) setSecret(`pin:${input.companyId}`, input.pin);
-  else if (!existing && !getSecret(`pin:${input.companyId}`)) {
+  else if (kind === 'software') {
+    // No PIN exists for this certificate; nothing to store.
+  } else if (!existing && !getSecret(`pin:${input.companyId}`)) {
     // The PIN remembered for this certificate ("Retine PIN-ul pe acest calculator") is enough.
     const remembered = getSecret(certPinAccount(input.certificateId));
     if (!remembered) throw new Error('pin is required on first enrollment');
@@ -271,9 +281,9 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
   if (runningCompany) throw new Error(`A sync is already running for ${runningCompany}`);
 
   const apiKey = getSecret(`apikey:${companyId}`);
-  const pin = getSecret(`pin:${companyId}`);
+  const pin = getSecret(`pin:${companyId}`) ?? undefined;
   if (!apiKey) throw new Error('API key missing from the secret store; re-enable monitoring from the web app');
-  if (!pin) throw new Error('PIN missing from the secret store; re-enable monitoring from the web app');
+  if (!pin && !isPinlessCertificate(entry.certificateId, config)) throw new Error('PIN missing from the secret store; re-enable monitoring from the web app');
 
   runningCompany = companyId;
   const startedAt = new Date().toISOString();

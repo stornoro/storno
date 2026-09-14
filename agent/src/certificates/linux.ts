@@ -27,6 +27,7 @@ export function listPkcs11Certificates(toolchain: Pkcs11Toolchain | null): Certi
       issuer: toolchain.moduleName,
       notAfter: null,
       source: 'pkcs11',
+      kind: 'token',
     }];
   }
 
@@ -93,6 +94,7 @@ export function listPkcs11Certificates(toolchain: Pkcs11Toolchain | null): Certi
       issuer: toolchain.moduleName,
       notAfter: null,
       source: 'pkcs11',
+      kind: 'token',
     }];
   }
 
@@ -119,6 +121,7 @@ export function parseCertificateObjects(output: string): Certificate[] {
       issuer: '',
       notAfter: null,
       source: 'pkcs11',
+      kind: 'token',
     });
   }
 
@@ -248,6 +251,7 @@ export async function listPkcs11CertificatesAsync(toolchain: Pkcs11Toolchain | n
       issuer: toolchain.moduleName,
       notAfter: null,
       source: 'pkcs11',
+      kind: 'token',
     }];
   }
   return [];

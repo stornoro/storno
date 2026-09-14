@@ -4,6 +4,8 @@ import { listWindowsCertificates } from './windows.js';
 import { listPkcs11Certificates, listPkcs11CertificatesAsync } from './linux.js';
 import type { AgentConfig } from '../config.js';
 import { resolvePkcs11Toolchain } from '../utils/toolchain.js';
+import { getCachedCertificates } from './cache.js';
+import { isConfiguredCloudId, isPinlessKind, type CertificateKind } from './kinds.js';
 
 export type { Certificate };
 
@@ -21,7 +23,7 @@ export function discoverCertificates(config: AgentConfig): Certificate[] {
 
   switch (os) {
     case 'win32':
-      return listWindowsCertificates();
+      return listWindowsCertificates(config);
     case 'darwin': {
       const keychain = listMacOSCertificates();
       const toolchain = resolvePkcs11Toolchain(config);
@@ -40,7 +42,7 @@ export async function discoverCertificatesAsync(config: AgentConfig): Promise<Ce
   const os = platform();
   switch (os) {
     case 'win32':
-      return listWindowsCertificates();
+      return listWindowsCertificates(config);
     case 'darwin': {
       const keychain = listMacOSCertificates();
       const toolchain = resolvePkcs11Toolchain(config);
@@ -63,4 +65,26 @@ export function isPkcs11CertificateId(id: string): boolean {
   if (platform() !== 'darwin') return true;
   const keychainIds = new Set(listMacOSCertificates().map((c) => c.id.toUpperCase()));
   return !keychainIds.has(id.toUpperCase());
+}
+
+/**
+ * The kind of a certificate the agent was asked to use: from the discovery cache,
+ * or (Windows, cache not warm yet) from a fresh store listing. Unknown ids are
+ * tokens, so an unrecognised certificate still requires a PIN.
+ */
+export function certificateKind(certificateId: string, config: AgentConfig): CertificateKind {
+  if (isConfiguredCloudId(certificateId, config)) return 'cloud';
+  const wanted = certificateId.trim().toUpperCase();
+  const cached = getCachedCertificates().certificates.find((c) => c.id.toUpperCase() === wanted);
+  if (cached) return cached.kind ?? 'token';
+  if (platform() === 'win32') {
+    const fresh = listWindowsCertificates(config).find((c) => c.id.toUpperCase() === wanted);
+    if (fresh) return fresh.kind;
+  }
+  return 'token';
+}
+
+/** Cloud and software certificates authenticate without a PIN (the vendor's driver or Windows guards the key). */
+export function isPinlessCertificate(certificateId: string, config: AgentConfig): boolean {
+  return isPinlessKind(certificateKind(certificateId, config));
 }

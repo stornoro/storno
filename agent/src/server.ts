@@ -10,6 +10,8 @@ import { startCertificateCache, getCachedCertificates } from './certificates/cac
 import { submitSpvWebRequest } from './spv-web.js';
 import { startSpvMonitor, statusList as monitorStatus, enroll as monitorEnroll, unenroll as monitorUnenroll, runSync as monitorRun } from './monitor/spv-monitor.js';
 import { signPdf, type SignPdfOptions } from './signing/pdf-signer.js';
+import { certificateKind } from './certificates/discovery.js';
+import { isPinlessKind } from './certificates/kinds.js';
 import { checkForUpdate, applyUpdate, type UpdateInfo } from './updater.js';
 
 declare const __VERSION__: string;
@@ -98,7 +100,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse, config: AgentC
   } else if (url === '/monitor' && req.method === 'GET') {
     json(res, 200, { entries: monitorStatus() });
   } else if (url === '/monitor' && req.method === 'POST') {
-    handleMonitorEnroll(req, res);
+    handleMonitorEnroll(req, res, config);
   } else if (monitorMatch(url) && req.method === 'DELETE') {
     handleMonitorUnenroll(res, monitorMatch(url)!.companyId);
   } else if (monitorMatch(url)?.action === 'run' && req.method === 'POST') {
@@ -172,6 +174,12 @@ async function handlePinStore(req: IncomingMessage, res: ServerResponse, config:
     json(res, 400, { error: 'Missing required fields: certificateId, pin' });
     return;
   }
+  const kind = certificateKind(payload.certificateId, config);
+  if (isPinlessKind(kind)) {
+    // Nothing to remember: the vendor's driver (cloud) or Windows (software) guards the key.
+    json(res, 200, { certificateId: payload.certificateId, stored: false, pinless: true, kind, store: pinStoreName() });
+    return;
+  }
   try {
     const check = await verifyPinForCertificate(payload.certificateId, payload.pin, config);
     if (!check.ok) {
@@ -202,7 +210,7 @@ function monitorMatch(url: string): { companyId: string; action: string | null }
   return m ? { companyId: m[1], action: m[2] ?? null } : null;
 }
 
-async function handleMonitorEnroll(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleMonitorEnroll(req: IncomingMessage, res: ServerResponse, config: AgentConfig): Promise<void> {
   if (req.headers['x-storno-agent'] !== '1') {
     json(res, 403, { error: 'Missing X-Storno-Agent header' });
     return;
@@ -216,7 +224,7 @@ async function handleMonitorEnroll(req: IncomingMessage, res: ServerResponse): P
     return;
   }
   try {
-    const entry = monitorEnroll(payload);
+    const entry = monitorEnroll(payload, config);
     const status = monitorStatus().find((e) => e.companyId === entry.companyId) ?? entry;
     json(res, 200, { entry: status });
   } catch (err) {

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import type { AgentConfig } from '../config.js';
 import { powershellProxy } from './powershell-proxy.js';
+import { isPinlessCertificate } from '../certificates/discovery.js';
 import { resolvePkcs11Toolchain, pkcs11Uri, PKCS11_AUTO_ID, type Pkcs11Toolchain } from '../utils/toolchain.js';
 import { parseCertificateObjects } from '../certificates/linux.js';
 import { isPkcs11CertificateId } from '../certificates/discovery.js';
@@ -17,6 +18,9 @@ const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (ANAF F5 sessions were obse
 
 /** In-memory PIN cache per certificate — avoids re-asking for PIN on every request. */
 const pinCache = new Map<string, { pin: string; cachedAt: number }>();
+
+/** How long a cloud-certificate request may wait for the user to approve it in the vendor app. */
+export const CLOUD_APPROVAL_TIMEOUT_MS = 180_000;
 const PIN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 function cachePin(certificateId: string, pin: string): void {
@@ -239,17 +243,21 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
   // want the certificate presented on the TLS handshake (cookies alone get a 403), so
   // web requests always carry the certificate; the jar still accumulates the session.
   const usedSession = req.web ? false : hasValidSession(cookiePath);
-  if (!usedSession && !req.pin) {
+  // Cloud / software certificates (Windows) have no PIN: the vendor's driver asks
+  // the user for approval itself. Every other certificate is a token and stays
+  // behind the PIN gate.
+  const pinless = !req.pin && isPinlessCertificate(req.certificateId, config);
+  if (!usedSession && !req.pin && !pinless) {
     throw new Error('PIN_REQUIRED: the certificate PIN was not provided; nothing is sent to ANAF without it');
   }
 
   if (req.web) {
-    return execRequest(req, config, usedSession);
+    return execRequest(req, config, usedSession, pinless);
   }
 
   let result: ProxyResponse;
   try {
-    result = await execRequest(req, config, usedSession);
+    result = await execRequest(req, config, usedSession, pinless);
   } catch (err) {
     // If PIN verification failed, clear cache and don't retry — prevents certificate lockout
     const msg = (err as Error).message;
@@ -263,10 +271,10 @@ export async function curlProxy(req: ProxyRequest, config: AgentConfig): Promise
   // invalidate cookies and retry with full mTLS authentication.
   if (usedSession && isSessionExpired(result)) {
     invalidateSession(req.certificateId);
-    if (!req.pin) {
+    if (!req.pin && !pinless) {
       throw new Error('PIN_REQUIRED: the ANAF session expired and no PIN was provided to authenticate again');
     }
-    return execRequest(req, config, false);
+    return execRequest(req, config, false, pinless);
   }
 
   return result;
@@ -282,14 +290,18 @@ async function execRequest(
   req: ProxyRequest,
   config: AgentConfig,
   sessionValid: boolean,
+  pinless = false,
 ): Promise<ProxyResponse> {
   // On Windows with PIN and no valid session: use PowerShell to set the CNG
   // SmartCardPin and make the request in the SAME process via Invoke-WebRequest.
   // This avoids the native PIN dialog. Cookies are saved for subsequent requests.
-  if (platform() === 'win32' && req.pin && !sessionValid) {
-    console.log(`[proxy] ${req.method} ${req.url} → PowerShell (cert+PIN, establishing session)`);
+  // Cloud certificates take the same path without a PIN: the vendor's key
+  // provider asks the user for approval while the request is in flight, so the
+  // process gets a longer deadline.
+  if (platform() === 'win32' && (req.pin || pinless) && !sessionValid) {
+    console.log(`[proxy] ${req.method} ${req.url} → PowerShell (${pinless ? 'cloud certificate, vendor approval' : 'cert+PIN'}, establishing session)`);
     const cookiePath = getCookieJarPath(req.certificateId);
-    return powershellProxy(req, cookiePath);
+    return powershellProxy(req, cookiePath, pinless ? CLOUD_APPROVAL_TIMEOUT_MS : undefined);
   }
 
   console.log(`[proxy] ${req.method} ${req.url} → curl (${sessionValid ? 'cookies only' : 'cert'})`);
@@ -515,17 +527,18 @@ export async function curlBatch(requests: ProxyRequest[], config: AgentConfig): 
 
   const cookiePath = getCookieJarPath(first.certificateId);
   const usedSession = hasValidSession(cookiePath);
-  if (!usedSession && !first.pin) {
+  const pinless = !first.pin && isPinlessCertificate(first.certificateId, config);
+  if (!usedSession && !first.pin && !pinless) {
     throw new Error('PIN_REQUIRED: the certificate PIN was not provided; nothing is sent to ANAF without it');
   }
-  if (platform() === 'win32' && first.pin && !usedSession) {
+  if (platform() === 'win32' && !usedSession) {
     throw new Error('BATCH_UNSUPPORTED: Windows certificate store needs the PowerShell path for the first request');
   }
 
   let results = await execCurlBatch(first, requests, config, usedSession);
   if (usedSession && results.some((r) => r.result && isSessionExpired(r.result))) {
     invalidateSession(first.certificateId);
-    if (!first.pin) {
+    if (!first.pin && !pinless) {
       throw new Error('PIN_REQUIRED: the ANAF session expired and no PIN was provided to authenticate again');
     }
     results = await execCurlBatch(first, requests, config, false);

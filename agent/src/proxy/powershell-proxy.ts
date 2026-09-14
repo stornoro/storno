@@ -236,7 +236,7 @@ if ($response.Content -is [byte[]]) {
 } | ConvertTo-Json -Depth 5 -Compress
 `;
 
-export function powershellProxy(req: ProxyRequest, cookiePath: string): Promise<ProxyResponse> {
+export function powershellProxy(req: ProxyRequest, cookiePath: string, timeoutMs = 120_000): Promise<ProxyResponse> {
   return new Promise((resolve, reject) => {
     const tempDir = join(tmpdir(), 'storno-agent-ps');
 
@@ -267,7 +267,7 @@ ${PS_SCRIPT}
       '-ExecutionPolicy', 'Bypass',
       '-Command', wrappedScript,
     ], {
-      timeout: 120_000,
+      timeout: timeoutMs,
       maxBuffer: 50 * 1024 * 1024, // 50MB for large ANAF responses
     }, (error, stdout, stderr) => {
       // Clean up temp body file

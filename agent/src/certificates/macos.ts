@@ -1,11 +1,17 @@
 import { execFileSync } from 'node:child_process';
 
+import type { CertificateKind } from './kinds.js';
+
 export interface Certificate {
   id: string;
   subject: string;
   issuer: string;
   notAfter: string | null;
   source: 'keychain' | 'windows-store' | 'pkcs11';
+  /** token (PIN), cloud (vendor approval, no PIN) or software (no PIN); absent on agents < 1.8. */
+  kind: CertificateKind;
+  /** Windows key provider (CSP/KSP) that holds the key, when known. */
+  provider?: string;
 }
 
 /**
@@ -34,6 +40,7 @@ export function listMacOSCertificates(): Certificate[] {
         issuer: '',
         notAfter: null,
         source: 'keychain',
+        kind: 'token',
       });
     }
 

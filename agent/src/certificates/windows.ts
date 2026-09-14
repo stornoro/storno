@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Certificate } from './macos.js';
+import type { AgentConfig } from '../config.js';
+import { classifyWindowsProvider, isConfiguredCloudId } from './kinds.js';
 
 /**
  * List client certificates from Windows Certificate Store via PowerShell.
@@ -35,7 +37,34 @@ function parseDotNetDate(value: unknown): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-export function listWindowsCertificates(): Certificate[] {
+/**
+ * Key provider (CSP/KSP) per certificate thumbprint, read with certutil from the
+ * certificate's key-provider property. certutil only reads the property; it never
+ * opens the key, so no smart-card or cloud-vendor prompt appears.
+ */
+export function windowsKeyProviders(): Map<string, string> {
+  const providers = new Map<string, string>();
+  try {
+    const output = execFileSync('certutil', ['-user', '-silent', '-store', 'My'], {
+      encoding: 'utf-8',
+      timeout: 15_000,
+      windowsHide: true,
+    });
+    let hash: string | null = null;
+    for (const line of output.split(/\r?\n/)) {
+      if (/^=+\s*\S.*\d+\s*=+\s*$/.test(line)) { hash = null; continue; }
+      const h = line.match(/\(sha1\):\s*([0-9a-f][0-9a-f\s]{38,}[0-9a-f])\s*$/i);
+      if (h) { hash = h[1].replace(/\s+/g, '').toUpperCase(); continue; }
+      const p = line.match(/^\s*Provider\s*=\s*(.+?)\s*$/i);
+      if (p && hash && !providers.has(hash)) providers.set(hash, p[1]);
+    }
+  } catch {
+    // certutil missing or blocked: every certificate stays a token (PIN required)
+  }
+  return providers;
+}
+
+export function listWindowsCertificates(config?: Pick<AgentConfig, 'cloudCertificateIds' | 'cloudCertificateProviders'>): Certificate[] {
   try {
     // Query all certs — filter later to catch hardware tokens without HasPrivateKey
     const script = `
@@ -53,6 +82,7 @@ export function listWindowsCertificates(): Certificate[] {
 
     const parsed = JSON.parse(output);
     const items = Array.isArray(parsed) ? parsed : [parsed];
+    const providers = windowsKeyProviders();
 
     return items
       .filter((item: any) => {
@@ -61,13 +91,20 @@ export function listWindowsCertificates(): Certificate[] {
         if (expiry && new Date(expiry) < new Date()) return false;
         return true;
       })
-      .map((item: any) => ({
-        id: item.Thumbprint,
-        subject: item.Subject ?? '',
-        issuer: item.Issuer ?? '',
-        notAfter: parseDotNetDate(item.NotAfter),
-        source: 'windows-store' as const,
-      }));
+      .map((item: any) => {
+        const id = String(item.Thumbprint ?? '').toUpperCase();
+        const provider = providers.get(id) ?? '';
+        const kind = isConfiguredCloudId(id, config) ? 'cloud' : classifyWindowsProvider(provider, config);
+        return {
+          id,
+          subject: item.Subject ?? '',
+          issuer: item.Issuer ?? '',
+          notAfter: parseDotNetDate(item.NotAfter),
+          source: 'windows-store' as const,
+          kind,
+          ...(provider ? { provider } : {}),
+        };
+      });
   } catch {
     return [];
   }

@@ -1084,6 +1084,10 @@ export interface AgentCertificate {
   source: 'keychain' | 'windows-store' | 'pkcs11'
   /** The agent keeps this certificate's PIN in the OS secure store (agent ≥ 1.7.8). */
   pinStored?: boolean
+  /** token = PIN required; cloud = the vendor app approves each operation, no PIN; software = no PIN (agent ≥ 1.8.0). */
+  kind?: 'token' | 'cloud' | 'software'
+  /** Windows key provider (CSP/KSP) holding the key, when known. */
+  provider?: string
 }
 
 export interface AnafProxyRequest {

@@ -99,6 +99,8 @@ async function main() {
           console.log(`  ID:      ${cert.id}`);
           console.log(`  Subject: ${cert.subject}`);
           console.log(`  Source:  ${cert.source}`);
+          console.log(`  Kind:    ${cert.kind}${cert.kind === 'cloud' ? ' (no PIN: the vendor app approves each operation)' : cert.kind === 'software' ? ' (no PIN)' : ' (PIN required)'}`);
+          if (cert.provider) console.log(`  Provider: ${cert.provider}`);
           if (cert.issuer) console.log(`  Issuer:  ${cert.issuer}`);
           if (cert.notAfter) console.log(`  Expires: ${cert.notAfter}`);
           console.log('');
