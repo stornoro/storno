@@ -2329,6 +2329,8 @@ export default defineI18nLocale(async () => {
       eoriCodeLabel: 'Cod EORI',
       representativeLabel: 'Reprezentant',
       representativeRoleLabel: 'Functie reprezentant',
+      caenCodeLabel: 'Cod CAEN',
+      caenCodeHelp: 'Activitatea principala (4 cifre); apare in antetul decontului de TVA (D300) si in SAF-T.',
       countryLabel: 'Tara',
       refreshAnaf: 'Reimprospateaza din ANAF',
       registrationNumber: 'Nr. inregistrare',
@@ -4499,6 +4501,7 @@ export default defineI18nLocale(async () => {
     refreshSuccess: 'Actualizarea statusurilor a inceput. Declaratiile vor fi actualizate in curand.',
     selectYear: 'Selecteaza anul',
     d300: {
+      warningsTitle: 'Decontul nu poate fi validat inca',
       collected: 'TVA colectat',
       deductible: 'TVA deductibil',
       net: 'TVA net',

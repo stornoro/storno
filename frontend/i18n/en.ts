@@ -2330,6 +2330,8 @@ export default defineI18nLocale(async () => {
     eoriCodeLabel: 'EORI code',
     representativeLabel: 'Representative',
     representativeRoleLabel: 'Representative role',
+    caenCodeLabel: 'CAEN code',
+    caenCodeHelp: 'Main activity code (4 digits); required in the VAT return (D300) header and SAF-T.',
     countryLabel: 'Country',
     refreshAnaf: 'Refresh from ANAF',
     registrationNumber: 'Registration no.',
@@ -4498,6 +4500,7 @@ export default defineI18nLocale(async () => {
     refreshSuccess: 'Status refresh started. Declarations will be updated shortly.',
     selectYear: 'Select year',
     d300: {
+      warningsTitle: 'The return cannot be validated yet',
       collected: 'Collected VAT',
       deductible: 'Deductible VAT',
       net: 'Net VAT',

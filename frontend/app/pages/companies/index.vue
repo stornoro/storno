@@ -333,6 +333,10 @@
                     <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.representativeRoleLabel') }}</div>
                     <div class="text-sm font-medium">{{ editCompany.representativeRole }}</div>
                   </div>
+                  <div v-if="editCompany.caenCode">
+                    <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.caenCodeLabel') }}</div>
+                    <div class="text-sm font-medium">{{ editCompany.caenCode }}</div>
+                  </div>
                 </div>
                 <!-- Default currency -->
                 <div class="pt-1">
@@ -436,6 +440,9 @@
                   </UFormField>
                   <UFormField :label="$t('companies.representativeRoleLabel')">
                     <UInput v-model="editForm.representativeRole" />
+                  </UFormField>
+                  <UFormField :label="$t('companies.caenCodeLabel')" :help="$t('companies.caenCodeHelp')">
+                    <UInput v-model="editForm.caenCode" maxlength="4" inputmode="numeric" placeholder="6201" />
                   </UFormField>
                 </div>
                 <UFormField :label="$t('companies.defaultCurrency')">
@@ -871,6 +878,7 @@ const editForm = reactive({
   eoriCode: '',
   representative: '',
   representativeRole: '',
+  caenCode: '',
   defaultCurrency: 'RON',
 })
 
@@ -901,6 +909,7 @@ const companyInfoDirty = computed(() => {
     || editForm.eoriCode !== (c.eoriCode ?? '')
     || editForm.representative !== (c.representative ?? '')
     || editForm.representativeRole !== (c.representativeRole ?? '')
+    || editForm.caenCode !== (c.caenCode ?? '')
     || editForm.defaultCurrency !== (c.defaultCurrency ?? 'RON')
 })
 
@@ -972,6 +981,7 @@ async function openEdit(company: Company) {
   editForm.eoriCode = company.eoriCode ?? ''
   editForm.representative = company.representative ?? ''
   editForm.representativeRole = company.representativeRole ?? ''
+  editForm.caenCode = company.caenCode ?? ''
   editForm.defaultCurrency = company.defaultCurrency ?? 'RON'
   autoSubmitEnabled.value = company.efacturaDelayHours != null
   selectedDelay.value = company.efacturaDelayHours ?? 24
@@ -1015,6 +1025,7 @@ async function saveCompanyInfo() {
       eoriCode: editForm.eoriCode || null,
       representative: editForm.representative || null,
       representativeRole: editForm.representativeRole || null,
+      caenCode: editForm.caenCode || null,
       defaultCurrency: editForm.defaultCurrency,
     } as Partial<Company>)
     if (result) {

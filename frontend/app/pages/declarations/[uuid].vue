@@ -224,6 +224,17 @@
             </UCard>
           </div>
 
+          <!-- What ANAF's validator will refuse without (missing CAEN, declarant, bank account) -->
+          <UAlert
+            v-for="w in (declaration.data.warnings ?? [])"
+            :key="w.code"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-triangle-alert"
+            :title="$t('declarations.d300.warningsTitle')"
+            :description="w.message"
+          />
+
           <!-- D300 header info (from uploaded XML) -->
           <UCard v-if="d300Header && Object.keys(d300Header).length">
             <template #header>
