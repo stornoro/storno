@@ -1,8 +1,10 @@
-import { createWriteStream, renameSync, chmodSync, unlinkSync } from 'node:fs';
+import { createWriteStream, renameSync, chmodSync, unlinkSync, readFileSync, existsSync } from 'node:fs';
 import { get as httpsGet } from 'node:https';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { spawn, execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 const REPO = 'stornoro/storno';
 const RELEASE_TAG_PREFIX = 'agent-v';
@@ -96,6 +98,48 @@ export async function checkForUpdate(currentVersion: string): Promise<UpdateInfo
 }
 
 /**
+ * Where the agent binary really lives.
+ *
+ * macOS runs a quarantined app that was never moved with Finder from a
+ * randomised, read-only copy (App Translocation, under /private/var/folders/…/
+ * AppTranslocation/…). process.execPath then points into that copy and any
+ * write next to it fails with EROFS. The update has to go to the original
+ * bundle: the launcher written by `storno-agent register` knows its path, and
+ * otherwise the usual install locations are searched for the same bundle name.
+ */
+export function resolveInstalledBinary(): string {
+  const exec = process.execPath;
+  if (process.platform !== 'darwin' || !exec.includes('/AppTranslocation/')) return exec;
+
+  const bundle = exec.match(/\/([^/]+\.app)\/Contents\/MacOS\/([^/]+)$/);
+  const candidates: string[] = [];
+
+  try {
+    const launcher = join(homedir(), '.storno-agent', 'Storno Agent.app', 'Contents', 'MacOS', 'storno-agent');
+    // Release launchers read `exec "<bundle binary>" start`; a dev launcher
+    // (`exec "node" "dist/index.js" start`) names no binary to replace.
+    const m = readFileSync(launcher, 'utf-8').match(/^exec "([^"]+)" start\s*$/m);
+    if (m) candidates.push(m[1]);
+  } catch { /* not registered */ }
+
+  if (bundle) {
+    for (const dir of ['/Applications', join(homedir(), 'Applications'), join(homedir(), 'Downloads'), join(homedir(), 'Desktop')]) {
+      candidates.push(join(dir, bundle[1], 'Contents', 'MacOS', bundle[2]));
+    }
+  }
+
+  for (const c of candidates) {
+    if (!c.includes('/AppTranslocation/') && existsSync(c)) return c;
+  }
+  throw new Error('The agent is running from a temporary read-only copy made by macOS and the original "Storno Agent.app" could not be found. Move the app to Applications, start it from there and try again.');
+}
+
+/** Strip the quarantine flag so the next launch runs the app in place instead of a translocated copy. */
+function clearQuarantine(appDir: string): void {
+  try { execFileSync('xattr', ['-dr', 'com.apple.quarantine', appDir], { stdio: 'ignore' }); } catch { /* best effort */ }
+}
+
+/**
  * Download the latest binary from GitHub, replace the current one, and restart.
  */
 export async function applyUpdate(currentVersion: string): Promise<{ success: boolean; message: string }> {
@@ -105,7 +149,12 @@ export async function applyUpdate(currentVersion: string): Promise<{ success: bo
     return { success: false, message: 'No update available.' };
   }
 
-  const binaryPath = process.execPath;
+  let binaryPath: string;
+  try {
+    binaryPath = resolveInstalledBinary();
+  } catch (err) {
+    return { success: false, message: `Update failed: ${(err as Error).message}` };
+  }
   const tempPath = binaryPath + '.update';
   const backupPath = binaryPath + '.backup';
 
@@ -129,6 +178,7 @@ export async function applyUpdate(currentVersion: string): Promise<{ success: bo
       const appDir = binaryPath.match(/^(.*\.app)\/Contents\/MacOS\//)?.[1];
       if (appDir) {
         try { execFileSync('codesign', ['--force', '--deep', '--sign', '-', appDir], { stdio: 'ignore' }); } catch { /* best effort */ }
+        clearQuarantine(appDir);
       }
     }
 
