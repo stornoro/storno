@@ -203,7 +203,22 @@ class InvoiceDefaultsController extends AbstractController
             ['value' => 'zi', 'label' => 'zi (Zi)', 'code' => 'DAY'],
             ['value' => 'luna', 'label' => 'luna (Luna)', 'code' => 'MON'],
             ['value' => 'set', 'label' => 'set (Set)', 'code' => 'SET'],
-            ['value' => 'pachet', 'label' => 'pachet (Pachet)', 'code' => 'PK'],
+            ['value' => 'pachet', 'label' => 'pachet (Pachet)', 'code' => 'XPK'],
+            ['value' => 'cutie', 'label' => 'cutie (Cutie)', 'code' => 'XBX'],
+            ['value' => 'pereche', 'label' => 'pereche (Pereche)', 'code' => 'PR'],
+            ['value' => 'g', 'label' => 'g (Gram)', 'code' => 'GRM'],
+            ['value' => 't', 'label' => 't (Tona)', 'code' => 'TNE'],
+            ['value' => 'ml', 'label' => 'ml (Mililitru)', 'code' => 'MLT'],
+            ['value' => 'cm', 'label' => 'cm (Centimetru)', 'code' => 'CMT'],
+            ['value' => 'km', 'label' => 'km (Kilometru)', 'code' => 'KMT'],
+            ['value' => 'mp', 'label' => 'mp (Metru patrat)', 'code' => 'MTK'],
+            ['value' => 'mc', 'label' => 'mc (Metru cub)', 'code' => 'MTQ'],
+            ['value' => 'min', 'label' => 'min (Minut)', 'code' => 'MIN'],
+            ['value' => 'sapt', 'label' => 'sapt (Saptamana)', 'code' => 'WEE'],
+            ['value' => 'an', 'label' => 'an (An)', 'code' => 'ANN'],
+            ['value' => 'kwh', 'label' => 'kWh (Kilowatt-ora)', 'code' => 'KWH'],
+            ['value' => 'serv', 'label' => 'serv (Serviciu)', 'code' => 'E48'],
+            ['value' => 'proc', 'label' => '% (Procent)', 'code' => 'P1'],
         ];
 
         // Countries — full ISO 3166-1 alpha-2 list
