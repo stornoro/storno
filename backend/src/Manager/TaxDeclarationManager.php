@@ -42,6 +42,7 @@ class TaxDeclarationManager
         private readonly DukIntegratorService $dukIntegrator,
         private readonly DeclarationValidator $validator,
         private readonly DeclarationNamespaceResolver $namespaces,
+        private readonly \League\Flysystem\FilesystemOperator $defaultStorage,
         #[TaggedIterator('app.declaration_data_populator')]
         iterable $dataPopulators,
         #[TaggedIterator('app.declaration_xml_generator')]
@@ -286,20 +287,22 @@ class TaxDeclarationManager
         );
     }
 
-    public function createFromXml(Company $company, string $xmlContent, User $user): TaxDeclaration
+    public function createFromXml(Company $company, string $xmlContent, User $user, string $source = 'xml_upload'): TaxDeclaration
     {
         $doc = new \DOMDocument();
         if (!$doc->loadXML($xmlContent)) {
             throw new \InvalidArgumentException('Invalid XML content.');
         }
 
-        $rootName = $doc->documentElement->nodeName;
+        $rootName = $doc->documentElement->localName ?? $doc->documentElement->nodeName;
 
         // Extract type from root element name (e.g., declaratie394 → d394)
         if (preg_match('/^declaratie(\d+)$/i', $rootName, $matches)) {
             $typeValue = 'd' . $matches[1];
         } elseif (strtolower($rootName) === 'declaratieunica') {
             $typeValue = 'd112';
+        } elseif (strtolower($rootName) === 'c168') {
+            $typeValue = 'c168';
         } else {
             throw new \InvalidArgumentException(sprintf('Cannot determine declaration type from root element: %s', $rootName));
         }
@@ -329,7 +332,11 @@ class TaxDeclarationManager
             $rows[$attr->name] = $attr->value;
         }
         $declaration->setData(['rows' => $rows, 'uploadedXml' => true]);
-        $declaration->setMetadata(['source' => 'xml_upload']);
+        // the document itself is what gets validated and filed, exactly as it came in
+        $xmlPath = sprintf('declarations/%s/%s/%s.xml', $company->getId(), $type->value, $declaration->getId());
+        $this->defaultStorage->write($xmlPath, $xmlContent);
+        $declaration->setXmlPath($xmlPath);
+        $declaration->setMetadata(['source' => $source, 'externalXml' => true]);
 
         $this->entityManager->persist($declaration);
         $this->entityManager->flush();
@@ -390,6 +397,14 @@ class TaxDeclarationManager
 
     public function generateXml(TaxDeclaration $declaration): string
     {
+        // uploaded (XML or PDF from another program): the stored document, never a regeneration
+        if (($declaration->getMetadata()['externalXml'] ?? false) === true && $declaration->getXmlPath() !== null && $this->defaultStorage->fileExists($declaration->getXmlPath())) {
+            $stored = $this->defaultStorage->read($declaration->getXmlPath());
+            $namespace = $declaration->getMetadata()['xmlns'] ?? $this->namespaces->fromXml($stored) ?? $this->namespaces->fromXsd($declaration->getType()->value);
+
+            return $this->namespaces->apply($stored, is_string($namespace) ? $namespace : null);
+        }
+
         $generator = $this->findGenerator($declaration->getType()->value);
         if ($generator === null) {
             throw new \InvalidArgumentException(sprintf('No XML generator found for type: %s', $declaration->getType()->value));
