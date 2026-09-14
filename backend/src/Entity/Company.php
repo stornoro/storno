@@ -134,6 +134,24 @@ class Company
     #[Groups(['company'])]
     private ?string $caenCode = null;
 
+    public const PERIOD_MONTHLY = 'monthly';
+    public const PERIOD_QUARTERLY = 'quarterly';
+
+    /** VAT return period: the D300, D394 and SAF-T (D406) deadlines follow it. */
+    #[ORM\Column(length: 10, options: ['default' => self::PERIOD_MONTHLY])]
+    #[Groups(['company'])]
+    private string $vatPeriod = self::PERIOD_MONTHLY;
+
+    /** D100 (income tax) period: quarterly for micro-enterprises and profit tax, monthly otherwise. */
+    #[ORM\Column(length: 10, options: ['default' => self::PERIOD_QUARTERLY])]
+    #[Groups(['company'])]
+    private string $incomeTaxPeriod = self::PERIOD_QUARTERLY;
+
+    /** With employees the company files D112 every month. */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['company'])]
+    private bool $hasEmployees = false;
+
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['company'])]
     private ?string $bankName = null;
@@ -526,6 +544,42 @@ class Company
     {
         $clean = preg_replace('/\D/', '', (string) $caenCode);
         $this->caenCode = $clean === '' ? null : substr($clean, 0, 10);
+        return $this;
+    }
+
+    public function getVatPeriod(): string
+    {
+        return $this->vatPeriod;
+    }
+
+    public function setVatPeriod(string $vatPeriod): static
+    {
+        $this->vatPeriod = $vatPeriod === self::PERIOD_QUARTERLY ? self::PERIOD_QUARTERLY : self::PERIOD_MONTHLY;
+
+        return $this;
+    }
+
+    public function getIncomeTaxPeriod(): string
+    {
+        return $this->incomeTaxPeriod;
+    }
+
+    public function setIncomeTaxPeriod(string $incomeTaxPeriod): static
+    {
+        $this->incomeTaxPeriod = $incomeTaxPeriod === self::PERIOD_MONTHLY ? self::PERIOD_MONTHLY : self::PERIOD_QUARTERLY;
+
+        return $this;
+    }
+
+    public function hasEmployees(): bool
+    {
+        return $this->hasEmployees;
+    }
+
+    public function setHasEmployees(bool $hasEmployees): static
+    {
+        $this->hasEmployees = $hasEmployees;
+
         return $this;
     }
 

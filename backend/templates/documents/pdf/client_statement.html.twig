@@ -1,0 +1,164 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.header { border-bottom: 2px solid {{ primaryColor|default('#2563eb') }}; padding-bottom: 14px; margin-bottom: 22px; overflow: hidden; }
+.header-left { float: left; width: 55%; }
+.header-right { float: right; width: 45%; text-align: right; }
+.doc-title { font-size: 20px; font-weight: bold; color: {{ primaryColor|default('#2563eb') }}; margin-bottom: 2px; }
+.doc-subtitle { font-size: 11px; color: #666; }
+.company-name { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
+.small { font-size: 10px; color: #555; }
+.parties { overflow: hidden; margin-bottom: 22px; }
+.party { float: left; width: 48%; }
+.party + .party { float: right; }
+.party-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 4px; font-weight: bold; }
+.party-name { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+table.lines { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+table.lines thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 7px 8px; text-align: left; font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+table.lines tbody td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-size: 10.5px; }
+table.lines tfoot td { padding: 8px; font-weight: bold; border-top: 2px solid #e2e8f0; font-size: 11px; }
+.overdue { color: #dc2626; font-weight: bold; }
+.credit { color: #047857; }
+.aging { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+.aging th { background: {{ primaryColor|default('#2563eb') }}; color: #fff; font-size: 9px; padding: 6px 4px; text-align: center; font-weight: 600; }
+.aging td { text-align: center; padding: 7px 4px; font-size: 10.5px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; }
+.aging td:last-child { border-right: none; }
+.aging .count { font-size: 9px; color: #999; display: block; }
+.section-title { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #999; font-weight: bold; margin: 16px 0 6px; }
+.balance-box { float: right; width: 300px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 18px; }
+.balance-row { overflow: hidden; padding: 3px 0; font-size: 11px; }
+.balance-row span:first-child { float: left; color: #555; }
+.balance-row span:last-child { float: right; }
+.balance-row.total { border-top: 2px solid {{ primaryColor|default('#2563eb') }}; margin-top: 4px; padding-top: 6px; font-size: 14px; font-weight: bold; }
+.bank-info { clear: both; margin-top: 8px; font-size: 10px; color: #444; }
+.bank-info .label { font-weight: bold; color: #666; }
+.footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #999; text-align: center; }
+.clearfix { clear: both; }
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="header-left">
+        <div class="company-name">{{ company.name }}</div>
+        <div class="small">
+            {% if company.cif %}CUI: {{ company.vatCode ?: company.cif }}<br>{% endif %}
+            {% if company.address %}{{ company.address }}{% if company.city %}, {{ company.city }}{% endif %}<br>{% endif %}
+            {% if company.email %}{{ company.email }}{% endif %}{% if company.phone %} · {{ company.phone }}{% endif %}
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="doc-title">SITUAȚIE FACTURI NEACHITATE</div>
+        <div class="doc-subtitle">la data de {{ statement.asOf|date('d.m.Y') }}</div>
+    </div>
+</div>
+
+<div class="parties">
+    <div class="party">
+        <div class="party-label">Client</div>
+        <div class="party-name">{{ statement.client.name }}</div>
+        <div class="small">
+            {% if statement.client.cui %}CUI: {{ statement.client.cui }}<br>{% endif %}
+            {% if statement.client.address %}{{ statement.client.address }}{% if statement.client.city %}, {{ statement.client.city }}{% endif %}<br>{% endif %}
+            {% if statement.client.email %}{{ statement.client.email }}{% endif %}
+        </div>
+    </div>
+    <div class="party">
+        <div class="party-label">Sumar</div>
+        <div class="small">
+            Facturi neachitate: <strong>{{ statement.totals.count }}</strong><br>
+            Din care restante: <strong>{{ statement.totals.overdue|number_format(2, ',', '.') }} {{ statement.currency }}</strong><br>
+            Monedă: {{ statement.currency }}
+        </div>
+    </div>
+</div>
+
+<div class="section-title">Facturi</div>
+<table class="lines">
+    <thead>
+        <tr>
+            <th>Nr. factură</th>
+            <th>Data emiterii</th>
+            <th>Scadență</th>
+            <th class="text-right">Total</th>
+            <th class="text-right">Achitat</th>
+            <th class="text-right">Rest de plată</th>
+            <th class="text-right">Zile întârziere</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for inv in statement.invoices %}
+        <tr>
+            <td>{{ inv.number }}</td>
+            <td>{{ inv.issueDate ? inv.issueDate|date('d.m.Y') : '-' }}</td>
+            <td>{{ inv.dueDate ? inv.dueDate|date('d.m.Y') : '-' }}</td>
+            <td class="text-right">{{ inv.total|number_format(2, ',', '.') }} {{ inv.currency }}</td>
+            <td class="text-right">{{ inv.paid|number_format(2, ',', '.') }} {{ inv.currency }}</td>
+            <td class="text-right{% if inv.outstanding < 0 %} credit{% endif %}">{{ inv.outstanding|number_format(2, ',', '.') }} {{ inv.currency }}</td>
+            <td class="text-right{% if inv.daysOverdue > 0 %} overdue{% endif %}">{{ inv.daysOverdue > 0 ? inv.daysOverdue : '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center">Nu există facturi neachitate.</td></tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="3">Total ({{ statement.currency }})</td>
+            <td class="text-right">{{ statement.totals.invoiced|number_format(2, ',', '.') }}</td>
+            <td class="text-right">{{ statement.totals.paid|number_format(2, ',', '.') }}</td>
+            <td class="text-right">{{ statement.balance|number_format(2, ',', '.') }}</td>
+            <td></td>
+        </tr>
+    </tfoot>
+</table>
+
+<div class="section-title">Vechime sold ({{ statement.currency }})</div>
+<table class="aging">
+    <thead>
+        <tr>
+            {% for key, label in bands %}<th>{{ label }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            {% for key, label in bands %}
+            <td>
+                {{ statement.aging[key].amount|number_format(2, ',', '.') }}
+                <span class="count">{{ statement.aging[key].count }} {{ statement.aging[key].count == 1 ? 'factură' : 'facturi' }}</span>
+            </td>
+            {% endfor %}
+        </tr>
+    </tbody>
+</table>
+
+<div class="balance-box">
+    <div class="balance-row"><span>Total facturat</span><span>{{ statement.totals.invoiced|number_format(2, ',', '.') }} {{ statement.currency }}</span></div>
+    <div class="balance-row"><span>Total achitat</span><span>{{ statement.totals.paid|number_format(2, ',', '.') }} {{ statement.currency }}</span></div>
+    {% if statement.totals.credits != '0.00' %}
+    <div class="balance-row"><span>Credite / storno</span><span class="credit">{{ statement.totals.credits|number_format(2, ',', '.') }} {{ statement.currency }}</span></div>
+    {% endif %}
+    <div class="balance-row"><span>Din care restant</span><span class="overdue">{{ statement.totals.overdue|number_format(2, ',', '.') }} {{ statement.currency }}</span></div>
+    <div class="balance-row total"><span>Total de achitat</span><span>{{ statement.balance|number_format(2, ',', '.') }} {{ statement.currency }}</span></div>
+</div>
+<div class="clearfix"></div>
+
+{% if statement.otherCurrencies is not empty %}
+<div class="small" style="margin-bottom: 10px;">
+    Facturi în alte monede (neincluse în total):
+    {% for cur, info in statement.otherCurrencies %}{{ info.outstanding|number_format(2, ',', '.') }} {{ cur }} ({{ info.count }}){% if not loop.last %}, {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+{% if statement.bankAccounts|default([]) is not empty %}
+<div class="bank-info">
+    <span class="label">Plata se poate efectua în contul:</span>
+    {% for account in statement.bankAccounts %}
+    <div>{{ account.iban }}{% if account.bankName %} – {{ account.bankName }}{% endif %}{% if account.currency %} ({{ account.currency }}){% endif %}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="footer">
+    Situație generată la {{ "now"|date('d.m.Y H:i') }}.
+    {% if not whiteLabelHideBranding|default(false) %}Emisă prin <a href="https://storno.ro" style="color: inherit; text-decoration: underline;">Storno.ro</a>{% endif %}
+</div>
+{% endblock %}

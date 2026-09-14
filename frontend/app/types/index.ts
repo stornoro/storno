@@ -151,6 +151,9 @@ export interface Company {
   representative: string | null
   representativeRole: string | null
   caenCode?: string | null
+  vatPeriod?: 'monthly' | 'quarterly'
+  incomeTaxPeriod?: 'monthly' | 'quarterly'
+  hasEmployees?: boolean
   bankName: string | null
   bankAccount: string | null
   bankBic: string | null
@@ -809,6 +812,29 @@ export interface DosarDetail {
   documents: SpvDocument[]
   files: DosarFile[]
   timeline: DosarTimelineEvent[]
+}
+
+/** One deadline of the fiscal calendar (GET /fiscal-calendar). */
+export interface FiscalCalendarItem {
+  code: string
+  label: string
+  dueDate: string
+  nominalDueDate: string
+  daysLeft: number
+  period: { year: number, month?: number, quarter?: number, from: string, to: string }
+  appliesBecause: string
+  declarationType: string | null
+  status: 'due' | 'overdue' | 'filed'
+  company?: { id: string, name: string | null, cif: number, isIndividual: boolean }
+}
+
+export interface FiscalCalendarResponse {
+  data: FiscalCalendarItem[]
+  from: string
+  days: number
+  counts: { due: number, overdue: number, filed: number }
+  company?: { id: string, name: string | null, cif: number, isIndividual: boolean }
+  companies?: Array<{ id: string, name: string | null, cif: number, isIndividual: boolean, counts: { due: number, overdue: number, filed: number } }>
 }
 
 export interface DosarActionItem {

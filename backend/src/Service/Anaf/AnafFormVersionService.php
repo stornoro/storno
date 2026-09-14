@@ -22,7 +22,7 @@ final class AnafFormVersionService
 {
     public const DEFAULT_MANIFEST_URL = 'http://static.anaf.ro/static/10/Anaf/update5/versiuni.xml';
     /** Forms Storno builds, validates or files itself (App\Enum\DeclarationType + the assistant's). */
-    public const STORNO_FORMS = ['D100', 'D101', 'D106', 'D112', 'D120', 'D130', 'D177', 'D180', 'D205', 'D208', 'D212', 'D300', 'D301', 'D311', 'D390', 'D392', 'D393', 'D394', 'D700', 'C168'];
+    public const STORNO_FORMS = ['D100', 'D101', 'D106', 'D112', 'D120', 'D130', 'D177', 'D180', 'D205', 'D208', 'D212', 'D300', 'D301', 'D311', 'D390', 'D392', 'D393', 'D394', 'D398', 'D700', 'C168'];
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,

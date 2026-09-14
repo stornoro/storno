@@ -37,6 +37,58 @@ const { selectedIds, allSelected, toggle, isSelected, clear: clearSelection, cou
 const bulkLoading = ref(false)
 const deleteConfirmOpen = ref(false)
 
+// ── Statement of unpaid invoices: send to every client with a balance ──
+const statementBulkOpen = ref(false)
+const statementBulkChecking = ref(false)
+const statementBulkSending = ref(false)
+const statementBulkPreview = ref<{ sent: number, skipped: number, clientsWithBalance: number } | null>(null)
+const statementBulkMinBalance = ref(0.01)
+const statementBulkMessage = ref('')
+
+async function previewStatementBulk() {
+  statementBulkChecking.value = true
+  try {
+    const { post } = useApi()
+    const res = await post<any>('/v1/clients/statements/email', { dryRun: true, minBalance: statementBulkMinBalance.value })
+    statementBulkPreview.value = { sent: res.sent ?? 0, skipped: res.skipped ?? 0, clientsWithBalance: res.clientsWithBalance ?? 0 }
+  }
+  catch (err: any) {
+    toast.add({ title: err?.data?.error || $t('clients.statement.bulkError'), color: 'error' })
+  }
+  finally {
+    statementBulkChecking.value = false
+  }
+}
+
+async function openStatementBulkModal() {
+  statementBulkPreview.value = null
+  statementBulkMessage.value = ''
+  statementBulkOpen.value = true
+  await previewStatementBulk()
+}
+
+async function sendStatementBulk() {
+  statementBulkSending.value = true
+  try {
+    const { post } = useApi()
+    const res = await post<any>('/v1/clients/statements/email', {
+      minBalance: statementBulkMinBalance.value,
+      message: statementBulkMessage.value || undefined,
+    })
+    statementBulkOpen.value = false
+    toast.add({
+      title: $t('clients.statement.bulkDone', { sent: res.sent ?? 0, skipped: res.skipped ?? 0, failed: res.failed ?? 0 }),
+      color: (res.failed ?? 0) > 0 ? 'warning' : 'success',
+    })
+  }
+  catch (err: any) {
+    toast.add({ title: err?.data?.error || $t('clients.statement.bulkError'), color: 'error' })
+  }
+  finally {
+    statementBulkSending.value = false
+  }
+}
+
 async function handleBulkDelete() {
   deleteConfirmOpen.value = false
   bulkLoading.value = true
@@ -215,6 +267,15 @@ onMounted(() => fetchClients())
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UButton
+            v-if="can(P.INVOICE_SEND)"
+            icon="i-lucide-mail"
+            color="neutral"
+            variant="outline"
+            :label="$t('clients.statement.bulkAction')"
+            :loading="statementBulkChecking"
+            @click="openStatementBulkModal"
+          />
           <UPopover>
             <UButton icon="i-lucide-columns-3" color="neutral" variant="outline" />
             <template #content>
@@ -414,6 +475,38 @@ onMounted(() => fetchClients())
           <div class="flex justify-end gap-2">
             <UButton :label="$t('common.cancel')" variant="ghost" @click="deleteConfirmOpen = false" />
             <UButton :label="$t('common.delete')" color="error" :loading="bulkLoading" @click="handleBulkDelete" />
+          </div>
+        </template>
+      </UModal>
+
+      <!-- Send statement to all clients with a balance -->
+      <UModal v-model:open="statementBulkOpen" :title="$t('clients.statement.bulkTitle')">
+        <template #body>
+          <div class="space-y-4">
+            <UFormField :label="$t('clients.statement.bulkMinBalance')">
+              <UInput v-model.number="statementBulkMinBalance" type="number" min="0" step="0.01" class="w-40" @change="previewStatementBulk" />
+            </UFormField>
+            <UFormField :label="$t('clients.statement.message')">
+              <UTextarea v-model="statementBulkMessage" :rows="3" :placeholder="$t('clients.statement.messagePlaceholder')" class="w-full" />
+            </UFormField>
+            <div v-if="statementBulkChecking" class="text-sm text-muted">{{ $t('clients.statement.bulkChecking') }}</div>
+            <div v-else-if="statementBulkPreview" class="text-sm space-y-1">
+              <p class="font-medium">{{ $t('clients.statement.bulkSummary', statementBulkPreview.sent) }}</p>
+              <p class="text-muted">{{ $t('clients.statement.bulkSkipped', statementBulkPreview.skipped) }}</p>
+              <p v-if="statementBulkPreview.clientsWithBalance > 0 && statementBulkPreview.sent === 0" class="text-warning">{{ $t('clients.statement.bulkNoRecipients') }}</p>
+            </div>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-end gap-2 w-full">
+            <UButton :label="$t('common.cancel')" variant="ghost" @click="statementBulkOpen = false" />
+            <UButton
+              :label="$t('clients.statement.bulkConfirm', { count: statementBulkPreview?.sent ?? 0 })"
+              icon="i-lucide-send"
+              :loading="statementBulkSending"
+              :disabled="statementBulkChecking || !statementBulkPreview || statementBulkPreview.sent === 0"
+              @click="sendStatementBulk"
+            />
           </div>
         </template>
       </UModal>

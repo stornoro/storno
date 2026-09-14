@@ -149,6 +149,103 @@
 
       <SharedRelatedCard v-if="client" type="client" :id="String(route.params.uuid)" :exclude="['invoices', 'clients']" />
 
+      <!-- Statement of unpaid invoices -->
+      <UCard>
+        <template #header>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="font-semibold">{{ $t('clients.statement.title') }}</h3>
+              <p v-if="statement" class="text-xs text-muted">
+                {{ $t('clients.statement.asOf') }} {{ formatDate(statement.asOf) }} &middot; {{ $t('clients.statement.unpaidCount', statement.totals.count) }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <UButton
+                icon="i-lucide-download"
+                size="xs"
+                variant="soft"
+                :loading="statementPdfLoading"
+                :disabled="!statement"
+                @click="downloadStatementPdf"
+              >
+                {{ $t('clients.statement.downloadPdf') }}
+              </UButton>
+              <UButton
+                v-if="can(P.INVOICE_SEND)"
+                icon="i-lucide-mail"
+                size="xs"
+                :disabled="!statement || Number(statement.balance) <= 0"
+                @click="openStatementEmailModal"
+              >
+                {{ $t('clients.statement.sendEmail') }}
+              </UButton>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="statementLoading && !statement" class="space-y-2">
+          <USkeleton class="h-6 w-full" />
+          <USkeleton class="h-6 w-2/3" />
+        </div>
+
+        <template v-else-if="statement">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div class="rounded-lg border border-default p-3">
+              <p class="text-xs text-muted">{{ $t('clients.statement.balance') }}</p>
+              <p class="text-lg font-semibold">{{ formatMoney(statement.balance, statement.currency) }}</p>
+            </div>
+            <div class="rounded-lg border border-default p-3">
+              <p class="text-xs text-muted">{{ $t('clients.statement.overdue') }}</p>
+              <p class="text-lg font-semibold" :class="Number(statement.totals.overdue) > 0 ? 'text-error' : ''">{{ formatMoney(statement.totals.overdue, statement.currency) }}</p>
+            </div>
+            <div v-if="Number(statement.totals.credits) !== 0" class="rounded-lg border border-default p-3">
+              <p class="text-xs text-muted">{{ $t('clients.statement.credits') }}</p>
+              <p class="text-lg font-semibold text-success">{{ formatMoney(statement.totals.credits, statement.currency) }}</p>
+            </div>
+          </div>
+
+          <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ $t('clients.statement.aging') }}</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
+            <div
+              v-for="band in agingBandKeys"
+              :key="band"
+              class="rounded-md border border-default px-2 py-1.5 text-center"
+              :class="Number(statement.aging[band]?.amount) > 0 && band !== 'current' ? 'bg-error/5 border-error/30' : ''"
+            >
+              <p class="text-[10px] text-muted leading-tight">{{ $t(`clients.statement.bands.${band}`) }}</p>
+              <p class="text-sm font-medium">{{ formatMoney(statement.aging[band]?.amount ?? 0, statement.currency) }}</p>
+              <p class="text-[10px] text-muted">{{ statement.aging[band]?.count ?? 0 }}</p>
+            </div>
+          </div>
+
+          <UTable
+            v-if="statementInvoices.length"
+            :data="statementInvoices"
+            :columns="statementColumns"
+            class="cursor-pointer"
+            @select="onStatementInvoiceClick"
+          >
+            <template #issueDate-cell="{ row }">{{ row.original.issueDate ? formatDate(row.original.issueDate) : '-' }}</template>
+            <template #dueDate-cell="{ row }">{{ row.original.dueDate ? formatDate(row.original.dueDate) : '-' }}</template>
+            <template #total-cell="{ row }">{{ formatMoney(row.original.total, row.original.currency) }}</template>
+            <template #paid-cell="{ row }">{{ formatMoney(row.original.paid, row.original.currency) }}</template>
+            <template #outstanding-cell="{ row }">
+              <span class="font-medium" :class="Number(row.original.outstanding) < 0 ? 'text-success' : ''">{{ formatMoney(row.original.outstanding, row.original.currency) }}</span>
+            </template>
+            <template #daysOverdue-cell="{ row }">
+              <UBadge v-if="row.original.daysOverdue > 0" color="error" variant="subtle" size="sm">{{ row.original.daysOverdue }}</UBadge>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </UTable>
+          <p v-else class="text-sm text-muted">{{ $t('clients.statement.noUnpaid') }}</p>
+
+          <p v-if="Object.keys(statement.otherCurrencies || {}).length" class="text-xs text-muted mt-2">
+            {{ $t('clients.statement.otherCurrencies') }}:
+            <span v-for="(info, cur) in statement.otherCurrencies" :key="cur" class="mr-2">{{ formatMoney(info.outstanding, String(cur)) }} ({{ info.count }})</span>
+          </p>
+        </template>
+      </UCard>
+
       <!-- Documents -->
       <UCard>
         <template #header>
@@ -300,6 +397,29 @@
     >
       <p class="text-sm text-(--ui-text-muted) mt-2">{{ $t('clients.syncInvoicesNote') }}</p>
     </SharedConfirmModal>
+
+    <!-- Statement e-mail modal -->
+    <UModal v-model:open="showStatementEmailModal" :title="$t('clients.statement.emailModalTitle')" :description="$t('clients.statement.emailModalDescription')">
+      <template #body>
+        <div class="space-y-4">
+          <UFormField :label="$t('clients.statement.recipient')" :error="!statementEmailTo ? $t('clients.statement.noEmail') : undefined">
+            <UInput v-model="statementEmailTo" type="email" class="w-full" />
+          </UFormField>
+          <UFormField :label="$t('clients.statement.message')">
+            <UTextarea v-model="statementEmailMessage" :rows="4" :placeholder="$t('clients.statement.messagePlaceholder')" class="w-full" />
+          </UFormField>
+          <p v-if="statement" class="text-sm text-muted">
+            {{ $t('clients.statement.unpaidCount', statement.totals.count) }} &middot; {{ $t('clients.statement.balance') }}: <strong>{{ formatMoney(statement.balance, statement.currency) }}</strong>
+          </p>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton :label="$t('common.cancel')" variant="ghost" @click="showStatementEmailModal = false" />
+          <UButton :label="$t('clients.statement.send')" icon="i-lucide-send" :loading="statementEmailSending" :disabled="!statementEmailTo" @click="sendStatementEmail" />
+        </div>
+      </template>
+    </UModal>
     </template>
   </UDashboardPanel>
 </template>
@@ -331,6 +451,90 @@ const showDeleteModal = ref(false)
 const deleting = ref(false)
 const showSyncModal = ref(false)
 const syncing = ref(false)
+
+// ── Statement of unpaid invoices ───────────────────────────────────
+const { can } = usePermissions()
+const statement = ref<any>(null)
+const statementLoading = ref(false)
+const statementPdfLoading = ref(false)
+const showStatementEmailModal = ref(false)
+const statementEmailTo = ref('')
+const statementEmailMessage = ref('')
+const statementEmailSending = ref(false)
+const agingBandKeys = ['current', 'days1_30', 'days31_60', 'days61_90', 'days91_120', 'days121_180', 'over180']
+const statementInvoices = computed<any[]>(() => statement.value?.invoices ?? [])
+const statementColumns = [
+  { accessorKey: 'number', header: $t('clients.statement.columns.number') },
+  { accessorKey: 'issueDate', header: $t('clients.statement.columns.issueDate') },
+  { accessorKey: 'dueDate', header: $t('clients.statement.columns.dueDate') },
+  { accessorKey: 'total', header: $t('clients.statement.columns.total') },
+  { accessorKey: 'paid', header: $t('clients.statement.columns.paid') },
+  { accessorKey: 'outstanding', header: $t('clients.statement.columns.outstanding') },
+  { accessorKey: 'daysOverdue', header: $t('clients.statement.columns.daysOverdue') },
+]
+
+async function fetchStatement() {
+  statementLoading.value = true
+  try {
+    const { get } = useApi()
+    statement.value = await get<any>(`/v1/clients/${route.params.uuid}/statement`)
+  }
+  catch {
+    toast.add({ title: $t('clients.statement.loadError'), color: 'error' })
+  }
+  finally {
+    statementLoading.value = false
+  }
+}
+
+function onStatementInvoiceClick(_e: Event, row: any) {
+  router.push(`/invoices/${row.original.id}`)
+}
+
+async function downloadStatementPdf() {
+  const { apiFetch } = useApi()
+  statementPdfLoading.value = true
+  try {
+    const blob = await apiFetch<Blob>(`/v1/clients/${route.params.uuid}/statement.pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `situatie-facturi-${statement.value?.asOf || 'client'}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  catch {
+    toast.add({ title: $t('clients.statement.pdfError'), color: 'error' })
+  }
+  finally {
+    statementPdfLoading.value = false
+  }
+}
+
+function openStatementEmailModal() {
+  statementEmailTo.value = client.value?.email || ''
+  statementEmailMessage.value = ''
+  showStatementEmailModal.value = true
+}
+
+async function sendStatementEmail() {
+  statementEmailSending.value = true
+  try {
+    const { post } = useApi()
+    await post(`/v1/clients/${route.params.uuid}/statement/email`, {
+      to: statementEmailTo.value || undefined,
+      message: statementEmailMessage.value || undefined,
+    })
+    showStatementEmailModal.value = false
+    toast.add({ title: $t('clients.statement.sent', { email: statementEmailTo.value }), color: 'success' })
+  }
+  catch (err: any) {
+    toast.add({ title: err?.data?.error || $t('clients.statement.sendError'), color: 'error' })
+  }
+  finally {
+    statementEmailSending.value = false
+  }
+}
 
 const countryLabel = computed(() => {
   if (!client.value?.country) return ''
@@ -469,5 +673,6 @@ async function confirmDelete() {
 onMounted(() => {
   fetchDefaults()
   fetchClientData()
+  fetchStatement()
 })
 </script>

@@ -133,6 +133,13 @@ class DashboardConfigController extends AbstractController
             'size' => 'md',
             'category' => 'activity',
         ],
+        [
+            'id' => 'fiscal-calendar-card',
+            'name_key' => 'dashboard.widgets.fiscalCalendar.name',
+            'description_key' => 'dashboard.widgets.fiscalCalendar.description',
+            'size' => 'md',
+            'category' => 'activity',
+        ],
     ];
 
     /**
@@ -141,7 +148,7 @@ class DashboardConfigController extends AbstractController
      * SPV, activity and the sync state — in this order.
      */
     private const INDIVIDUAL_WIDGET_IDS = [
-        'dosare-actions', 'sync-status', 'amounts-to-pay-card', 'expenses-card', 'activity-card', 'recent-invoices-table',
+        'dosare-actions', 'fiscal-calendar-card', 'sync-status', 'amounts-to-pay-card', 'expenses-card', 'activity-card', 'recent-invoices-table',
     ];
 
     /** Widget IDs that default to visible: false for existing users. */
@@ -150,6 +157,7 @@ class DashboardConfigController extends AbstractController
         'top-products-revenue',
         'top-outstanding-clients',
         'dosare-actions',
+        'fiscal-calendar-card',
     ];
 
     public function __construct(

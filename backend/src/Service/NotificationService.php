@@ -17,6 +17,7 @@ class NotificationService
         'spv.document_received',
         'invoice.anaf_deadline',
         'invoice.anaf_missing_token',
+        'fiscal.deadline',
         'token.expiring_soon',
         'export_ready',
         'payment.received',

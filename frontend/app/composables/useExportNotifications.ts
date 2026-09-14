@@ -146,6 +146,7 @@ const _useNotifications = () => {
       'token.refresh_failed': 'i-lucide-key-round',
       'proforma.expiring_soon': 'i-lucide-clock',
       'proforma.expired': 'i-lucide-calendar-x',
+      'fiscal.deadline': 'i-lucide-calendar-days',
     }
     const colorMap: Record<string, string> = {
       'invoice.validated': 'success',
@@ -161,6 +162,7 @@ const _useNotifications = () => {
       'token.refresh_failed': 'error',
       'proforma.expiring_soon': 'warning',
       'proforma.expired': 'warning',
+      'fiscal.deadline': 'warning',
     }
 
     toast.add({

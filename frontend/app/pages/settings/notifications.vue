@@ -81,6 +81,11 @@ const categories = [
     events: ['token.expiring_soon', 'token.refresh_failed'],
   },
   {
+    key: 'fiscal',
+    label: $t('notificationPreferences.categories.fiscal'),
+    events: ['fiscal.deadline'],
+  },
+  {
     key: 'exports',
     label: $t('notificationPreferences.categories.exports'),
     events: ['export_ready'],

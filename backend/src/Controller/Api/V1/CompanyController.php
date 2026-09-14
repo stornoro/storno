@@ -256,6 +256,15 @@ class CompanyController extends AbstractController
         if (isset($data['representative'])) $company->setRepresentative($data['representative'] ?: null);
         if (isset($data['representativeRole'])) $company->setRepresentativeRole($data['representativeRole'] ?: null);
         if (array_key_exists('caenCode', $data)) $company->setCaenCode($data['caenCode'] ?: null);
+        foreach (['vatPeriod' => 'setVatPeriod', 'incomeTaxPeriod' => 'setIncomeTaxPeriod'] as $field => $setter) {
+            if (isset($data[$field])) {
+                if (!in_array($data[$field], [Company::PERIOD_MONTHLY, Company::PERIOD_QUARTERLY], true)) {
+                    return $this->json(['error' => sprintf('%s must be "monthly" or "quarterly".', $field)], Response::HTTP_BAD_REQUEST);
+                }
+                $company->$setter($data[$field]);
+            }
+        }
+        if (isset($data['hasEmployees'])) $company->setHasEmployees((bool) $data['hasEmployees']);
         if (isset($data['bankName'])) $company->setBankName($data['bankName']);
         if (isset($data['bankAccount'])) $company->setBankAccount($data['bankAccount']);
         if (isset($data['bankBic'])) $company->setBankBic($data['bankBic']);
@@ -682,6 +691,9 @@ class CompanyController extends AbstractController
             'representative' => $company->getRepresentative(),
             'representativeRole' => $company->getRepresentativeRole(),
             'caenCode' => $company->getCaenCode(),
+            'vatPeriod' => $company->getVatPeriod(),
+            'incomeTaxPeriod' => $company->getIncomeTaxPeriod(),
+            'hasEmployees' => $company->hasEmployees(),
             'bankName' => $company->getBankName(),
             'bankAccount' => $company->getBankAccount(),
             'bankBic' => $company->getBankBic(),

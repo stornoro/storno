@@ -338,6 +338,21 @@
                     <div class="text-sm font-medium">{{ editCompany.caenCode }}</div>
                   </div>
                 </div>
+                <!-- Fiscal profile (drives the fiscal calendar) -->
+                <div class="grid grid-cols-3 gap-x-4 pt-1">
+                  <div v-if="editCompany.vatPayer">
+                    <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.vatPeriodLabel') }}</div>
+                    <div class="text-sm font-medium">{{ $t(`companies.period.${editCompany.vatPeriod ?? 'monthly'}`) }}</div>
+                  </div>
+                  <div v-if="!editCompany.isIndividual">
+                    <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.incomeTaxPeriodLabel') }}</div>
+                    <div class="text-sm font-medium">{{ $t(`companies.period.${editCompany.incomeTaxPeriod ?? 'quarterly'}`) }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.hasEmployeesLabel') }}</div>
+                    <div class="text-sm font-medium">{{ editCompany.hasEmployees ? $t('common.yes') : $t('common.no') }}</div>
+                  </div>
+                </div>
                 <!-- Default currency -->
                 <div class="pt-1">
                   <div class="text-xs text-(--ui-text-muted)">{{ $t('companies.defaultCurrency') }}</div>
@@ -443,6 +458,18 @@
                   </UFormField>
                   <UFormField :label="$t('companies.caenCodeLabel')" :help="$t('companies.caenCodeHelp')">
                     <UInput v-model="editForm.caenCode" maxlength="4" inputmode="numeric" placeholder="6201" />
+                  </UFormField>
+                </div>
+                <!-- Fiscal profile: what the fiscal calendar derives the deadlines from -->
+                <div class="grid grid-cols-3 gap-3">
+                  <UFormField v-if="editForm.vatPayer" :label="$t('companies.vatPeriodLabel')" :help="$t('companies.vatPeriodHelp')">
+                    <USelectMenu v-model="editForm.vatPeriod" :items="periodOptions" value-key="value" />
+                  </UFormField>
+                  <UFormField v-if="!editCompany?.isIndividual" :label="$t('companies.incomeTaxPeriodLabel')" :help="$t('companies.incomeTaxPeriodHelp')">
+                    <USelectMenu v-model="editForm.incomeTaxPeriod" :items="periodOptions" value-key="value" />
+                  </UFormField>
+                  <UFormField :label="$t('companies.hasEmployeesLabel')" :help="$t('companies.hasEmployeesHelp')">
+                    <USwitch v-model="editForm.hasEmployees" class="mt-1" />
                   </UFormField>
                 </div>
                 <UFormField :label="$t('companies.defaultCurrency')">
@@ -879,8 +906,15 @@ const editForm = reactive({
   representative: '',
   representativeRole: '',
   caenCode: '',
+  vatPeriod: 'monthly' as 'monthly' | 'quarterly',
+  incomeTaxPeriod: 'quarterly' as 'monthly' | 'quarterly',
+  hasEmployees: false,
   defaultCurrency: 'RON',
 })
+const periodOptions = computed(() => [
+  { label: $t('companies.period.monthly'), value: 'monthly' },
+  { label: $t('companies.period.quarterly'), value: 'quarterly' },
+])
 
 const canConfirmDelete = computed(() =>
   deleteConfirmInput.value.trim().toLowerCase() === (editCompany.value?.name ?? '').trim().toLowerCase(),
@@ -910,6 +944,9 @@ const companyInfoDirty = computed(() => {
     || editForm.representative !== (c.representative ?? '')
     || editForm.representativeRole !== (c.representativeRole ?? '')
     || editForm.caenCode !== (c.caenCode ?? '')
+    || editForm.vatPeriod !== (c.vatPeriod ?? 'monthly')
+    || editForm.incomeTaxPeriod !== (c.incomeTaxPeriod ?? 'quarterly')
+    || editForm.hasEmployees !== (c.hasEmployees ?? false)
     || editForm.defaultCurrency !== (c.defaultCurrency ?? 'RON')
 })
 
@@ -982,6 +1019,9 @@ async function openEdit(company: Company) {
   editForm.representative = company.representative ?? ''
   editForm.representativeRole = company.representativeRole ?? ''
   editForm.caenCode = company.caenCode ?? ''
+  editForm.vatPeriod = company.vatPeriod ?? 'monthly'
+  editForm.incomeTaxPeriod = company.incomeTaxPeriod ?? 'quarterly'
+  editForm.hasEmployees = company.hasEmployees ?? false
   editForm.defaultCurrency = company.defaultCurrency ?? 'RON'
   autoSubmitEnabled.value = company.efacturaDelayHours != null
   selectedDelay.value = company.efacturaDelayHours ?? 24
@@ -1026,6 +1066,9 @@ async function saveCompanyInfo() {
       representative: editForm.representative || null,
       representativeRole: editForm.representativeRole || null,
       caenCode: editForm.caenCode || null,
+      vatPeriod: editForm.vatPeriod,
+      incomeTaxPeriod: editForm.incomeTaxPeriod,
+      hasEmployees: editForm.hasEmployees,
       defaultCurrency: editForm.defaultCurrency,
     } as Partial<Company>)
     if (result) {

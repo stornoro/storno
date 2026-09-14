@@ -113,6 +113,17 @@
 
         <SharedRelatedCard type="declaration" :id="declaration.id" />
 
+        <!-- Prerequisites the ANAF validator will refuse without (any declaration type) -->
+        <UAlert
+          v-for="w in (declaration.data?.warnings ?? [])"
+          :key="w.code"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-triangle-alert"
+          :title="$t('declarations.warningsTitle')"
+          :description="w.message"
+        />
+
         <!-- D394: Sales/Purchases -->
         <template v-if="declaration.type === 'd394' && declaration.data">
           <!-- Totals -->
@@ -196,7 +207,11 @@
             <template #header>
               <h3 class="font-semibold">{{ $t('declarations.invoiceSeries') }}</h3>
             </template>
-            <UTable :data="declaration.data.serieFacturi" :columns="seriesColumns" />
+            <UTable :data="declaration.data.serieFacturi" :columns="seriesColumns">
+              <template #tip-cell="{ row }">
+                <UBadge variant="subtle" color="neutral" size="xs">{{ $t(`declarations.d394.seriesTypes.${row.original.tip}`) }}</UBadge>
+              </template>
+            </UTable>
           </UCard>
         </template>
 
@@ -223,17 +238,6 @@
               <p class="text-sm text-(--ui-text-muted)">{{ Number(declaration.data.totals.net) >= 0 ? $t('declarations.d300.toPay') : $t('declarations.d300.toRecover') }}</p>
             </UCard>
           </div>
-
-          <!-- What ANAF's validator will refuse without (missing CAEN, declarant, bank account) -->
-          <UAlert
-            v-for="w in (declaration.data.warnings ?? [])"
-            :key="w.code"
-            color="warning"
-            variant="subtle"
-            icon="i-lucide-triangle-alert"
-            :title="$t('declarations.d300.warningsTitle')"
-            :description="w.message"
-          />
 
           <!-- D300 header info (from uploaded XML) -->
           <UCard v-if="d300Header && Object.keys(d300Header).length">
@@ -694,10 +698,10 @@ const salesColumns = [
 ]
 
 const seriesColumns = [
-  { accessorKey: 'serie', header: $t('declarations.series') },
-  { accessorKey: 'firstNumber', header: $t('declarations.firstNumber') },
-  { accessorKey: 'lastNumber', header: $t('declarations.lastNumber') },
-  { accessorKey: 'count', header: $t('declarations.invoiceCount') },
+  { accessorKey: 'tip', header: $t('declarations.d394.seriesType') },
+  { accessorKey: 'serieI', header: $t('declarations.series') },
+  { accessorKey: 'nrI', header: $t('declarations.firstNumber') },
+  { accessorKey: 'nrF', header: $t('declarations.lastNumber') },
 ]
 
 const operationsColumns = [

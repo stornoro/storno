@@ -70,6 +70,12 @@ const links = computed(() => {
       onSelect: close,
     },
     can(P.DECLARATION_VIEW) && {
+      label: $t('nav.fiscalCalendar'),
+      icon: 'i-lucide-calendar-days',
+      to: '/fiscal-calendar',
+      onSelect: close,
+    },
+    can(P.DECLARATION_VIEW) && {
       label: $t('nav.spv'),
       icon: 'i-lucide-inbox',
       to: '/spv',
