@@ -10,6 +10,10 @@ export interface AgentConfig {
   /** Optional overrides for the PKCS#11 toolchain (macOS/Linux). Auto-detected when null. */
   opensslPath?: string | null;
   pkcs11ToolPath?: string | null;
+  /** Windows: certificate thumbprints to treat as cloud certificates (no PIN) when provider detection misses them. */
+  cloudCertificateIds?: string[];
+  /** Windows: extra key-provider name fragments (lower-case match) that mean "cloud certificate". */
+  cloudCertificateProviders?: string[];
 }
 
 const CONFIG_DIR = join(homedir(), '.storno-agent');
@@ -31,6 +35,8 @@ const DEFAULT_CONFIG: AgentConfig = {
   curlPath: platform() === 'win32' ? 'C:\\Windows\\System32\\curl.exe' : 'curl',
   opensslPath: null,
   pkcs11ToolPath: null,
+  cloudCertificateIds: [],
+  cloudCertificateProviders: [],
 };
 
 export function loadConfig(): AgentConfig {

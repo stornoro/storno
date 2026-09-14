@@ -120,7 +120,11 @@
             >
               <input v-model="agentSelectedCertId" type="radio" :value="cert.id" class="accent-primary" />
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium truncate">{{ certDisplayName(cert) }}</p>
+                <div class="flex items-center gap-2 min-w-0">
+                  <p class="text-sm font-medium truncate">{{ certDisplayName(cert) }}</p>
+                  <UBadge v-if="cert.kind === 'cloud'" color="info" variant="subtle" size="xs" icon="i-lucide-cloud">{{ $t('anaf.agentCertCloud') }}</UBadge>
+                  <UBadge v-else-if="cert.kind === 'software'" color="neutral" variant="subtle" size="xs" icon="i-lucide-monitor">{{ $t('anaf.agentCertSoftware') }}</UBadge>
+                </div>
                 <p class="text-xs text-(--ui-text-muted)">{{ certIssuerShort(cert) }}</p>
                 <p v-if="certExpiry(cert)" class="text-xs text-(--ui-text-muted)">{{ certExpiry(cert) }}</p>
               </div>
@@ -128,7 +132,15 @@
           </div>
 
           <!-- PIN input: remembered permanently by the agent (OS secure store), or for this browser session on older agents -->
-          <div v-if="agentSelectedCertId" class="space-y-2">
+          <UAlert
+            v-if="agentSelectedCertId && selectedCertPinless"
+            color="info"
+            variant="subtle"
+            :icon="selectedCert?.kind === 'cloud' ? 'i-lucide-cloud' : 'i-lucide-monitor'"
+            :title="selectedCert?.kind === 'cloud' ? $t('anaf.agentCertCloudTitle') : $t('anaf.agentCertSoftwareTitle')"
+            :description="selectedCert?.kind === 'cloud' ? $t('anaf.agentCertCloudHint', { provider: selectedCert?.provider || '' }) : $t('anaf.agentCertSoftwareHint')"
+          />
+          <div v-if="agentSelectedCertId && !selectedCertPinless" class="space-y-2">
             <div v-if="selectedCertPinStored" class="flex flex-wrap items-center gap-2">
               <UBadge color="success" variant="subtle" icon="i-lucide-key-round">
                 {{ $t('anaf.agentPinStored', { store: agentSecretStore || '' }) }}
@@ -234,13 +246,14 @@
               <UButton
                 icon="i-lucide-radar"
                 :loading="monitorSaving"
-                :disabled="!agentSelectedCertId || (!agentPin && !selectedCertPinStored)"
+                :disabled="!monitorCanEnable"
                 @click="enableMonitor()"
               >
                 {{ $t('anaf.monitorEnable') }}
               </UButton>
             </div>
-            <p v-if="!agentSelectedCertId || (!agentPin && !selectedCertPinStored)" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorNeedsCertAndPin') }}</p>
+            <p v-if="selectedCert?.kind === 'cloud'" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorCloudUnsupported') }}</p>
+            <p v-else-if="!monitorCanEnable" class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorNeedsCertAndPin') }}</p>
             <p class="text-xs text-(--ui-text-muted)">{{ $t('anaf.monitorSecurityNote') }}</p>
           </template>
         </div>
@@ -521,7 +534,7 @@ const companyStore = useCompanyStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const toast = useToast()
-const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, clearPin, agentSecretStore, storePinOnAgent, forgetPinOnAgent, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor } = useAnafAgent()
+const { agentAvailable, agentVersion, agentChecking, agentUpdateAvailable, agentLatestVersion, checkAgent, listCertificates, tryAutoStart, triggerAgentUpdate, getPreferredCertId, setPreferredCertId, getSavedPin, savePin, clearPin, agentSecretStore, storePinOnAgent, forgetPinOnAgent, certDisplayName, certIssuerShort, certExpiry, getMonitorStatus, enrollMonitor, unenrollMonitor, runMonitor, isPinlessCert } = useAnafAgent()
 const { describeAgentError } = useAgentError()
 const agentUpdating = ref(false)
 
@@ -554,6 +567,16 @@ const pinForgetting = ref(false)
 const selectedCert = computed(() => agentCerts.value.find(c => c.id === agentSelectedCertId.value) ?? null)
 /** The agent keeps the PIN of the selected certificate in the OS secure store: no PIN needed in the browser. */
 const selectedCertPinStored = computed(() => !!selectedCert.value?.pinStored)
+/** Cloud (vendor approval) or software certificate: there is no PIN at all. */
+const selectedCertPinless = computed(() => !!selectedCert.value && isPinlessCert(selectedCert.value))
+/** Monitoring runs unattended: a token with a PIN, or a software certificate; never a cloud certificate. */
+const monitorCanEnable = computed(() => {
+  const cert = selectedCert.value
+  if (!cert) return false
+  if (cert.kind === 'cloud') return false
+  if (cert.kind === 'software') return true
+  return !!agentPin.value || selectedCertPinStored.value
+})
 
 const agentDownloadUrl = 'https://get.storno.ro/agent'
 
@@ -599,7 +622,7 @@ async function loadMonitorStatus() {
 
 async function enableMonitor(verificationToken?: string) {
   const company = monitorCompany.value
-  if (!company || !agentSelectedCertId.value || (!agentPin.value && !selectedCertPinStored.value)) return
+  if (!company || !agentSelectedCertId.value || !monitorCanEnable.value) return
   monitorSaving.value = true
   try {
     const key = await apiKeyStore.createApiKey({

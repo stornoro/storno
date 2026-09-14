@@ -80,6 +80,14 @@ export function useAnafAgent() {
     const rest = pinStoredIds.value.filter(id => id !== certificateId)
     pinStoredIds.value = stored ? [...rest, certificateId] : rest
   }
+  /** Certificates that take no PIN (cloud: the vendor app approves; software: Windows guards the key), as reported by agent ≥ 1.8.0. */
+  const pinlessIds = useState<string[]>('agent-pinless-ids', () => [])
+  function isPinlessCertificate(certificateId: string): boolean {
+    return pinlessIds.value.includes(certificateId)
+  }
+  function isPinlessCert(cert: Pick<AgentCertificate, 'kind'>): boolean {
+    return cert.kind === 'cloud' || cert.kind === 'software'
+  }
 
   async function listCertificates(): Promise<AgentCertificate[]> {
     const res = await agentFetch('/certificates', {
@@ -89,6 +97,7 @@ export function useAnafAgent() {
     if (typeof data.secretStore === 'string') agentSecretStore.value = data.secretStore
     const certs: AgentCertificate[] = data.certificates ?? []
     for (const c of certs) markPinStored(c.id, !!c.pinStored)
+    pinlessIds.value = certs.filter(isPinlessCert).map(c => c.id)
     return certs
   }
 
@@ -102,7 +111,15 @@ export function useAnafAgent() {
   async function requirePin(certificateId: string, pin?: string): Promise<string | undefined> {
     const value = pin || getSavedPin(certificateId)
     if (value) return value
+    if (isPinlessCertificate(certificateId)) return undefined
     if (await hasStoredPin(certificateId)) return undefined
+    // The list may not have been loaded in this tab yet: ask the agent what kind of certificate this is.
+    try {
+      await listCertificates()
+      if (isPinlessCertificate(certificateId)) return undefined
+    } catch {
+      // agent offline: the caller's own request fails with a typed error
+    }
     throw new Error(PIN_REQUIRED_MESSAGE)
   }
 
@@ -717,6 +734,8 @@ export function useAnafAgent() {
     clearPin,
     agentSecretStore,
     hasStoredPin,
+    isPinlessCertificate,
+    isPinlessCert,
     storePinOnAgent,
     forgetPinOnAgent,
     tryAutoStart,

@@ -91,9 +91,11 @@ Write-Output "OK"
 
   try {
     await new Promise<void>((resolve, reject) => {
+      // Without a PIN (cloud / software certificate) the vendor's key provider may
+      // ask the user to approve the signature: give them time to do so.
       execFile('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-Command', script,
-      ], { timeout: 60_000 }, (err, stdout, stderr) => {
+      ], { timeout: pin ? 60_000 : 180_000 }, (err, stdout, stderr) => {
         if (err) {
           const msg = stderr || stdout || err.message;
           if (msg.includes('PIN verification failed')) {
