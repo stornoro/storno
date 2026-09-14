@@ -4404,6 +4404,10 @@ export default defineI18nLocale(async () => {
     viewPdf: 'Vizualizeaza PDF-ul ANAF',
     pdfForSpv: 'PDF pentru SPV',
     manualFilingHint: 'PDF-ul in formatul ANAF, cu XML-ul inclus, pe care il poti incarca singur in SPV (Depunere declaratii) daca nu depui prin agent.',
+    formVersions: {
+      changed: 'ANAF a schimbat formularul {form} pe {date} (de la {from} la {to}). Declaratiile construite inainte de aceasta data pot fi respinse; construieste-le din nou inainte de depunere.',
+      outdated: 'Validatoarele instalate pe acest server sunt in urma fata de ANAF pentru: {forms}. Ruleaza actualizarea validatoarelor (app:anaf:update-validators).',
+    },
     external: {
       button: 'Depusa in alta parte',
       title: 'Inregistreaza o depunere facuta in alta parte',

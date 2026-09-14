@@ -736,6 +736,28 @@ export interface Dosar {
   updatedAt: string
 }
 
+export interface AnafFormVersionRow {
+  form: string
+  storno: boolean
+  versionJ: string
+  versionP: string
+  previousJ: string | null
+  previousP: string | null
+  changedAt: string | null
+  firstSeenAt: string
+  localJ: string | null
+  localP: string | null
+  localOutdated: boolean
+  historyUrl: string | null
+}
+
+export interface AnafFormVersions {
+  checkedAt: string | null
+  forms: AnafFormVersionRow[]
+  changedRecently: string[]
+  localOutdated: string[]
+}
+
 export type RelatedType = 'client' | 'supplier' | 'invoice' | 'recurring_invoice' | 'declaration' | 'spv_document' | 'spv_request' | 'dosar'
 
 export interface RelatedItem {

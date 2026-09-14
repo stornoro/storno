@@ -39,6 +39,17 @@ class PublicDeclarationFormController extends AbstractController
         private readonly LoggerInterface $logger,
     ) {}
 
+    /** ANAF's current form versions (validator J / PDF P) as DUKIntegrator's manifest lists them, with what changed lately. */
+    #[Route('/form-versions', methods: ['GET'])]
+    public function formVersions(\App\Service\Anaf\AnafFormVersionService $versions): JsonResponse
+    {
+        $response = $this->json($versions->overview());
+        $response->setPublic();
+        $response->setMaxAge(900);
+
+        return $response;
+    }
+
     #[Route('/forms', methods: ['GET'])]
     public function catalog(): JsonResponse
     {

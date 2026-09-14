@@ -4403,6 +4403,10 @@ export default defineI18nLocale(async () => {
     viewPdf: 'View the ANAF PDF',
     pdfForSpv: 'PDF for SPV',
     manualFilingHint: 'The PDF in ANAF format, XML embedded, that you can upload yourself in SPV (Depunere declarații) if you do not file through the agent.',
+    formVersions: {
+      changed: 'ANAF changed form {form} on {date} (from {from} to {to}). Declarations built before that date may be rejected; rebuild them before filing.',
+      outdated: 'The validators installed on this server are behind ANAF for: {forms}. Run the validator update (app:anaf:update-validators).',
+    },
     external: {
       button: 'Filed elsewhere',
       title: 'Record a filing made elsewhere',
