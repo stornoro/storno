@@ -4376,7 +4376,7 @@ export default defineI18nLocale(async () => {
     deleted: 'Case file deleted',
     form: {
       type: 'Type', title: 'Title', titleHint: 'Filled in from the subject when left empty.',
-      contractNumber: 'Contract no.', contractDate: 'Contract date', address: 'Property address', tenant: 'Tenant', tenantCif: 'Tenant CNP/CUI',
+      contractNumber: 'Contract no.', contractDate: 'Contract date', address: 'Property address', tenant: 'Tenant', tenantCif: 'Tenant CNP/CUI', addressAnaf: 'Property address (ANAF nomenclator)', tenantAddressAnaf: 'Tenant address (ANAF nomenclator)', landlordAddressAnaf: 'Landlord address (ANAF nomenclator)',
       rent: 'Monthly rent', currency: 'Currency', from: 'From', until: 'Until', terminationDate: 'Termination date',
       year: 'Filing year', deadlineAt: 'Deadline', deadlineLabel: 'What deadline', nextStep: 'Next step', notes: 'Notes',
     },
