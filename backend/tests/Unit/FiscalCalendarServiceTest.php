@@ -260,4 +260,22 @@ class FiscalCalendarServiceTest extends TestCase
         $this->assertNotContains('C168', $codes, 'no deadline on the dosar (registration accepted)');
         $this->assertNotContains('D212_ESTIMAT', $codes, 'companies do not file the Declarația unică');
     }
+    public function testTwoDosareOfTheSameContractGiveOneEstimateAndKeepTheirOwnC168Status(): void
+    {
+        $filed = (new TaxDeclaration())->setType(DeclarationType::C168)->setStatus(DeclarationStatus::ACCEPTED)->setYear(2026)->setMonth(12)->setPeriodType('annual');
+        $accepted = $this->rentalDosar('01.08.2026', '31.07.2027', null);
+        $duplicate = $this->rentalDosar('01.08.2026', '31.07.2027', '2026-08-31');
+        $declarations = $this->createMock(TaxDeclarationRepository::class);
+        $declarations->method('findByCompanyAndStatuses')->willReturn([$filed]);
+        $dosare = $this->createMock(DosarRepository::class);
+        $dosare->method('findForCompany')->willReturn([$accepted, $duplicate]);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $declarations, $dosare);
+
+        $items = $service->upcoming($this->company(individual: true), new \DateTimeImmutable('2026-09-15'), 60);
+        $codes = array_count_values(array_column($items, 'code'));
+        self::assertSame(1, $codes['D212_ESTIMAT'] ?? 0, 'one estimate per due date');
+        $c168 = array_values(array_filter($items, static fn (array $i) => $i['code'] === 'C168'));
+        self::assertCount(1, $c168);
+        self::assertSame('overdue', $c168[0]['status'], 'a C168 accepted for another dosar does not file this one');
+    }
 }

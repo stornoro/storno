@@ -107,7 +107,13 @@ final class FiscalCalendarService
                 continue;
             }
             $item['daysLeft'] = (int) $from->diff($due)->format('%r%a');
-            $item['status'] ??= $this->status($item, $filed, $from);
+            if (isset($item['dosarId'])) {
+                // a dosar deadline is filed only through that dosar, never by another declaration of the same type
+                $item['status'] = ($item['filed'] ?? false) ? self::STATUS_FILED : ($due < $from ? self::STATUS_OVERDUE : self::STATUS_DUE);
+                unset($item['filed']);
+            } else {
+                $item['status'] = $this->status($item, $filed, $from);
+            }
             // Deadlines Storno cannot see filed (SAF-T, financial statements, a contract's end) are never reported overdue
             if ($item['declarationType'] === null && $item['status'] === self::STATUS_OVERDUE) {
                 continue;
@@ -231,7 +237,7 @@ final class FiscalCalendarService
                     'nominalDueDate' => $nominal->format('Y-m-d'),
                     'dueDate' => $this->holidays->nextWorkingDay($nominal)->format('Y-m-d'),
                     'declarationType' => DeclarationType::C168->value,
-                    'status' => in_array(DeclarationType::C168->value, $filed['byDosar'][$dosarId] ?? [], true) ? self::STATUS_FILED : null,
+                    'filed' => in_array(DeclarationType::C168->value, $filed['byDosar'][$dosarId] ?? [], true),
                 ];
             }
 
@@ -250,7 +256,7 @@ final class FiscalCalendarService
                     'nominalDueDate' => $nominal->format('Y-m-d'),
                     'dueDate' => $this->holidays->nextWorkingDay($nominal)->format('Y-m-d'),
                     'declarationType' => DeclarationType::D212->value,
-                    'status' => $estimateFiled ? self::STATUS_FILED : null,
+                    'filed' => $estimateFiled,
                 ];
             }
 
@@ -262,18 +268,26 @@ final class FiscalCalendarService
                     'nominalDueDate' => $end->format('Y-m-d'),
                     'dueDate' => $end->format('Y-m-d'),
                     'declarationType' => null,
-                    'status' => null,
+                    'filed' => false,
                 ];
             }
         }
 
-        return array_map(static function (array $item): array {
-            if ($item['status'] === null) {
-                unset($item['status']);
+        // One estimated D212 covers every contract that starts on the same day: keep a single item per due date.
+        $seen = [];
+        $items = array_values(array_filter($items, static function (array $item) use (&$seen): bool {
+            if ($item['code'] !== 'D212_ESTIMAT') {
+                return true;
             }
+            if (isset($seen[$item['dueDate']])) {
+                return false;
+            }
+            $seen[$item['dueDate']] = true;
 
-            return $item;
-        }, $items);
+            return true;
+        }));
+
+        return $items;
     }
 
     /** Dates in a dosar subject are DD.MM.YYYY or YYYY-MM-DD. */
