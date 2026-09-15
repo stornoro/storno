@@ -5011,6 +5011,7 @@ export default defineI18nLocale(async () => {
     year: 'year {year}',
     createDeclaration: 'Create the declaration',
     openDeclarations: 'See declarations',
+    openDosar: 'Open the dosar',
     notInStorno: 'Filed outside Storno',
     because: {
       vat_payer: 'VAT payer',
@@ -5020,6 +5021,7 @@ export default defineI18nLocale(async () => {
       employees: 'has employees',
       saft: 'standard audit file for tax',
       individual: 'individual',
+      rental_contract: 'rental contract (dosar)',
       company: 'legal entity',
     },
     codes: {
@@ -5032,6 +5034,9 @@ export default defineI18nLocale(async () => {
       D406: 'SAF-T',
       D212: 'Annual personal return',
       BILANT: 'Annual financial statements',
+      C168: 'Rental contract registration (C168)',
+      D212_ESTIMAT: 'Estimated Declarația unică (new rental income)',
+      CONTRACT_END: 'Rental contract end',
     },
   },
   backendMessages: {

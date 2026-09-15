@@ -5012,6 +5012,7 @@ export default defineI18nLocale(async () => {
     year: 'anul {year}',
     createDeclaration: 'Creeaza declaratia',
     openDeclarations: 'Vezi declaratiile',
+    openDosar: 'Deschide dosarul',
     notInStorno: 'Se depune in afara Storno',
     because: {
       vat_payer: 'platitor de TVA',
@@ -5022,6 +5023,7 @@ export default defineI18nLocale(async () => {
       saft: 'fisierul standard de control fiscal',
       individual: 'persoana fizica',
       company: 'persoana juridica',
+      rental_contract: 'contract de inchiriere (dosar)',
     },
     codes: {
       D300: 'Decont de TVA',
@@ -5033,6 +5035,9 @@ export default defineI18nLocale(async () => {
       D406: 'SAF-T',
       D212: 'Declaratia unica',
       BILANT: 'Situatii financiare anuale',
+      C168: 'Inregistrarea contractului de inchiriere (C168)',
+      D212_ESTIMAT: 'Declaratia unica estimativa (venit nou din chirii)',
+      CONTRACT_END: 'Expirarea contractului de inchiriere',
     },
   },
   backendMessages: {

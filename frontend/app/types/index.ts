@@ -844,7 +844,9 @@ export interface FiscalCalendarItem {
   dueDate: string
   nominalDueDate: string
   daysLeft: number
-  period: { year: number, month?: number, quarter?: number, from: string, to: string }
+  period: { year: number, month?: number, quarter?: number, from: string, to: string   dosarId?: string
+  dosarTitle?: string
+}
   appliesBecause: string
   declarationType: string | null
   status: 'due' | 'overdue' | 'filed'
