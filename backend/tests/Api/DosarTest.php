@@ -204,6 +204,16 @@ class DosarTest extends ApiTestCase
         $this->assertSame($dosar['id'], $created['declaration']['dosarId']);
         $this->assertStringContainsString('<c168 xmlns="mfp:anaf:dgti:c168:declaratie:v3"', $created['xml']);
         $this->assertCount(1, $created['declaration']['data']['attachments']);
+        // attachments come back without their content, and the shape can be sent back without losing the file
+        $attachment = $created['declaration']['data']['attachments'][0];
+        $this->assertSame('contract.pdf', $attachment['name']);
+        $this->assertArrayNotHasKey('contentBase64', $attachment);
+        $this->assertTrue($attachment['stored']);
+        $this->assertGreaterThan(0, $attachment['size']);
+        $updated = $this->apiPatch('/api/v1/declarations/' . $created['declaration']['id'], ['data' => $created['declaration']['data']], $h);
+        $this->assertResponseStatusCodeSame(200, json_encode($updated));
+        $this->assertSame('contract.pdf', $updated['data']['attachments'][0]['name']);
+        $this->assertTrue($updated['data']['attachments'][0]['stored']);
 
         // the ANAF PDF (with the attachment zip) is produced on demand for the draft, for manual filing in SPV
         $this->client->request('GET', '/api/v1/declarations/' . $created['declaration']['id'] . '/pdf?inline=1', [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token, 'HTTP_X_COMPANY' => $companyId]);

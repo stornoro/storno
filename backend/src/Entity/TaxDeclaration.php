@@ -10,6 +10,7 @@ use App\Enum\DeclarationType;
 use App\Repository\TaxDeclarationRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: TaxDeclarationRepository::class)]
@@ -50,8 +51,8 @@ class TaxDeclaration
     #[Groups(['declaration:list', 'declaration:detail'])]
     private string $periodType = 'monthly';
 
+    /** Serialized through getDataForApi(): attachments are exposed without their binary content. */
     #[ORM\Column(nullable: true)]
-    #[Groups(['declaration:detail'])]
     private ?array $data = null;
 
     #[ORM\Column(nullable: true)]
@@ -183,6 +184,75 @@ class TaxDeclaration
     public function getData(): ?array
     {
         return $this->data;
+    }
+
+    /**
+     * The declaration data as the API returns it: form attachments (`data.attachments`,
+     * e.g. the scanned contract of a C168) carry only name, size and mime — never the
+     * base64 content, which can be several megabytes per read.
+     */
+    #[Groups(['declaration:detail'])]
+    #[SerializedName('data')]
+    public function getDataForApi(): ?array
+    {
+        if ($this->data === null || !is_array($this->data['attachments'] ?? null)) {
+            return $this->data;
+        }
+
+        $data = $this->data;
+        $data['attachments'] = array_values(array_map(static function (mixed $attachment): mixed {
+            if (!is_array($attachment) || !is_string($attachment['contentBase64'] ?? null)) {
+                return $attachment;
+            }
+            $base64 = $attachment['contentBase64'];
+            $size = intdiv(strlen($base64) * 3, 4) - strlen($base64) + strlen(rtrim($base64, '='));
+            $public = array_diff_key($attachment, ['contentBase64' => true]);
+            $public['size'] = $public['size'] ?? max(0, $size);
+            $public['mime'] = $public['mime'] ?? (str_ends_with(strtolower((string) ($attachment['name'] ?? '')), '.pdf') ? 'application/pdf' : null);
+            $public['stored'] = true;
+
+            return $public;
+        }, $this->data['attachments']));
+
+        return $data;
+    }
+
+    /**
+     * Merges attachments sent back by a client into the stored ones: an incoming
+     * attachment without `contentBase64` (the shape the API returns) keeps the stored
+     * content of the attachment with the same name, and a payload that omits
+     * `attachments` altogether keeps the stored list. Missing names drop the file.
+     */
+    public static function mergeAttachments(?array $stored, array $incoming): array
+    {
+        $storedAttachments = is_array($stored['attachments'] ?? null) ? $stored['attachments'] : [];
+        if ($storedAttachments === []) {
+            return $incoming;
+        }
+        if (!array_key_exists('attachments', $incoming)) {
+            $incoming['attachments'] = $storedAttachments;
+
+            return $incoming;
+        }
+        if (!is_array($incoming['attachments'])) {
+            return $incoming;
+        }
+
+        $byName = [];
+        foreach ($storedAttachments as $attachment) {
+            if (is_array($attachment) && isset($attachment['name'])) {
+                $byName[(string) $attachment['name']] = $attachment;
+            }
+        }
+        $incoming['attachments'] = array_values(array_map(static function (mixed $attachment) use ($byName): mixed {
+            if (is_array($attachment) && !is_string($attachment['contentBase64'] ?? null) && isset($byName[(string) ($attachment['name'] ?? '')])) {
+                return $byName[(string) $attachment['name']];
+            }
+
+            return $attachment;
+        }, $incoming['attachments']));
+
+        return $incoming;
     }
 
     public function setData(?array $data): static
