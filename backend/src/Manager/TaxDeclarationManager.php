@@ -162,7 +162,9 @@ class TaxDeclarationManager
         }
 
         if (isset($data['data'])) {
-            $declaration->setData($data['data']);
+            // Clients read attachments without their content (see TaxDeclaration::getDataForApi)
+            // and may send the same shape back: keep the stored files instead of blanking them.
+            $declaration->setData(is_array($data['data']) ? TaxDeclaration::mergeAttachments($declaration->getData(), $data['data']) : $data['data']);
         }
 
         if (isset($data['metadata'])) {
