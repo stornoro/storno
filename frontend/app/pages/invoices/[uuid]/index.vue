@@ -840,6 +840,18 @@
           @confirm="onIssue"
         />
 
+        <!-- Credit limit confirmation (partner rule) -->
+        <SharedConfirmModal
+          v-model:open="creditLimitModalOpen"
+          :title="$t('partners.invoice.creditLimitTitle')"
+          :description="creditLimitInfo ? $t('partners.invoice.creditLimit', { outstanding: creditLimitInfo.outstanding, total: creditLimitInfo.total, limit: creditLimitInfo.limit, currency: creditLimitInfo.currency }) : ''"
+          icon="i-lucide-gauge"
+          color="warning"
+          :confirm-label="$t('invoices.issue')"
+          :loading="issuing"
+          @confirm="onCreditLimitConfirm"
+        />
+
         <!-- Submit to SPV Modal -->
         <SharedConfirmModal
           v-model:open="submitModalOpen"
@@ -1133,6 +1145,10 @@ const payments = ref<any[]>([])
 const emailModalOpen = ref(false)
 const emailLogs = ref<any[]>([])
 const issueModalOpen = ref(false)
+// Partner rule: credit limit confirmation before issuing
+const creditLimitModalOpen = ref(false)
+const creditLimitAcknowledged = ref(false)
+const creditLimitInfo = ref<{ outstanding: string, total: string, limit: string, projected: string, currency: string } | null>(null)
 const issuing = ref(false)
 const submitModalOpen = ref(false)
 const markUnpaidModalOpen = ref(false)
@@ -1649,9 +1665,24 @@ async function onIssue() {
     return
   }
 
+  // Partner rule: credit limit → confirmation before issuing (the API only warns)
+  if (!creditLimitAcknowledged.value && (invoice.value?.client as any)?.creditLimit) {
+    const projected = await projectedClientBalance()
+    if (projected && Number(projected.projected) > Number(projected.limit)) {
+      issuing.value = false
+      creditLimitInfo.value = projected
+      creditLimitModalOpen.value = true
+      return
+    }
+  }
+  creditLimitAcknowledged.value = false
+
   const result = await invoiceStore.issueInvoice(route.params.uuid as string)
   issuing.value = false
   if (result) {
+    if (result.warning?.code === 'credit_limit_exceeded') {
+      useToast().add({ title: $t('partners.invoice.creditLimitExceeded'), description: result.warning.message, color: 'warning', icon: 'i-lucide-gauge' })
+    }
     const description = result.scheduledSendAt
       ? $t('invoices.scheduledSendAt', { date: formatDateTime(result.scheduledSendAt) })
       : undefined
@@ -1664,8 +1695,41 @@ async function onIssue() {
     await refreshInvoiceData()
   }
   else {
-    useToast().add({ title: $t('invoices.issueError'), color: 'error' })
+    useToast().add({ title: $t('invoices.issueError'), description: invoiceStore.error || undefined, color: 'error' })
   }
+}
+
+async function projectedClientBalance() {
+  const client = invoice.value?.client as any
+  if (!client?.id || !client.creditLimit) return null
+  try {
+    const { get } = useApi()
+    const statement = await get<any>(`/v1/clients/${client.id}/statement`)
+    const currency = statement?.currency || 'RON'
+    let total = Number(invoice.value?.total || 0)
+    if (invoice.value?.currency && invoice.value.currency !== currency) {
+      const rate = Number((invoice.value as any).exchangeRate || 0)
+      if (!rate) return null
+      total = total * rate
+    }
+    const outstanding = Number(statement?.balance || 0)
+    return {
+      outstanding: outstanding.toFixed(2),
+      total: total.toFixed(2),
+      limit: Number(client.creditLimit).toFixed(2),
+      projected: (outstanding + total).toFixed(2),
+      currency,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function onCreditLimitConfirm() {
+  creditLimitModalOpen.value = false
+  creditLimitAcknowledged.value = true
+  onIssue()
 }
 
 async function onSubmit() {

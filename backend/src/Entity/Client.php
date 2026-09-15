@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Entity\Traits\AuditableTrait;
+use App\Entity\Traits\PartnerVerificationTrait;
 use App\Entity\Traits\SoftDeletableTrait;
 use App\Repository\ClientRepository;
 use App\Entity\ImportJob;
@@ -18,6 +19,12 @@ class Client
 {
     use AuditableTrait;
     use SoftDeletableTrait;
+    use PartnerVerificationTrait;
+
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_WARNING = 'warning';
+    public const STATUS_BLOCKED = 'blocked';
+    public const STATUSES = [self::STATUS_ACTIVE, self::STATUS_WARNING, self::STATUS_BLOCKED];
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -143,6 +150,16 @@ class Client
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['client:detail'])]
     private ?string $viesName = null;
+
+    /** active | warning (shown when picked on an invoice) | blocked (cannot be invoiced) */
+    #[ORM\Column(length: 20, options: ['default' => 'active'])]
+    #[Groups(['client:list', 'client:detail', 'invoice:list', 'invoice:detail', 'proforma:detail', 'recurring_invoice:detail'])]
+    private string $status = self::STATUS_ACTIVE;
+
+    /** Outstanding balance the client may reach before issuing warns (company default currency). */
+    #[ORM\Column(type: 'decimal', precision: 15, scale: 2, nullable: true)]
+    #[Groups(['client:list', 'client:detail', 'invoice:detail'])]
+    private ?string $creditLimit = null;
 
     public function __construct()
     {
@@ -515,6 +532,37 @@ class Client
     public function setImportJob(?ImportJob $importJob): static
     {
         $this->importJob = $importJob;
+
+        return $this;
+    }
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): static
+    {
+        if (!in_array($status, self::STATUSES, true)) {
+            throw new \InvalidArgumentException(sprintf('Invalid client status: %s', $status));
+        }
+        $this->status = $status;
+
+        return $this;
+    }
+
+    public function isBlocked(): bool
+    {
+        return $this->status === self::STATUS_BLOCKED;
+    }
+
+    public function getCreditLimit(): ?string
+    {
+        return $this->creditLimit;
+    }
+
+    public function setCreditLimit(?string $creditLimit): static
+    {
+        $this->creditLimit = $creditLimit === null ? null : number_format((float) $creditLimit, 2, '.', '');
 
         return $this;
     }

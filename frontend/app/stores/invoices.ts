@@ -366,10 +366,12 @@ export const useInvoiceStore = defineStore('invoices', () => {
     }
   }
 
-  async function issueInvoice(uuid: string): Promise<{ status: string; number: string; efacturaDelayHours: number | null; scheduledSendAt: string | null } | null> {
+  type IssueWarning = { code: string; message: string; creditLimit: string; outstanding: string; invoiceTotal: string; projected: string; currency: string }
+
+  async function issueInvoice(uuid: string): Promise<{ status: string; number: string; efacturaDelayHours: number | null; scheduledSendAt: string | null; warning?: IssueWarning | null } | null> {
     const { post } = useApi()
     try {
-      return await post<{ status: string; number: string; efacturaDelayHours: number | null; scheduledSendAt: string | null }>(`/v1/invoices/${uuid}/issue`)
+      return await post<{ status: string; number: string; efacturaDelayHours: number | null; scheduledSendAt: string | null; warning?: IssueWarning | null }>(`/v1/invoices/${uuid}/issue`)
     }
     catch (err: any) {
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut emite factura.'

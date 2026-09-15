@@ -300,6 +300,177 @@
           </UCard>
         </template>
 
+        <!-- D301: special VAT return (persons not registered for VAT) -->
+        <template v-else-if="declaration.type === 'd301' && declaration.data">
+          <div v-if="d301Totals" class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d301.totalBase') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d301Totals.base) }}</p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d301.totalVat') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d301Totals.vat) }}</p>
+            </UCard>
+            <UCard :class="Number(d301Totals.toPay) > 0 ? 'border-red-200 dark:border-red-800' : ''">
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d301.toPay') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d301Totals.toPay) }}</p>
+              <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.d301.toPayHint') }}</p>
+            </UCard>
+          </div>
+
+          <!-- Sections: one row per supplier invoice and operation -->
+          <UCard>
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d301.sections') }} ({{ d301Sections.length }})</h3>
+            </template>
+            <UTable v-if="d301Sections.length" :data="d301Sections" :columns="d301Columns">
+              <template #tip_operatie-cell="{ row }">
+                <UBadge variant="subtle" :color="(row.original.tip_operatie === '5' ? 'neutral' : row.original.tip_operatie === '1' ? 'info' : 'primary') as any" size="xs" :title="$t(`declarations.d301.operationTypes.${row.original.tip_operatie}`)">
+                  {{ $t(`declarations.d301.operationCodes.${row.original.tip_operatie}`) }}
+                </UBadge>
+              </template>
+              <template #supplier-cell="{ row }">
+                <span>{{ row.original.supplier }}</span>
+                <span v-if="row.original.country" class="ml-1 text-xs text-(--ui-text-muted)">({{ row.original.country }})</span>
+              </template>
+              <template #val_valuta-cell="{ row }">
+                <span class="font-mono whitespace-nowrap">{{ formatAmount(row.original.val_valuta) }} {{ row.original.tip_valuta }}</span>
+              </template>
+              <template #curs_valutar-cell="{ row }">
+                <span class="font-mono">{{ row.original.tip_valuta === 'RON' ? '—' : row.original.curs_valutar }}</span>
+              </template>
+              <template #baza-cell="{ row }">
+                <span class="font-mono">{{ formatAmount(row.original.baza) }}</span>
+              </template>
+              <template #tva-cell="{ row }">
+                <span class="font-mono font-medium">{{ formatAmount(row.original.tva) }}</span>
+              </template>
+            </UTable>
+            <p v-else class="text-sm text-(--ui-text-muted)">{{ $t('declarations.d301.noSections') }}</p>
+          </UCard>
+
+          <!-- Section totals (baza1 … tva5) -->
+          <UCard v-if="d301SectionTotals.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d301.sectionTotals') }}</h3>
+            </template>
+            <UTable :data="d301SectionTotals" :columns="d301TotalsColumns">
+              <template #label-cell="{ row }">
+                {{ $t(`declarations.d301.operationCodes.${row.original.code}`) }} — {{ $t(`declarations.d301.operationTypes.${row.original.code}`) }}
+              </template>
+              <template #base-cell="{ row }">
+                <span class="font-mono">{{ formatAmount(row.original.base) }}</span>
+              </template>
+              <template #vat-cell="{ row }">
+                <span class="font-mono font-medium">{{ formatAmount(row.original.vat) }}</span>
+              </template>
+            </UTable>
+          </UCard>
+
+          <!-- Header attributes -->
+          <UCard v-if="d301Header.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d301.headerInfo') }}</h3>
+            </template>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div v-for="h in d301Header" :key="h.key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="text-xs text-(--ui-text-muted)" :title="h.key">{{ $t(`declarations.d301.fields.${h.key}`) }}</span>
+                <span class="font-mono whitespace-nowrap ml-2">{{ h.value }}</span>
+              </div>
+            </div>
+          </UCard>
+        </template>
+
+        <!-- D398: OSS VAT return (union scheme), one card per member state of consumption -->
+        <template v-else-if="declaration.type === 'd398' && declaration.data">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <UCard :class="Number(d398Totals?.vatDue) > 0 ? 'border-red-200 dark:border-red-800' : ''">
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d398.vatDue') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d398Totals?.vatDue) }} {{ d398Totals?.currency ?? 'EUR' }}</p>
+              <p class="text-sm text-(--ui-text-muted)">{{ d398States.length ? $t('declarations.d398.statesCount', { count: d398States.length }) : $t('declarations.d398.nilReturn') }}</p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d398.period') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ d398Rows.period_start_date }} – {{ d398Rows.period_end_date }}</p>
+              <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.d398.fields.vat_id_no') }}: <span class="font-mono">{{ d398Rows.vat_id_no }}</span></p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d398.eurRate') }}</h3>
+              </template>
+              <template v-if="d398EurRate">
+                <p class="text-2xl font-bold font-mono">{{ d398EurRate.rate }}</p>
+                <p class="text-sm text-(--ui-text-muted)">{{ $t(`declarations.d398.eurRateSource.${d398EurRate.source}`, { date: d398EurRate.date }) }}</p>
+              </template>
+              <p v-else class="text-sm text-(--ui-text-muted)">{{ $t('declarations.d398.eurRateNotNeeded') }}</p>
+            </UCard>
+          </div>
+
+          <UCard v-for="ms in d398States" :key="ms.mscon_state">
+            <template #header>
+              <div class="flex items-center justify-between">
+                <h3 class="font-semibold">
+                  <UBadge variant="subtle" color="info" size="sm" class="mr-2 font-mono">{{ ms.mscon_state }}</UBadge>
+                  {{ $t('declarations.d398.state') }}
+                </h3>
+                <span class="text-sm">{{ $t('declarations.d398.fields.due_balance') }}: <span class="font-mono font-medium">{{ formatAmount(ms.due_balance) }} EUR</span></span>
+              </div>
+            </template>
+            <UTable :data="(ms.supplies ?? []) as any[]" :columns="d398SupplyColumns">
+              <template #supply_type-cell="{ row }">
+                <UBadge variant="subtle" :color="(row.original.supply_type === '2' ? 'primary' : 'info') as any" size="xs">
+                  {{ $t(`declarations.d398.supplyTypes.${row.original.supply_type}`) }}
+                </UBadge>
+              </template>
+              <template #vat_rate_type-cell="{ row }">
+                {{ $t(`declarations.d398.rateTypes.${row.original.vat_rate_type}`) }}
+              </template>
+              <template #vat_rate-cell="{ row }">
+                <span class="font-mono">{{ row.original.vat_rate }} %</span>
+              </template>
+              <template #taxable_amount-cell="{ row }">
+                <span class="font-mono">{{ formatAmount(row.original.taxable_amount) }}</span>
+              </template>
+              <template #vat_amount-cell="{ row }">
+                <span class="font-mono font-medium">{{ formatAmount(row.original.vat_amount) }}</span>
+              </template>
+            </UTable>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+              <div v-for="key in ['vat_total_goods_msid', 'vat_total_services_msid', 'vat_total_goods_msest', 'vat_total_services_msest']" :key="key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="text-xs text-(--ui-text-muted)" :title="key">{{ $t(`declarations.d398.fields.${key}`) }}</span>
+                <span class="font-mono whitespace-nowrap ml-2">{{ formatAmount(ms[key]) }}</span>
+              </div>
+            </div>
+          </UCard>
+
+          <UCard v-if="!d398States.length">
+            <p class="text-sm text-(--ui-text-muted)">{{ $t('declarations.d398.noStates') }}</p>
+          </UCard>
+
+          <!-- Header attributes -->
+          <UCard v-if="d398Header.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d398.headerInfo') }}</h3>
+            </template>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div v-for="h in d398Header" :key="h.key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="text-xs text-(--ui-text-muted)" :title="h.key">{{ $t(`declarations.d398.fields.${h.key}`) }}</span>
+                <span class="font-mono whitespace-nowrap ml-2">{{ h.value }}</span>
+              </div>
+            </div>
+          </UCard>
+        </template>
+
         <!-- Manual types: Editable rows -->
         <template v-else-if="isManualType && declaration.data">
           <UCard>
@@ -710,6 +881,85 @@ const operationsColumns = [
   { accessorKey: 'codO', header: 'CIF' },
   { accessorKey: 'denO', header: $t('declarations.partnerName') },
   { accessorKey: 'baza', header: $t('declarations.taxableBase') },
+]
+
+// ── D301: sections (one row per supplier invoice and operation), totals, header ──
+const D301_HEADER_KEYS = ['d_rec', 'mijl_trans', 'temei', 'pers_inreg', 'banca', 'cont', 'nume_declarant', 'prenume_declarant', 'functia_declarant', 'nr_evid', 'totalPlata_A']
+
+const d301Sections = computed<any[]>(() => {
+  const sections = (declaration.value?.data as any)?.sections
+  return Array.isArray(sections) ? sections : []
+})
+
+const d301Totals = computed<{ base: string, vat: string, toPay: string } | null>(() => {
+  const totals = (declaration.value?.data as any)?.totals
+  return totals && typeof totals === 'object' ? totals : null
+})
+
+const d301SectionTotals = computed<{ code: string, base: string, vat: string }[]>(() => {
+  const rows = (declaration.value?.data as any)?.rows ?? {}
+  return ['1', '2', '3', '4', '5']
+    .map(code => ({ code, base: String(rows[`baza${code}`] ?? '0'), vat: String(rows[`tva${code}`] ?? '0') }))
+    .filter(r => Number(r.base) !== 0 || Number(r.vat) !== 0)
+})
+
+const d301Header = computed<{ key: string, value: string }[]>(() => {
+  const rows = (declaration.value?.data as any)?.rows ?? {}
+  return D301_HEADER_KEYS
+    .filter(key => rows[key] !== undefined && rows[key] !== null && rows[key] !== '')
+    .map(key => ({ key, value: String(rows[key]) }))
+})
+
+const d301Columns = [
+  { accessorKey: 'tip_operatie', header: $t('declarations.d301.operation') },
+  { accessorKey: 'supplier', header: $t('declarations.d301.supplier') },
+  { accessorKey: 'nr_doc', header: $t('declarations.d301.documentNumber') },
+  { accessorKey: 'data_doc', header: $t('declarations.d301.documentDate') },
+  { accessorKey: 'val_valuta', header: $t('declarations.d301.amount') },
+  { accessorKey: 'curs_valutar', header: $t('declarations.d301.exchangeRate') },
+  { accessorKey: 'baza', header: $t('declarations.d301.base') },
+  { accessorKey: 'tva', header: $t('declarations.d301.vat') },
+]
+
+const d301TotalsColumns = [
+  { accessorKey: 'label', header: $t('declarations.d301.operation') },
+  { accessorKey: 'base', header: $t('declarations.d301.base') },
+  { accessorKey: 'vat', header: $t('declarations.d301.vat') },
+]
+
+// ── D398: member states of consumption with their supplies, totals, header ──
+const D398_HEADER_KEYS = ['an_r', 'luna_r', 'd_rec', 'moes_voes_imp', 'nil_vat_return', 'currency', 'vat_id_no', 'name', 'grand_total_vat_due', 'totalPlata_A']
+
+const d398Rows = computed<Record<string, any>>(() => ((declaration.value?.data as any)?.rows ?? {}) as Record<string, any>)
+
+const d398States = computed<any[]>(() => {
+  const states = (declaration.value?.data as any)?.states
+  return Array.isArray(states) ? states : []
+})
+
+const d398Totals = computed<{ vatDue: string, currency: string } | null>(() => {
+  const totals = (declaration.value?.data as any)?.totals
+  return totals && typeof totals === 'object' ? totals : null
+})
+
+const d398EurRate = computed<{ rate: string, date: string, source: string } | null>(() => {
+  const r = (declaration.value?.data as any)?.eurRate
+  return r && typeof r === 'object' && r.rate ? r : null
+})
+
+const d398Header = computed<{ key: string, value: string }[]>(() => {
+  const rows = d398Rows.value
+  return D398_HEADER_KEYS
+    .filter(key => rows[key] !== undefined && rows[key] !== null && rows[key] !== '')
+    .map(key => ({ key, value: String(rows[key]) }))
+})
+
+const d398SupplyColumns = [
+  { accessorKey: 'supply_type', header: $t('declarations.d398.supplyType') },
+  { accessorKey: 'vat_rate_type', header: $t('declarations.d398.rateType') },
+  { accessorKey: 'vat_rate', header: $t('declarations.d398.rate') },
+  { accessorKey: 'taxable_amount', header: $t('declarations.d398.taxableAmount') },
+  { accessorKey: 'vat_amount', header: $t('declarations.d398.vatAmount') },
 ]
 
 // ── Computed table data ─────────────────────────────────────────────

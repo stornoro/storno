@@ -79,6 +79,7 @@ class InvoiceController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly EFacturaXmlParser $xmlParser,
         private readonly WebhookDeliveryRepository $webhookDeliveryRepository,
+        private readonly \App\Service\Partner\PartnerRulesService $partnerRules,
     ) {}
 
     #[Route('/invoices', methods: ['GET'])]
@@ -854,6 +855,14 @@ class InvoiceController extends AbstractController
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        // Partner rule: credit limit — a warning in the response, never a refusal
+        $creditWarning = null;
+        try {
+            $creditWarning = $this->partnerRules->creditLimitWarning($invoice);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Credit limit check failed: {error}', ['error' => $e->getMessage(), 'invoiceId' => (string) $invoice->getId()]);
+        }
+
         try {
             $this->invoiceManager->issue($invoice, $user);
         } catch (\DomainException $e) {
@@ -876,6 +885,7 @@ class InvoiceController extends AbstractController
             'number' => $invoice->getNumber(),
             'efacturaDelayHours' => $invoice->getCompany()?->getEfacturaDelayHours(),
             'scheduledSendAt' => $invoice->getScheduledSendAt()?->format('c'),
+            'warning' => $creditWarning,
         ]);
     }
 

@@ -167,6 +167,19 @@
       </div>
       <SharedClientRecentDocuments v-if="form.clientId" :client-id="form.clientId" />
 
+      <!-- Partner rules / registry status of the selected client -->
+      <div v-if="selectedClient && partnerNotices.length" class="space-y-1.5">
+        <div
+          v-for="n in partnerNotices"
+          :key="n.key"
+          class="flex items-center gap-2 p-2 rounded-lg border"
+          :class="n.level === 'error' ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800' : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'"
+        >
+          <UIcon :name="n.level === 'error' ? 'i-lucide-ban' : 'i-lucide-alert-triangle'" class="size-4 shrink-0" :class="n.level === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'" />
+          <span class="text-xs" :class="n.level === 'error' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'">{{ n.text }}</span>
+        </div>
+      </div>
+
       <!-- Reverse charge indicator -->
       <div v-if="reverseChargeActive" class="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
         <UIcon name="i-lucide-info" class="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -1122,6 +1135,19 @@ const selectedClient = computed(() =>
   clients.value.find(c => c.id === form.clientId) || null,
 )
 
+// Partner rules (status) and registry snapshot (ANAF) of the picked client
+const partnerNotices = computed(() => {
+  const c = selectedClient.value as any
+  const out: Array<{ key: string, level: 'error' | 'warning', text: string }> = []
+  if (!c) return out
+  if (c.status === 'blocked') out.push({ key: 'blocked', level: 'error', text: $t('partners.invoice.blocked') })
+  else if (c.status === 'warning') out.push({ key: 'warning', level: 'warning', text: $t('partners.invoice.warning') })
+  if (c.inactive === true) out.push({ key: 'inactive', level: 'error', text: $t('partners.invoice.inactive') })
+  if (c.type !== 'individual' && c.vatRegistered === false && c.isVatPayer) out.push({ key: 'vat', level: 'warning', text: $t('partners.invoice.notVatRegistered') })
+  if (c.vatOnCollection === true) out.push({ key: 'collection', level: 'warning', text: $t('partners.invoice.vatOnCollection') })
+  return out
+})
+
 function clearClient() {
   form.clientId = null
   form.receiverName = ''
@@ -1143,6 +1169,10 @@ function clearClient() {
 }
 
 async function onClientSelected(client: Client) {
+  if ((client as any).status === 'blocked') {
+    useToast().add({ title: $t('partners.invoice.blocked'), color: 'error', icon: 'i-lucide-ban' })
+    return
+  }
   form.clientId = client.id
   form.receiverCif = ''
   form.receiverName = ''

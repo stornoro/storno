@@ -307,6 +307,18 @@ export interface Client {
   viesValid: boolean | null
   viesValidatedAt: string | null
   viesName: string | null
+  // Partner verification snapshot (ANAF / VIES) and partner rules
+  vatStatusCheckedAt: string | null
+  vatRegistered: boolean | null
+  vatOnCollection: boolean | null
+  vatOnCollectionFrom: string | null
+  vatOnCollectionTo: string | null
+  inactive: boolean | null
+  efacturaRegistered: boolean | null
+  verificationNotes: string | null
+  affiliated: boolean
+  status: 'active' | 'warning' | 'blocked'
+  creditLimit: string | null
   createdAt: string
   updatedAt: string | null
   invoiceCount?: number
@@ -412,6 +424,17 @@ export interface Supplier {
   notes: string | null
   source: string
   lastSyncedAt: string | null
+  // Partner verification snapshot (ANAF / VIES)
+  vatStatusCheckedAt: string | null
+  vatRegistered: boolean | null
+  vatOnCollection: boolean | null
+  vatOnCollectionFrom: string | null
+  vatOnCollectionTo: string | null
+  inactive: boolean | null
+  efacturaRegistered: boolean | null
+  verificationNotes: string | null
+  viesValid: boolean | null
+  affiliated: boolean
   createdAt: string
   updatedAt: string | null
 }

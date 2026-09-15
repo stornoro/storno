@@ -45,6 +45,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // Fiscal calendar — 7 / 3 / 1 days before an unfiled declaration deadline
             ->add(RecurringMessage::cron('20 8 * * *', new RunCommandMessage('app:notifications:fiscal-deadlines')))
             ->add(RecurringMessage::cron('15 8 * * *', new RunCommandMessage('app:dosare:remind')))
+            // Partner verification — re-check clients / suppliers at ANAF / VIES after 30 days
+            ->add(RecurringMessage::cron('40 6 * * *', new RunCommandMessage('app:partners:verify-stale')))
             ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:notifications:due-invoices')))
             ->add(RecurringMessage::cron('0 10 * * *', new RunCommandMessage('app:proforma:process-expiry')))
             // Monthly reports — 1st of month

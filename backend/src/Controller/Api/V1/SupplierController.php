@@ -7,6 +7,8 @@ use App\Enum\InvoiceDirection;
 use App\Repository\InvoiceRepository;
 use App\Repository\SupplierRepository;
 use App\Service\Export\SagaXmlExportService;
+use App\Service\Partner\PartnerVerificationService;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use App\Constants\Pagination;
 use App\Security\OrganizationContext;
 use App\Util\AddressNormalizer;
@@ -27,6 +29,7 @@ class SupplierController extends AbstractController
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
         private readonly SagaXmlExportService $sagaXmlExportService,
+        private readonly PartnerVerificationService $partnerVerification,
     ) {}
 
     #[Route('/suppliers', methods: ['GET'])]
@@ -235,6 +238,7 @@ class SupplierController extends AbstractController
         $supplier->setBankName(!empty($data['bankName']) ? trim($data['bankName']) : null);
         $supplier->setBankAccount(!empty($data['bankAccount']) ? trim($data['bankAccount']) : null);
         $supplier->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
+        $supplier->setAffiliated(filter_var($data['affiliated'] ?? false, FILTER_VALIDATE_BOOLEAN));
         $supplier->setSource('manual');
 
         $this->entityManager->persist($supplier);
@@ -341,11 +345,41 @@ class SupplierController extends AbstractController
         if (array_key_exists('bankName', $data)) $supplier->setBankName(!empty($data['bankName']) ? trim($data['bankName']) : null);
         if (array_key_exists('bankAccount', $data)) $supplier->setBankAccount(!empty($data['bankAccount']) ? trim($data['bankAccount']) : null);
         if (array_key_exists('notes', $data)) $supplier->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
+        if (array_key_exists('affiliated', $data)) $supplier->setAffiliated(filter_var($data['affiliated'], FILTER_VALIDATE_BOOLEAN));
 
         $this->entityManager->flush();
 
         return $this->json([
             'supplier' => $supplier,
+        ], context: ['groups' => ['supplier:detail']]);
+    }
+
+    /**
+     * Check the supplier at ANAF (Romanian companies) or VIES (EU partners) and store the
+     * snapshot: VAT registration, VAT on collection, inactive status, e-Factura register.
+     */
+    #[Route('/suppliers/{uuid}/verify', methods: ['POST'])]
+    public function verify(string $uuid, RateLimiterFactory $registryLookupLimiter): JsonResponse
+    {
+        $supplier = $this->supplierRepository->find($uuid);
+        if (!$supplier || !$this->organizationContext->ownsCompany($supplier->getCompany())) {
+            return $this->json(['error' => 'Supplier not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::CLIENT_EDIT)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $limiter = $registryLookupLimiter->create((string) $this->getUser()?->getUserIdentifier());
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json(['error' => 'Too many lookups. Please try again later.'], Response::HTTP_TOO_MANY_REQUESTS);
+        }
+
+        $result = $this->partnerVerification->verify($supplier);
+
+        return $this->json([
+            'supplier' => $supplier,
+            'result' => $result,
         ], context: ['groups' => ['supplier:detail']]);
     }
 

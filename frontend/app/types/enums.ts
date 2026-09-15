@@ -127,6 +127,7 @@ export enum DeclarationType {
   D212 = 'd212',
   D301 = 'd301',
   D311 = 'd311',
+  D398 = 'd398',
 }
 
 export enum DeclarationStatus {
@@ -167,6 +168,7 @@ export const DeclarationTypeLabel: Record<DeclarationType, string> = {
   [DeclarationType.D212]: 'D212',
   [DeclarationType.D301]: 'D301',
   [DeclarationType.D311]: 'D311',
+  [DeclarationType.D398]: 'D398',
 }
 
 export const AUTO_POPULATED_TYPES = [
@@ -175,4 +177,6 @@ export const AUTO_POPULATED_TYPES = [
   DeclarationType.D390,
   DeclarationType.D392,
   DeclarationType.D393,
+  DeclarationType.D301,
+  DeclarationType.D398,
 ]

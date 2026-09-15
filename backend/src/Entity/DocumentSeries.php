@@ -142,9 +142,15 @@ class DocumentSeries
     #[Groups(['docseries:list', 'docseries:detail', 'invoice:detail', 'proforma:detail', 'delivery_note:detail', 'receipt:detail'])]
     public function getNextNumber(): string
     {
-        $next = $this->currentNumber + 1;
+        return $this->formatNumber($this->currentNumber + 1);
+    }
 
-        return $this->prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    /**
+     * Format a sequence number the way issued documents carry it (prefix + at least 4 digits).
+     */
+    public function formatNumber(int $number): string
+    {
+        return $this->prefix . str_pad((string) $number, 4, '0', STR_PAD_LEFT);
     }
 
     public function setSource(string $source): static

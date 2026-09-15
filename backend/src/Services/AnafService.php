@@ -42,6 +42,48 @@ class AnafService
     }
 
     /**
+     * Same as findCompanies(), but distinguishes "ANAF did not answer" (null)
+     * from "ANAF answered and the CIF is unknown" (entry mapped to null).
+     *
+     * @param string[] $cifs
+     * @return array<string, CompanyInfo|null>|null keyed by CIF digits; null when the registry was unreachable
+     */
+    public function findCompaniesOrNull(array $cifs): ?array
+    {
+        $date = date('Y-m-d');
+        $digits = array_values(array_unique(array_map(fn(string $cif) => preg_replace('/\D/', '', $cif), $cifs)));
+        $payload = array_map(fn(string $cif) => ['cui' => (int) $cif, 'data' => $date], $digits);
+
+        try {
+            $response = $this->httpClient->request('POST', self::API_URL, [
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => json_encode($payload),
+                'timeout' => 15,
+            ]);
+            $status = $response->getStatusCode();
+            $data = json_decode($response->getContent(false), true);
+        } catch (\Throwable $e) {
+            $this->logger->error('ANAF API batch error', ['error' => $e->getMessage()]);
+            return null;
+        }
+
+        if ($status >= 400 || !is_array($data) || (!isset($data['found']) && !isset($data['notFound']))) {
+            $this->logger->warning('ANAF API batch: unexpected answer', ['status' => $status]);
+            return null;
+        }
+
+        $results = array_fill_keys($digits, null);
+        foreach ($data['found'] ?? [] as $entry) {
+            $cui = (string) ($entry['date_generale']['cui'] ?? '');
+            if ($cui !== '') {
+                $results[$cui] = CompanyInfo::createFromAnaf(['found' => [$entry]]);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Lookup multiple CIFs in a single API call (max 500 per ANAF docs).
      *
      * @param string[] $cifs

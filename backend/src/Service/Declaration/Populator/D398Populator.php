@@ -21,9 +21,11 @@ use App\Service\ExchangeRateService;
  * currency the form accepts:
  *
  *  - EUR invoices are taken as they are;
- *  - RON invoices are converted with the BNR EUR rate of the day (ExchangeRateService has no
- *    dated lookup; the law asks for the ECB rate of the last day of the quarter, so the
- *    declaration carries the EUR_RATE_APPROXIMATE warning until the user checks the amounts);
+ *  - RON invoices are converted at the ECB reference rate of the last day of the quarter or,
+ *    when none was published that day, of the next publication day (art. 315 Cod fiscal;
+ *    ExchangeRateService::getRateForDate). While the quarter is still running, or when the
+ *    ECB is unreachable, the BNR rate of the day is used instead and the declaration carries
+ *    the EUR_RATE_FALLBACK warning so the user regenerates it once the quarter has ended;
  *  - other currencies go to RON with the invoice's exchange rate and then to EUR as above.
  *
  * The VAT rate is the destination state's: a line's own rate is kept when it is one of that
@@ -76,6 +78,7 @@ class D398Populator implements DeclarationDataPopulatorInterface
         $counts = ['issued' => 0, 'oss' => 0, 'domestic' => 0, 'nonEu' => 0, 'skipped' => 0];
         $warnings = [];
         $eurRate = null;
+        $eurRateInfo = null;
         $eurRateUsed = false;
         $eurRateMissing = [];
         $ratesOffline = [];
@@ -136,7 +139,7 @@ class D398Populator implements DeclarationDataPopulatorInterface
                     $rateType = abs($rate - $standard) < 0.001 ? self::RATE_STANDARD : self::RATE_REDUCED;
                 }
 
-                $base = $this->toEur($line->getLineTotal(), $invoice, $eurRate, $eurRateUsed, $eurRateMissing);
+                $base = $this->toEur($line->getLineTotal(), $invoice, $to, $eurRate, $eurRateInfo, $eurRateUsed, $eurRateMissing);
                 if ($base === null) {
                     $counts['skipped']++;
                     continue;
@@ -209,8 +212,8 @@ class D398Populator implements DeclarationDataPopulatorInterface
         if (!$company->isVatPayer()) {
             $warnings[] = ['code' => 'COMPANY_NOT_VAT_PAYER', 'message' => 'Compania nu este inregistrata in scopuri de TVA; regimul UE (OSS) cere un cod de TVA valid in Romania.'];
         }
-        if ($eurRateUsed) {
-            $warnings[] = ['code' => 'EUR_RATE_APPROXIMATE', 'message' => sprintf('Facturile in lei au fost convertite in EUR la cursul BNR al zilei (%s); legea cere cursul BCE din ultima zi a trimestrului, verificati sumele.', $eurRate !== null ? number_format($eurRate, 4, '.', '') : '-')];
+        if ($eurRateUsed && ($eurRateInfo['source'] ?? null) !== 'ecb') {
+            $warnings[] = ['code' => 'EUR_RATE_FALLBACK', 'message' => sprintf('Cursul BCE din ultima zi a trimestrului (%s) nu este inca disponibil; facturile in lei au fost convertite la cursul BNR al zilei (%s). Regenerati declaratia dupa incheierea trimestrului.', $to->format('d.m.Y'), $eurRate !== null ? number_format($eurRate, 4, '.', '') : '-')];
         }
         if ($eurRateMissing) {
             $warnings[] = ['code' => 'MISSING_EUR_RATE', 'message' => sprintf('Nu exista curs EUR pentru conversia facturilor %s; liniile nu au fost incluse.', implode(', ', array_unique($eurRateMissing)))];
@@ -239,6 +242,7 @@ class D398Populator implements DeclarationDataPopulatorInterface
             'rows' => $rows,
             'states' => $states,
             'totals' => ['vatDue' => $grandTotalDue, 'currency' => 'EUR'],
+            'eurRate' => $eurRateUsed ? $eurRateInfo : null,
             'invoiceCounts' => $counts,
             'warnings' => $warnings,
         ];
@@ -279,7 +283,34 @@ class D398Populator implements DeclarationDataPopulatorInterface
         return null;
     }
 
-    private function toEur(string $amount, Invoice $invoice, ?float &$eurRate, bool &$eurRateUsed, array &$missing): ?string
+    /**
+     * The EUR rate of the return: ECB, last day of the quarter or the next publication day;
+     * the BNR rate of the day while the quarter is running or when the ECB is unreachable.
+     *
+     * @return array{rate: string, date: string, source: string}|null
+     */
+    private function eurRate(\DateTimeInterface $quarterEnd): ?array
+    {
+        try {
+            $dated = $this->exchangeRates?->getRateForDate('EUR', $quarterEnd, true);
+            if (is_array($dated) && ($dated['rate'] ?? 0) > 0) {
+                return ['rate' => number_format((float) $dated['rate'], 4, '.', ''), 'date' => (string) $dated['date'], 'source' => 'ecb'];
+            }
+        } catch (\Throwable) {
+            // fall through to the live rate
+        }
+        try {
+            $live = $this->exchangeRates?->getRate('EUR');
+        } catch (\Throwable) {
+            $live = null;
+        }
+        if ($live === null || $live <= 0) {
+            return null;
+        }
+        return ['rate' => number_format($live, 4, '.', ''), 'date' => date('Y-m-d'), 'source' => 'bnr'];
+    }
+
+    private function toEur(string $amount, Invoice $invoice, \DateTimeInterface $quarterEnd, ?float &$eurRate, ?array &$eurRateInfo, bool &$eurRateUsed, array &$missing): ?string
     {
         $currency = strtoupper($invoice->getCurrency() ?: 'RON');
         if ($currency === 'EUR') {
@@ -290,12 +321,9 @@ class D398Populator implements DeclarationDataPopulatorInterface
             $rate = $invoice->getExchangeRate();
             $ron = ($rate !== null && bccomp($rate, '0', 6) > 0) ? bcmul($amount, $rate, 4) : $amount;
         }
-        if ($eurRate === null) {
-            try {
-                $eurRate = $this->exchangeRates?->getRate('EUR');
-            } catch (\Throwable) {
-                $eurRate = null;
-            }
+        if ($eurRateInfo === null) {
+            $eurRateInfo = $this->eurRate($quarterEnd);
+            $eurRate = $eurRateInfo !== null ? (float) $eurRateInfo['rate'] : null;
         }
         if ($eurRate === null || $eurRate <= 0) {
             $missing[] = (string) $invoice->getNumber();

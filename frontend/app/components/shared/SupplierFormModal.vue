@@ -141,6 +141,15 @@
           <USwitch v-model="form.isVatPayer" />
         </div>
 
+        <!-- Affiliated party (D394) -->
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <span class="text-sm font-medium text-(--ui-text)">{{ $t('partners.rules.affiliated') }}</span>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('partners.rules.affiliatedHint') }}</p>
+          </div>
+          <USwitch v-model="form.affiliated" />
+        </div>
+
         <!-- Bank -->
         <div class="grid grid-cols-2 gap-4">
           <UFormField :label="$t('suppliers.bankName')">
@@ -217,6 +226,7 @@ const form = reactive({
   bankName: '',
   bankAccount: '',
   notes: '',
+  affiliated: false,
 })
 
 // Fetch defaults to populate country/county options
@@ -255,6 +265,7 @@ function populateForm(s: Supplier) {
   form.bankName = s.bankName || ''
   form.bankAccount = s.bankAccount || ''
   form.notes = s.notes || ''
+  form.affiliated = s.affiliated ?? false
   cifError.value = ''
   anafSuccess.value = false
   anafError.value = false
@@ -395,6 +406,7 @@ async function onSave() {
     bankName: form.bankName || null,
     bankAccount: form.bankAccount || null,
     notes: form.notes || null,
+    affiliated: form.affiliated,
   }
 
   if (isEdit.value && props.supplier) {
@@ -434,6 +446,7 @@ function resetForm() {
   form.bankName = ''
   form.bankAccount = ''
   form.notes = ''
+  form.affiliated = false
   cifError.value = ''
   anafSuccess.value = false
   anafError.value = false

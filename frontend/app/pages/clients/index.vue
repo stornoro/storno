@@ -413,6 +413,7 @@ onMounted(() => fetchClients())
             >
               {{ row.original.viesValid ? 'VIES ✓' : 'VIES ✗' }}
             </UBadge>
+            <SharedPartnerStatusBadges :partner="row.original" size="xs" />
           </div>
         </template>
         <template #invoiceCount-cell="{ row }">

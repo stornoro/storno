@@ -136,6 +136,8 @@ class SupplierRepository extends ServiceEntityRepository
             SELECT
                 s.id, s.name, s.cif, s.vat_code AS vatCode, s.is_vat_payer AS isVatPayer,
                 s.address, s.city, s.email, s.last_synced_at AS lastSyncedAt, s.source,
+                s.affiliated, s.inactive, s.vat_registered AS vatRegistered, s.vat_on_collection AS vatOnCollection,
+                s.efactura_registered AS efacturaRegistered, s.vies_valid AS viesValid, s.vat_status_checked_at AS vatStatusCheckedAt,
                 s.created_at AS createdAt,
                 COALESCE(inv.invoice_count, 0) AS invoiceCount,
                 COALESCE(inv.invoice_total, 0) AS invoiceTotal,
@@ -174,6 +176,10 @@ class SupplierRepository extends ServiceEntityRepository
 
         foreach ($rows as &$row) {
             $row['isVatPayer'] = (bool) $row['isVatPayer'];
+            $row['affiliated'] = (bool) $row['affiliated'];
+            foreach (['inactive', 'vatRegistered', 'vatOnCollection', 'efacturaRegistered', 'viesValid'] as $flag) {
+                $row[$flag] = $row[$flag] === null ? null : (bool) $row[$flag];
+            }
             $row['invoiceCount'] = (int) $row['invoiceCount'];
             $row['invoiceTotal'] = round((float) $row['invoiceTotal'], 2);
         }
@@ -199,5 +205,24 @@ class SupplierRepository extends ServiceEntityRepository
         $total = (int) $conn->fetchOne($countSql, $countParams);
 
         return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
+    }
+    /**
+     * Partners whose registry check is missing or older than `$since`: companies
+     * with an identifier (CUI / VAT code), never individuals.
+     *
+     * @return Supplier[]
+     */
+    public function findStaleForVerification(Company $company, \DateTimeImmutable $since): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('s.company = :company')
+            ->andWhere('s.deletedAt IS NULL')
+            ->andWhere("(s.cif IS NOT NULL AND s.cif != '') OR (s.vatCode IS NOT NULL AND s.vatCode != '')")
+            ->andWhere('s.vatStatusCheckedAt IS NULL OR s.vatStatusCheckedAt < :since')
+            ->setParameter('company', $company)
+            ->setParameter('since', $since)
+            ->orderBy('s.vatStatusCheckedAt', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 }

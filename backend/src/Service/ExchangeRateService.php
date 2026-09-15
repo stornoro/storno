@@ -17,6 +17,8 @@ class ExchangeRateService
     private const FRESH_TTL = 86400; // 24h cache for successful fetches
     private const STALE_RETRY_TTL = 600; // 10min retry window when serving fallback / empty
     private const FAILURE_NOTIFICATION_TTL = 86400; // dedupe critical warning to once per day
+    private const ECB_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.%s.EUR.SP00.A';
+    private const ECB_WINDOW_DAYS = 7; // publication gap the dated lookup bridges (weekends, holidays)
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -90,6 +92,111 @@ class ExchangeRateService
         }
 
         return $rate['value'] / $rate['multiplier'];
+    }
+
+    /**
+     * ECB reference rate of a currency against RON on a given day.
+     *
+     * The ECB publishes reference rates (1 EUR = x units of each currency) on every TARGET
+     * business day; a currency's rate in RON is RON/EUR ÷ currency/EUR of the same day. Looks
+     * for the rate published on $date and, when there is none (weekend, holiday), the most
+     * recent earlier publication — or, with $nextPublished, the first later one within a week
+     * (the rule of the OSS return: the last day of the quarter or the next publication day).
+     * Windows entirely in the past are immutable and cached for a year; a window reaching
+     * today is retried after an hour. Null for dates in the future and when the ECB is
+     * unreachable, so callers fall back to the live BNR rate.
+     *
+     * @return array{rate: float, date: string}|null
+     */
+    public function getRateForDate(string $currency, \DateTimeInterface $date, bool $nextPublished = false): ?array
+    {
+        $currency = strtoupper($currency);
+        $day = \DateTimeImmutable::createFromInterface($date)->setTime(0, 0);
+        if ($currency === 'RON') {
+            return ['rate' => 1.0, 'date' => $day->format('Y-m-d')];
+        }
+        $today = new \DateTimeImmutable('today');
+        if ($day > $today) {
+            return null;
+        }
+        $start = $nextPublished ? $day : $day->modify('-' . self::ECB_WINDOW_DAYS . ' days');
+        $end = $nextPublished ? min($day->modify('+' . self::ECB_WINDOW_DAYS . ' days'), $today) : $day;
+        $series = $currency === 'EUR' ? ['RON'] : ['RON', $currency];
+
+        $table = $this->fetchEcbWindow($series, $start, $end);
+        if ($table === null) {
+            return null;
+        }
+        $dates = array_keys($table['RON'] ?? []);
+        if ($currency !== 'EUR') {
+            $dates = array_values(array_intersect($dates, array_keys($table[$currency] ?? [])));
+        }
+        sort($dates);
+        $target = $day->format('Y-m-d');
+        $picked = null;
+        foreach ($dates as $d) {
+            if ($nextPublished ? $d >= $target : $d <= $target) {
+                $picked = $d;
+                if ($nextPublished) {
+                    break;
+                }
+            }
+        }
+        if ($picked === null) {
+            return null;
+        }
+        $rate = $currency === 'EUR' ? $table['RON'][$picked] : $table['RON'][$picked] / $table[$currency][$picked];
+
+        return ['rate' => round($rate, 6), 'date' => $picked];
+    }
+
+    /**
+     * ECB reference rates (1 EUR = x units) per series and day, from the ECB data portal
+     * (CSV), cached per window.
+     *
+     * @param list<string> $series ISO codes, e.g. ['RON', 'USD']
+     * @return array<string, array<string, float>>|null [currency => [Y-m-d => value]]
+     */
+    private function fetchEcbWindow(array $series, \DateTimeImmutable $start, \DateTimeImmutable $end): ?array
+    {
+        $key = sprintf('ecb_rates_%s_%s_%s', implode('_', $series), $start->format('Ymd'), $end->format('Ymd'));
+        $immutable = $end < new \DateTimeImmutable('today');
+
+        return $this->cache->get($key, function (ItemInterface $item) use ($series, $start, $end, $immutable): ?array {
+            $item->expiresAfter($immutable ? self::LAST_GOOD_TTL : 3600);
+            try {
+                $response = $this->httpClient->request('GET', sprintf(self::ECB_URL, implode('+', $series)), [
+                    'timeout' => 10,
+                    'query' => ['startPeriod' => $start->format('Y-m-d'), 'endPeriod' => $end->format('Y-m-d'), 'format' => 'csvdata'],
+                ]);
+                $csv = $response->getContent();
+            } catch (\Throwable $e) {
+                $this->logger->error('[ECB] Failed to load reference rates', ['error' => $e->getMessage()]);
+                $item->expiresAfter(self::STALE_RETRY_TTL);
+                return null;
+            }
+
+            $lines = preg_split('/\r?\n/', trim($csv)) ?: [];
+            $header = str_getcsv(array_shift($lines) ?? '');
+            $iCur = array_search('CURRENCY', $header, true);
+            $iDate = array_search('TIME_PERIOD', $header, true);
+            $iVal = array_search('OBS_VALUE', $header, true);
+            if ($iCur === false || $iDate === false || $iVal === false) {
+                $item->expiresAfter(self::STALE_RETRY_TTL);
+                return null;
+            }
+            $table = [];
+            foreach ($lines as $line) {
+                $cols = str_getcsv($line);
+                $value = $cols[$iVal] ?? '';
+                if (!isset($cols[$iCur], $cols[$iDate]) || !is_numeric($value) || (float) $value <= 0) {
+                    continue;
+                }
+                $table[strtoupper($cols[$iCur])][$cols[$iDate]] = (float) $value;
+            }
+
+            return $table;
+        });
     }
 
     /**
