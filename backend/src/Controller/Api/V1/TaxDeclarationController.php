@@ -979,7 +979,7 @@ class TaxDeclarationController extends AbstractController
 
         // e-guvernare portal (WAS6DUS) answers with HTML: success carries "Indexul este <n>",
         // failure "Ne cerem scuze … Motivul: <span …>reason</span>".
-        if ($uploadId === null && is_string($body) && preg_match('/Indexul este\s*(?:<[^>]+>\s*)*(\d+)/iu', $body, $m)) {
+        if ($uploadId === null && is_string($body) && preg_match('/Indexul\s+este\s*(?:<[^>]+>\s*)*(\d+)/iu', $body, $m)) {
             $uploadId = $m[1];
             $parsed = ['index' => $uploadId, 'source' => 'was6dus'];
         } elseif ($uploadId === null && is_string($body) && preg_match('/Motivul:\s*(?:<[^>]+>\s*)*([^<]+)/iu', $body, $m)) {
