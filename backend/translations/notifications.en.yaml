@@ -84,3 +84,14 @@ notification:
     blocking_body: 'Your app version (%current%) is no longer supported. Update to %latest% to keep using Storno.ro.'
     recommended_title: 'New version available'
     recommended_body: 'A newer version is available. You are on %current% — update to %latest% for new features and fixes.'
+  partner_status_changed:
+    title: '%company% — %kind% %partner%'
+    message: '%kind% %partner% (%identifier%): %changes%. Check the partner before the next invoice.'
+    kind:
+      client: 'Client'
+      supplier: 'Supplier'
+    change:
+      became_inactive: 'became an inactive taxpayer'
+      lost_vat_registration: 'is no longer registered for VAT'
+      vat_on_collection: 'applies VAT on collection'
+      vies_invalid: 'VAT number is no longer valid in VIES'

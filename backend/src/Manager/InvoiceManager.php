@@ -650,6 +650,12 @@ class InvoiceManager
             throw new \DomainException('Only draft invoices can be issued.');
         }
 
+        // Partner rule: a blocked client cannot be invoiced (storno of an existing invoice still can)
+        $blockedClient = $invoice->getClient();
+        if ($blockedClient?->isBlocked() && $invoice->getParentDocument() === null) {
+            throw new \DomainException(\App\Service\Partner\PartnerRulesService::blockedMessage($blockedClient));
+        }
+
         // Assign final number from DocumentSeries with pessimistic lock
         $series = $invoice->getDocumentSeries();
         if (!$series) {

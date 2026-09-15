@@ -93,4 +93,58 @@ XML;
         // getRate gracefully returns null instead of crashing
         $this->assertNull($svc->getRate('EUR'));
     }
+
+    private function ecbCsv(array $rows): string
+    {
+        $csv = "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE,OBS_STATUS\n";
+        foreach ($rows as [$currency, $date, $value]) {
+            $csv .= sprintf("EXR.D.%s.EUR.SP00.A,D,%s,EUR,SP00,A,%s,%s,A\n", $currency, $currency, $date, $value);
+        }
+        return $csv;
+    }
+
+    public function testDatedRateIsTheEcbPublicationOfTheDayOrTheNeighbouringOne(): void
+    {
+        $requests = [];
+        $client = new MockHttpClient(function (string $method, string $url) use (&$requests) {
+            $requests[] = $url;
+            return new MockResponse($this->ecbCsv([['RON', '2026-06-30', '5.2439'], ['RON', '2026-07-01', '5.2367'], ['RON', '2026-07-06', '5.2300']]));
+        });
+        $svc = $this->makeService($client);
+
+        // Published that day
+        $this->assertSame(['rate' => 5.2439, 'date' => '2026-06-30'], $svc->getRateForDate('EUR', new \DateTimeImmutable('2026-06-30')));
+        $this->assertStringContainsString('D.RON.EUR.SP00.A', $requests[0]);
+        $this->assertStringContainsString('startPeriod=2026-06-23&endPeriod=2026-06-30', $requests[0]);
+
+        // Saturday 2026-07-04: the most recent earlier publication, or the next one for the OSS rule
+        $this->assertSame(['rate' => 5.2367, 'date' => '2026-07-01'], $svc->getRateForDate('EUR', new \DateTimeImmutable('2026-07-04')));
+        $this->assertSame(['rate' => 5.23, 'date' => '2026-07-06'], $svc->getRateForDate('EUR', new \DateTimeImmutable('2026-07-04'), true));
+        $this->assertStringContainsString('startPeriod=2026-07-04&endPeriod=2026-07-11', $requests[2]);
+
+        // The same window is served from cache
+        $svc->getRateForDate('EUR', new \DateTimeImmutable('2026-07-04'), true);
+        $this->assertCount(3, $requests);
+    }
+
+    public function testDatedRateOfAnotherCurrencyIsTheCrossRateThroughTheEuro(): void
+    {
+        $svc = $this->makeService(new MockHttpClient(new MockResponse($this->ecbCsv([['RON', '2026-06-30', '5.0000'], ['USD', '2026-06-30', '1.2500']]))));
+        $this->assertSame(['rate' => 4.0, 'date' => '2026-06-30'], $svc->getRateForDate('USD', new \DateTimeImmutable('2026-06-30')));
+        $this->assertSame(['rate' => 1.0, 'date' => '2026-06-30'], $svc->getRateForDate('RON', new \DateTimeImmutable('2026-06-30')));
+    }
+
+    public function testDatedRateIsNullForTheFutureAndWhenTheEcbIsDown(): void
+    {
+        $calls = 0;
+        $client = new MockHttpClient(function () use (&$calls) {
+            $calls++;
+            throw new TransportException('ECB unreachable');
+        });
+        $svc = $this->makeService($client);
+        $this->assertNull($svc->getRateForDate('EUR', new \DateTimeImmutable('+30 days'), true));
+        $this->assertSame(0, $calls, 'a date in the future is not looked up');
+        $this->assertNull($svc->getRateForDate('EUR', new \DateTimeImmutable('2026-06-30')));
+        $this->assertSame(1, $calls);
+    }
 }

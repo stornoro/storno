@@ -1,0 +1,16 @@
+# Test environment only: ANAF's public company registry is replaced by a scripted
+# stub (App\Tests\Support\AnafRegistryStub) so no request leaves the machine.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\Tests\Support\AnafRegistryStub: ~
+
+    app.test.anaf_http_client:
+        class: Symfony\Component\HttpClient\MockHttpClient
+        arguments: ['@App\Tests\Support\AnafRegistryStub']
+
+    App\Services\AnafService:
+        arguments:
+            $httpClient: '@app.test.anaf_http_client'

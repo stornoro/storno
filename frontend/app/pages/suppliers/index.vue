@@ -286,7 +286,10 @@ onMounted(() => fetchSuppliers())
           </div>
         </template>
         <template #cif-cell="{ row }">
-          <span class="font-mono text-sm">{{ row.original.cif || '-' }}</span>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-sm">{{ row.original.cif || '-' }}</span>
+            <SharedPartnerStatusBadges :partner="row.original" size="xs" vies />
+          </div>
         </template>
         <template #invoiceCount-cell="{ row }">
           <span class="text-sm tabular-nums">{{ (row.original as any).invoiceCount ?? 0 }}</span>

@@ -21,6 +21,7 @@
           <UBadge v-if="supplier.source" color="blue" variant="subtle">
             {{ $t(`common.sources.${supplier.source}`, supplier.source) }}
           </UBadge>
+          <SharedPartnerStatusBadges :partner="supplier" size="sm" affiliated vies />
           <div class="ml-auto flex gap-2">
             <UButton icon="i-lucide-pencil" variant="soft" size="sm" :label="$t('common.edit')" @click="editModalOpen = true" />
             <UButton icon="i-lucide-trash-2" variant="soft" color="error" size="sm" :label="$t('common.delete')" @click="deleteConfirmOpen = true" />
@@ -88,6 +89,8 @@
             </div>
           </dl>
         </UCard>
+
+        <SharedPartnerVerificationCard :partner="supplier" kind="supplier" @verified="onVerified" />
 
         <SharedRelatedCard type="supplier" :id="String(route.params.uuid)" :exclude="['invoices', 'suppliers']" />
 
@@ -228,6 +231,10 @@ function onSupplierSaved(updated: Supplier) {
   supplier.value = updated
   toast.add({ title: $t('suppliers.supplierUpdated'), color: 'success' })
   fetchData()
+}
+
+function onVerified(updated: Record<string, any>) {
+  supplier.value = { ...(supplier.value as any), ...updated }
 }
 
 async function handleDelete() {

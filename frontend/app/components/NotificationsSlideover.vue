@@ -42,6 +42,7 @@ function channelIcon(notification: BackendNotification): string {
     'proforma.expiring_soon': 'i-lucide-clock',
     'proforma.expired': 'i-lucide-calendar-x',
     'fiscal.deadline': 'i-lucide-calendar-days',
+    'partner.status_changed': 'i-lucide-shield-alert',
   }
   return typeMap[notification.type] || 'i-lucide-bell'
 }
@@ -49,7 +50,7 @@ function channelIcon(notification: BackendNotification): string {
 function iconColor(notification: BackendNotification): string {
   if (notification.isRead) return 'text-(--ui-text-muted)'
   const errorTypes = ['sync.error', 'invoice.rejected', 'token.refresh_failed']
-  const warnTypes = ['invoice.overdue', 'invoice.due_today', 'invoice.due_soon', 'token.expiring_soon', 'proforma.expiring_soon', 'proforma.expired', 'fiscal.deadline']
+  const warnTypes = ['invoice.overdue', 'invoice.due_today', 'invoice.due_soon', 'token.expiring_soon', 'proforma.expiring_soon', 'proforma.expired', 'fiscal.deadline', 'partner.status_changed']
   const successTypes = ['invoice.validated', 'payment.received', 'efactura.new_documents', 'sync.completed']
   if (errorTypes.includes(notification.type)) return 'text-error'
   if (warnTypes.includes(notification.type)) return 'text-warning'
@@ -100,6 +101,11 @@ function notificationLink(n: BackendNotification): string | null {
   if (n.type === 'sync.error' || n.type === 'sync.completed') return '/efactura'
   if (n.type === 'token.expiring_soon' || n.type === 'token.refresh_failed') return '/efactura'
   if (n.type === 'fiscal.deadline') return '/fiscal-calendar'
+  if (n.type === 'partner.status_changed') {
+    const partnerId = n.data?.partnerId as string | undefined
+    const base = n.data?.partnerType === 'supplier' ? '/suppliers' : '/clients'
+    return partnerId ? `${base}/${partnerId}` : base
+  }
   if (n.type === 'payment.received' && invoiceId) return `/invoices/${invoiceId}`
   return n.link ?? null
 }

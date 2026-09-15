@@ -86,6 +86,11 @@ const categories = [
     events: ['fiscal.deadline'],
   },
   {
+    key: 'partners',
+    label: $t('notificationPreferences.categories.partners'),
+    events: ['partner.status_changed'],
+  },
+  {
     key: 'exports',
     label: $t('notificationPreferences.categories.exports'),
     events: ['export_ready'],

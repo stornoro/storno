@@ -84,3 +84,14 @@ notification:
     blocking_body: 'Versiunea ta (%current%) nu mai este suportata. Actualizeaza la %latest% pentru a continua sa folosesti Storno.ro.'
     recommended_title: 'Versiune noua disponibila'
     recommended_body: 'O versiune mai noua este disponibila. Folosesti %current% — actualizeaza la %latest% pentru functii si corecturi noi.'
+  partner_status_changed:
+    title: '%company% — %kind% %partner%'
+    message: '%kind% %partner% (%identifier%): %changes%. Verifica partenerul inainte de urmatoarea factura.'
+    kind:
+      client: 'Clientul'
+      supplier: 'Furnizorul'
+    change:
+      became_inactive: 'a devenit contribuabil inactiv'
+      lost_vat_registration: 'nu mai este inregistrat in scopuri de TVA'
+      vat_on_collection: 'aplica TVA la incasare'
+      vies_invalid: 'codul de TVA nu mai este valid in VIES'

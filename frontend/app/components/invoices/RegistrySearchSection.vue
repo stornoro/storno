@@ -28,13 +28,18 @@
           :key="c.id"
           type="button"
           class="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-(--ui-bg-elevated) cursor-pointer"
-          @mousedown.prevent="selectClient(c)"
+          :class="{ 'opacity-50 cursor-not-allowed': c.status === 'blocked' }"
+          :disabled="c.status === 'blocked'"
+          @mousedown.prevent="c.status !== 'blocked' && selectClient(c)"
         >
           <div class="flex items-center justify-center size-8 rounded-full bg-primary/10 text-primary shrink-0">
             <UIcon name="i-lucide-building-2" class="size-4" />
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium truncate">{{ c.name }}</div>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-sm font-medium truncate">{{ c.name }}</span>
+              <SharedPartnerStatusBadges :partner="c" size="xs" />
+            </div>
             <div class="text-xs text-(--ui-text-muted)">{{ c.cui || c.cnp || '-' }}<span v-if="c.city"> &middot; {{ c.city }}</span></div>
           </div>
         </button>

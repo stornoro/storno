@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Entity\Traits\AuditableTrait;
+use App\Entity\Traits\PartnerVerificationTrait;
 use App\Entity\Traits\SoftDeletableTrait;
 use App\Repository\SupplierRepository;
 use Doctrine\ORM\Mapping as ORM;
@@ -17,6 +18,7 @@ class Supplier
 {
     use AuditableTrait;
     use SoftDeletableTrait;
+    use PartnerVerificationTrait;
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -94,6 +96,10 @@ class Supplier
     #[ORM\Column(nullable: true)]
     #[Groups(['supplier:detail'])]
     private ?\DateTimeImmutable $lastSyncedAt = null;
+
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    #[Groups(['supplier:list', 'supplier:detail'])]
+    private ?bool $viesValid = null;
 
     public function __construct()
     {
@@ -317,6 +323,17 @@ class Supplier
     public function setLastSyncedAt(?\DateTimeImmutable $lastSyncedAt): static
     {
         $this->lastSyncedAt = $lastSyncedAt;
+
+        return $this;
+    }
+    public function isViesValid(): ?bool
+    {
+        return $this->viesValid;
+    }
+
+    public function setViesValid(?bool $viesValid): static
+    {
+        $this->viesValid = $viesValid;
 
         return $this;
     }

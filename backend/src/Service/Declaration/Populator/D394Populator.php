@@ -71,6 +71,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
         $issuedSeries = [];
         $unsupportedRates = [];
         $countyVotes = [];
+        $hasAffiliated = false;
 
         foreach ($invoices as $invoice) {
             $direction = $invoice->getDirection();
@@ -111,6 +112,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
             if ($partner['countyVote'] !== null) {
                 $countyVotes[$partner['countyVote']] = ($countyVotes[$partner['countyVote']] ?? 0) + 1;
             }
+            $hasAffiliated = $hasAffiliated || $partner['affiliated'];
 
             $reverseCharge = $typeCode === InvoiceTypeCode::REVERSE_CHARGE->value;
             $invoiceId = (string) ($invoice->getId() ?? spl_object_id($invoice));
@@ -289,7 +291,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
         return [
             'form' => 'D394',
             'period' => ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d'), 'type' => $periodType === 'quarterly' ? 'T' : 'L'],
-            'header' => $this->buildHeader($company, $year, $month, $periodType, $hasOperations),
+            'header' => $this->buildHeader($company, $year, $month, $periodType, $hasOperations, $hasAffiliated),
             'informatii' => $informatii,
             'partners' => $partners,
             'rezumat1' => $rezumat1,
@@ -312,7 +314,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
     /**
      * Who the invoice is with, in the form's terms.
      *
-     * @return array{tip_partener: int, cuiP: ?string, digits: string, denP: string, taraP: ?string, locP: ?string, judP: ?string, issue: ?string, countyVote: ?string, id: string, name: string}
+     * @return array{tip_partener: int, cuiP: ?string, digits: string, denP: string, taraP: ?string, locP: ?string, judP: ?string, issue: ?string, countyVote: ?string, id: string, name: string, affiliated: bool}
      */
     private function partner(Invoice $invoice, bool $isSale): array
     {
@@ -327,6 +329,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
             $vatPayer = $client ? $client->isVatPayer() : (bool) preg_match('/^RO\d/i', $cui);
             $county = $client?->getCounty() ?: ($snapshot['county'] ?? null);
             $city = $client?->getCity() ?: ($snapshot['city'] ?? null);
+            $affiliated = $client?->isAffiliated() ?? false;
         } else {
             $supplier = $invoice->getSupplier();
             $country = strtoupper((string) ($supplier?->getCountry() ?: 'RO')) ?: 'RO';
@@ -337,13 +340,14 @@ class D394Populator implements DeclarationDataPopulatorInterface
             $vatPayer = $supplier ? $supplier->isVatPayer() : ((bool) preg_match('/^RO\d/i', $cui) || $this->hasVat($invoice));
             $county = $supplier?->getCounty();
             $city = $supplier?->getCity();
+            $affiliated = $supplier?->isAffiliated() ?? false;
         }
 
         $digits = preg_replace('/\D/', '', $cui) ?? '';
         $cnpDigits = preg_replace('/\D/', '', $cnp) ?? '';
         $tip = D394Rules::partnerType($country, $vatPayer);
         $denP = mb_substr(mb_strtoupper(trim($name)), 0, 200);
-        $out = ['tip_partener' => $tip, 'cuiP' => null, 'digits' => $digits, 'denP' => $denP, 'taraP' => null, 'locP' => null, 'judP' => null, 'issue' => null, 'countyVote' => null, 'id' => $digits ?: $cnpDigits, 'name' => $name];
+        $out = ['tip_partener' => $tip, 'cuiP' => null, 'digits' => $digits, 'denP' => $denP, 'taraP' => null, 'locP' => null, 'judP' => null, 'issue' => null, 'countyVote' => null, 'id' => $digits ?: $cnpDigits, 'name' => $name, 'affiliated' => $affiliated];
 
         if ($tip === 1) {
             if ($digits === '') {
@@ -659,7 +663,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
         return $out;
     }
 
-    private function buildHeader(Company $company, int $year, int $month, string $periodType, bool $hasOperations): array
+    private function buildHeader(Company $company, int $year, int $month, string $periodType, bool $hasOperations, bool $hasAffiliated = false): array
     {
         $quarterly = $periodType === 'quarterly';
         $luna = $quarterly ? (int) ceil($month / 3) * 3 : $month;
@@ -688,7 +692,7 @@ class D394Populator implements DeclarationDataPopulatorInterface
             'cif_intocmit' => (string) $company->getCif(),
             'calitate_intocmit' => mb_substr($role, 0, 75),
             'optiune' => 0,
-            'prsAfiliat' => 0,
+            'prsAfiliat' => $hasAffiliated ? 1 : 0,
         ];
     }
 

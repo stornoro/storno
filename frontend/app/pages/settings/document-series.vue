@@ -120,6 +120,61 @@ async function onSetDefault(item: DocumentSeries) {
   }
 }
 
+// Decizia de numerotare (yearly numbering decision PDF)
+const decisionModalOpen = ref(false)
+const decisionDownloading = ref(false)
+const currentYear = new Date().getFullYear()
+const decisionForm = ref({
+  year: currentYear,
+  decisionNumber: 1,
+  decisionDate: `${currentYear}-01-01`,
+  responsible: '',
+  rangeSize: 9999,
+})
+
+function openDecision() {
+  decisionForm.value = {
+    year: currentYear,
+    decisionNumber: 1,
+    decisionDate: `${currentYear}-01-01`,
+    responsible: companyStore.currentCompany?.representative || '',
+    rangeSize: 9999,
+  }
+  decisionModalOpen.value = true
+}
+
+watch(() => decisionForm.value.year, (year) => {
+  if (year >= 2000 && year <= 2100 && /^\d{4}-\d{2}-\d{2}$/.test(decisionForm.value.decisionDate)) {
+    decisionForm.value.decisionDate = `${year}${decisionForm.value.decisionDate.slice(4)}`
+  }
+})
+
+async function downloadDecision() {
+  const { apiFetch } = useApi()
+  decisionDownloading.value = true
+  try {
+    const f = decisionForm.value
+    const params = new URLSearchParams({ year: String(f.year), decisionNumber: String(f.decisionNumber), rangeSize: String(f.rangeSize) })
+    if (f.decisionDate) params.set('decisionDate', f.decisionDate)
+    if (f.responsible.trim()) params.set('responsible', f.responsible.trim())
+    const blob = await apiFetch<Blob>(`/v1/document-series/numbering-decision.pdf?${params.toString()}`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `decizie-numerotare-${f.year}-nr-${f.decisionNumber}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+    decisionModalOpen.value = false
+  }
+  catch (e: unknown) {
+    const message = (e as { data?: { error?: string } })?.data?.error
+    toast.add({ title: message || $t('documentSeries.decision.error'), color: 'error' })
+  }
+  finally {
+    decisionDownloading.value = false
+  }
+}
+
 watch(() => companyStore.currentCompanyId, () => store.fetchSeries())
 
 onMounted(() => {
@@ -137,14 +192,23 @@ onMounted(() => {
       orientation="horizontal"
       class="mb-4"
     >
-      <UButton
-        v-if="can(P.SERIES_MANAGE)"
-        :label="$t('documentSeries.addSeries')"
-        color="neutral"
-        icon="i-lucide-plus"
-        class="w-fit lg:ms-auto"
-        @click="openCreate()"
-      />
+      <div class="flex flex-wrap gap-2 w-fit lg:ms-auto">
+        <UButton
+          v-if="can(P.SERIES_VIEW) && hasAnySeries"
+          :label="$t('documentSeries.decision.button')"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-file-signature"
+          @click="openDecision()"
+        />
+        <UButton
+          v-if="can(P.SERIES_MANAGE)"
+          :label="$t('documentSeries.addSeries')"
+          color="neutral"
+          icon="i-lucide-plus"
+          @click="openCreate()"
+        />
+      </div>
     </UPageCard>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -260,6 +324,44 @@ onMounted(() => {
         </div>
       </template>
     </USlideover>
+
+    <!-- Decizia de numerotare -->
+    <UModal v-model:open="decisionModalOpen" :title="$t('documentSeries.decision.title')" :description="$t('documentSeries.decision.description')">
+      <template #body>
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <UFormField :label="$t('documentSeries.decision.year')" required>
+              <UInput v-model.number="decisionForm.year" type="number" :min="2000" :max="2100" />
+            </UFormField>
+            <UFormField :label="$t('documentSeries.decision.number')" required>
+              <UInput v-model.number="decisionForm.decisionNumber" type="number" :min="1" />
+            </UFormField>
+          </div>
+          <UFormField :label="$t('documentSeries.decision.date')" required>
+            <UInput v-model="decisionForm.decisionDate" type="date" />
+          </UFormField>
+          <UFormField :label="$t('documentSeries.decision.responsible')" :help="$t('documentSeries.decision.responsibleHelp')">
+            <UInput v-model="decisionForm.responsible" :placeholder="companyStore.currentCompany?.representative || ''" />
+          </UFormField>
+          <UFormField :label="$t('documentSeries.decision.rangeSize')" :help="$t('documentSeries.decision.rangeSizeHelp')">
+            <UInput v-model.number="decisionForm.rangeSize" type="number" :min="1" :max="9999999" />
+          </UFormField>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton variant="ghost" @click="decisionModalOpen = false">{{ $t('common.cancel') }}</UButton>
+          <UButton
+            icon="i-lucide-download"
+            :loading="decisionDownloading"
+            :disabled="!decisionForm.year || !decisionForm.decisionNumber || !decisionForm.decisionDate || !decisionForm.rangeSize"
+            @click="downloadDecision"
+          >
+            {{ $t('documentSeries.decision.download') }}
+          </UButton>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Delete confirmation -->
     <SharedConfirmModal

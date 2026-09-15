@@ -71,7 +71,8 @@ class D398PopulatorTest extends TestCase
     }
 
     /** @param Invoice[] $invoices */
-    private function populate(array $invoices, ?array $liveRates = null, ?float $eurRate = 5.0, int $year = 2026, int $month = 4): array
+    /** @param array{rate: float, date: string}|null $datedEurRate what ExchangeRateService::getRateForDate answers for the quarter end */
+    private function populate(array $invoices, ?array $liveRates = null, ?float $eurRate = 5.0, int $year = 2026, int $month = 4, ?array $datedEurRate = null): array
     {
         $repo = $this->createMock(InvoiceRepository::class);
         $repo->method('findForVatReturn')->willReturn($invoices);
@@ -79,6 +80,12 @@ class D398PopulatorTest extends TestCase
         $eu->method('getAllRates')->willReturnCallback(static fn (string $c) => $liveRates[$c] ?? null);
         $fx = $this->createMock(ExchangeRateService::class);
         $fx->method('getRate')->willReturn($eurRate);
+        $fx->method('getRateForDate')->willReturnCallback(static function (string $currency, \DateTimeInterface $date, bool $nextPublished = false) use ($datedEurRate): ?array {
+            self::assertSame('EUR', $currency);
+            self::assertSame('2026-06-30', $date->format('Y-m-d'), 'the rate of the last day of the quarter is asked for');
+            self::assertTrue($nextPublished, 'when nothing was published on the last day, the next publication counts');
+            return $datedEurRate;
+        });
         return (new D398Populator($repo, $eu, $fx))->populate($this->company, $year, $month, 'quarterly');
     }
 
@@ -122,16 +129,35 @@ class D398PopulatorTest extends TestCase
         self::assertNotContains('EUR_RATE_APPROXIMATE', array_column($data['warnings'], 'code'));
     }
 
-    public function testRonInvoicesAreConvertedWithTheEurRateAndFlagged(): void
+    public function testRonInvoicesAreConvertedWithTheEcbRateOfTheLastDayOfTheQuarter(): void
     {
         $data = $this->populate([
             $this->invoice('IT', '2026-04-10', [['base' => '1000.00']], ['currency' => 'RON']),
             $this->invoice('IT', '2026-04-11', [['base' => '100.00']], ['currency' => 'USD', 'exchangeRate' => '4.5000']),
-        ], ['IT' => ['standard' => 22.0]], 5.0);
+        ], ['IT' => ['standard' => 22.0]], 4.0, 2026, 4, ['rate' => 5.0, 'date' => '2026-06-30']);
         $s = $data['states'][0]['supplies'][0];
-        self::assertSame('290.00', $s['taxable_amount']); // 1000 / 5 + 100 × 4.5 / 5
+        self::assertSame('290.00', $s['taxable_amount']); // 1000 / 5 + 100 × 4.5 / 5, at the dated rate, not the live 4.0
         self::assertSame('63.80', $s['vat_amount']);
-        self::assertContains('EUR_RATE_APPROXIMATE', array_column($data['warnings'], 'code'));
+        self::assertSame(['rate' => '5.0000', 'date' => '2026-06-30', 'source' => 'ecb'], $data['eurRate']);
+        $codes = array_column($data['warnings'], 'code');
+        self::assertNotContains('EUR_RATE_FALLBACK', $codes);
+        self::assertNotContains('EUR_RATE_APPROXIMATE', $codes);
+    }
+
+    public function testWithoutTheDatedRateTheLiveRateIsUsedAndFlagged(): void
+    {
+        $data = $this->populate([
+            $this->invoice('IT', '2026-04-10', [['base' => '1000.00']], ['currency' => 'RON']),
+        ], ['IT' => ['standard' => 22.0]], 5.0);
+        self::assertSame('200.00', $data['states'][0]['supplies'][0]['taxable_amount']);
+        self::assertSame('bnr', $data['eurRate']['source']);
+        self::assertSame('5.0000', $data['eurRate']['rate']);
+        self::assertContains('EUR_RATE_FALLBACK', array_column($data['warnings'], 'code'));
+
+        // EUR-only returns need no conversion and carry no rate
+        $eurOnly = $this->populate([$this->invoice('IT', '2026-04-10', [['base' => '100.00']])], ['IT' => ['standard' => 22.0]], 5.0);
+        self::assertNull($eurOnly['eurRate']);
+        self::assertNotContains('EUR_RATE_FALLBACK', array_column($eurOnly['warnings'], 'code'));
     }
 
     public function testWithoutAnEurRateRonLinesAreLeftOut(): void

@@ -6,6 +6,8 @@ use App\Entity\DocumentSeries;
 use App\Repository\DocumentSeriesRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
+use App\Service\DocumentSeries\NumberingDecisionPdfService;
+use App\Service\DocumentSeries\NumberingDecisionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,6 +24,8 @@ class DocumentSeriesController extends AbstractController
         private readonly DocumentSeriesRepository $documentSeriesRepository,
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
+        private readonly NumberingDecisionService $numberingDecisionService,
+        private readonly NumberingDecisionPdfService $numberingDecisionPdfService,
     ) {}
 
     #[Route('/document-series', methods: ['GET'])]
@@ -39,6 +43,91 @@ class DocumentSeriesController extends AbstractController
         $series = $this->documentSeriesRepository->findByCompany($company);
 
         return $this->json(['data' => $series], context: ['groups' => ['docseries:list']]);
+    }
+
+    /**
+     * Decizia de numerotare: the yearly internal decision listing, per document
+     * type, the series and the number range allocated for the year.
+     */
+    #[Route('/document-series/numbering-decision', methods: ['GET'], priority: 10)]
+    public function numberingDecision(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company || !$this->organizationContext->ownsCompany($company)) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::SERIES_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        try {
+            $decision = $this->numberingDecisionService->build($company, $this->yearParam($request), $this->decisionOptions($request));
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        return $this->json($decision);
+    }
+
+    #[Route('/document-series/numbering-decision.pdf', methods: ['GET'], priority: 10)]
+    public function numberingDecisionPdf(Request $request): Response
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company || !$this->organizationContext->ownsCompany($company)) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::SERIES_VIEW)) {
+            return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
+        }
+
+        try {
+            $decision = $this->numberingDecisionService->build($company, $this->yearParam($request), $this->decisionOptions($request));
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $pdf = $this->numberingDecisionPdfService->generate($company, $decision);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'Failed to generate PDF: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        $disposition = $request->query->getBoolean('download', true) ? 'attachment' : 'inline';
+
+        return new Response($pdf, Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('%s; filename="%s"', $disposition, NumberingDecisionPdfService::fileName($decision)),
+            'Content-Length' => (string) strlen($pdf),
+        ]);
+    }
+
+    private function yearParam(Request $request): int
+    {
+        $year = $request->query->get('year');
+        if ($year === null || $year === '') {
+            return (int) date('Y');
+        }
+        if (!\is_string($year) || !preg_match('/^\d{4}$/', $year)) {
+            throw new \InvalidArgumentException('year must be a four-digit year.');
+        }
+
+        return (int) $year;
+    }
+
+    /** @return array<string, string|null> */
+    private function decisionOptions(Request $request): array
+    {
+        $options = [];
+        foreach (['decisionNumber', 'decisionDate', 'responsible', 'rangeSize'] as $key) {
+            $value = $request->query->get($key);
+            if ($value !== null && $value !== '') {
+                $options[$key] = \is_string($value) ? trim(strip_tags($value)) : null;
+            }
+        }
+
+        return $options;
     }
 
     #[Route('/document-series', methods: ['POST'])]

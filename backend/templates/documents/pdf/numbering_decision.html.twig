@@ -1,0 +1,129 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% set c = decision.company %}
+
+{% block styles %}
+body { font-size: 11.5px; line-height: 1.55; }
+.letterhead { border-bottom: 2px solid {{ primaryColor|default('#2563eb') }}; padding-bottom: 10px; margin-bottom: 26px; }
+.letterhead .company-name { font-size: 15px; font-weight: bold; }
+.letterhead .small { font-size: 10px; color: #555; }
+.doc-title { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; color: {{ primaryColor|default('#2563eb') }}; }
+.doc-subtitle { text-align: center; font-size: 12px; margin-bottom: 26px; }
+p { margin-bottom: 10px; text-align: justify; }
+.article { font-weight: bold; margin-top: 14px; margin-bottom: 4px; }
+table.ranges { width: 100%; border-collapse: collapse; margin: 10px 0 16px; }
+table.ranges th { background: #f8fafc; border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; font-size: 9.5px; text-transform: uppercase; color: #475569; font-weight: 600; }
+table.ranges td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 10.5px; vertical-align: top; }
+table.ranges td.num { text-align: right; }
+table.ranges td.mono { font-weight: 600; }
+.signature { margin-top: 44px; overflow: hidden; page-break-inside: avoid; }
+.signature .block { float: left; width: 48%; }
+.signature .block + .block { float: right; text-align: right; }
+.signature .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 26px; }
+.signature .name { font-weight: bold; }
+.signature .role { font-size: 10px; color: #555; }
+.signature .line { border-top: 1px solid #94a3b8; width: 60%; margin-top: 30px; }
+.signature .block + .block .line { margin-left: auto; }
+.footnote { font-size: 9px; color: #777; margin-top: 30px; }
+{% endblock %}
+
+{% block content %}
+<div class="letterhead">
+    <div class="company-name">{{ c.name }}</div>
+    <div class="small">
+        {% if c.vatCode %}CIF: {{ c.vatCode }}{% elseif c.cif %}CIF: {{ c.cif }}{% endif %}
+        {% if c.registrationNumber %} &middot; Nr. Reg. Com.: {{ c.registrationNumber }}{% endif %}
+    </div>
+    {% if c.address %}<div class="small">Sediul: {{ c.address }}</div>{% endif %}
+</div>
+
+<div class="doc-title">DECIZIA nr. {{ decision.decisionNumber }} din {{ decisionDateText }}</div>
+<div class="doc-subtitle">privind numerotarea documentelor financiar-contabile pentru anul {{ decision.year }}</div>
+
+<p>
+    Subsemnatul/Subsemnata <strong>{{ c.representative|default('______________________') }}</strong>,
+    în calitate de <strong>{{ c.representativeRole|lower }}</strong> al <strong>{{ c.name }}</strong>,
+    cu sediul în {{ c.address|default('______________________') }},
+    {% if c.vatCode %}CIF {{ c.vatCode }}{% elseif c.cif %}CIF {{ c.cif }}{% endif %}{% if c.registrationNumber %}, înregistrată la Registrul Comerțului sub nr. {{ c.registrationNumber }}{% endif %},
+</p>
+
+<p>{{ decision.legalBasis.text }}</p>
+
+<p style="text-align:center; font-weight:bold; margin: 14px 0;">DECIDE:</p>
+
+<p class="article">Art. 1.</p>
+<p>
+    Începând cu data de 1 ianuarie {{ decision.year }}, documentele financiar-contabile emise de {{ c.name }}
+    se numerotează în ordine cronologică, fără omisiuni și fără repetări, pe seriile și în intervalele de numere
+    de mai jos. Numărul alocat este format din seria documentului urmată de numărul de ordine, completat cu zerouri
+    până la cel puțin patru cifre (de exemplu {{ decision.rows|length > 0 ? decision.rows[0].formatExample : 'FAC0001' }}).
+</p>
+
+<table class="ranges">
+    <thead>
+        <tr>
+            <th style="width:4%">Nr.</th>
+            <th style="width:30%">Tip document</th>
+            <th style="width:12%">Serie</th>
+            <th style="width:13%" class="text-right">Primul număr</th>
+            <th style="width:13%" class="text-right">Ultimul număr</th>
+            <th style="width:28%">Format</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in decision.rows %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ row.typeLabel }}{% if row.isDefault %} <span style="color:#64748b; font-size:9px;">(serie implicită)</span>{% endif %}</td>
+            <td class="mono">{{ row.prefix }}</td>
+            <td class="num">{{ row.firstNumber }}</td>
+            <td class="num">{{ row.lastNumber }}</td>
+            <td class="mono">{{ row.firstFormatted }} … {{ row.lastFormatted }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center">Nu există serii de documente definite.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p class="article">Art. 2.</p>
+<p>
+    Se desemnează <strong>{{ decision.responsible|default('______________________') }}</strong> ca persoană responsabilă
+    cu alocarea și evidența numerelor documentelor financiar-contabile enumerate la art. 1. Persoana desemnată
+    urmărește respectarea ordinii cronologice a numerotării, ține evidența seriilor și a intervalelor alocate
+    și informează conducerea societății cu privire la epuizarea unui interval.
+</p>
+
+<p class="article">Art. 3.</p>
+<p>
+    Numerele neutilizate până la sfârșitul anului {{ decision.year }} nu se reportează. Pentru anul următor se emite
+    o nouă decizie de numerotare. Documentele anulate își păstrează numărul alocat și se arhivează împreună cu
+    celelalte exemplare.
+</p>
+
+<p class="article">Art. 4.</p>
+<p>
+    Prezenta decizie se comunică persoanei desemnate la art. 2, compartimentului financiar-contabil și persoanelor
+    care emit documente în numele societății, și se păstrează la sediul societății împreună cu documentele
+    justificative, pe durata de arhivare prevăzută de lege.
+</p>
+
+<div class="signature">
+    <div class="block">
+        <div class="label">{{ c.representativeRole|default('Administrator') }}</div>
+        <div class="name">{{ c.representative|default('______________________') }}</div>
+        <div class="line"></div>
+        <div class="role">Semnătura și ștampila</div>
+    </div>
+    <div class="block">
+        <div class="label">Am luat la cunoștință</div>
+        <div class="name">{{ decision.responsible|default('______________________') }}</div>
+        <div class="line"></div>
+        <div class="role">Persoana responsabilă cu numerotarea</div>
+    </div>
+</div>
+
+<div class="footnote">
+    Temei legal: {{ decision.legalBasis.title }}. Document generat cu Storno la data de {{ 'now'|date('d.m.Y') }}.
+</div>
+{% endblock %}

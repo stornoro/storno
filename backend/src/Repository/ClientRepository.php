@@ -116,6 +116,9 @@ class ClientRepository extends ServiceEntityRepository
             SELECT
                 c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
                 c.address, c.city, c.email, c.country, c.vies_valid AS viesValid, c.source,
+                c.status, c.credit_limit AS creditLimit, c.affiliated, c.inactive,
+                c.vat_registered AS vatRegistered, c.vat_on_collection AS vatOnCollection,
+                c.efactura_registered AS efacturaRegistered, c.vat_status_checked_at AS vatStatusCheckedAt,
                 COALESCE(s.invoice_count, 0) AS invoiceCount,
                 COALESCE(s.invoice_total, 0) AS invoiceTotal,
                 s.last_invoice_date AS lastInvoiceDate,
@@ -155,6 +158,10 @@ class ClientRepository extends ServiceEntityRepository
         foreach ($rows as &$row) {
             $row['isVatPayer'] = (bool) $row['isVatPayer'];
             $row['viesValid'] = $row['viesValid'] === null ? null : (bool) $row['viesValid'];
+            $row['affiliated'] = (bool) $row['affiliated'];
+            foreach (['inactive', 'vatRegistered', 'vatOnCollection', 'efacturaRegistered'] as $flag) {
+                $row[$flag] = $row[$flag] === null ? null : (bool) $row[$flag];
+            }
             $row['invoiceCount'] = (int) $row['invoiceCount'];
             $row['invoiceTotal'] = round((float) $row['invoiceTotal'], 2);
         }
@@ -300,5 +307,26 @@ class ClientRepository extends ServiceEntityRepository
             ->getScalarResult();
 
         return array_values(array_unique(array_column($rows, 'email')));
+    }
+    /**
+     * Partners whose registry check is missing or older than `$since`: companies
+     * with an identifier (CUI / VAT code), never individuals.
+     *
+     * @return Client[]
+     */
+    public function findStaleForVerification(Company $company, \DateTimeImmutable $since): array
+    {
+        return $this->createQueryBuilder('c')
+            ->where('c.company = :company')
+            ->andWhere('c.deletedAt IS NULL')
+            ->andWhere('c.type = :type')
+            ->setParameter('type', 'company')
+            ->andWhere("(c.cui IS NOT NULL AND c.cui != '') OR (c.vatCode IS NOT NULL AND c.vatCode != '')")
+            ->andWhere('c.vatStatusCheckedAt IS NULL OR c.vatStatusCheckedAt < :since')
+            ->setParameter('company', $company)
+            ->setParameter('since', $since)
+            ->orderBy('c.vatStatusCheckedAt', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 }

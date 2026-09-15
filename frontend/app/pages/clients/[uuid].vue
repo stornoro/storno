@@ -21,6 +21,7 @@
         <UBadge v-if="client.source" color="blue" variant="subtle">
           {{ $t(`common.sources.${client.source}`, client.source) }}
         </UBadge>
+        <SharedPartnerStatusBadges :partner="client" size="sm" affiliated />
         <div class="ml-auto flex gap-2">
           <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" @click="showSyncModal = true">
             {{ $t('clients.syncInvoices') }}
@@ -150,6 +151,8 @@
       <SharedRelatedCard v-if="client" type="client" :id="String(route.params.uuid)" :exclude="['invoices', 'clients']" />
 
       <!-- Statement of unpaid invoices -->
+      <SharedPartnerVerificationCard :partner="client" kind="client" @verified="onVerified" />
+
       <UCard>
         <template #header>
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -633,6 +636,10 @@ watch(invoicePage, () => fetchClientData())
 async function onClientSaved() {
   toast.add({ title: $t('clients.clientUpdated'), color: 'success' })
   await fetchClientData()
+}
+
+function onVerified(updated: Record<string, any>) {
+  client.value = { ...client.value, ...updated }
 }
 
 function onDelete() {

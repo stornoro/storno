@@ -16,6 +16,7 @@ use App\Service\Export\SagaXmlExportService;
 use App\Constants\Pagination;
 use App\Services\AnafService;
 use App\Service\Vies\ViesService;
+use App\Service\Partner\PartnerVerificationService;
 use App\Message\ValidateViesMessage;
 use App\Util\AddressNormalizer;
 use App\Service\Export\CsvCell;
@@ -52,6 +53,7 @@ class ClientController extends AbstractController
         private readonly ViesService $viesService,
         private readonly InvoiceManager $invoiceManager,
         private readonly MessageBusInterface $messageBus,
+        private readonly PartnerVerificationService $partnerVerification,
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -292,6 +294,9 @@ class ClientController extends AbstractController
         $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
         $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
         $client->setSource('manual');
+        if ($rulesError = $this->applyPartnerRules($client, $data)) {
+            return $rulesError;
+        }
 
         // Auto-enrich Romanian companies from ANAF (fill missing fields only)
         $anafValidated = false;
@@ -543,6 +548,9 @@ class ClientController extends AbstractController
         if (array_key_exists('notes', $data)) $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
         if (array_key_exists('idNumber', $data)) $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
         if (array_key_exists('currency', $data)) $client->setCurrency(!empty($data['currency']) ? strtoupper(trim($data['currency'])) : null);
+        if ($rulesError = $this->applyPartnerRules($client, $data)) {
+            return $rulesError;
+        }
 
         // Auto-populate vatCode from CUI if it has an EU prefix
         if (array_key_exists('cui', $data)) {
@@ -581,6 +589,63 @@ class ClientController extends AbstractController
      * cancelled. Receiver name/CIF, buyer snapshot, and VAT rules are refreshed; cached
      * XML is invalidated so e-Factura submission regenerates it with the new data.
      */
+    /**
+     * Check the client at ANAF (Romanian companies) or VIES (EU partners) and store the
+     * snapshot: VAT registration, VAT on collection, inactive status, e-Factura register.
+     */
+    #[Route('/{uuid}/verify', methods: ['POST'])]
+    public function verify(string $uuid, RateLimiterFactory $registryLookupLimiter): JsonResponse
+    {
+        $client = $this->clientRepository->find(Uuid::fromString($uuid));
+        if (!$client) {
+            return $this->json(['error' => 'Client not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('CLIENT_EDIT', $client);
+
+        if ($guard = $this->guardRegistryLookup($registryLookupLimiter)) {
+            return $guard;
+        }
+
+        $result = $this->partnerVerification->verify($client);
+
+        return $this->json([
+            'client' => $client,
+            'result' => $result,
+        ], Response::HTTP_OK, [], ['groups' => ['client:detail']]);
+    }
+
+    /**
+     * Partner rules accepted on create / update: `status` (active | warning | blocked),
+     * `creditLimit` (amount in the company currency, null to remove) and `affiliated`
+     * (declared as affiliated party in D394).
+     */
+    private function applyPartnerRules(Client $client, array $data): ?JsonResponse
+    {
+        if (array_key_exists('status', $data)) {
+            $status = is_string($data['status']) ? strtolower(trim($data['status'])) : '';
+            if (!in_array($status, Client::STATUSES, true)) {
+                return $this->json(['error' => 'Invalid status. Allowed: active, warning, blocked.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            $client->setStatus($status);
+        }
+        if (array_key_exists('creditLimit', $data)) {
+            $limit = $data['creditLimit'];
+            if ($limit === null || $limit === '') {
+                $client->setCreditLimit(null);
+            } elseif (!is_numeric($limit) || (float) $limit < 0) {
+                return $this->json(['error' => 'creditLimit must be a positive amount or null.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            } else {
+                $client->setCreditLimit((float) $limit > 0 ? (string) $limit : null);
+            }
+        }
+        if (array_key_exists('affiliated', $data)) {
+            $client->setAffiliated(filter_var($data['affiliated'], FILTER_VALIDATE_BOOLEAN));
+        }
+
+        return null;
+    }
+
     #[Route('/{uuid}/sync-invoices', methods: ['POST'])]
     public function syncInvoices(string $uuid): JsonResponse
     {

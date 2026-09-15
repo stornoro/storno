@@ -197,6 +197,23 @@
           <USwitch v-model="form.isVatPayer" />
         </div>
 
+        <!-- Partner rules -->
+        <div class="grid grid-cols-2 gap-4">
+          <UFormField :label="$t('partners.rules.status')" :help="$t('partners.rules.statusHint')">
+            <USelectMenu v-model="form.status" :items="statusOptions" value-key="value" class="w-full" />
+          </UFormField>
+          <UFormField :label="$t('partners.rules.creditLimit')" :help="$t('partners.rules.creditLimitHint')">
+            <UInput v-model="form.creditLimit" type="number" min="0" step="0.01" icon="i-lucide-gauge" />
+          </UFormField>
+        </div>
+        <div v-if="form.type === 'company'" class="flex items-center justify-between gap-4">
+          <div>
+            <span class="text-sm font-medium text-(--ui-text)">{{ $t('partners.rules.affiliated') }}</span>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('partners.rules.affiliatedHint') }}</p>
+          </div>
+          <USwitch v-model="form.affiliated" />
+        </div>
+
         <!-- ID Number / Currency -->
         <div class="grid grid-cols-2 gap-4">
           <UFormField :label="$t('clients.idNumber')">
@@ -285,7 +302,16 @@ const form = reactive({
   registrationNumber: '',
   idNumber: '',
   currency: undefined as string | undefined,
+  status: 'active' as 'active' | 'warning' | 'blocked',
+  creditLimit: '' as string,
+  affiliated: false,
 })
+
+const statusOptions = computed(() => [
+  { label: $t('partners.rules.statuses.active'), value: 'active' },
+  { label: $t('partners.rules.statuses.warning'), value: 'warning' },
+  { label: $t('partners.rules.statuses.blocked'), value: 'blocked' },
+])
 
 // Fetch defaults to populate country/county options
 fetchDefaults()
@@ -331,6 +357,9 @@ function populateForm(c: Client) {
   form.registrationNumber = c.registrationNumber || ''
   form.idNumber = c.idNumber || ''
   form.currency = c.currency || undefined
+  form.status = c.status || 'active'
+  form.creditLimit = c.creditLimit != null ? String(c.creditLimit) : ''
+  form.affiliated = c.affiliated ?? false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -358,6 +387,9 @@ function populateFromPrefill(p: Record<string, any>) {
   form.registrationNumber = p.registrationNumber || ''
   form.idNumber = p.idNumber || ''
   form.currency = p.currency || undefined
+  form.status = p.status || 'active'
+  form.creditLimit = p.creditLimit != null ? String(p.creditLimit) : ''
+  form.affiliated = p.affiliated ?? false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -586,6 +618,7 @@ async function onSave() {
       registrationNumber: form.registrationNumber || null,
       idNumber: form.idNumber || null,
       currency: form.currency || null,
+      ...rulesPayload(),
     }
     const client = await clientStore.updateClient(props.client.id, payload)
     saving.value = false
@@ -604,6 +637,10 @@ async function onSave() {
   if (form.type === 'company' && form.country === 'RO' && form.cui) {
     const client = await clientStore.createClientFromRegistry(form.cui, form.name)
     if (client) {
+      // the registry path knows nothing about partner rules — apply them afterwards
+      if (form.status !== 'active' || form.creditLimit !== '' || form.affiliated) {
+        await clientStore.updateClient(client.id, rulesPayload())
+      }
       saving.value = false
       open.value = false
       emit('saved', client)
@@ -629,6 +666,7 @@ async function onSave() {
     registrationNumber: form.registrationNumber || undefined,
     idNumber: form.idNumber || undefined,
     currency: form.currency || undefined,
+    ...rulesPayload(),
   })
 
   saving.value = false
@@ -636,6 +674,14 @@ async function onSave() {
     open.value = false
     emit('saved', client)
     resetForm()
+  }
+}
+
+function rulesPayload(): Record<string, any> {
+  return {
+    status: form.status,
+    creditLimit: form.creditLimit === '' ? null : Number(form.creditLimit),
+    affiliated: form.type === 'company' ? form.affiliated : false,
   }
 }
 
@@ -659,6 +705,9 @@ function resetForm() {
   form.registrationNumber = ''
   form.idNumber = ''
   form.currency = undefined
+  form.status = 'active'
+  form.creditLimit = ''
+  form.affiliated = false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
