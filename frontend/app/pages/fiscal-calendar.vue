@@ -150,7 +150,10 @@ function createLink(item: FiscalCalendarItem): string {
                 </div>
               </div>
               <div class="shrink-0">
-                <UButton v-if="item.declarationType && item.status !== 'filed'" :to="createLink(item)" size="xs" variant="soft" icon="i-lucide-file-plus">
+                <UButton v-if="item.dosarId" :to="`/dosare/${item.dosarId}`" size="xs" variant="soft" icon="i-lucide-folder-open">
+                  {{ $t('fiscalCalendar.openDosar') }}
+                </UButton>
+                <UButton v-else-if="item.declarationType && item.status !== 'filed'" :to="createLink(item)" size="xs" variant="soft" icon="i-lucide-file-plus">
                   {{ $t('fiscalCalendar.createDeclaration') }}
                 </UButton>
                 <span v-else-if="!item.declarationType" class="text-xs text-(--ui-text-muted)">{{ $t('fiscalCalendar.notInStorno') }}</span>

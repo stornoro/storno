@@ -3,9 +3,11 @@
 namespace App\Service\Calendar;
 
 use App\Entity\Company;
+use App\Entity\Dosar;
 use App\Entity\TaxDeclaration;
 use App\Enum\DeclarationStatus;
 use App\Enum\DeclarationType;
+use App\Repository\DosarRepository;
 use App\Repository\InvoiceRepository;
 use App\Repository\TaxDeclarationRepository;
 
@@ -15,6 +17,11 @@ use App\Repository\TaxDeclarationRepository;
  * operations, foreign suppliers). Each deadline is moved to the next working day when it falls
  * on a weekend or a legal holiday, and is marked `filed` when a submitted or accepted declaration
  * of that type exists for the period, `overdue` when it is past due and not filed.
+ *
+ * Rental-contract dosare add their own deadlines: the C168 registration / amendment /
+ * termination (30 days from the contract event, carried by the dosar until ANAF accepts the
+ * filing), the estimated Declarația unică a natural person owes within 30 days of a new
+ * rental income, and the end of the contract (addendum or C168 termination to prepare).
  *
  * Not covered here because they are handled elsewhere: the 5-day e-Factura submission window
  * of issued invoices and the expiry of ANAF tokens / certificates.
@@ -47,12 +54,19 @@ final class FiscalCalendarService
         'D406' => 'SAF-T',
         'D212' => 'Declarația unică',
         'BILANT' => 'Situații financiare anuale',
+        'C168' => 'Înregistrarea contractului de închiriere',
+        'D212_ESTIMAT' => 'Declarația unică estimativă (venit nou din chirii)',
+        'CONTRACT_END' => 'Expirarea contractului de închiriere',
     ];
+
+    /** Days a natural person has to declare the estimated income of a new rental contract (D212, cap. II). */
+    public const ESTIMATE_DAYS = 30;
 
     public function __construct(
         private readonly RomanianHolidays $holidays,
         private readonly InvoiceRepository $invoiceRepository,
         private readonly TaxDeclarationRepository $declarationRepository,
+        private readonly DosarRepository $dosarRepository,
     ) {
     }
 
@@ -61,7 +75,7 @@ final class FiscalCalendarService
      *
      * @return list<array{code: string, label: string, dueDate: string, nominalDueDate: string, daysLeft: int,
      *   period: array{year: int, month?: int, quarter?: int, from: string, to: string},
-     *   appliesBecause: string, declarationType: ?string, status: string}>
+     *   appliesBecause: string, declarationType: ?string, status: string, dosarId?: string, dosarTitle?: string}>
      */
     public function upcoming(Company $company, \DateTimeImmutable $from, int $days = 60): array
     {
@@ -70,7 +84,7 @@ final class FiscalCalendarService
         $windowEnd = $from->modify(sprintf('+%d days', max(0, $days)));
 
         $filed = $this->filedIndex($company);
-        $items = [];
+        $candidates = [];
 
         // Deadlines fall in the month after the period (or in May for the annual ones): walk the
         // months from the lookback start to the end of the window and derive the period from each.
@@ -78,19 +92,27 @@ final class FiscalCalendarService
         $last = $windowEnd->modify('first day of this month');
         while ($cursor <= $last) {
             foreach ($this->deadlinesDueIn($company, (int) $cursor->format('Y'), (int) $cursor->format('n')) as $item) {
-                $due = new \DateTimeImmutable($item['dueDate']);
-                if ($due < $windowStart || $due > $windowEnd) {
-                    continue;
-                }
-                $item['daysLeft'] = (int) $from->diff($due)->format('%r%a');
-                $item['status'] = $this->status($item, $filed, $from);
-                // Deadlines Storno cannot see filed (SAF-T, financial statements) are never reported overdue
-                if ($item['declarationType'] === null && $item['status'] === self::STATUS_OVERDUE) {
-                    continue;
-                }
-                $items[] = $item;
+                $candidates[] = $item;
             }
             $cursor = $cursor->modify('+1 month');
+        }
+        foreach ($this->dosarDeadlines($company, $filed) as $item) {
+            $candidates[] = $item;
+        }
+
+        $items = [];
+        foreach ($candidates as $item) {
+            $due = new \DateTimeImmutable($item['dueDate']);
+            if ($due < $windowStart || $due > $windowEnd) {
+                continue;
+            }
+            $item['daysLeft'] = (int) $from->diff($due)->format('%r%a');
+            $item['status'] ??= $this->status($item, $filed, $from);
+            // Deadlines Storno cannot see filed (SAF-T, financial statements, a contract's end) are never reported overdue
+            if ($item['declarationType'] === null && $item['status'] === self::STATUS_OVERDUE) {
+                continue;
+            }
+            $items[] = $item;
         }
 
         usort($items, static fn (array $a, array $b) => [$a['dueDate'], $a['code']] <=> [$b['dueDate'], $b['code']]);
@@ -175,6 +197,99 @@ final class FiscalCalendarService
         ];
     }
 
+    /**
+     * Deadlines carried by the active rental-contract dosare of the company.
+     *
+     * @param array{byType: array<string, list<array{0: int, 1: int, 2: string, 3: ?string}>>, byDosar: array<string, list<string>>} $filed
+     * @return list<array<string, mixed>>
+     */
+    private function dosarDeadlines(Company $company, array $filed): array
+    {
+        $items = [];
+        foreach ($this->dosarRepository->findForCompany($company, Dosar::TYPE_RENTAL_CONTRACT) as $dosar) {
+            if (!$dosar instanceof Dosar || $dosar->getStatus() === Dosar::STATUS_CLOSED) {
+                continue;
+            }
+            $subject = $dosar->getSubject();
+            $start = $this->subjectDate($subject['deLa'] ?? $subject['data'] ?? null);
+            $end = $this->subjectDate($subject['panaLa'] ?? null);
+            $dosarId = (string) $dosar->getId();
+            $period = [
+                'year' => (int) ($start?->format('Y') ?? date('Y')),
+                'from' => $start?->format('Y-m-d') ?? '',
+                'to' => $end?->format('Y-m-d') ?? '',
+            ];
+            $base = ['period' => $period, 'appliesBecause' => 'rental_contract', 'dosarId' => $dosarId, 'dosarTitle' => $dosar->getTitle()];
+
+            // C168: the dosar carries the 30-day deadline until ANAF accepts the filing (then it is cleared).
+            $deadline = $dosar->getDeadlineAt();
+            if ($deadline !== null && ($dosar->getDeadlineLabel() === null || str_contains($dosar->getDeadlineLabel(), 'C168'))) {
+                $nominal = $deadline->setTime(0, 0);
+                $items[] = $base + [
+                    'code' => 'C168',
+                    'label' => $dosar->getDeadlineLabel() ?? self::LABELS['C168'],
+                    'nominalDueDate' => $nominal->format('Y-m-d'),
+                    'dueDate' => $this->holidays->nextWorkingDay($nominal)->format('Y-m-d'),
+                    'declarationType' => DeclarationType::C168->value,
+                    'status' => in_array(DeclarationType::C168->value, $filed['byDosar'][$dosarId] ?? [], true) ? self::STATUS_FILED : null,
+                ];
+            }
+
+            // A natural person who starts earning rent declares the estimated income within 30 days.
+            if ($company->isIndividual() && $start !== null) {
+                $nominal = $start->modify(sprintf('+%d days', self::ESTIMATE_DAYS));
+                $estimateFiled = false;
+                foreach ($filed['byType'][DeclarationType::D212->value] ?? [] as [$year, , , $submittedAt]) {
+                    if ($year === (int) $start->format('Y') && ($submittedAt === null || $submittedAt >= $start->format('Y-m-d'))) {
+                        $estimateFiled = true;
+                    }
+                }
+                $items[] = $base + [
+                    'code' => 'D212_ESTIMAT',
+                    'label' => self::LABELS['D212_ESTIMAT'],
+                    'nominalDueDate' => $nominal->format('Y-m-d'),
+                    'dueDate' => $this->holidays->nextWorkingDay($nominal)->format('Y-m-d'),
+                    'declarationType' => DeclarationType::D212->value,
+                    'status' => $estimateFiled ? self::STATUS_FILED : null,
+                ];
+            }
+
+            // The contract's end: prepare the addendum or the C168 termination.
+            if ($end !== null) {
+                $items[] = $base + [
+                    'code' => 'CONTRACT_END',
+                    'label' => self::LABELS['CONTRACT_END'],
+                    'nominalDueDate' => $end->format('Y-m-d'),
+                    'dueDate' => $end->format('Y-m-d'),
+                    'declarationType' => null,
+                    'status' => null,
+                ];
+            }
+        }
+
+        return array_map(static function (array $item): array {
+            if ($item['status'] === null) {
+                unset($item['status']);
+            }
+
+            return $item;
+        }, $items);
+    }
+
+    /** Dates in a dosar subject are DD.MM.YYYY or YYYY-MM-DD. */
+    private function subjectDate(mixed $value): ?\DateTimeImmutable
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return null;
+        }
+        $value = trim($value);
+        $date = preg_match('/^\d{1,2}\.\d{1,2}\.\d{4}$/', $value) === 1
+            ? \DateTimeImmutable::createFromFormat('!d.m.Y', $value)
+            : \DateTimeImmutable::createFromFormat('!Y-m-d', substr($value, 0, 10));
+
+        return $date instanceof \DateTimeImmutable ? $date : null;
+    }
+
     /** @return array{from: string, to: string} */
     private function monthBounds(int $year, int $month): array
     {
@@ -192,29 +307,34 @@ final class FiscalCalendarService
     }
 
     /**
-     * Filed declarations of the company indexed by type: [year, month, periodType] triples.
+     * Filed declarations of the company: by type as [year, month, periodType, submittedAt] and,
+     * for the ones filed from a dosar, the types per dosar id.
      *
-     * @return array<string, list<array{0: int, 1: int, 2: string}>>
+     * @return array{byType: array<string, list<array{0: int, 1: int, 2: string, 3: ?string}>>, byDosar: array<string, list<string>>}
      */
     private function filedIndex(Company $company): array
     {
-        $index = [];
+        $index = ['byType' => [], 'byDosar' => []];
         foreach ($this->declarationRepository->findByCompanyAndStatuses($company, self::FILED_STATUSES) as $declaration) {
             if ($declaration instanceof TaxDeclaration) {
-                $index[$declaration->getType()->value][] = [$declaration->getYear(), $declaration->getMonth(), $declaration->getPeriodType()];
+                $filedAt = $declaration->getSubmittedAt() ?? $declaration->getCreatedAt();
+                $index['byType'][$declaration->getType()->value][] = [$declaration->getYear(), $declaration->getMonth(), $declaration->getPeriodType(), $filedAt?->format('Y-m-d')];
+                if ($declaration->getDosar() !== null) {
+                    $index['byDosar'][(string) $declaration->getDosar()->getId()][] = $declaration->getType()->value;
+                }
             }
         }
 
         return $index;
     }
 
-    /** @param array<string, mixed> $item @param array<string, list<array{0: int, 1: int, 2: string}>> $filed */
+    /** @param array<string, mixed> $item @param array{byType: array<string, list<array{0: int, 1: int, 2: string, 3: ?string}>>, byDosar: array<string, list<string>>} $filed */
     private function status(array $item, array $filed, \DateTimeImmutable $today): string
     {
         $type = $item['declarationType'];
         if ($type !== null) {
             $period = $item['period'];
-            foreach ($filed[$type] ?? [] as [$year, $month]) {
+            foreach ($filed['byType'][$type] ?? [] as [$year, $month]) {
                 if ($year !== $period['year']) {
                     continue;
                 }

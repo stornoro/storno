@@ -6,6 +6,8 @@ use App\Entity\Company;
 use App\Entity\TaxDeclaration;
 use App\Enum\DeclarationStatus;
 use App\Enum\DeclarationType;
+use App\Entity\Dosar;
+use App\Repository\DosarRepository;
 use App\Repository\InvoiceRepository;
 use App\Repository\TaxDeclarationRepository;
 use App\Service\Calendar\FiscalCalendarService;
@@ -17,6 +19,7 @@ class FiscalCalendarServiceTest extends TestCase
 {
     private InvoiceRepository&MockObject $invoices;
     private TaxDeclarationRepository&MockObject $declarations;
+    private DosarRepository&MockObject $dosare;
     private FiscalCalendarService $service;
 
     protected function setUp(): void
@@ -26,7 +29,9 @@ class FiscalCalendarServiceTest extends TestCase
         $this->invoices->method('hasIntraCommunityOperations')->willReturn(false);
         $this->invoices->method('hasForeignSupplierInvoices')->willReturn(false);
         $this->declarations->method('findByCompanyAndStatuses')->willReturn([]);
-        $this->service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $this->declarations);
+        $this->dosare = $this->createMock(DosarRepository::class);
+        $this->dosare->method('findForCompany')->willReturn([]);
+        $this->service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $this->declarations, $this->dosare);
     }
 
     private function company(bool $vatPayer = true, string $vatPeriod = 'monthly', string $incomeTaxPeriod = 'quarterly', bool $employees = false, bool $individual = false): Company
@@ -121,7 +126,7 @@ class FiscalCalendarServiceTest extends TestCase
         $invoices->method('hasIntraCommunityOperations')->willReturnCallback(
             static fn (Company $c, \DateTimeInterface $from) => $from->format('Y-m') === '2026-09',
         );
-        $service = new FiscalCalendarService(new RomanianHolidays(), $invoices, $this->declarations);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $invoices, $this->declarations, $this->dosare);
         $items = $this->keyed($service->upcoming($this->company(), new \DateTimeImmutable('2026-10-01'), 60));
 
         self::assertArrayHasKey('D390 2026-10-26', $items);
@@ -134,7 +139,7 @@ class FiscalCalendarServiceTest extends TestCase
         $invoices = $this->createMock(InvoiceRepository::class);
         $invoices->method('hasIntraCommunityOperations')->willReturn(true); // ignored: not a VAT payer
         $invoices->method('hasForeignSupplierInvoices')->willReturn(true);
-        $service = new FiscalCalendarService(new RomanianHolidays(), $invoices, $this->declarations);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $invoices, $this->declarations, $this->dosare);
         $items = $this->keyed($service->upcoming($this->company(vatPayer: false), new \DateTimeImmutable('2026-10-01'), 60));
 
         self::assertArrayHasKey('D301 2026-10-26', $items);
@@ -181,7 +186,7 @@ class FiscalCalendarServiceTest extends TestCase
             $filed(DeclarationType::D300, 2026, 9, DeclarationStatus::ACCEPTED),
             $filed(DeclarationType::D100, 2026, 8, DeclarationStatus::SUBMITTED, 'quarterly'), // any month of Q3 marks the quarter
         ]);
-        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $declarations);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $declarations, $this->dosare);
 
         $items = $this->keyed($service->upcoming($this->company(employees: true), new \DateTimeImmutable('2026-11-05'), 30));
 
@@ -201,8 +206,58 @@ class FiscalCalendarServiceTest extends TestCase
         $declarations->expects(self::once())->method('findByCompanyAndStatuses')
             ->with(self::anything(), [DeclarationStatus::SUBMITTED, DeclarationStatus::PROCESSING, DeclarationStatus::ACCEPTED])
             ->willReturn([]);
-        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $declarations);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $declarations, $this->dosare);
         $items = $this->keyed($service->upcoming($this->company(), new \DateTimeImmutable('2026-11-05'), 30));
         self::assertSame('overdue', $items['D300 2026-10-26']['status']);
+    }
+    private function rentalDosar(string $deLa, string $panaLa, ?string $deadline): Dosar
+    {
+        $dosar = (new Dosar())->setType(Dosar::TYPE_RENTAL_CONTRACT)->setTitle('Contract de închiriere Bld. Iuliu Maniu 7')
+            ->setSubject(['numar' => '1', 'data' => $deLa, 'deLa' => $deLa, 'panaLa' => $panaLa, 'chirie' => '500', 'moneda' => 'EUR']);
+        if ($deadline !== null) {
+            $dosar->setDeadlineAt(new \DateTimeImmutable($deadline))->setDeadlineLabel('C168 înregistrare: 30 de zile de la semnarea contractului');
+        }
+
+        return $dosar;
+    }
+
+    public function testRentalDosarAddsC168EstimateAndContractEndForAnIndividual(): void
+    {
+        $dosare = $this->createMock(DosarRepository::class);
+        $dosare->method('findForCompany')->willReturn([$this->rentalDosar('01.08.2026', '31.07.2027', '2026-08-31')]);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $this->declarations, $dosare);
+
+        // 20 Aug 2026: both 30-day deadlines are ahead
+        $items = $this->keyed($service->upcoming($this->company(individual: true), new \DateTimeImmutable('2026-08-20'), 60));
+        $this->assertArrayHasKey('C168 2026-08-31', $items);
+        $this->assertSame('c168', $items['C168 2026-08-31']['declarationType']);
+        $this->assertSame('due', $items['C168 2026-08-31']['status']);
+        $this->assertSame('rental_contract', $items['C168 2026-08-31']['appliesBecause']);
+        $this->assertSame('Contract de închiriere Bld. Iuliu Maniu 7', $items['C168 2026-08-31']['dosarTitle']);
+        $this->assertArrayHasKey('D212_ESTIMAT 2026-08-31', $items, 'estimated income: contract start + 30 days');
+        $this->assertSame('d212', $items['D212_ESTIMAT 2026-08-31']['declarationType']);
+
+        // 15 Sep 2026: both are overdue and still listed (inside the lookback)
+        $items = $this->keyed($service->upcoming($this->company(individual: true), new \DateTimeImmutable('2026-09-15'), 60));
+        $this->assertSame('overdue', $items['C168 2026-08-31']['status']);
+        $this->assertSame('overdue', $items['D212_ESTIMAT 2026-08-31']['status']);
+
+        // June 2027: the contract's end is ahead; an ended contract is never reported overdue
+        $items = $this->keyed($service->upcoming($this->company(individual: true), new \DateTimeImmutable('2027-06-15'), 60));
+        $this->assertArrayHasKey('CONTRACT_END 2027-07-31', $items);
+        $this->assertNull($items['CONTRACT_END 2027-07-31']['declarationType']);
+        $items = $this->keyed($service->upcoming($this->company(individual: true), new \DateTimeImmutable('2027-08-10'), 60));
+        $this->assertArrayNotHasKey('CONTRACT_END 2027-07-31', $items);
+    }
+
+    public function testRentalDosarOfACompanyHasNoEstimateAndNoC168OnceAccepted(): void
+    {
+        $dosare = $this->createMock(DosarRepository::class);
+        $dosare->method('findForCompany')->willReturn([$this->rentalDosar('01.08.2026', '31.07.2027', null)]);
+        $service = new FiscalCalendarService(new RomanianHolidays(), $this->invoices, $this->declarations, $dosare);
+
+        $codes = array_column($service->upcoming($this->company(), new \DateTimeImmutable('2026-08-20'), 60), 'code');
+        $this->assertNotContains('C168', $codes, 'no deadline on the dosar (registration accepted)');
+        $this->assertNotContains('D212_ESTIMAT', $codes, 'companies do not file the Declarația unică');
     }
 }

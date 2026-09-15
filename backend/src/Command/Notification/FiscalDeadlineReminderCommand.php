@@ -61,7 +61,9 @@ class FiscalDeadlineReminderCommand extends Command
             }
             $items = array_filter(
                 $this->calendar->upcoming($company, $today, max(self::REMIND_DAYS_BEFORE)),
-                static fn (array $item) => $item['status'] === FiscalCalendarService::STATUS_DUE && in_array($item['daysLeft'], self::REMIND_DAYS_BEFORE, true),
+                // C168 deadlines of a dosar are reminded by app:dosare:remind (30/7/1/0 days); skip them here.
+                static fn (array $item) => $item['status'] === FiscalCalendarService::STATUS_DUE && in_array($item['daysLeft'], self::REMIND_DAYS_BEFORE, true)
+                    && !($item['code'] === 'C168' && isset($item['dosarId'])),
             );
             if ($items === []) {
                 continue;
