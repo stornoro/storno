@@ -113,6 +113,17 @@
 
         <SharedRelatedCard type="declaration" :id="declaration.id" />
 
+        <!-- D212 created without data: it is filled from a dosar (rent contract) or through the MCP tools -->
+        <UAlert
+          v-if="declaration.type === 'd212' && declaration.status === 'draft' && !Object.keys(declaration.data?.rows ?? {}).length && !declaration.data?.input"
+          color="info"
+          variant="subtle"
+          icon="i-lucide-info"
+          :title="$t('declarations.d212EmptyTitle')"
+          :description="$t('declarations.d212EmptyHint')"
+          :actions="[{ label: $t('declarations.d212EmptyAction'), to: '/dosare', icon: 'i-lucide-folder-open' }]"
+        />
+
         <!-- Prerequisites the ANAF validator will refuse without (any declaration type) -->
         <UAlert
           v-for="w in (declaration.data?.warnings ?? [])"
@@ -1015,10 +1026,18 @@ async function recalculate() {
     declaration.value = await store.recalculateDeclaration(uuid)
     toast.add({ title: $t('declarations.recalculateSuccess'), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.recalculateError'), color: 'error' })
+    toast.add({ title: $t('declarations.recalculateError'), description: apiErrorMessage(e), color: 'error' })
   } finally {
     actionLoading.value = false
   }
+}
+
+/** The server's own message (ANAF validator text, business rule) instead of ofetch's "[POST] url: 400". */
+function apiErrorMessage(e: any): string {
+  const d = e?.data
+  const raw = d?.error ?? d?.message ?? d?.detail ?? (typeof d === 'string' ? d : null) ?? e?.message ?? ''
+  const text = String(raw).replace(/^\[[A-Z]+\] "[^"]+": \d+\s*/, '')
+  return text.length > 1200 ? text.slice(0, 1200) + '…' : text
 }
 
 async function validate() {
@@ -1027,7 +1046,7 @@ async function validate() {
     declaration.value = await store.validateDeclaration(uuid)
     toast.add({ title: $t('declarations.validateSuccess'), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.validateError'), color: 'error' })
+    toast.add({ title: $t('declarations.validateError'), description: apiErrorMessage(e), color: 'error' })
   } finally {
     actionLoading.value = false
   }
@@ -1041,7 +1060,7 @@ async function onDelete() {
     toast.add({ title: $t('declarations.deleteSuccess'), color: 'success' })
     router.push('/declarations')
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.deleteError'), color: 'error' })
+    toast.add({ title: $t('declarations.deleteError'), description: apiErrorMessage(e), color: 'error' })
   } finally {
     actionLoading.value = false
   }
@@ -1056,7 +1075,7 @@ async function saveRows() {
     editingData.value = false
     toast.add({ title: $t('declarations.dataSaved'), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.saveError'), color: 'error' })
+    toast.add({ title: $t('declarations.saveError'), description: apiErrorMessage(e), color: 'error' })
   } finally {
     savingData.value = false
   }
@@ -1159,7 +1178,7 @@ async function submitWithAgent() {
     agentSubmitModalOpen.value = false
     toast.add({ title: $t('declarations.submitSuccess'), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: e?.message ?? $t('declarations.submitError'), color: 'error' })
+    toast.add({ title: $t('declarations.submitError'), description: apiErrorMessage(e), color: 'error' })
   } finally {
     agentSubmitting.value = false
   }

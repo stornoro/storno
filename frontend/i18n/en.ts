@@ -4743,6 +4743,9 @@ export default defineI18nLocale(async () => {
       },
     },
     warningsTitle: 'The declaration cannot be validated yet',
+    d212EmptyTitle: 'The single return has no data yet',
+    d212EmptyHint: 'D212 is not built from invoices. Generate it from a case file with a rent contract (Dosare → contract → Generate D212) or through the MCP tools (declaration_build). Validation and the PDF become available once it is filled in.',
+    d212EmptyAction: 'Open case files',
     d300: {
       warningsTitle: 'The return cannot be validated yet',
       collected: 'Collected VAT',
