@@ -355,7 +355,12 @@ function deadlineText(): string | null {
 const subjectEntries = computed(() => {
   const s = detail.value?.dosar.subject ?? {}
   const labels: Record<string, string> = { numar: $t('dosare.form.contractNumber'), data: $t('dosare.form.contractDate'), adresa: $t('dosare.form.address'), chirias: $t('dosare.form.tenant'), chiriasCif: $t('dosare.form.tenantCif'), chirie: $t('dosare.form.rent'), moneda: $t('dosare.form.currency'), deLa: $t('dosare.form.from'), panaLa: $t('dosare.form.until'), dataIncetare: $t('dosare.form.terminationDate'), an: $t('dosare.form.year') }
-  return Object.entries(s).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => ({ key: k, label: labels[k] ?? k, value: String(v) }))
+  const addressLabels: Record<string, string> = { adresaCod: $t('dosare.form.addressAnaf'), chiriasAdresaCod: $t('dosare.form.tenantAddressAnaf'), locatorAdresaCod: $t('dosare.form.landlordAddressAnaf') }
+  const formatAddress = (a: Record<string, unknown>): string => [a.stradaNume, a.numar ? `nr. ${a.numar}` : null, a.detalii, a.localitateNume, a.codPostal, a.tara && a.tara !== 'RO' ? a.tara : null].filter(Boolean).join(', ')
+  return Object.entries(s)
+    .filter(([, v]) => v !== null && v !== '' && v !== undefined)
+    .map(([k, v]) => ({ key: k, label: addressLabels[k] ?? labels[k] ?? k, value: v && typeof v === 'object' ? formatAddress(v as Record<string, unknown>) : String(v) }))
+    .filter(e => e.value !== '')
 })
 function summaryFor(doc: SpvDocument): string {
   return (locale.value === 'ro' ? (doc.summary ?? doc.summaryEn) : (doc.summaryEn ?? doc.summary)) ?? doc.details ?? ''

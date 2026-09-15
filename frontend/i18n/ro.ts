@@ -4377,7 +4377,7 @@ export default defineI18nLocale(async () => {
     deleted: 'Dosar sters',
     form: {
       type: 'Tip', title: 'Titlu', titleHint: 'Se completeaza automat din subiect daca lipseste.',
-      contractNumber: 'Nr. contract', contractDate: 'Data contractului', address: 'Adresa imobilului', tenant: 'Chirias', tenantCif: 'CNP/CUI chirias',
+      contractNumber: 'Nr. contract', contractDate: 'Data contractului', address: 'Adresa imobilului', tenant: 'Chirias', tenantCif: 'CNP/CUI chirias', addressAnaf: 'Adresa imobilului (nomenclator ANAF)', tenantAddressAnaf: 'Adresa chiriașului (nomenclator ANAF)', landlordAddressAnaf: 'Adresa proprietarului (nomenclator ANAF)',
       rent: 'Chirie lunara', currency: 'Moneda', from: 'De la', until: 'Pana la', terminationDate: 'Data incetarii',
       year: 'Anul depunerii', deadlineAt: 'Termen', deadlineLabel: 'Ce termen', nextStep: 'Urmatorul pas', notes: 'Note',
     },
