@@ -158,21 +158,30 @@ function initSortable() {
   sortableInstance = Sortable.create(gridRef.value, {
     animation: 150,
     handle: '.dashboard-drag-handle',
-    ghostClass: 'opacity-40',
-    chosenClass: 'ring-2 ring-primary rounded-lg',
-    dragClass: 'shadow-2xl',
+    ghostClass: 'dashboard-widget-ghost',
+    chosenClass: 'dashboard-widget-chosen',
+    dragClass: 'dashboard-widget-dragging',
+    // Touch: a short press starts the drag, a swipe still scrolls
+    delay: 120,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 4,
+    fallbackTolerance: 3,
     onEnd(evt) {
-      // Build new order array from DOM
-      const items = gridRef.value?.querySelectorAll('[data-widget-id]')
-      if (!items) return
-      const newOrder: string[] = []
-      items.forEach((el) => {
-        const id = el.getAttribute('data-widget-id')
-        if (id) newOrder.push(id)
-      })
-      // Apply the reorder (evt.newIndex used as reference — DOM is source of truth)
-      void evt
-      configStore.reorderWidgets(newOrder)
+      const { item, from, oldIndex, newIndex } = evt
+      if (oldIndex === undefined || newIndex === undefined) return
+
+      // Sortable moved the node itself; put it back where Vue rendered it, otherwise Vue's
+      // keyed re-render fights the manual DOM change (widgets jump or land elsewhere).
+      // Vue then applies the new order from the store.
+      const siblings = Array.from(from.children).filter(el => el !== item)
+      from.insertBefore(item, siblings[oldIndex] ?? null)
+      if (oldIndex === newIndex) return
+
+      const order = activeWidgets.value.map(w => w.id)
+      const [moved] = order.splice(oldIndex, 1)
+      if (!moved) return
+      order.splice(newIndex, 0, moved)
+      configStore.reorderWidgets(order)
     },
   })
 }
@@ -386,3 +395,17 @@ const resolvedDateTo = computed(() => resolvedRange.value.dateTo)
     @add="handleAddWidget"
   />
 </template>
+
+<style scoped>
+.dashboard-widget-ghost {
+  opacity: 0.35;
+}
+.dashboard-widget-chosen {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+.dashboard-widget-dragging {
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.35);
+}
+</style>

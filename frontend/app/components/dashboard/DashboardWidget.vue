@@ -47,15 +47,15 @@ const { isModuleEnabled } = useModules()
     <template v-if="editMode">
       <!-- Drag handle top-left -->
       <div
-        class="dashboard-drag-handle absolute top-2 left-2 z-10 opacity-0 group-hover/widget:opacity-100 transition-opacity cursor-grab active:cursor-grabbing bg-(--ui-bg)/80 backdrop-blur-sm rounded-md p-1 shadow-sm"
-        title="Trage pentru a reordona"
+        class="dashboard-drag-handle absolute top-2 left-2 z-10 opacity-70 hover:opacity-100 group-hover/widget:opacity-100 transition-opacity cursor-grab active:cursor-grabbing touch-none bg-(--ui-bg)/90 backdrop-blur-sm rounded-md p-1.5 shadow-sm ring-1 ring-(--ui-border)"
+        :title="$t('dashboard.edit.dragToReorder')"
       >
         <UIcon name="i-lucide-grip-vertical" class="size-4 text-(--ui-text-muted)" />
       </div>
 
       <!-- Hide button top-right -->
       <button
-        class="absolute top-2 right-2 z-10 opacity-0 group-hover/widget:opacity-100 transition-opacity bg-(--ui-bg)/80 backdrop-blur-sm rounded-md p-1 shadow-sm hover:text-error"
+        class="absolute top-2 right-2 z-10 opacity-70 hover:opacity-100 group-hover/widget:opacity-100 transition-opacity bg-(--ui-bg)/90 backdrop-blur-sm rounded-md p-1.5 shadow-sm ring-1 ring-(--ui-border) hover:text-error"
         :title="$t('dashboard.edit.hideWidget')"
         @click="emit('hide', id)"
       >
