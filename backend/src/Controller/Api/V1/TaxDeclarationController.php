@@ -632,8 +632,18 @@ class TaxDeclarationController extends AbstractController
                 $this->defaultStorage->write($xmlPath, $xml);
                 $declaration->setXmlPath($xmlPath);
 
-                // Generate unsigned PDF via DUKIntegrator
-                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // Generate unsigned PDF via DUKIntegrator, with the attachment zip when the form
+                // carries files (C168 needs the scanned contract; DUK refuses to render it without the zip)
+                $attachments = [];
+                foreach (is_array($declaration->getData()['attachments'] ?? null) ? $declaration->getData()['attachments'] : [] as $i => $a) {
+                    $bin = is_array($a) && is_string($a['contentBase64'] ?? null) ? base64_decode($a['contentBase64'], true) : false;
+                    if ($bin !== false && $bin !== '') {
+                        $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
+                    }
+                }
+                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
 
                 // Store PDF
                 $pdfPath = sprintf(
@@ -751,8 +761,18 @@ class TaxDeclarationController extends AbstractController
                 $this->defaultStorage->write($xmlPath, $xml);
                 $declaration->setXmlPath($xmlPath);
 
-                // Generate unsigned PDF via DUKIntegrator
-                $pdfBinary = $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // Generate unsigned PDF via DUKIntegrator, with the attachment zip when the form
+                // carries files (C168 needs the scanned contract; DUK refuses to render it without the zip)
+                $attachments = [];
+                foreach (is_array($declaration->getData()['attachments'] ?? null) ? $declaration->getData()['attachments'] : [] as $i => $a) {
+                    $bin = is_array($a) && is_string($a['contentBase64'] ?? null) ? base64_decode($a['contentBase64'], true) : false;
+                    if ($bin !== false && $bin !== '') {
+                        $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
+                    }
+                }
+                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
 
                 // Store PDF
                 $pdfPath = sprintf(
