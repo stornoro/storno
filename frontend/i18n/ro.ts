@@ -4744,6 +4744,9 @@ export default defineI18nLocale(async () => {
       },
     },
     warningsTitle: 'Declaratia nu poate fi validata inca',
+    d212EmptyTitle: 'Declaratia unica nu are inca date',
+    d212EmptyHint: 'D212 nu se completeaza din facturi. Se genereaza dintr-un dosar cu contract de inchiriere (Dosare → contract → Genereaza D212) sau prin instrumentele MCP (declaration_build). Validarea si PDF-ul devin disponibile dupa completare.',
+    d212EmptyAction: 'Deschide dosarele',
     d300: {
       warningsTitle: 'Decontul nu poate fi validat inca',
       collected: 'TVA colectat',
