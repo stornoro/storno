@@ -91,6 +91,11 @@ const categories = [
     events: ['partner.status_changed'],
   },
   {
+    key: 'fleet',
+    label: $t('notificationPreferences.categories.fleet'),
+    events: ['expiry.due'],
+  },
+  {
     key: 'exports',
     label: $t('notificationPreferences.categories.exports'),
     events: ['export_ready'],

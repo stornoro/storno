@@ -8,6 +8,7 @@ use App\Repository\ImportJobRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Import\ImportOrchestrator;
+use App\Service\Import\Mapper\TemplateAwareMapperInterface;
 use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
@@ -23,7 +24,10 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/api/v1/import')]
 class ImportController extends AbstractController
 {
-    private const ALLOWED_EXTENSIONS = ['csv', 'xlsx', 'xml'];
+    private const ALLOWED_EXTENSIONS = ['csv', 'xlsx', 'xml', 'zip'];
+
+    /** Sources whose XML / ZIP upload is a cash register export, not a SAGA XML. */
+    private const CASH_REGISTER_SOURCES = ['cash_register'];
 
     private const SOURCE_LABELS = [
         'smartbill'       => 'SmartBill',
@@ -39,6 +43,12 @@ class ImportController extends AbstractController
         'bolt'            => 'Bolt',
         'facturis'        => 'Facturis',
         'emag'            => 'eMag',
+        'uber'            => 'Uber',
+        'glovo'           => 'Glovo',
+        'tazz'            => 'Tazz',
+        'woocommerce'     => 'WooCommerce',
+        'prestashop'      => 'PrestaShop',
+        'cash_register'   => 'Casă de marcat (XML A4200)',
         'generic'         => 'Altul (generic)',
     ];
 
@@ -48,6 +58,8 @@ class ImportController extends AbstractController
         'invoices_issued'      => 'Facturi emise',
         'invoices_received'    => 'Facturi primite',
         'recurring_invoices'   => 'Facturi recurente',
+        'platform_sales'       => 'Vânzări prin platforme (Uber, Bolt, Glovo, Tazz)',
+        'receipts'             => 'Bonuri fiscale (casă de marcat)',
     ];
 
     public function __construct(
@@ -152,9 +164,14 @@ class ImportController extends AbstractController
             );
         }
 
-        // Determine file format from extension
+        // Determine file format from extension (an XML / ZIP from a cash register is an A4200 export)
+        $isCashRegister = in_array($source, self::CASH_REGISTER_SOURCES, true);
+        if ($extension === 'zip' && !$isCashRegister) {
+            return $this->json(['error' => 'ZIP archives are accepted only for cash register exports.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
         $fileFormat = match ($extension) {
-            'xml'  => 'saga_xml',
+            'xml'  => $isCashRegister ? 'a4200_xml' : 'saga_xml',
+            'zip'  => 'a4200_zip',
             default => $extension,
         };
 
@@ -194,7 +211,7 @@ class ImportController extends AbstractController
             $this->entityManager->flush();
         }
 
-        $targetFields = $this->orchestrator->getTargetFields($job->getImportType());
+        $targetFields = $this->orchestrator->getTargetFields($job->getImportType(), $job->getSource());
 
         return $this->json(
             ['job' => $job, 'targetFields' => $targetFields],
@@ -226,7 +243,8 @@ class ImportController extends AbstractController
             );
         }
 
-        $targetFields = $this->orchestrator->getTargetFields($importType);
+        $source = (string) $request->query->get('source', '');
+        $targetFields = $this->orchestrator->getTargetFields($importType, $source !== '' ? $source : null);
         if (empty($targetFields)) {
             return $this->json(['error' => 'No target fields found for this import type.'], Response::HTTP_NOT_FOUND);
         }
@@ -236,8 +254,18 @@ class ImportController extends AbstractController
 
         // Build example rows based on import type
         $exampleRows = $this->getExampleRows($importType, $fieldKeys);
-
         $filename = sprintf('model_import_%s.csv', $importType);
+
+        // A platform / shop source ships a template in its own column layout
+        $sourceMapper = $source !== '' ? $this->orchestrator->findMapper($source, $importType) : null;
+        if ($sourceMapper instanceof TemplateAwareMapperInterface) {
+            $headers = array_keys($sourceMapper->getDefaultMapping());
+            $exampleRows = array_map(
+                fn (array $row) => array_map(fn (string $h) => $row[$h] ?? '', $headers),
+                $sourceMapper->getTemplateRows(),
+            );
+            $filename = sprintf('model_import_%s_%s.csv', $source, $importType);
+        }
 
         $response = new StreamedResponse(function () use ($headers, $exampleRows) {
             $output = fopen('php://output', 'w');
@@ -280,7 +308,7 @@ class ImportController extends AbstractController
             return $job;
         }
 
-        $targetFields = $this->orchestrator->getTargetFields($job->getImportType());
+        $targetFields = $this->orchestrator->getTargetFields($job->getImportType(), $job->getSource());
 
         return $this->json(
             [
@@ -483,6 +511,16 @@ class ImportController extends AbstractController
             ['jobId' => $jobId]
         );
 
+        // Hard delete receipts (and their lines) created by a cash register import
+        $conn->executeStatement(
+            'DELETE rl FROM receipt_line rl INNER JOIN receipt r ON rl.receipt_id = r.id WHERE r.import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+        $conn->executeStatement(
+            'DELETE FROM receipt WHERE import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
         // Hard delete clients created by this import
         $conn->executeStatement(
             'DELETE FROM client WHERE import_job_id = :jobId',
@@ -588,6 +626,13 @@ class ImportController extends AbstractController
             ],
             'invoices_received' => [
                 ['number' => 'FZ001', 'issueDate' => '2026-01-10', 'dueDate' => '2026-02-10', 'senderName' => 'SC Furnizor SRL', 'senderCif' => 'RO87654321', 'receiverName' => '', 'receiverCif' => '', 'subtotal' => '500.00', 'vatTotal' => '95.00', 'total' => '595.00', 'currency' => 'RON', 'paymentMethod' => 'transfer bancar', 'notes' => '', 'lineDescription' => 'Materiale birou', 'lineQuantity' => '1', 'lineUnitOfMeasure' => 'set', 'lineUnitPrice' => '500.00', 'lineVatRate' => '19', 'lineVatAmount' => '95.00', 'lineTotal' => '500.00', 'lineProductCode' => 'MAT001'],
+            ],
+            'platform_sales' => [
+                ['externalId' => 'TRIP-0001', 'date' => '2026-09-07', 'description' => 'Cursă', 'counterparty' => 'Popescu Ion', 'gross' => '48.50', 'tips' => '5.00', 'tolls' => '0.00', 'vat' => '0.00', 'commission' => '12.13', 'commissionVat' => '0.00', 'payout' => '41.37', 'currency' => 'RON', 'status' => 'completed'],
+                ['externalId' => 'TRIP-0002', 'date' => '2026-09-08', 'description' => 'Cursă', 'counterparty' => 'Popescu Ion', 'gross' => '23.00', 'tips' => '0.00', 'tolls' => '0.00', 'vat' => '0.00', 'commission' => '5.75', 'commissionVat' => '0.00', 'payout' => '17.25', 'currency' => 'RON', 'status' => 'completed'],
+            ],
+            'receipts' => [
+                ['type' => 'bon', 'fiscalId' => 'AB00000001202609071012000012' . '0034', 'deviceSerial' => 'AB00000001', 'issueDate' => '2026-09-07', 'time' => '10:12:00', 'zReportNumber' => '12', 'receiptNumber' => '34', 'total' => '121.00', 'vatTotal' => '21.00', 'vatBreakdown' => '21:21.00', 'payments' => '3:121.00', 'customerCif' => '', 'lines' => '', 'currency' => 'RON', 'receiptCount' => ''],
             ],
             'recurring_invoices' => [
                 ['reference' => 'REC-001', 'clientName' => 'SC Exemplu SRL', 'clientCif' => 'RO12345678', 'currency' => 'RON', 'seriesName' => 'FV', 'description' => 'Chirie birou', 'frequency' => 'Lunar', 'isActive' => 'Da', 'nextIssuanceDate' => '2026-03-01', 'frequencyDay' => '1', 'dueDateDays' => '30', 'dueDateFixedDay' => '', 'penaltyEnabled' => 'Nu', 'penaltyPercentPerDay' => '', 'penaltyGraceDays' => '', 'autoEmailEnabled' => 'Da', 'autoEmailTime' => '09:00', 'autoEmailDayOffset' => '0', 'lineDescription' => 'Chirie birou luna curenta', 'lineProductCode' => 'SRV001', 'lineUnitOfMeasure' => 'buc', 'lineVatRate' => '19', 'lineQuantity' => '1', 'lineUnitPrice' => '2000.00', 'lineTotal' => '2000.00', 'linePriceRule' => 'fix', 'lineReferenceCurrency' => ''],

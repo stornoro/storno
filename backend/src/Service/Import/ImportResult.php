@@ -7,6 +7,9 @@ class ImportResult
     /** @var array<int, array{row: int, field: string, message: string}> */
     private array $errors = [];
 
+    /** @var array<string, mixed> What an aggregating persister built (documents, daily totals) */
+    private array $summary = [];
+
     public function __construct(
         private int $totalRows = 0,
         private int $createdCount = 0,
@@ -82,6 +85,18 @@ class ImportResult
         return $this->errorCount > 0;
     }
 
+    /** @param array<string, mixed> $summary */
+    public function setSummary(array $summary): void
+    {
+        $this->summary = $summary;
+    }
+
+    /** @return array<string, mixed> */
+    public function getSummary(): array
+    {
+        return $this->summary;
+    }
+
     public function toArray(): array
     {
         return [
@@ -91,6 +106,7 @@ class ImportResult
             'skippedCount' => $this->skippedCount,
             'errorCount' => $this->errorCount,
             'errors' => $this->errors,
+            'summary' => $this->summary,
         ];
     }
 }

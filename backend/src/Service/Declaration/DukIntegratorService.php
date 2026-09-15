@@ -18,13 +18,23 @@ class DukIntegratorService
         $this->serviceUrl = $javaServiceUrl ?: 'http://127.0.0.1:8082';
     }
 
-    public function validate(string $xml, string $type): DukValidationResult
+    /**
+     * @param int|null $year  reporting period; forms whose XML does not carry it as an
+     * @param int|null $month attribute (D406 / SAF-T) need it, or the validator applies the
+     *                        rules of the oldest period it knows
+     */
+    public function validate(string $xml, string $type, ?int $year = null, ?int $month = null): DukValidationResult
     {
         $type = strtoupper($type);
+        $query = ['type' => $type];
+        if ($year !== null && $month !== null) {
+            $query['an'] = $year;
+            $query['luna'] = $month;
+        }
 
         try {
             $response = $this->httpClient->request('POST', $this->serviceUrl . '/duk/validate', [
-                'query' => ['type' => $type],
+                'query' => $query,
                 'body' => $xml,
                 'headers' => ['Content-Type' => 'application/xml'],
                 'timeout' => 60,

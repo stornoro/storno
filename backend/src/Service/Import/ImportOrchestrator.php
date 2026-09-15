@@ -6,8 +6,10 @@ use App\Entity\Company;
 use App\Entity\ImportJob;
 use App\Service\Centrifugo\CentrifugoService;
 use App\Service\Import\Mapper\ColumnMapperInterface;
+use App\Service\Import\Mapper\HeaderAwareMappingInterface;
 use App\Service\Import\Parser\FileParserInterface;
 use App\Service\Import\Persister\EntityPersisterInterface;
+use App\Service\Import\Persister\SummaryProviderInterface;
 use App\Service\Import\Validator\ImportRowValidator;
 use Doctrine\ORM\EntityManagerInterface;
 use League\Flysystem\FilesystemOperator;
@@ -66,7 +68,11 @@ class ImportOrchestrator
             // Try to find the best mapper and suggest mapping
             $mapper = $this->findBestMapper($job->getSource(), $job->getImportType(), $preview['headers']);
             if ($mapper) {
-                $job->setSuggestedMapping($mapper->getDefaultMapping());
+                $job->setSuggestedMapping(
+                    $mapper instanceof HeaderAwareMappingInterface
+                        ? $mapper->suggestMapping($preview['headers'])
+                        : $mapper->getDefaultMapping(),
+                );
             }
 
             $job->setStatus('preview');
@@ -188,10 +194,21 @@ class ImportOrchestrator
             // Final flush
             $persister->flush();
 
+            // Aggregating persisters create their documents at flush time: count them now
+            if ($persister instanceof SummaryProviderInterface) {
+                $summary = $persister->getSummary();
+                $result->setSummary($summary);
+                if (isset($summary['documentsCreated']) && $result->getCreatedCount() === 0) {
+                    for ($i = 0; $i < (int) $summary['documentsCreated']; $i++) {
+                        $result->incrementCreated();
+                    }
+                }
+            }
+
             // Update job with results (raw SQL — entity may be detached after clear())
             $conn = $this->entityManager->getConnection();
             $conn->executeStatement(
-                'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, errors = :errorList, processed_at = :processedAt WHERE id = :id',
+                'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, errors = :errorList, summary = :summary, processed_at = :processedAt WHERE id = :id',
                 [
                     'status' => 'completed',
                     'created' => $result->getCreatedCount(),
@@ -199,6 +216,7 @@ class ImportOrchestrator
                     'skipped' => $result->getSkippedCount(),
                     'errors' => $result->getErrorCount(),
                     'errorList' => json_encode($result->getErrors()),
+                    'summary' => $result->getSummary() === [] ? null : json_encode($result->getSummary()),
                     'processedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
                     'id' => $jobId->toRfc4122(),
                 ],
@@ -313,16 +331,38 @@ class ImportOrchestrator
     }
 
     /**
-     * Get target fields for a given import type (for UI column mapping).
+     * Get target fields for a given import type (for UI column mapping); the
+     * source's own mapper wins when it has one, because shop / platform
+     * exports carry fields the generic invoice mapper does not know.
      */
-    public function getTargetFields(string $importType): array
+    public function getTargetFields(string $importType, ?string $source = null): array
     {
+        if ($source !== null && $source !== '') {
+            $mapper = $this->findMapper($source, $importType);
+            if ($mapper !== null) {
+                return $mapper->getTargetFields();
+            }
+        }
         foreach ($this->mappers as $mapper) {
             if ($mapper->getImportType() === $importType) {
                 return $mapper->getTargetFields();
             }
         }
         return [];
+    }
+
+    /**
+     * The mapper registered for exactly this source and import type, if any.
+     */
+    public function findMapper(string $source, string $importType): ?ColumnMapperInterface
+    {
+        foreach ($this->mappers as $mapper) {
+            if ($mapper->getSource() === $source && $mapper->getImportType() === $importType) {
+                return $mapper;
+            }
+        }
+
+        return null;
     }
 
     private function getParser(string $fileFormat): FileParserInterface
@@ -386,6 +426,7 @@ class ImportOrchestrator
             'bolt' => ['csv'],
             'facturis' => ['csv', 'xlsx'],
             'emag' => ['xlsx'],
+            'cash_register' => ['a4200_xml', 'zip'],
             default => ['csv', 'xlsx'],
         };
     }

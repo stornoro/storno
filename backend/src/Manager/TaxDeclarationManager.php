@@ -225,7 +225,7 @@ class TaxDeclarationManager
         // ANAF-grade validation through DUKIntegrator. Mandatory: a declaration is
         // never marked validated on a syntax check alone.
         try {
-            $outcome = $this->validator->validate($xml, $declaration->getType()->value);
+            $outcome = $this->validator->validate($xml, $declaration->getType()->value, true, $declaration->getYear(), $declaration->getMonth());
         } catch (DukUnavailableException $e) {
             throw new \RuntimeException($e->getMessage(), 0, $e);
         }

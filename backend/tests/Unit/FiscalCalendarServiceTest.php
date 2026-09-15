@@ -72,6 +72,8 @@ class FiscalCalendarServiceTest extends TestCase
         self::assertSame(25, $items['D300 2026-10-26']['daysLeft']);
         self::assertArrayHasKey('D394 2026-10-30', $items);
         self::assertArrayHasKey('D406 2026-11-02', $items, '31 Oct 2026 is a Saturday → Monday 2 Nov');
+        self::assertSame('d406', $items['D406 2026-11-02']['declarationType'], 'SAF-T is generated in Storno');
+        self::assertSame(['year' => 2026, 'month' => 9, 'from' => '2026-09-01', 'to' => '2026-09-30'], $items['D406 2026-11-02']['period']);
         self::assertArrayHasKey('D300 2026-11-25', $items);
         self::assertArrayHasKey('D100 2026-10-26', $items, 'Q3 income tax is due in October');
         self::assertSame(['year' => 2026, 'quarter' => 3, 'from' => '2026-07-01', 'to' => '2026-09-30'], $items['D100 2026-10-26']['period']);
@@ -194,7 +196,7 @@ class FiscalCalendarServiceTest extends TestCase
         self::assertSame('filed', $items['D100 2026-10-26']['status']);
         self::assertSame('overdue', $items['D394 2026-10-30']['status'], 'past due and not filed');
         self::assertSame('overdue', $items['D112 2026-10-26']['status']);
-        self::assertArrayNotHasKey('D406 2026-11-02', $items, 'a past deadline Storno cannot see filed (SAF-T) is dropped instead of shown overdue');
+        self::assertSame('overdue', $items['D406 2026-11-02']['status'], 'SAF-T is generated in Storno now, so an unfiled past deadline is overdue like the others');
         self::assertSame('due', $items['D300 2026-11-25']['status']);
         self::assertSame(-10, $items['D300 2026-10-26']['daysLeft']);
         self::assertSame(20, $items['D300 2026-11-25']['daysLeft']);

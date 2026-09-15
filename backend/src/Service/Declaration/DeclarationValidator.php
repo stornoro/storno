@@ -29,7 +29,7 @@ final class DeclarationValidator
     /**
      * @throws DukUnavailableException when the validator service is not running
      */
-    public function validate(string $xml, string $type, bool $healNamespace = true): DeclarationValidationOutcome
+    public function validate(string $xml, string $type, bool $healNamespace = true, ?int $year = null, ?int $month = null): DeclarationValidationOutcome
     {
         if (!$this->duk->isAvailable()) {
             throw new DukUnavailableException('Serviciul de validare ANAF (DUKIntegrator) nu este disponibil.');
@@ -40,7 +40,7 @@ final class DeclarationValidator
         $namespaceCorrected = false;
         $namespace = $this->namespaces->fromXml($xml);
 
-        $result = $this->duk->validate($xml, $type);
+        $result = $this->duk->validate($xml, $type, $year, $month);
 
         if (!$result->valid && $healNamespace) {
             $suggested = $this->namespaces->suggestedNamespace($result);
@@ -53,7 +53,7 @@ final class DeclarationValidator
                 $xml = $this->namespaces->apply($xml, $suggested);
                 $namespace = $suggested;
                 $namespaceCorrected = true;
-                $result = $this->duk->validate($xml, $type);
+                $result = $this->duk->validate($xml, $type, $year, $month);
             }
         }
 

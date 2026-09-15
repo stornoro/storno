@@ -1,0 +1,5 @@
+Trip ID,Trip date,Driver,Event type,Fare,Tips,Tolls,Taxes,Service fee,Total,Currency,Status
+t-0001,2026-09-07 08:15:00,Popescu Ion,Trip,48.50,0.00,0.00,0.00,-12.13,36.37,RON,completed
+t-0001,2026-09-07 08:40:00,Popescu Ion,Tip,0.00,5.00,0.00,0.00,0.00,5.00,RON,completed
+t-0002,2026-09-08 19:40:00,Popescu Ion,Trip,23.00,0.00,2.00,0.00,-5.75,19.25,RON,completed
+t-0003,2026-09-14 10:00:00,Popescu Ion,Trip,30.00,0.00,0.00,0.00,-7.50,22.50,RON,completed

@@ -72,6 +72,28 @@ notification:
     deadline_today:
       title: '%company%: termen astazi'
       message: '%dosar% — %label%: termenul este astazi (%date%).'
+  expiry:
+    due:
+      title: '%subject%: %label% expira in %days% zile'
+      message: '%label% (%kind%) pentru %subject% expira pe %date%. Reinnoieste si actualizeaza data in Storno.'
+    due_today:
+      title: '%subject%: %label% expira astazi'
+      message: '%label% (%kind%) pentru %subject% expira astazi (%date%).'
+    kind:
+      rca: 'asigurare RCA'
+      itp: 'inspectie tehnica periodica'
+      rovinieta: 'rovinieta'
+      casco: 'asigurare CASCO'
+      tahograf: 'calibrare tahograf'
+      extinctor: 'extinctor'
+      trusa_medicala: 'trusa medicala'
+      licenta_transport: 'licenta de transport'
+      copie_conforma: 'copie conforma'
+      leasing: 'contract de leasing'
+      certificat_digital: 'certificat digital'
+      contract: 'contract'
+      autorizatie: 'autorizatie'
+      other: 'altele'
   spv:
     document_received:
       title: '%company%: %type%'

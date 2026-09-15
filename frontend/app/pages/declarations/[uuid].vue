@@ -482,6 +482,95 @@
           </UCard>
         </template>
 
+        <!-- D406 (SAF-T): header, section counts and totals, accounts and the fixed mapping -->
+        <template v-else-if="declaration.type === 'd406' && declaration.data">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d406.period') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ d406Period.from }} – {{ d406Period.to }}</p>
+              <p class="text-sm text-(--ui-text-muted)">
+                {{ d406Period.type === 'T' ? $t('declarations.d406.quarterly') : $t('declarations.d406.monthly') }} ·
+                {{ $t('declarations.d406.registrationNumber') }} <span class="font-mono">{{ d406Header.registrationNumber }}</span>
+              </p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d406.salesTotal') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d406Totals?.sales?.net) }}</p>
+              <p class="text-sm text-(--ui-text-muted)">
+                {{ $t('declarations.vatAmount') }}: {{ formatAmount(d406Totals?.sales?.vat) }} ·
+                {{ $t('declarations.d406.received') }}: {{ formatAmount(d406Totals?.payments?.received) }}
+              </p>
+            </UCard>
+            <UCard>
+              <template #header>
+                <h3 class="font-semibold">{{ $t('declarations.d406.purchasesTotal') }}</h3>
+              </template>
+              <p class="text-2xl font-bold">{{ formatAmount(d406Totals?.purchases?.net) }}</p>
+              <p class="text-sm text-(--ui-text-muted)">
+                {{ $t('declarations.vatAmount') }}: {{ formatAmount(d406Totals?.purchases?.vat) }} ·
+                {{ $t('declarations.d406.paid') }}: {{ formatAmount(d406Totals?.payments?.paid) }}
+              </p>
+            </UCard>
+          </div>
+
+          <UCard>
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d406.sections') }}</h3>
+            </template>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div v-for="c in d406Counts" :key="c.key" class="flex items-center justify-between text-sm p-2 rounded-lg bg-(--ui-bg-elevated)">
+                <span class="text-xs text-(--ui-text-muted)">{{ $t(`declarations.d406.counts.${c.key}`) }}</span>
+                <span class="font-mono font-medium ml-2">{{ c.value }}</span>
+              </div>
+            </div>
+            <p class="text-sm text-(--ui-text-muted) mt-3">
+              {{ $t('declarations.d406.ledgerTotals', { debit: formatAmount(d406Totals?.ledger?.debit), credit: formatAmount(d406Totals?.ledger?.credit) }) }}
+            </p>
+          </UCard>
+
+          <UCard v-if="d406Accounts.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d406.accounts') }} ({{ d406Accounts.length }})</h3>
+            </template>
+            <UTable :data="d406Accounts" :columns="d406AccountColumns">
+              <template #id-cell="{ row }">
+                <span class="font-mono font-medium">{{ row.original.id }}</span>
+              </template>
+              <template #debit-cell="{ row }">
+                <span class="font-mono">{{ formatAmount(row.original.debit) }}</span>
+              </template>
+              <template #credit-cell="{ row }">
+                <span class="font-mono">{{ formatAmount(row.original.credit) }}</span>
+              </template>
+              <template #closing-cell="{ row }">
+                <span class="font-mono font-medium">
+                  {{ formatAmount(row.original.closingDebit ?? row.original.closingCredit) }}
+                  <span class="text-xs text-(--ui-text-muted)">{{ row.original.closingDebit !== null ? 'D' : 'C' }}</span>
+                </span>
+              </template>
+            </UTable>
+          </UCard>
+
+          <UCard v-if="d406Mapping.length">
+            <template #header>
+              <h3 class="font-semibold">{{ $t('declarations.d406.mapping') }}</h3>
+            </template>
+            <p class="text-sm text-(--ui-text-muted) mb-3">{{ $t('declarations.d406.mappingHint') }}</p>
+            <UTable :data="d406Mapping" :columns="d406MappingColumns">
+              <template #debit-cell="{ row }">
+                <span class="font-mono">{{ row.original.debit }}</span>
+              </template>
+              <template #credit-cell="{ row }">
+                <span class="font-mono">{{ row.original.credit }}</span>
+              </template>
+            </UTable>
+          </UCard>
+        </template>
+
         <!-- Manual types: Editable rows -->
         <template v-else-if="isManualType && declaration.data">
           <UCard>
@@ -971,6 +1060,37 @@ const d398SupplyColumns = [
   { accessorKey: 'vat_rate', header: $t('declarations.d398.rate') },
   { accessorKey: 'taxable_amount', header: $t('declarations.d398.taxableAmount') },
   { accessorKey: 'vat_amount', header: $t('declarations.d398.vatAmount') },
+]
+
+// ── D406 (SAF-T): header, counts, account movements and the document → ledger mapping ──
+const d406Header = computed<Record<string, any>>(() => ((declaration.value?.data as any)?.header ?? {}) as Record<string, any>)
+const d406Period = computed<Record<string, any>>(() => ((declaration.value?.data as any)?.period ?? {}) as Record<string, any>)
+const d406Totals = computed<any>(() => (declaration.value?.data as any)?.totals ?? null)
+const d406Accounts = computed<any[]>(() => {
+  const accounts = (declaration.value?.data as any)?.accounts
+  return Array.isArray(accounts) ? accounts : []
+})
+const d406Mapping = computed<any[]>(() => {
+  const mapping = (declaration.value?.data as any)?.mapping
+  return Array.isArray(mapping) ? mapping : []
+})
+const D406_COUNT_KEYS = ['salesInvoices', 'purchaseInvoices', 'payments', 'customers', 'suppliers', 'accounts', 'transactions', 'excludedInvoices']
+const d406Counts = computed<{ key: string, value: number }[]>(() => {
+  const counts = (declaration.value?.data as any)?.counts ?? {}
+  return D406_COUNT_KEYS.filter(key => counts[key] !== undefined).map(key => ({ key, value: Number(counts[key]) }))
+})
+const d406AccountColumns = [
+  { accessorKey: 'id', header: $t('declarations.d406.account') },
+  { accessorKey: 'description', header: $t('declarations.d406.accountName') },
+  { accessorKey: 'debit', header: $t('declarations.d406.debit') },
+  { accessorKey: 'credit', header: $t('declarations.d406.credit') },
+  { accessorKey: 'closing', header: $t('declarations.d406.closing') },
+]
+const d406MappingColumns = [
+  { accessorKey: 'document', header: $t('declarations.d406.document') },
+  { accessorKey: 'debit', header: $t('declarations.d406.debit') },
+  { accessorKey: 'credit', header: $t('declarations.d406.credit') },
+  { accessorKey: 'note', header: $t('declarations.d406.note') },
 ]
 
 // ── Computed table data ─────────────────────────────────────────────

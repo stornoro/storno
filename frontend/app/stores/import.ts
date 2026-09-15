@@ -24,8 +24,28 @@ interface ImportJob {
   skippedCount: number
   errorCount: number
   errors: Array<{ row: number; field: string; message: string }> | null
+  /** What an aggregating import built: documents per group, daily totals of a cash register file */
+  summary: ImportSummary | null
   processedAt: string | null
   createdAt: string
+}
+
+interface ImportSummary {
+  // platform statements
+  rowsAggregated?: number
+  rowsSkipped?: number
+  documentsCreated?: number
+  salesInvoices?: number
+  commissionInvoices?: number
+  documents?: Array<{ number: string; type: string; total: string; currency: string }>
+  // cash register files
+  receiptsCreated?: number
+  receiptsSkipped?: number
+  zReports?: number
+  from?: string | null
+  to?: string | null
+  total?: string
+  days?: Array<{ date: string; receipts: number; total: string; vat: string; cash: string; card: string; other: string; zReports: Array<{ number: string; receiptsDeclared: number; total: string; vat: string }> }>
 }
 
 interface ImportProgress {
@@ -167,17 +187,19 @@ export const useImportStore = defineStore('import', () => {
     }
   }
 
-  async function downloadTemplate(importType: string): Promise<void> {
+  async function downloadTemplate(importType: string, source?: string): Promise<void> {
     const { apiFetch } = useApi()
     try {
-      const blob = await apiFetch<Blob>(`/v1/import/template?importType=${importType}`, {
+      // A platform / shop source ships the template in its own column layout
+      const query = source ? `?importType=${importType}&source=${source}` : `?importType=${importType}`
+      const blob = await apiFetch<Blob>(`/v1/import/template${query}`, {
         method: 'GET',
         responseType: 'blob',
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `model_import_${importType}.csv`
+      a.download = source ? `model_import_${source}_${importType}.csv` : `model_import_${importType}.csv`
       a.click()
       URL.revokeObjectURL(url)
     }

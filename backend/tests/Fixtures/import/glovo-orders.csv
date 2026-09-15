@@ -1,0 +1,4 @@
+Order ID,Order date,Customer,Order type,Order total,Tips,Delivery fee,VAT,Commission,Commission VAT,Payout,Currency,Status
+GLV-100001,2026-09-07 12:31,Client final,Delivery,89.00,0.00,0.00,8.98,26.70,5.61,56.69,RON,Delivered
+GLV-100002,2026-09-07 19:02,Client final,Delivery,45.50,2.00,0.00,4.59,13.65,2.87,30.98,RON,Delivered
+GLV-100003,2026-09-08 13:15,Client final,Delivery,120.00,0.00,0.00,12.11,36.00,7.56,76.44,RON,Delivered

@@ -1,0 +1,4 @@
+Order ID,Order Number,Order Date,Status,Customer Name,Billing Company,VAT Number,Billing Email,Billing Phone,Billing Address 1,Billing City,Billing State,Billing Postcode,Billing Country,Line items,Order Subtotal,Tax Total,Shipping Total,Discount Total,Order Total,Currency,Payment Method Title
+1001,1001,2026-09-07 10:12:00,wc-completed,Ion Popescu,,,ion.popescu@example.com,0700000000,Str. Exemplu nr. 1,București,B,010101,RO,Tricou alb x 2 = 120.00 | Șapcă x 1 = 45.00,136.36,28.64,0.00,0.00,165.00,RON,Card
+1002,1002,2026-09-08 14:30:00,processing,Maria Ionescu,Exemplu SRL,RO12345678,contact@example.com,0700000001,Bd. Exemplu nr. 10,Cluj-Napoca,CJ,400001,RO,Hanorac x 1 = 199.00,164.46,34.54,0.00,0.00,199.00,RON,Ramburs
+1003,1003,2026-09-09 09:00:00,cancelled,Vasile Georgescu,,,vasile@example.com,,,,,,RO,Tricou negru x 1 = 60.00,49.59,10.41,0.00,0.00,60.00,RON,Card

@@ -10,6 +10,7 @@ enum DeclarationType: string
     case D390 = 'd390';
     case D392 = 'd392';
     case D393 = 'd393';
+    case D406 = 'd406';
 
     // Manual entry
     case D100 = 'd100';
@@ -35,6 +36,7 @@ enum DeclarationType: string
             self::D390 => 'D390 - Declaratie recapitulativa VIES',
             self::D392 => 'D392 - Declaratie informativa operatiuni intracomunitare',
             self::D393 => 'D393 - Declaratie informativa VIES servicii',
+            self::D406 => 'D406 - SAF-T (fisierul standard de control fiscal)',
             self::D100 => 'D100 - Obligatii plata buget de stat',
             self::D101 => 'D101 - Impozit pe profit',
             self::D106 => 'D106 - Declaratie informativa dividende actionari',
@@ -55,7 +57,7 @@ enum DeclarationType: string
     public function periodType(): string
     {
         return match ($this) {
-            self::D394, self::D300, self::D390, self::D392, self::D393 => 'monthly',
+            self::D394, self::D300, self::D390, self::D392, self::D393, self::D406 => 'monthly',
             self::D100, self::D112, self::D130, self::D180, self::D301 => 'monthly',
             self::D101, self::D106, self::D120, self::D311, self::D398 => 'quarterly',
             self::D205, self::D208, self::D212, self::C168 => 'annual',
@@ -65,7 +67,7 @@ enum DeclarationType: string
     public function canAutoPopulate(): bool
     {
         return match ($this) {
-            self::D394, self::D300, self::D390, self::D392, self::D393, self::D301, self::D398 => true,
+            self::D394, self::D300, self::D390, self::D392, self::D393, self::D301, self::D398, self::D406 => true,
             default => false,
         };
     }

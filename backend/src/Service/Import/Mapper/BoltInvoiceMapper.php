@@ -78,12 +78,19 @@ class BoltInvoiceMapper extends AbstractInvoiceMapper
             $description .= " ($rideDate)";
         }
 
+        // The VAT rate follows the amounts: an EU platform invoices without VAT
+        // (reverse charge), a Romanian one with the rate its VAT amount implies.
+        $net = (float) ($result['subtotal'] ?? 0);
+        $vat = (float) ($result['vatTotal'] ?? 0);
+        $rate = $net > 0 && $vat > 0 ? round($vat / $net * 100) : 0;
+
         $result['lines'] = [[
             'description'   => $description,
             'quantity'      => '1',
             'unitOfMeasure' => 'buc',
             'unitPrice'     => $result['subtotal'] ?? '0',
-            'vatRate'       => '19',
+            'vatRate'       => (string) $rate,
+            'vatCategoryCode' => $rate > 0 ? 'S' : 'AE',
             'vatAmount'     => $result['vatTotal'] ?? '0',
             'lineTotal'     => $result['subtotal'] ?? '0',
         ]];

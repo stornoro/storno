@@ -19,7 +19,7 @@ JARS_DIR="${DUK_JARS_DIR:-$SCRIPT_DIR}"
 VERSIUNI_URL="${DUK_VERSIUNI_URL:-http://static.anaf.ro/static/10/Anaf/update5/versiuni.xml}"
 # Forms Storno can generate or validate out of the box. Keep in sync with App\Enum\DeclarationType
 # plus the forms handled by the declaration assistant (C168, D177, D700).
-DEFAULT_TYPES="${DUK_TYPES:-D100 D101 D106 D112 D120 D130 D177 D180 D205 D208 D212 D300 D301 D311 D390 D392 D393 D394 D700 C168}"
+DEFAULT_TYPES="${DUK_TYPES:-D100 D101 D106 D112 D120 D130 D177 D180 D205 D208 D212 D300 D301 D311 D390 D392 D393 D394 D406 D700 C168}"
 
 MODE="types"
 TYPES=""

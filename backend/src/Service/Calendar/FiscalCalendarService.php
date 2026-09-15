@@ -114,7 +114,7 @@ final class FiscalCalendarService
             } else {
                 $item['status'] = $this->status($item, $filed, $from);
             }
-            // Deadlines Storno cannot see filed (SAF-T, financial statements, a contract's end) are never reported overdue
+            // Deadlines Storno cannot see filed (financial statements, a contract's end) are never reported overdue
             if ($item['declarationType'] === null && $item['status'] === self::STATUS_OVERDUE) {
                 continue;
             }
@@ -162,7 +162,7 @@ final class FiscalCalendarService
         }
         if (!$individual && $saftPeriod !== null) {
             $lastDay = (int) (new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month)))->format('t');
-            $items[] = $this->item('D406', $year, $month, $lastDay, $saftPeriod, 'saft', null);
+            $items[] = $this->item('D406', $year, $month, $lastDay, $saftPeriod, 'saft', DeclarationType::D406);
         }
         if ($month === 5) {
             $annual = ['year' => $year - 1, 'from' => sprintf('%04d-01-01', $year - 1), 'to' => sprintf('%04d-12-31', $year - 1)];

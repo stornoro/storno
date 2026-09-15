@@ -140,6 +140,13 @@ class DashboardConfigController extends AbstractController
             'size' => 'md',
             'category' => 'activity',
         ],
+        [
+            'id' => 'expiries-card',
+            'name_key' => 'dashboard.widgets.expiries.name',
+            'description_key' => 'dashboard.widgets.expiries.description',
+            'size' => 'md',
+            'category' => 'activity',
+        ],
     ];
 
     /**
@@ -158,6 +165,7 @@ class DashboardConfigController extends AbstractController
         'top-outstanding-clients',
         'dosare-actions',
         'fiscal-calendar-card',
+        'expiries-card',
     ];
 
     public function __construct(

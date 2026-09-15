@@ -19,6 +19,8 @@ final class MessageKey
     const TITLE_FISCAL_DEADLINE = 'notification.fiscal_deadline.title';
     const TITLE_PAYMENT_RECEIVED = 'notification.payment_received.title';
     const TITLE_PARTNER_STATUS_CHANGED = 'notification.partner_status_changed.title';
+    const TITLE_EXPIRY_DUE = 'notification.expiry.due.title';
+    const TITLE_EXPIRY_TODAY = 'notification.expiry.due_today.title';
 
     // Notification messages
     const MSG_INVOICE_VALIDATED = 'notification.invoice_validated.message';
@@ -37,6 +39,8 @@ final class MessageKey
     const MSG_PAYMENT_RECEIVED_TITLE = 'notification.payment_received.title_format';
     const MSG_PAYMENT_RECEIVED = 'notification.payment_received.message';
     const MSG_PARTNER_STATUS_CHANGED = 'notification.partner_status_changed.message';
+    const MSG_EXPIRY_DUE = 'notification.expiry.due.message';
+    const MSG_EXPIRY_TODAY = 'notification.expiry.due_today.message';
 
     // Sync errors (sanitized)
     const ERR_INTERNAL_SAVE = 'error.sync.internal_save';

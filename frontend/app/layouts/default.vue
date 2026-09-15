@@ -87,6 +87,12 @@ const links = computed(() => {
       to: '/dosare',
       onSelect: close,
     },
+    can(P.SETTINGS_VIEW) && {
+      label: $t('nav.vehicles'),
+      icon: 'i-lucide-car',
+      to: '/vehicles',
+      onSelect: close,
+    },
     can(P.CLIENT_VIEW) && {
       label: $t('nav.clients'),
       icon: 'i-lucide-users',

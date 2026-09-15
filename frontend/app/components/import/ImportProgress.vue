@@ -25,6 +25,12 @@ const progressPercent = computed(() => {
   return Math.min(Math.round((processed.value / totalRows.value) * 100), 100)
 })
 
+// What an aggregating import built: the documents of a platform statement,
+// the daily totals of a cash register file.
+const summary = computed<any>(() => props.job?.summary ?? null)
+const documents = computed<any[]>(() => summary.value?.documents ?? [])
+const days = computed<any[]>(() => summary.value?.days ?? [])
+
 const stats = computed(() => [
   {
     label: $t('importExport.created'),
@@ -104,6 +110,49 @@ const stats = computed(() => [
       >
         <p class="text-2xl font-bold" :class="stat.color">{{ stat.value }}</p>
         <p class="text-sm text-(--ui-text-muted)">{{ stat.label }}</p>
+      </div>
+    </div>
+
+    <!-- Documents built from a platform statement -->
+    <div v-if="documents.length" class="space-y-2">
+      <h4 class="text-sm font-medium">{{ $t('importExport.summaryDocuments') }}</h4>
+      <div class="max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div v-for="doc in documents" :key="doc.number" class="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+          <span class="font-medium truncate">{{ doc.number }}</span>
+          <span class="text-(--ui-text-muted) shrink-0">
+            {{ doc.type === 'commission' ? $t('importExport.summaryCommissionInvoice') : $t('importExport.summarySalesInvoice') }}
+          </span>
+          <span class="shrink-0">{{ doc.total }} {{ doc.currency }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily totals of a cash register file -->
+    <div v-if="days.length" class="space-y-2">
+      <h4 class="text-sm font-medium">{{ $t('importExport.summaryDays') }}</h4>
+      <div class="max-h-48 overflow-x-auto overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 dark:bg-gray-800 text-(--ui-text-muted)">
+            <tr>
+              <th class="text-left px-3 py-2 font-medium">{{ $t('importExport.summaryDay') }}</th>
+              <th class="text-right px-3 py-2 font-medium">{{ $t('importExport.summaryReceipts') }}</th>
+              <th class="text-right px-3 py-2 font-medium">{{ $t('importExport.summaryTotal') }}</th>
+              <th class="text-right px-3 py-2 font-medium">{{ $t('importExport.summaryCash') }}</th>
+              <th class="text-right px-3 py-2 font-medium">{{ $t('importExport.summaryCard') }}</th>
+              <th class="text-right px-3 py-2 font-medium">{{ $t('importExport.summaryZReport') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            <tr v-for="day in days" :key="day.date">
+              <td class="px-3 py-2">{{ day.date }}</td>
+              <td class="px-3 py-2 text-right">{{ day.receipts }}</td>
+              <td class="px-3 py-2 text-right">{{ day.total }}</td>
+              <td class="px-3 py-2 text-right">{{ day.cash }}</td>
+              <td class="px-3 py-2 text-right">{{ day.card }}</td>
+              <td class="px-3 py-2 text-right">{{ (day.zReports ?? []).map((z: any) => z.number).join(', ') || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 

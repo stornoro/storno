@@ -41,6 +41,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   POST /generate-pdf       XML body → PDF binary
  *   POST /verify-signature   JSON {xml, signature} → JSON result
  *   POST /duk/validate       XML body → JSON DUK validation result
+ *                            (?an=&luna=: the reporting period, for forms like D406
+ *                            whose XML does not carry it as an attribute)
  *   POST /duk/generate-pdf   XML body → PDF binary (DUKIntegrator)
  *   GET  /health             JSON status
  */
@@ -550,8 +552,22 @@ public class JavaServiceServer {
                 Method setConfig = intClass.getMethod("setConfigPath", String.class);
                 setConfig.invoke(integrator, dukDir + "/");
 
-                Method parseMethod = intClass.getMethod("parseDocument", String.class, String.class);
-                int result = (Integer) parseMethod.invoke(integrator, tmpXml.getAbsolutePath(), type);
+                // Forms whose XML does not carry the reporting period in an attribute (D406 /
+                // SAF-T) must pass it explicitly: DUKIntegrator picks the rule set of that
+                // period from it, and without one it falls back to the oldest rule set.
+                String anParam = parseQueryParam(ex.getRequestURI().getRawQuery(), "an");
+                String lunaParam = parseQueryParam(ex.getRequestURI().getRawQuery(), "luna");
+                int result;
+                if (anParam != null && !anParam.isEmpty() && lunaParam != null && !lunaParam.isEmpty()) {
+                    Object validator = intClass.getMethod("getValidator").invoke(integrator);
+                    Method parsePeriod = validator.getClass().getMethod("parseDocument",
+                        String.class, String.class, String.class, int.class, int.class, String.class);
+                    result = (Integer) parsePeriod.invoke(validator, type, tmpXml.getAbsolutePath(),
+                        tmpErr.getAbsolutePath(), Integer.parseInt(anParam), Integer.parseInt(lunaParam), null);
+                } else {
+                    Method parseMethod = intClass.getMethod("parseDocument", String.class, String.class);
+                    result = (Integer) parseMethod.invoke(integrator, tmpXml.getAbsolutePath(), type);
+                }
                 boolean valid = (result == 0);
 
                 long elapsed = System.currentTimeMillis() - start;
