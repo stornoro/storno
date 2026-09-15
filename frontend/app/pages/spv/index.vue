@@ -8,7 +8,7 @@ const store = useSpvDocumentStore()
 const companyStore = useCompanyStore()
 const toast = useToast()
 const route = useRoute()
-const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, getSavedPin, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
+const { syncSpvViaAgent, requestSpvViaAgent, getPreferredCertId, pinAvailable, checkAgent, agentAvailable, tryAutoStart } = useAnafAgent()
 const { describeAgentError } = useAgentError()
 
 useHead({ title: $t('spv.title') })
@@ -55,11 +55,6 @@ async function handleSync() {
     setupOpen.value = true
     return
   }
-  if (!getSavedPin(savedCertId.value)) {
-    setupState.value = 'no-pin'
-    setupOpen.value = true
-    return
-  }
   await checkAgent()
   if (!agentAvailable.value) {
     await tryAutoStart()
@@ -69,6 +64,11 @@ async function handleSync() {
       setupOpen.value = true
       return
     }
+  }
+  if (!(await pinAvailable(savedCertId.value))) {
+    setupState.value = 'no-pin'
+    setupOpen.value = true
+    return
   }
 
   syncing.value = true
@@ -158,13 +158,13 @@ async function openRequest() {
 async function sendRequest() {
   if (!requestType.value) return
   if (!savedCertId.value) { setupState.value = 'no-cert'; setupOpen.value = true; return }
-  if (!getSavedPin(savedCertId.value)) { setupState.value = 'no-pin'; setupOpen.value = true; return }
   await checkAgent()
   if (!agentAvailable.value) {
     await tryAutoStart()
     await checkAgent()
     if (!agentAvailable.value) { setupState.value = 'no-agent'; setupOpen.value = true; return }
   }
+  if (!(await pinAvailable(savedCertId.value))) { setupState.value = 'no-pin'; setupOpen.value = true; return }
   requestSending.value = true
   try {
     const params: Record<string, string> = {}
