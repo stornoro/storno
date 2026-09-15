@@ -233,6 +233,7 @@ const createTypeOptions = [
     { label: 'D393 - VIES servicii', value: 'd393' },
     { label: 'D301 - Decont special TVA (neplatitori)', value: 'd301' },
     { label: 'D398 - Declaratie speciala TVA (OSS, regimul UE)', value: 'd398' },
+    { label: 'D406 - SAF-T (fisierul standard de control fiscal)', value: 'd406' },
   ],
   [
     { label: 'D100 - Obligatii plata buget de stat', value: 'd100' },
@@ -248,6 +249,21 @@ const createTypeOptions = [
     { label: 'D311 - Declaratie TVA colectat (cod anulat)', value: 'd311' },
   ],
 ]
+
+// SAF-T follows the VAT period of the company (quarterly when it is not registered for VAT),
+// so the period selector is offered for it and preselected from the company settings.
+const periodTypeOptions = computed(() => [
+  { label: $t('declarations.periodTypes.monthly'), value: 'monthly' },
+  { label: $t('declarations.periodTypes.quarterly'), value: 'quarterly' },
+])
+
+const createNeedsPeriodType = computed(() => createForm.type === 'd406')
+
+watch(() => createForm.type, (type) => {
+  if (type !== 'd406') return
+  const company = companyStore.currentCompany
+  createForm.periodType = company?.vatPayer === false ? 'quarterly' : (company?.vatPeriod ?? 'monthly')
+})
 
 async function onCreate() {
   submitting.value = true
@@ -395,6 +411,7 @@ const typeOptions = [
   { label: 'D301', value: 'd301' },
   { label: 'D311', value: 'd311' },
   { label: 'D398', value: 'd398' },
+  { label: 'D406', value: 'd406' },
 ]
 
 const statusOptions = [
@@ -888,6 +905,14 @@ function onRowClick(_e: Event, row: any) {
               <USelectMenu
                 v-model="createForm.type"
                 :items="createTypeOptions"
+                value-key="value"
+              />
+            </UFormField>
+
+            <UFormField v-if="createNeedsPeriodType" :label="$t('declarations.periodType')" :hint="$t('declarations.periodTypeHint')">
+              <USelectMenu
+                v-model="createForm.periodType"
+                :items="periodTypeOptions"
                 value-key="value"
               />
             </UFormField>

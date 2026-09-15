@@ -2,6 +2,7 @@
 const props = defineProps<{
   open: boolean
   initialImportType?: string
+  initialSource?: string
 }>()
 
 const emit = defineEmits<{
@@ -18,16 +19,52 @@ const selectedSource = ref<string | null>(null)
 const selectedImportType = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const columnMapping = ref<Record<string, string>>({})
-const importOptions = ref<Record<string, any>>({ markAsPaid: false })
+const importOptions = ref<Record<string, any>>({ markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '' })
 
 const isInvoiceImport = computed(() =>
   selectedImportType.value?.startsWith('invoices') ?? false,
 )
 
+// Statements of a platform (Uber, Bolt, Glovo, Tazz) are grouped into documents
+const isPlatformImport = computed(() => selectedImportType.value === 'platform_sales')
+// Shop order exports carry every order, paid or not
+const isShopOrderImport = computed(() =>
+  selectedImportType.value === 'invoices_issued'
+  && ['woocommerce', 'prestashop'].includes(selectedSource.value ?? ''),
+)
+const isReceiptImport = computed(() => selectedImportType.value === 'receipts')
+
+const groupByOptions = computed(() => [
+  { value: 'week', label: $t('importExport.groupByWeek') },
+  { value: 'day', label: $t('importExport.groupByDay') },
+  { value: 'order', label: $t('importExport.groupByOrder') },
+])
+
+/** Only the options the selected import actually uses, without the empty ones. */
+function collectImportOptions(): Record<string, any> | undefined {
+  const opts: Record<string, any> = {}
+  if (isInvoiceImport.value) opts.markAsPaid = importOptions.value.markAsPaid
+  if (isShopOrderImport.value) opts.includeAll = importOptions.value.includeAll
+  if (isPlatformImport.value) {
+    opts.groupBy = importOptions.value.groupBy
+    if (importOptions.value.platformName) opts.platformName = importOptions.value.platformName
+    if (importOptions.value.platformCif) opts.platformCif = importOptions.value.platformCif
+  }
+  if (isReceiptImport.value && importOptions.value.cashRegisterName) {
+    opts.cashRegisterName = importOptions.value.cashRegisterName
+  }
+
+  return Object.keys(opts).length > 0 ? opts : undefined
+}
+
 // Apply initialImportType when the wizard opens
 watch(() => props.open, (isOpen) => {
-  if (isOpen && props.initialImportType) {
+  if (!isOpen) return
+  if (props.initialImportType) {
     selectedImportType.value = props.initialImportType
+  }
+  if (props.initialSource) {
+    selectedSource.value = props.initialSource
   }
 })
 
@@ -66,8 +103,7 @@ async function handleNext() {
     currentStep.value = 3
   }
   else if (currentStep.value === 3) {
-    const opts = isInvoiceImport.value ? importOptions.value : undefined
-    const success = await importStore.executeImport(importStore.currentJob!.id, opts)
+    const success = await importStore.executeImport(importStore.currentJob!.id, collectImportOptions())
     if (success) {
       currentStep.value = 4
       importStore.fetchHistory()
@@ -145,7 +181,7 @@ function handleClose() {
   selectedImportType.value = null
   selectedFile.value = null
   columnMapping.value = {}
-  importOptions.value = { markAsPaid: false }
+  importOptions.value = { markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '' }
   importStore.currentJob = null
   importStore.progress = null
   emit('update:open', false)
@@ -233,6 +269,45 @@ onUnmounted(() => {
           :column-mapping="columnMapping"
           :total-rows="importStore.currentJob?.totalRows ?? 0"
         />
+
+        <!-- Platform statements: how the rows are grouped into documents -->
+        <div v-if="isPlatformImport" class="space-y-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div>
+            <p class="text-sm font-medium">{{ $t('importExport.groupBy') }}</p>
+            <p class="text-xs text-(--ui-text-muted) mb-2">{{ $t('importExport.groupByDescription') }}</p>
+            <USelectMenu
+              v-model="importOptions.groupBy"
+              :items="groupByOptions"
+              value-key="value"
+              label-key="label"
+              class="w-full sm:w-64"
+            />
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField :label="$t('importExport.platformName')" :help="$t('importExport.platformIdentityHint')">
+              <UInput v-model="importOptions.platformName" class="w-full" />
+            </UFormField>
+            <UFormField :label="$t('importExport.platformCif')">
+              <UInput v-model="importOptions.platformCif" class="w-full" />
+            </UFormField>
+          </div>
+        </div>
+
+        <!-- Shop orders: statuses that are not paid / completed -->
+        <div v-if="isShopOrderImport" class="flex items-start gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <USwitch v-model="importOptions.includeAll" />
+          <div>
+            <p class="text-sm font-medium">{{ $t('importExport.includeAll') }}</p>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('importExport.includeAllDescription') }}</p>
+          </div>
+        </div>
+
+        <!-- Cash register: the name the receipts carry -->
+        <div v-if="isReceiptImport" class="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <UFormField :label="$t('importExport.cashRegisterName')" :help="$t('importExport.cashRegisterNameHint')">
+            <UInput v-model="importOptions.cashRegisterName" class="w-full sm:w-80" />
+          </UFormField>
+        </div>
 
         <!-- Mark as paid option for invoice imports -->
         <div v-if="isInvoiceImport" class="flex items-start gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700">

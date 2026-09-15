@@ -19,6 +19,7 @@ class NotificationService
         'invoice.anaf_missing_token',
         'fiscal.deadline',
         'partner.status_changed',
+        'expiry.due',
         'token.expiring_soon',
         'export_ready',
         'payment.received',

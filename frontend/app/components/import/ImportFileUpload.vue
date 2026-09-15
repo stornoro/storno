@@ -7,19 +7,29 @@ const props = defineProps<{
 
 const file = defineModel<File | null>()
 
-const { t: $t } = useI18n()
+const { t: $t, te } = useI18n()
 const importStore = useImportStore()
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
+// Platform statements and shop exports ship a template in their own column layout
+const SOURCES_WITH_TEMPLATE = ['uber', 'bolt', 'glovo', 'tazz', 'woocommerce', 'prestashop']
+
 const acceptedFormats = computed(() => {
   if (props.source === 'saga') return '.csv,.xlsx,.xml'
   if (props.source === 'icefact') return '.csv'
+  if (props.source === 'cash_register') return '.xml,.zip'
   return '.csv,.xlsx'
 })
 
 const showTemplateLink = computed(() => {
-  return props.source === 'generic' && props.importType
+  return !!props.importType && (props.source === 'generic' || SOURCES_WITH_TEMPLATE.includes(props.source))
+})
+
+// Where to download the export in each platform (1-2 lines)
+const instructions = computed(() => {
+  const key = `importExport.sourceInstructions.${props.source}`
+  return te(key) ? $t(key) : null
 })
 
 function handleDrop(e: DragEvent) {
@@ -54,7 +64,7 @@ function formatSize(bytes: number): string {
 
 function handleDownloadTemplate() {
   if (props.importType) {
-    importStore.downloadTemplate(props.importType)
+    importStore.downloadTemplate(props.importType, SOURCES_WITH_TEMPLATE.includes(props.source) ? props.source : undefined)
   }
 }
 </script>
@@ -68,6 +78,12 @@ function handleDownloadTemplate() {
       class="hidden"
       @change="handleFileSelect"
     />
+
+    <!-- Where to find the export in the source platform -->
+    <div v-if="instructions" class="flex items-start gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+      <UIcon name="i-lucide-info" class="w-4 h-4 mt-0.5 text-(--ui-text-muted) shrink-0" />
+      <p class="text-xs text-(--ui-text-muted)">{{ instructions }}</p>
+    </div>
 
     <!-- Template download link -->
     <div v-if="showTemplateLink" class="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">

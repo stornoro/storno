@@ -1,0 +1,4 @@
+ID;Reference;New client;Delivery;Customer;Total;Payment;Status;Date
+501;XKBKNABJK;Yes;România;I. Popescu;165,00 lei;Card;Livrat;2026-09-07 10:12:00
+502;QWERTYUIO;No;România;M. Ionescu;199,00 lei;Ramburs;Plată acceptată;2026-09-08 14:30:00
+503;ZXCVBNMAS;No;România;V. Georgescu;60,00 lei;Card;Anulat;2026-09-09 09:00:00

@@ -133,6 +133,9 @@ const { isModuleEnabled } = useModules()
     <!-- Fiscal calendar: the next declaration deadlines -->
     <DashboardFiscalCalendarCard v-else-if="id === 'fiscal-calendar-card'" />
 
+    <!-- Fleet: vehicle documents and company items about to expire -->
+    <DashboardExpiriesCard v-else-if="id === 'expiries-card'" />
+
     <!-- Due Today Card -->
     <DashboardDueTodayCard
       v-else-if="id === 'due-today-card'"

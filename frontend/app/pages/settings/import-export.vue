@@ -11,6 +11,7 @@ const toast = useToast()
 
 const wizardOpen = ref(false)
 const wizardImportType = ref<string | undefined>(undefined)
+const wizardSource = ref<string | undefined>(undefined)
 const restoreModalOpen = ref(false)
 
 // Shown right after the first company is created (?onboarding=1)
@@ -57,11 +58,30 @@ const migrationSteps = [
 
 function openWizardForStep(importType: string) {
   wizardImportType.value = importType
+  wizardSource.value = undefined
   wizardOpen.value = true
 }
 
 function openWizardGeneric() {
   wizardImportType.value = undefined
+  wizardSource.value = undefined
+  wizardOpen.value = true
+}
+
+// Sales that arrive as a platform statement, a shop export or a cash register file
+const salesSources = computed(() => [
+  { key: 'uber', importType: 'platform_sales', label: 'Uber', icon: 'i-lucide-car', color: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-100 dark:bg-gray-800' },
+  { key: 'bolt', importType: 'platform_sales', label: 'Bolt', icon: 'i-lucide-car', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+  { key: 'glovo', importType: 'platform_sales', label: 'Glovo', icon: 'i-lucide-bike', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+  { key: 'tazz', importType: 'platform_sales', label: 'Tazz', icon: 'i-lucide-bike', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' },
+  { key: 'woocommerce', importType: 'invoices_issued', label: 'WooCommerce', icon: 'i-lucide-shopping-cart', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+  { key: 'prestashop', importType: 'invoices_issued', label: 'PrestaShop', icon: 'i-lucide-shopping-bag', color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-900/30' },
+  { key: 'cash_register', importType: 'receipts', label: $t('importExport.sourceCashRegister'), icon: 'i-lucide-printer', color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-100 dark:bg-teal-900/30' },
+])
+
+function openWizardForSource(source: string, importType: string) {
+  wizardImportType.value = importType
+  wizardSource.value = source
   wizardOpen.value = true
 }
 
@@ -90,6 +110,12 @@ const sourceLabels: Record<string, string> = {
   bolt: 'Bolt',
   facturis: 'Facturis',
   emag: 'eMag',
+  uber: 'Uber',
+  glovo: 'Glovo',
+  tazz: 'Tazz',
+  woocommerce: 'WooCommerce',
+  prestashop: 'PrestaShop',
+  cash_register: 'Casa de marcat',
   generic: 'Generic',
 }
 
@@ -99,6 +125,8 @@ const importTypeLabels: Record<string, string> = {
   invoices_issued: 'Facturi emise',
   invoices_received: 'Facturi primite',
   recurring_invoices: 'Facturi recurente',
+  platform_sales: 'Vanzari prin platforme',
+  receipts: 'Bonuri fiscale',
 }
 
 const statusColors: Record<string, string> = {
@@ -470,6 +498,39 @@ onUnmounted(() => {
       </div>
     </UPageCard>
 
+    <!-- Section 1b: Vanzari din platforme, magazine online si casa de marcat -->
+    <UPageCard variant="subtle">
+      <div class="rounded-lg bg-gradient-to-r from-teal-500/10 via-teal-500/5 to-transparent p-6 mb-6">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-teal-500/20 flex items-center justify-center shrink-0">
+            <UIcon name="i-lucide-store" class="w-6 h-6 text-teal-600 dark:text-teal-400" />
+          </div>
+          <div>
+            <h2 class="text-lg font-semibold">{{ $t('importExport.salesImportsTitle') }}</h2>
+            <p class="text-sm text-(--ui-text-muted) mt-1">{{ $t('importExport.salesImportsDescription') }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <button
+          v-for="src in salesSources"
+          :key="src.key"
+          type="button"
+          class="flex items-start gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-600 hover:bg-teal-50/50 dark:hover:bg-teal-900/10 transition-colors text-left"
+          @click="openWizardForSource(src.key, src.importType)"
+        >
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" :class="src.bg">
+            <UIcon :name="src.icon" class="w-5 h-5" :class="src.color" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium">{{ src.label }}</p>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t(`importExport.sourceInstructions.${src.key}`) }}</p>
+          </div>
+        </button>
+      </div>
+    </UPageCard>
+
     <!-- Section 2: Importa extras + borderou -->
     <UPageCard variant="subtle">
       <div class="rounded-lg bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-6 mb-6">
@@ -728,6 +789,7 @@ onUnmounted(() => {
     <ImportWizard
       :open="wizardOpen"
       :initial-import-type="wizardImportType"
+      :initial-source="wizardSource"
       @update:open="wizardOpen = $event"
       @completed="handleWizardComplete"
     />

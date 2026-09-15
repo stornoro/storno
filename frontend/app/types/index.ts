@@ -844,9 +844,9 @@ export interface FiscalCalendarItem {
   dueDate: string
   nominalDueDate: string
   daysLeft: number
-  period: { year: number, month?: number, quarter?: number, from: string, to: string   dosarId?: string
+  period: { year: number, month?: number, quarter?: number, from: string, to: string }
+  dosarId?: string
   dosarTitle?: string
-}
   appliesBecause: string
   declarationType: string | null
   status: 'due' | 'overdue' | 'filed'
@@ -2144,3 +2144,74 @@ export interface CreateDeclarationPayload {
   month: number
   periodType?: string
 }
+
+// ── Fleet (parc auto) and expiry items ──────────────────────────────
+export type VehicleOwnership = 'own' | 'leasing' | 'rented'
+export type ExpiryKind = 'rca' | 'itp' | 'rovinieta' | 'casco' | 'tahograf' | 'extinctor' | 'trusa_medicala' | 'licenta_transport' | 'copie_conforma' | 'leasing' | 'certificat_digital' | 'contract' | 'autorizatie' | 'other'
+export type ExpiryStatus = 'ok' | 'due' | 'expired' | 'renewed'
+
+export interface Vehicle {
+  id: string
+  companyId: string
+  plate: string
+  vin: string | null
+  make: string | null
+  model: string | null
+  year: number | null
+  fuel: string | null
+  ownership: VehicleOwnership
+  driverName: string | null
+  notes?: string | null
+  active: boolean
+  displayName: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** Flat row of an expiry item as returned by /expiries/upcoming and inside the vehicle list */
+export interface ExpiryRow {
+  id: string
+  kind: ExpiryKind
+  label: string
+  number: string | null
+  provider: string | null
+  validFrom: string | null
+  expiresAt: string
+  daysLeft: number
+  status: ExpiryStatus
+  remindDaysBefore: number
+  vehicleId: string | null
+  vehicle: { id: string, plate: string, displayName: string } | null
+  notes: string | null
+}
+
+export interface ExpiryItem extends Omit<ExpiryRow, 'notes'> {
+  companyId: string
+  notes?: string | null
+  renewedFromId: string | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface VehicleExpirySummary {
+  nextExpiry: ExpiryRow | null
+  counts: { expired: number, due: number, ok: number }
+}
+
+export interface VehicleListResponse {
+  data: Vehicle[]
+  expiries: Record<string, VehicleExpirySummary>
+  total: number
+  ownerships: VehicleOwnership[]
+  fuels: string[]
+}
+
+export interface VehicleDetail {
+  vehicle: Vehicle
+  expiries: ExpiryItem[]
+  counts: { total: number, expired: number, due: number, ok: number }
+  nextExpiry: ExpiryRow | null
+}
+
+export interface ExpiryKindInfo { kind: ExpiryKind, label: string, vehicle: boolean, months: number | null }

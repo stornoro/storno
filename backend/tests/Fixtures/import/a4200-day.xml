@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<msj idM="AB00000001202609072130000012">
+  <bon idB="AB000000012026090710120000120001" totB="121.00" totTva="21.00">
+    <cote cota="21" tva="21.00"/>
+    <pl tipP="3" valPl="121.00"/>
+  </bon>
+  <bon idB="AB000000012026090712450000120002" totB="55.50" totTva="5.50">
+    <cote cota="11" tva="5.50"/>
+    <pl tipP="1" valPl="55.50"/>
+  </bon>
+  <bon idB="AB000000012026090718020000120003" totB="232.00" totTva="32.00" cif="12345678">
+    <cote cota="21" tva="21.00"/>
+    <cote cota="11" tva="11.00"/>
+    <pl tipP="3" valPl="100.00"/>
+    <pl tipP="1" valPl="132.00"/>
+  </bon>
+  <rB idR="AB00000001202609072130000012" nrAv="0" nrB="3" totB="408.50" totTva="58.50" nrBC="1" totBC="232.00" nrA="0" totA="0.00" nrR="0" totR="0.00" nrM="0" totM="0.00" totTvaC="32.00" totTaxe="0.00" totNet="0.00" sume_serv_in="0.00" sume_serv_out="0.00" monRef="RON">
+    <pl tipP="3" valPl="221.00" monPl="RON"/>
+    <pl tipP="1" valPl="187.50" monPl="RON"/>
+    <coteZ cota="21" valOp="200.00" tva="42.00"/>
+    <coteZ cota="11" valOp="150.00" tva="16.50"/>
+  </rB>
+</msj>

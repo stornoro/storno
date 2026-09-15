@@ -129,6 +129,16 @@ class Receipt
     #[Groups(['receipt:list', 'receipt:detail'])]
     private ?string $fiscalNumber = null;
 
+    // Serial number of the fiscal cash register that printed the receipt (cash register imports).
+    #[ORM\Column(length: 30, nullable: true)]
+    #[Groups(['receipt:detail'])]
+    private ?string $deviceSerial = null;
+
+    // The import job that created this receipt, so a revert can remove it.
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?ImportJob $importJob = null;
+
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['receipt:list', 'receipt:detail'])]
     private ?string $customerName = null;
@@ -482,6 +492,30 @@ class Receipt
     public function setFiscalNumber(?string $fiscalNumber): static
     {
         $this->fiscalNumber = $fiscalNumber;
+
+        return $this;
+    }
+
+    public function getDeviceSerial(): ?string
+    {
+        return $this->deviceSerial;
+    }
+
+    public function setDeviceSerial(?string $deviceSerial): static
+    {
+        $this->deviceSerial = $deviceSerial;
+
+        return $this;
+    }
+
+    public function getImportJob(): ?ImportJob
+    {
+        return $this->importJob;
+    }
+
+    public function setImportJob(?ImportJob $importJob): static
+    {
+        $this->importJob = $importJob;
 
         return $this;
     }

@@ -12,6 +12,7 @@ use App\Enum\DocumentType;
 use App\Enum\InvoiceDirection;
 use App\Repository\ClientRepository;
 use App\Repository\InvoiceRepository;
+use App\Repository\VatRateRepository;
 use App\Service\Import\ImportResult;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -37,6 +38,7 @@ class InvoicePersister implements EntityPersisterInterface
         private readonly EntityManagerInterface $entityManager,
         private readonly InvoiceRepository $invoiceRepository,
         private readonly ClientRepository $clientRepository,
+        private readonly ?VatRateRepository $vatRateRepository = null,
     ) {}
 
     public function supports(string $importType): bool
@@ -95,6 +97,14 @@ class InvoicePersister implements EntityPersisterInterface
             return;
         }
 
+        // Shop exports carry every order; only paid / completed ones become invoices unless asked otherwise
+        if (array_key_exists('_statusPaid', $mappedData) && $mappedData['_statusPaid'] === false
+            && empty($mappedData['_importOptions']['includeAll'])) {
+            $result->incrementSkipped();
+
+            return;
+        }
+
         $senderCif   = !empty($mappedData['senderCif'])   ? trim($mappedData['senderCif'])   : null;
         $receiverCif = !empty($mappedData['receiverCif']) ? trim($mappedData['receiverCif']) : null;
         $direction   = $mappedData['direction'] ?? null;
@@ -141,6 +151,11 @@ class InvoicePersister implements EntityPersisterInterface
             $this->pendingCache[$dedupKey] = new Invoice(); // placeholder to skip future multi-line rows
             $result->incrementSkipped();
             return;
+        }
+
+        // Exports that only know the gross amount: split it with the company's default VAT rate
+        if (!empty($mappedData['_vatIncludedUnknownRate'])) {
+            $mappedData = $this->splitGrossWithCompanyRate($mappedData, $company);
         }
 
         // Create the invoice
@@ -267,7 +282,104 @@ class InvoicePersister implements EntityPersisterInterface
         if ($clientId) {
             // Use getReference — no DB query, just sets the FK
             $invoice->setClient($this->entityManager->getReference(Client::class, Uuid::fromString($clientId)));
+
+            return;
         }
+
+        // Shop orders: the customer becomes a client (revertible with the import)
+        if ($isIssued && !empty($data['_createClient'])) {
+            $invoice->setClient($this->createClient($company, $data, $clientName, $clientCif, $clientEmail));
+        }
+    }
+
+    /**
+     * Create the client of an issued invoice from the row's receiver / billing
+     * fields. Customers without a name are pooled under "Persoană fizică".
+     */
+    private function createClient(Company $company, array $data, ?string $name, ?string $cif, ?string $email): Client
+    {
+        $companyId = $company->getId()->toRfc4122();
+        $name = trim((string) $name) !== '' ? trim((string) $name) : 'Persoană fizică';
+        $cnp = !empty($data['receiverCnp']) ? preg_replace('/\s+/', '', (string) $data['receiverCnp']) : null;
+        $cnp = $cnp !== null && preg_match('/^\d{13}$/', $cnp) ? $cnp : null;
+
+        $nameKey = $companyId . ':name:' . mb_strtolower($name);
+        if ($cif === null && $email === null && $cnp === null && isset($this->clientCache[$nameKey])) {
+            return $this->entityManager->getReference(Client::class, Uuid::fromString($this->clientCache[$nameKey]));
+        }
+
+        $client = new Client();
+        $client->setCompany($company);
+        $client->setName(mb_substr($name, 0, 255));
+        $client->setType($cif ? 'company' : 'individual');
+        if ($cif) {
+            $cifUpper = strtoupper(trim($cif));
+            if (str_starts_with($cifUpper, 'RO')) {
+                $client->setVatCode($cifUpper);
+                $client->setCui(substr($cifUpper, 2));
+                $client->setIsVatPayer(true);
+            } else {
+                $client->setCui($cifUpper);
+            }
+        }
+        if ($cnp !== null) {
+            $client->setCnp($cnp);
+        }
+        foreach (['clientEmail' => 'setEmail', 'clientPhone' => 'setPhone', 'clientAddress' => 'setAddress', 'clientCity' => 'setCity', 'clientCounty' => 'setCounty', 'clientPostalCode' => 'setPostalCode'] as $field => $setter) {
+            if (!empty($data[$field])) {
+                $client->$setter(mb_substr(trim((string) $data[$field]), 0, 255));
+            }
+        }
+        if (!empty($data['clientCountry']) && preg_match('/^[A-Za-z]{2}$/', trim((string) $data['clientCountry']))) {
+            $client->setCountry(strtoupper(trim((string) $data['clientCountry'])));
+        }
+        $client->setSource('import:' . ($data['_source'] ?? 'generic'));
+        if (isset($data['_importJob'])) {
+            $client->setImportJob($data['_importJob']);
+        }
+        $this->entityManager->persist($client);
+
+        $id = $client->getId()->toRfc4122();
+        $this->clientCache[$nameKey] = $id;
+        if ($cif) {
+            $this->clientCache[$companyId . ':cui:' . trim($cif)] = $id;
+        }
+        if ($email) {
+            $this->clientCache[$companyId . ':email:' . mb_strtolower(trim($email))] = $id;
+        }
+
+        return $client;
+    }
+
+    /**
+     * Gross-only exports (order total with VAT included, rate unknown): use the
+     * company's default VAT rate when it is a VAT payer, no VAT otherwise.
+     */
+    private function splitGrossWithCompanyRate(array $data, Company $company): array
+    {
+        $gross = (float) ($data['total'] ?? 0);
+        $rate = 0.0;
+        if ($company->isVatPayer()) {
+            $default = $this->vatRateRepository?->findDefaultByCompany($company);
+            $rate = $default !== null ? (float) $default->getRate() : 21.0;
+        }
+        $net = $rate > 0 ? round($gross / (1 + $rate / 100), 2) : $gross;
+        $vat = round($gross - $net, 2);
+
+        $data['subtotal'] = number_format($net, 2, '.', '');
+        $data['vatTotal'] = number_format($vat, 2, '.', '');
+        $data['total'] = number_format($gross, 2, '.', '');
+        foreach ($data['lines'] ?? [] as $i => $line) {
+            $lineGross = (float) ($line['lineTotal'] ?? $gross);
+            $lineNet = $rate > 0 ? round($lineGross / (1 + $rate / 100), 2) : $lineGross;
+            $data['lines'][$i]['unitPrice'] = number_format($lineNet / max((float) ($line['quantity'] ?? 1), 0.0001), 2, '.', '');
+            $data['lines'][$i]['lineTotal'] = number_format($lineNet, 2, '.', '');
+            $data['lines'][$i]['vatAmount'] = number_format($lineGross - $lineNet, 2, '.', '');
+            $data['lines'][$i]['vatRate'] = number_format($rate, 2, '.', '');
+            $data['lines'][$i]['vatCategoryCode'] = $rate > 0 ? 'S' : ($company->isVatPayer() ? 'E' : 'O');
+        }
+
+        return $data;
     }
 
     /**
@@ -326,6 +438,13 @@ class InvoicePersister implements EntityPersisterInterface
                 $direction = 'incoming';
             }
         }
+        // Mappers describe the direction the way their export does ("issued" /
+        // "received"); the entity knows outgoing / incoming.
+        $direction = match ($direction) {
+            'issued', 'sale', 'sales', 'out' => 'outgoing',
+            'received', 'purchase', 'in' => 'incoming',
+            default => $direction,
+        };
         if (!empty($direction)) {
             try {
                 $invoice->setDirection(InvoiceDirection::from($direction));

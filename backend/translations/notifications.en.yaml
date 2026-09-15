@@ -72,6 +72,28 @@ notification:
     deadline_today:
       title: '%company%: deadline today'
       message: '%dosar% — %label%: due today (%date%).'
+  expiry:
+    due:
+      title: '%subject%: %label% expires in %days% days'
+      message: '%label% (%kind%) for %subject% expires on %date%. Renew it and update the date in Storno.'
+    due_today:
+      title: '%subject%: %label% expires today'
+      message: '%label% (%kind%) for %subject% expires today (%date%).'
+    kind:
+      rca: 'RCA insurance'
+      itp: 'periodic technical inspection'
+      rovinieta: 'road vignette'
+      casco: 'CASCO insurance'
+      tahograf: 'tachograph calibration'
+      extinctor: 'fire extinguisher'
+      trusa_medicala: 'first-aid kit'
+      licenta_transport: 'transport licence'
+      copie_conforma: 'certified copy'
+      leasing: 'leasing contract'
+      certificat_digital: 'digital certificate'
+      contract: 'contract'
+      autorizatie: 'permit'
+      other: 'other'
   spv:
     document_received:
       title: '%company%: %type%'

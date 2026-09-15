@@ -23,12 +23,17 @@ const sourceBranding: Record<string, { color: string; initials: string }> = {
   bolt: { color: '#34D186', initials: 'BT' },
   facturis: { color: '#E91E63', initials: 'FC' },
   emag: { color: '#F5A623', initials: 'eM' },
+  uber: { color: '#000000', initials: 'UB' },
+  glovo: { color: '#FFC244', initials: 'GL' },
+  tazz: { color: '#EE2E24', initials: 'TZ' },
+  woocommerce: { color: '#7F54B3', initials: 'WC' },
+  prestashop: { color: '#DF0067', initials: 'PS' },
+  cash_register: { color: '#0F766E', initials: 'CM' },
   generic: { color: '#9E9E9E', initials: '?' },
 }
 
 // Sources that are coming soon (shown in UI but not selectable)
 const comingSoonSources = [
-  { key: 'uber', label: 'Uber', color: '#000000', initials: 'UB' },
   { key: 'blue', label: 'Blue', color: '#0066FF', initials: 'BL' },
 ]
 
@@ -51,7 +56,7 @@ const availableImportTypes = computed(() => {
 })
 
 function formatBadge(fmt: string): string {
-  if (fmt === 'saga_xml') return 'XML'
+  if (fmt === 'saga_xml' || fmt === 'a4200_xml') return 'XML'
   return fmt.toUpperCase()
 }
 </script>

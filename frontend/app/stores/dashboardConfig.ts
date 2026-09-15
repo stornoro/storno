@@ -47,6 +47,7 @@ export const WIDGET_CATALOG: CatalogWidget[] = [
   { id: 'top-outstanding-clients', name_key: 'dashboard.widgets.topOutstandingClients.name', description_key: 'dashboard.widgets.topOutstandingClients.description', size: 'lg', category: 'clients' },
   { id: 'dosare-actions', name_key: 'dashboard.widgets.dosareActions.name', description_key: 'dashboard.widgets.dosareActions.description', size: 'md', category: 'activity' },
   { id: 'fiscal-calendar-card', name_key: 'dashboard.widgets.fiscalCalendar.name', description_key: 'dashboard.widgets.fiscalCalendar.description', size: 'md', category: 'activity' },
+  { id: 'expiries-card', name_key: 'dashboard.widgets.expiries.name', description_key: 'dashboard.widgets.expiries.description', size: 'md', category: 'activity' },
 ]
 
 // Default config: original 12 widgets visible, 3 new ones hidden
@@ -68,6 +69,7 @@ const DEFAULT_CONFIG: WidgetConfig[] = [
   { id: 'top-outstanding-clients', position: 14, visible: false },
   { id: 'dosare-actions', position: 15, visible: false },
   { id: 'fiscal-calendar-card', position: 16, visible: false },
+  { id: 'expiries-card', position: 17, visible: false },
 ]
 
 // ── Store ─────────────────────────────────────────────────────────────────────

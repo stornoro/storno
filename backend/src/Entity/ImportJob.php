@@ -108,6 +108,14 @@ class ImportJob
     #[Groups(['import_job:detail'])]
     private ?\DateTimeImmutable $processedAt = null;
 
+    /**
+     * What an aggregating import built: documents per group, daily totals of a
+     * cash register file. Free shape per import type, flat scalars and small lists.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['import_job:detail'])]
+    private ?array $summary = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -342,6 +350,18 @@ class ImportJob
     public function setProcessedAt(?\DateTimeImmutable $processedAt): static
     {
         $this->processedAt = $processedAt;
+
+        return $this;
+    }
+
+    public function getSummary(): ?array
+    {
+        return $this->summary;
+    }
+
+    public function setSummary(?array $summary): static
+    {
+        $this->summary = $summary;
 
         return $this;
     }

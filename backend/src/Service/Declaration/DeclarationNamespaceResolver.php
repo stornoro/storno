@@ -21,6 +21,15 @@ use App\Model\Declaration\DukValidationResult;
  */
 final class DeclarationNamespaceResolver
 {
+    /**
+     * Forms whose instance namespace cannot be read from the XSD: ANAF's SAF-T schema puts
+     * its types in `…:d406t:…` (the file's targetNamespace) while a declaration is written in
+     * `…:d406:…`, the namespace the D406 validator expects on <AuditFile>.
+     */
+    private const INSTANCE_NAMESPACES = [
+        'd406' => 'mfp:anaf:dgti:d406:declaratie:v1',
+    ];
+
     /** @var array<string, string|null> */
     private array $xsdCache = [];
 
@@ -33,6 +42,9 @@ final class DeclarationNamespaceResolver
     public function fromXsd(string $type): ?string
     {
         $type = strtolower($type);
+        if (isset(self::INSTANCE_NAMESPACES[$type])) {
+            return self::INSTANCE_NAMESPACES[$type];
+        }
         if (array_key_exists($type, $this->xsdCache)) {
             return $this->xsdCache[$type];
         }

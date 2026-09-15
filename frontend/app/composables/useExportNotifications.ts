@@ -147,6 +147,7 @@ const _useNotifications = () => {
       'proforma.expiring_soon': 'i-lucide-clock',
       'proforma.expired': 'i-lucide-calendar-x',
       'fiscal.deadline': 'i-lucide-calendar-days',
+      'expiry.due': 'i-lucide-car',
       'partner.status_changed': 'i-lucide-shield-alert',
     }
     const colorMap: Record<string, string> = {
@@ -164,6 +165,7 @@ const _useNotifications = () => {
       'proforma.expiring_soon': 'warning',
       'proforma.expired': 'warning',
       'fiscal.deadline': 'warning',
+      'expiry.due': 'warning',
       'partner.status_changed': 'warning',
     }
 
