@@ -123,6 +123,24 @@ export function useAnafAgent() {
     throw new Error(PIN_REQUIRED_MESSAGE)
   }
 
+  /**
+   * Can an operation with this certificate go ahead without asking for a PIN now?
+   * Yes when the browser session holds it, when the agent remembers it in the OS
+   * secure store, or when the certificate takes no PIN at all (cloud / software).
+   * Pages must use this instead of getSavedPin() alone before opening a "no PIN" dialog.
+   */
+  async function pinAvailable(certificateId: string): Promise<boolean> {
+    if (getSavedPin(certificateId)) return true
+    if (isPinlessCertificate(certificateId)) return true
+    if (await hasStoredPin(certificateId)) return true
+    try {
+      await listCertificates()
+      return isPinlessCertificate(certificateId)
+    } catch {
+      return false
+    }
+  }
+
   /** Does the agent keep this certificate's PIN? Older agents (no /pin route) and an offline agent answer no. */
   async function hasStoredPin(certificateId: string): Promise<boolean> {
     if (pinStoredIds.value.includes(certificateId)) return true
@@ -734,6 +752,7 @@ export function useAnafAgent() {
     clearPin,
     agentSecretStore,
     hasStoredPin,
+    pinAvailable,
     isPinlessCertificate,
     isPinlessCert,
     storePinOnAgent,
