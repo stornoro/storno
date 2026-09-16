@@ -5129,7 +5129,7 @@ export default defineI18nLocale(async () => {
     fuel: { benzina: 'Benzina', motorina: 'Motorina', gpl: 'GPL', hibrid: 'Hibrid', electric: 'Electric', altul: 'Altul' },
     filters: { allKinds: 'Toate tipurile', allVehicles: 'Toate vehiculele', includeClosed: 'Include reinnoite' },
     form: {
-      plate: 'Numar inmatriculare', vin: 'Serie sasiu (VIN)', make: 'Marca', model: 'Model', year: 'An fabricatie', fuel: 'Combustibil', ownership: 'Detinere', driverName: 'Sofer', notes: 'Note', active: 'Vehicul activ',
+      plate: 'Numar inmatriculare', plateHint: 'Lasa gol pentru vehicule neinmatriculate (ATV, remorca, utilaj)', vin: 'Serie sasiu (VIN)', make: 'Marca', model: 'Model', year: 'An fabricatie', fuel: 'Combustibil', ownership: 'Detinere', driverName: 'Sofer', notes: 'Note', active: 'Vehicul activ',
       kind: 'Tip', label: 'Denumire', labelHint: 'Gol = denumirea tipului', number: 'Numar polita / document', provider: 'Furnizor / asigurator', validFrom: 'Valabil de la', expiresAt: 'Expira la',
       remindDaysBefore: 'Alerta cu (zile) inainte', remindHint: 'Apoi cu 7 zile, 1 zi si in ziua expirarii', vehicle: 'Vehicul', companyLevel: 'Fara vehicul (la nivel de firma)',
     },

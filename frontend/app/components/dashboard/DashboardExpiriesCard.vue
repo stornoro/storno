@@ -47,7 +47,7 @@ function daysLabel(item: ExpiryRow): string {
           <NuxtLink :to="item.vehicleId ? `/vehicles/${item.vehicleId}` : '/expiries'" class="flex items-start gap-2 py-2 -mx-1 px-1 rounded hover:bg-(--ui-bg-elevated) transition-colors">
             <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="dotColor[item.status]" />
             <div class="min-w-0 flex-1">
-              <div class="text-sm truncate"><span class="font-medium">{{ item.label }}</span><span v-if="item.vehicle"> · {{ item.vehicle.plate }}</span></div>
+              <div class="text-sm truncate"><span class="font-medium">{{ item.label }}</span><span v-if="item.vehicle"> · {{ item.vehicle.displayName || item.vehicle.plate }}</span></div>
               <div class="text-xs text-(--ui-text-muted) truncate">{{ formatDate(item.expiresAt) }} · {{ daysLabel(item) }}</div>
             </div>
           </NuxtLink>

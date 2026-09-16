@@ -180,14 +180,12 @@ class VehicleController extends AbstractController
     /** @param array<string, mixed> $input */
     private function apply(Vehicle $vehicle, array $input): void
     {
-        if (isset($input['plate'])) {
-            $plate = mb_strtoupper(preg_replace('/\s+/', ' ', trim((string) $input['plate'])) ?? '');
-            if ($plate === '' || mb_strlen($plate) > 20) {
-                throw new \InvalidArgumentException('Numărul de înmatriculare este obligatoriu (max. 20 caractere).');
+        if (array_key_exists('plate', $input)) {
+            $plate = mb_strtoupper(preg_replace('/\s+/', ' ', trim((string) ($input['plate'] ?? ''))) ?? '');
+            if (mb_strlen($plate) > 20) {
+                throw new \InvalidArgumentException('Numărul de înmatriculare poate avea maximum 20 de caractere.');
             }
             $vehicle->setPlate($plate);
-        } elseif ($vehicle->getPlate() === '') {
-            throw new \InvalidArgumentException('Numărul de înmatriculare (plate) este obligatoriu.');
         }
         foreach (['vin' => 32, 'make' => 60, 'model' => 60, 'driverName' => 120] as $key => $max) {
             if (array_key_exists($key, $input)) {
@@ -222,6 +220,10 @@ class VehicleController extends AbstractController
             $vehicle->setActive(filter_var($input['active'], FILTER_VALIDATE_BOOLEAN));
         }
         $vehicle->touch();
+        if ($vehicle->getPlate() === '' && ($vehicle->getVin() === null || $vehicle->getVin() === '')) {
+            // Unregistered vehicles (ATV, trailer, machine) have no plate; the VIN identifies them instead.
+            throw new \InvalidArgumentException('Completează numărul de înmatriculare sau seria de șasiu (VIN).');
+        }
     }
 
     /** @return array<string, mixed> */
@@ -252,6 +254,9 @@ class VehicleController extends AbstractController
      */
     private function assertPlateIsFree(Company $company, Vehicle $vehicle): void
     {
+        if ($vehicle->getPlate() === '') {
+            return;
+        }
         $existing = $this->vehicles->findOneByPlate($company, $vehicle->getPlate(), $vehicle);
         if ($existing instanceof Vehicle) {
             throw new \InvalidArgumentException('Există deja un vehicul cu numărul ' . $vehicle->getPlate() . '.');

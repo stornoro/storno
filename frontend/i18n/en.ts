@@ -5128,7 +5128,7 @@ export default defineI18nLocale(async () => {
     fuel: { benzina: 'Petrol', motorina: 'Diesel', gpl: 'LPG', hibrid: 'Hybrid', electric: 'Electric', altul: 'Other' },
     filters: { allKinds: 'All kinds', allVehicles: 'All vehicles', includeClosed: 'Include renewed' },
     form: {
-      plate: 'Plate number', vin: 'VIN', make: 'Make', model: 'Model', year: 'Year', fuel: 'Fuel', ownership: 'Ownership', driverName: 'Driver', notes: 'Notes', active: 'Active vehicle',
+      plate: 'Plate number', plateHint: 'Leave empty for unregistered vehicles (ATV, trailer, machine)', vin: 'VIN', make: 'Make', model: 'Model', year: 'Year', fuel: 'Fuel', ownership: 'Ownership', driverName: 'Driver', notes: 'Notes', active: 'Active vehicle',
       kind: 'Kind', label: 'Label', labelHint: 'Empty = the kind\'s name', number: 'Policy / document number', provider: 'Provider / insurer', validFrom: 'Valid from', expiresAt: 'Expires on',
       remindDaysBefore: 'Remind (days) before', remindHint: 'Then 7 days, 1 day before and on the day', vehicle: 'Vehicle', companyLevel: 'No vehicle (company level)',
     },

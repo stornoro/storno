@@ -137,7 +137,7 @@ function daysText(days: number): string {
               <UIcon name="i-lucide-car" class="text-xl text-muted mt-0.5 shrink-0" />
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-medium">{{ v.plate }}</span>
+                  <span class="font-medium">{{ v.displayName || v.plate }}</span>
                   <span v-if="v.make || v.model" class="text-muted">{{ [v.make, v.model].filter(Boolean).join(' ') }}</span>
                   <UBadge v-if="!v.active" color="neutral" variant="subtle" size="xs">{{ $t('fleet.inactive') }}</UBadge>
                   <UBadge v-if="v.ownership !== 'own'" color="neutral" variant="outline" size="xs">{{ $t(`fleet.ownership.${v.ownership}`) }}</UBadge>
@@ -173,7 +173,7 @@ function daysText(days: number): string {
         <template #body>
           <form class="space-y-3" @submit.prevent="submit">
             <div class="grid grid-cols-2 gap-3">
-              <UFormField :label="$t('fleet.form.plate')" required><UInput v-model="form.plate" placeholder="B 123 ABC" class="w-full" /></UFormField>
+              <UFormField :label="$t('fleet.form.plate')" :hint="$t('fleet.form.plateHint')"><UInput v-model="form.plate" placeholder="B 123 ABC" class="w-full" /></UFormField>
               <UFormField :label="$t('fleet.form.vin')"><UInput v-model="form.vin" class="w-full" /></UFormField>
               <UFormField :label="$t('fleet.form.make')"><UInput v-model="form.make" class="w-full" /></UFormField>
               <UFormField :label="$t('fleet.form.model')"><UInput v-model="form.model" class="w-full" /></UFormField>
@@ -186,7 +186,7 @@ function daysText(days: number): string {
             <UCheckbox v-if="editing" v-model="form.active" :label="$t('fleet.form.active')" />
             <div class="flex justify-end gap-2 pt-2">
               <UButton color="neutral" variant="ghost" @click="modalOpen = false">{{ $t('common.cancel') }}</UButton>
-              <UButton type="submit" :loading="saving" :disabled="!form.plate">{{ $t('common.save') }}</UButton>
+              <UButton type="submit" :loading="saving" :disabled="!form.plate && !form.vin">{{ $t('common.save') }}</UButton>
             </div>
           </form>
         </template>
