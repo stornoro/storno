@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\V1;
 
+use App\Entity\Company;
 use App\Entity\Vehicle;
 use App\Repository\ExpiryItemRepository;
 use App\Repository\VehicleRepository;
@@ -86,6 +87,7 @@ class VehicleController extends AbstractController
         $vehicle = (new Vehicle())->setCompany($company);
         try {
             $this->apply($vehicle, $input);
+            $this->assertPlateIsFree($company, $vehicle);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -119,6 +121,7 @@ class VehicleController extends AbstractController
         }
         try {
             $this->apply($vehicle, $input);
+            $this->assertPlateIsFree($vehicle->getCompany(), $vehicle);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage(), 'code' => 'VALIDATION_FAILED'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -241,5 +244,17 @@ class VehicleController extends AbstractController
         }
 
         return $vehicle;
+    }
+
+    /**
+     * A plate identifies the vehicle for the whole company: two records with the same one
+     * would split its expiry history in two and send duplicate reminders.
+     */
+    private function assertPlateIsFree(Company $company, Vehicle $vehicle): void
+    {
+        $existing = $this->vehicles->findOneByPlate($company, $vehicle->getPlate(), $vehicle);
+        if ($existing instanceof Vehicle) {
+            throw new \InvalidArgumentException('Există deja un vehicul cu numărul ' . $vehicle->getPlate() . '.');
+        }
     }
 }

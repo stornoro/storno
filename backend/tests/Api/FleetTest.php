@@ -189,4 +189,16 @@ class FleetTest extends ApiTestCase
         $this->apiDelete('/api/v1/vehicles/' . $vehicle['id'], $h);
         $this->apiDelete('/api/v1/expiries/' . $far['id'], $h);
     }
+    public function testASecondVehicleWithTheSamePlateIsRefused(): void
+    {
+        $this->login();
+        $h = ['X-Company' => $this->getFirstCompanyId()];
+        $this->apiPost('/api/v1/vehicles', ['plate' => 'B-77-DUP', 'make' => 'Dacia'], $h);
+        $this->assertResponseStatusCodeSame(201);
+
+        $again = $this->apiPost('/api/v1/vehicles', ['plate' => 'b-77-dup', 'make' => 'Dacia'], $h);
+        $this->assertResponseStatusCodeSame(422, json_encode($again));
+        $this->assertSame('VALIDATION_FAILED', $again['code']);
+        $this->assertStringContainsString('B-77-DUP', $again['error']);
+    }
 }

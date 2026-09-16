@@ -32,4 +32,18 @@ class VehicleRepository extends ServiceEntityRepository
 
         return $qb->getQuery()->getResult();
     }
+
+    /** The active or archived vehicle of the company with this plate, ignoring $exclude. */
+    public function findOneByPlate(Company $company, string $plate, ?Vehicle $exclude = null): ?Vehicle
+    {
+        $qb = $this->createQueryBuilder('v')
+            ->where('v.company = :company')->setParameter('company', $company)
+            ->andWhere('UPPER(v.plate) = :plate')->setParameter('plate', mb_strtoupper($plate))
+            ->setMaxResults(1);
+        if ($exclude !== null && $exclude->getId() !== null) {
+            $qb->andWhere('v.id != :self')->setParameter('self', $exclude->getId());
+        }
+
+        return $qb->getQuery()->getOneOrNullResult();
+    }
 }
