@@ -114,7 +114,7 @@ const facts = computed(() => {
             <div class="space-y-1">
               <div class="flex flex-wrap items-center gap-2">
                 <UIcon name="i-lucide-car" class="text-xl text-muted" />
-                <span class="text-lg font-semibold">{{ detail.vehicle.plate }}</span>
+                <span class="text-lg font-semibold">{{ detail.vehicle.displayName || detail.vehicle.plate }}</span>
                 <span v-if="detail.vehicle.make || detail.vehicle.model" class="text-muted">{{ [detail.vehicle.make, detail.vehicle.model].filter(Boolean).join(' ') }}</span>
                 <UBadge v-if="!detail.vehicle.active" color="neutral" variant="subtle" size="xs">{{ $t('fleet.inactive') }}</UBadge>
               </div>

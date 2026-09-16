@@ -122,11 +122,17 @@ class Vehicle
         return $this->company?->getId()?->toRfc4122();
     }
 
-    /** "B 123 ABC · Dacia Logan" for lists and notifications */
+    /**
+     * "B 123 ABC · Dacia Logan" for lists and notifications. An unregistered vehicle
+     * (ATV, trailer, machine) has no plate: it shows its make and model, or its VIN.
+     */
     #[Groups(['vehicle:list', 'vehicle:detail', 'expiry:list'])]
     public function getDisplayName(): string
     {
         $name = trim(($this->make ?? '') . ' ' . ($this->model ?? ''));
+        if ($this->plate === '') {
+            return $name !== '' ? $name : ($this->vin ?? '');
+        }
 
         return $name !== '' ? $this->plate . ' · ' . $name : $this->plate;
     }

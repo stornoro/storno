@@ -201,4 +201,22 @@ class FleetTest extends ApiTestCase
         $this->assertSame('VALIDATION_FAILED', $again['code']);
         $this->assertStringContainsString('B-77-DUP', $again['error']);
     }
+    public function testAnUnregisteredVehicleIsIdentifiedByItsVin(): void
+    {
+        $this->login();
+        $h = ['X-Company' => $this->getFirstCompanyId()];
+
+        $created = $this->apiPost('/api/v1/vehicles', ['vin' => 'TEST0VIN0000000001', 'make' => 'Linhai', 'model' => 'ATV'], $h);
+        $this->assertResponseStatusCodeSame(201, json_encode($created));
+        $this->assertSame('', $created['vehicle']['plate']);
+        $this->assertSame('Linhai ATV', $created['vehicle']['displayName']);
+
+        // a second one without a plate is fine (the plate check only guards real plates)
+        $this->apiPost('/api/v1/vehicles', ['vin' => 'TEST0VIN0000000002', 'make' => 'Linhai', 'model' => 'ATV'], $h);
+        $this->assertResponseStatusCodeSame(201);
+
+        $refused = $this->apiPost('/api/v1/vehicles', ['make' => 'Linhai'], $h);
+        $this->assertResponseStatusCodeSame(422, json_encode($refused));
+        $this->assertStringContainsString('sasiu', str_replace(['ș', 'ă'], ['s', 'a'], $refused['error']));
+    }
 }
