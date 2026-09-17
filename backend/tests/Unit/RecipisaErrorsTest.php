@@ -59,4 +59,22 @@ final class RecipisaErrorsTest extends TestCase
     {
         self::assertNull(CheckDeclarationStatusHandler::errorsInRecipisa('not a pdf at all'));
     }
+
+    public function testTheLegacyDiacriticsOfTheRecipisaDoNotFakeAnError(): void
+    {
+        // the parser renders "există" with the diacritics of a legacy encoding
+        self::assertNull(CheckDeclarationStatusHandler::errorsInRecipisa(
+            $this->pdf('Ati depus o declaratie tip D212 cu numarul INTERNT-100000123-2026. Nu existã erori de validare.'),
+        ));
+    }
+
+    public function testAnAttributeErrorIsReported(): void
+    {
+        $errors = CheckDeclarationStatusHandler::errorsInRecipisa(
+            $this->pdf('Au fost identificate urmãtoarele ERORI: E: validari globale eroare atribut: bifa19: atributul trebuie sa existe'),
+        );
+
+        self::assertNotNull($errors);
+        self::assertStringContainsString('bifa19', $errors);
+    }
 }
