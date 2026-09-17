@@ -100,7 +100,8 @@ final class D212FormTest extends TestCase
         $xml = $this->build(['an' => 2026]);
 
         self::assertStringContainsString('nume_c="POPESCU"', $xml);
-        self::assertStringContainsString('prenume_c="I ION"', $xml);
+        self::assertStringContainsString('initiala_c="I"', $xml);
+        self::assertStringContainsString('prenume_c="ION"', $xml);
         self::assertStringContainsString('bifa19="0"', $xml);
         self::assertStringContainsString('bifa23="0"', $xml);
         self::assertStringNotContainsString('bifa_succesor', $xml);

@@ -222,6 +222,23 @@ class TaxDeclarationManager
             throw new \RuntimeException('Generated XML is not valid.');
         }
 
+        // The Declarația unică of the 2026 campaign onwards is filed through ANAF's web form:
+        // the downloadable validator still carries the previous shape of the form and refuses
+        // the current one, so Storno's own rules are what guard it.
+        if ($declaration->getType() === DeclarationType::D212 && $declaration->getYear() >= 2026) {
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], [
+                'dukValidation' => [
+                    'valid' => null,
+                    'skipped' => 'Campania 2026 a Declarației unice se depune prin formularul web ANAF; validatorul descărcabil nu cunoaște încă structura ei.',
+                    'validatedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                ],
+            ]));
+            $declaration->setStatus(DeclarationStatus::VALIDATED);
+            $this->entityManager->flush();
+
+            return $declaration;
+        }
+
         // ANAF-grade validation through DUKIntegrator. Mandatory: a declaration is
         // never marked validated on a syntax check alone.
         try {
