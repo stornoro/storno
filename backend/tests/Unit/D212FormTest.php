@@ -91,4 +91,50 @@ final class D212FormTest extends TestCase
         $input['an'] = 2024;
         self::assertContains('D212-SCOPE', array_column($form->build($input)->issues, 'code'));
     }
+    /**
+     * The 2026 campaign of the form splits the name, adds two chapter flags and dropped the
+     * successor one — ANAF's back office refuses a file that still carries the old shape.
+     */
+    public function testTheCampaignOf2026UsesTheNewRootAttributes(): void
+    {
+        $xml = $this->build(['an' => 2026]);
+
+        self::assertStringContainsString('nume_c="POPESCU"', $xml);
+        self::assertStringContainsString('prenume_c="I ION"', $xml);
+        self::assertStringContainsString('bifa19="0"', $xml);
+        self::assertStringContainsString('bifa23="0"', $xml);
+        self::assertStringNotContainsString('bifa_succesor', $xml);
+    }
+
+    public function testAnEarlierCampaignKeepsTheOldRootAttributes(): void
+    {
+        $xml = $this->build(['an' => 2025, 'chirii' => [[
+            'numarContract' => '1', 'dataContract' => '01.12.2023',
+            'adresaBun' => 'Apartament, Bucuresti', 'deLa' => '01.01.2024', 'panaLa' => '30.11.2024',
+            'venitBrut' => 12000,
+        ]]]);
+
+        self::assertStringContainsString('nume_c="POPESCU I ION"', $xml);
+        self::assertStringContainsString('bifa_succesor="0"', $xml);
+        self::assertStringNotContainsString('prenume_c', $xml);
+        self::assertStringNotContainsString('bifa19', $xml);
+    }
+
+    private function build(array $overrides): string
+    {
+        $input = array_merge([
+            'an' => 2026,
+            'contribuabil' => ['nume' => 'POPESCU I ION', 'cnp' => '1800101400016', 'adresa' => 'Bucuresti'],
+            'chirii' => [[
+                'numarContract' => '1', 'dataContract' => '01.04.2025',
+                'adresaBun' => 'Apartament, Bucuresti', 'deLa' => '01.04.2025', 'panaLa' => '31.12.2025',
+                'venitBrut' => 12000,
+            ]],
+        ], $overrides);
+
+        $result = (new D212Form())->build($input);
+        self::assertSame([], array_filter($result->issues, fn ($i) => $i['level'] === 'error'), json_encode($result->issues));
+
+        return $result->xml;
+    }
 }

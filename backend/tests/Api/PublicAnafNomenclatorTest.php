@@ -15,7 +15,7 @@ final class PublicAnafNomenclatorTest extends WebTestCase
         $client = static::createClient();
         $em = static::getContainer()->get('doctrine')->getManager();
         $repo = $em->getRepository(AnafNomenclatorEntry::class);
-        foreach ([['judet', '', '40', 'MUNICIPIUL BUCUREŞTI'], ['localitate', '40', '6', '6 Sector - Mun. Bucureşti'], ['strada', '40-6', '59', 'Str. Azurului'], ['strada', '40-6', '412', 'Bld. Iuliu Maniu'], ['strada', '40-6', '9', 'Aleea Ştefăneşti']] as [$kind, $parent, $code, $name]) {
+        foreach ([['judet', '', '40', 'MUNICIPIUL BUCUREŞTI'], ['localitate', '40', '6', '6 Sector - Mun. Bucureşti'], ['strada', '40-6', '412', 'Bld. Iuliu Maniu'], ['strada', '40-6', '9', 'Aleea Ştefăneşti']] as [$kind, $parent, $code, $name]) {
             if ($repo->findOneBy(['kind' => $kind, 'parentKey' => $parent, 'code' => $code]) === null) {
                 $em->persist((new AnafNomenclatorEntry())->setKind($kind)->setParentKey($parent)->setCode($code)->setName($name));
             }
