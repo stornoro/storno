@@ -56,6 +56,7 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       TELEGRAM_DSN: ${TELEGRAM_DSN:-null://null}
       TWILIO_DSN: ${TWILIO_DSN:-null://null}
+      INTEGRATION_API_KEY: ${INTEGRATION_API_KEY:-}
     volumes:
       - jwt_keys:/app/config/jwt
       - backend_var:/app/var
