@@ -17,6 +17,14 @@ class ExchangeRateService
     private const FRESH_TTL = 86400; // 24h cache for successful fetches
     private const STALE_RETRY_TTL = 600; // 10min retry window when serving fallback / empty
     private const FAILURE_NOTIFICATION_TTL = 86400; // dedupe critical warning to once per day
+    /**
+     * Average annual exchange rates published by BNR (mean of the twelve monthly means).
+     * Add the new year every January; until then the service computes an estimate.
+     */
+    private const BNR_ANNUAL_AVERAGE = [
+        'EUR' => [2023 => 4.9464, 2024 => 4.9746, 2025 => 5.0415],
+    ];
+
     private const ECB_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.%s.EUR.SP00.A';
     private const ECB_WINDOW_DAYS = 7; // publication gap the dated lookup bridges (weekends, holidays)
 
@@ -148,6 +156,64 @@ class ExchangeRateService
         $rate = $currency === 'EUR' ? $table['RON'][$picked] : $table['RON'][$picked] / $table[$currency][$picked];
 
         return ['rate' => round($rate, 6), 'date' => $picked];
+    }
+
+    /**
+     * The average annual exchange rate the National Bank of Romania publishes for a year
+     * (the simple mean of its twelve monthly averages, each the mean of that month's daily rates).
+     *
+     * Income from renting out property for a rent expressed in a foreign currency, paid by a
+     * natural person, is converted to lei with this rate (Codul fiscal, venituri din cedarea
+     * folosinței bunurilor): the gross annual income is the contractual rent evaluated at the
+     * average annual rate of the year the income was earned. A rent paid by a company is taxed
+     * at source and uses the rate of the day before the payment instead.
+     *
+     * The rates BNR published are listed here; for a year that is not listed the mean of the
+     * monthly means is computed from the daily series and reported as `computed`, so the caller
+     * can tell an official figure from an estimate.
+     *
+     * @return array{rate: float, source: string}|null
+     */
+    public function getAnnualAverageRate(string $currency, int $year): ?array
+    {
+        $currency = strtoupper(trim($currency));
+        if ($currency === 'RON' || $currency === '') {
+            return ['rate' => 1.0, 'source' => 'ron'];
+        }
+        if (isset(self::BNR_ANNUAL_AVERAGE[$currency][$year])) {
+            return ['rate' => self::BNR_ANNUAL_AVERAGE[$currency][$year], 'source' => 'bnr'];
+        }
+        if ($year > (int) date('Y')) {
+            return null;
+        }
+
+        $monthly = [];
+        for ($month = 1; $month <= 12; ++$month) {
+            $days = [];
+            $start = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+            $end = $start->modify('last day of this month');
+            if ($end > new \DateTimeImmutable('today')) {
+                break;
+            }
+            $series = $currency === 'EUR' ? ['RON'] : ['RON', $currency];
+            $table = $this->fetchEcbWindow($series, $start, $end);
+            foreach (array_keys($table['RON'] ?? []) as $day) {
+                $ron = $table['RON'][$day] ?? null;
+                $other = $currency === 'EUR' ? 1.0 : ($table[$currency][$day] ?? null);
+                if ($ron !== null && $other !== null && $other > 0.0) {
+                    $days[] = $ron / $other;
+                }
+            }
+            if ($days === []) {
+                return null;
+            }
+            $monthly[] = array_sum($days) / count($days);
+        }
+        if (count($monthly) < 12) {
+            return null;
+        }
+
+        return ['rate' => round(array_sum($monthly) / 12, 4), 'source' => 'computed'];
     }
 
     /**

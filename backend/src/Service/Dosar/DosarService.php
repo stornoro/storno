@@ -20,6 +20,7 @@ use App\Enum\InvoiceDirection;
 use App\Enum\DeclarationType;
 use App\Enum\SpvDocumentCategory;
 use App\Repository\DosarRepository;
+use App\Service\ExchangeRateService;
 use App\Util\Cnp;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -37,6 +38,7 @@ final class DosarService
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly DosarRepository $dosare,
+        private readonly ?ExchangeRateService $exchangeRates = null,
     ) {
     }
 
@@ -439,9 +441,21 @@ final class DosarService
             $months = ($to->format('Y') - $from->format('Y')) * 12 + ((int) $to->format('n') - (int) $from->format('n')) + 1;
             $chirie = isset($s['chirie']) && is_numeric($s['chirie']) ? (float) $s['chirie'] : 0.0;
             $moneda = strtoupper((string) ($s['moneda'] ?? 'RON'));
-            $brut = $moneda === 'RON' ? (int) round($chirie * $months) : 0;
-            if ($moneda !== 'RON') {
-                $notes[] = sprintf('%s: chiria este în %s (%s/lună × %d luni); completează venitBrut în lei la cursul BNR din ziua fiecărei încasări.', $dosar->getTitle(), $moneda, $chirie, $months);
+            if ($moneda === 'RON') {
+                $brut = (int) round($chirie * $months);
+            } else {
+                // A rent in foreign currency paid by a natural person becomes lei at the average
+                // annual exchange rate of the income year (the rate BNR publishes for that year).
+                $average = $this->exchangeRates?->getAnnualAverageRate($moneda, $incomeYear);
+                $brut = $average !== null ? (int) round($chirie * $months * $average['rate']) : 0;
+                $notes[] = $average !== null
+                    ? sprintf(
+                        '%s: chiria este în %s (%s/lună × %d luni = %s %s). Venit brut %d lei la cursul mediu anual %s din %d (%s). Dacă chiriașul este persoană juridică, impozitul se reține la sursă și venitul nu se declară aici.',
+                        $dosar->getTitle(), $moneda, $chirie, $months, rtrim(rtrim(number_format($chirie * $months, 2, '.', ''), '0'), '.'), $moneda,
+                        $brut, number_format($average['rate'], 4, ',', '.'), $incomeYear,
+                        $average['source'] === 'bnr' ? 'curs BNR publicat' : 'medie calculată din cursurile zilnice',
+                    )
+                    : sprintf('%s: chiria este în %s (%s/lună × %d luni), iar cursul mediu anual pe %d nu a putut fi obținut; completează venitBrut în lei.', $dosar->getTitle(), $moneda, $chirie, $months, $incomeYear);
             }
             $chirii[] = [
                 'numarContract' => (string) ($s['numar'] ?? ''),
