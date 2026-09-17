@@ -105,6 +105,7 @@ final class D212FormTest extends TestCase
         self::assertStringContainsString('bifa19="0"', $xml);
         self::assertStringContainsString('bifa23="0"', $xml);
         self::assertStringNotContainsString('bifa_succesor', $xml);
+        self::assertStringNotContainsString('adresa_c', $xml, 'the 2026 campaign has no free-text address');
     }
 
     public function testAnEarlierCampaignKeepsTheOldRootAttributes(): void
@@ -117,6 +118,7 @@ final class D212FormTest extends TestCase
 
         self::assertStringContainsString('nume_c="POPESCU I ION"', $xml);
         self::assertStringContainsString('bifa_succesor="0"', $xml);
+        self::assertStringContainsString('adresa_c="Bucuresti"', $xml);
         self::assertStringNotContainsString('prenume_c', $xml);
         self::assertStringNotContainsString('bifa19', $xml);
     }
