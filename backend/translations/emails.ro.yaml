@@ -209,6 +209,22 @@ notifications:
     approaching: 'Termen depasit in curand'
     submit: 'Trimite la ANAF'
 
+  expiry_due:
+    heading_named: '%document% expira in %count% zile'
+    heading_named_today: '%document% expira astazi'
+    heading: 'Un document al vehiculului expira'
+    heading_today: 'Un document al vehiculului expira astazi'
+    today: 'Expira astazi'
+    in_days: 'Expira in %count% zile'
+    vehicle: 'Vehicul'
+    document: 'Document'
+    number: 'Numar / polita'
+    provider: 'Emitent'
+    expires_at: 'Expira la'
+    company: 'Firma'
+    hint: 'Dupa ce reinnoiesti, deschide documentul in Storno si apasa Reinnoieste: se creeaza automat termenul urmator, iar cel vechi ramane in istoric.'
+    cta: 'Vezi documentul'
+
   backup_ready:
     heading: 'Backup disponibil'
     download: 'Descarca backup'

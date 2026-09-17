@@ -50,6 +50,7 @@ class SendExternalNotificationHandler
         'proforma.expired' => 'emails/notification_proforma_expired.html.twig',
         'backup_ready' => 'emails/notification_backup_ready.html.twig',
         'restore_completed' => 'emails/notification_restore_completed.html.twig',
+        'expiry.due' => 'emails/notification_expiry_due.html.twig',
     ];
 
     public function __construct(
