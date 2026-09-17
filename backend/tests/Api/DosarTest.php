@@ -90,7 +90,10 @@ class DosarTest extends ApiTestCase
         $byContract = array_column($prefill['input']['chirii'], null, 'numarContract');
         $this->assertSame(36000, $byContract['2']['venitBrut'], '3000 × 12 months of 2025');
         $this->assertSame('01.01.2025', $byContract['2']['deLa']);
-        $this->assertSame(0, $byContract['9']['venitBrut'], 'EUR rent is not converted');
+        // 400 EUR a month from 1 July to the end of 2025, at the average annual rate of 2025 (5,0415)
+        $this->assertSame(12100, $byContract['9']['venitBrut'], 'the EUR rent is converted at the annual average rate');
+        $this->assertSame('01.07.2025', $byContract['9']['deLa']);
+        $this->assertSame('31.12.2025', $byContract['9']['panaLa']);
         $this->assertSame('01.07.2025', $byContract['9']['deLa']);
         $this->assertNotEmpty($prefill['notes']);
 

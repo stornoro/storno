@@ -434,11 +434,15 @@ final class DosarService
             $deLa = $this->date($s['deLa'] ?? $s['data'] ?? null);
             $panaLa = $this->date($s['dataIncetare'] ?? $s['panaLa'] ?? null);
             $from = $deLa === null || $deLa < $start ? $start : $deLa;
-            $to = $panaLa === null || $panaLa > $end ? $end : $panaLa;
+            // The rental stops on its end date (that day is no longer paid); a contract still
+            // running at the end of the year is cut at 1 January, which keeps December whole.
+            $yearEnd = $end->modify('+1 day');
+            $endExclusive = $panaLa === null || $panaLa > $yearEnd ? $yearEnd : $panaLa;
+            $to = $endExclusive->modify('-1 day');
             if ($from > $to || ($deLa !== null && $deLa > $end) || ($panaLa !== null && $panaLa < $start)) {
                 continue;
             }
-            $months = ($to->format('Y') - $from->format('Y')) * 12 + ((int) $to->format('n') - (int) $from->format('n')) + 1;
+            $months = self::rentMonths($from, $endExclusive);
             $chirie = isset($s['chirie']) && is_numeric($s['chirie']) ? (float) $s['chirie'] : 0.0;
             $moneda = strtoupper((string) ($s['moneda'] ?? 'RON'));
             if ($moneda === 'RON') {
@@ -450,12 +454,12 @@ final class DosarService
                 $brut = $average !== null ? (int) round($chirie * $months * $average['rate']) : 0;
                 $notes[] = $average !== null
                     ? sprintf(
-                        '%s: chiria este în %s (%s/lună × %d luni = %s %s). Venit brut %d lei la cursul mediu anual %s din %d (%s). Dacă chiriașul este persoană juridică, impozitul se reține la sursă și venitul nu se declară aici.',
-                        $dosar->getTitle(), $moneda, $chirie, $months, rtrim(rtrim(number_format($chirie * $months, 2, '.', ''), '0'), '.'), $moneda,
+                        '%s: chiria este în %s (%s/lună × %s luni = %s %s). Venit brut %d lei la cursul mediu anual %s din %d (%s). Dacă chiriașul este persoană juridică, impozitul se reține la sursă și venitul nu se declară aici.',
+                        $dosar->getTitle(), $moneda, $chirie, self::number($months), self::number($chirie * $months), $moneda,
                         $brut, number_format($average['rate'], 4, ',', '.'), $incomeYear,
                         $average['source'] === 'bnr' ? 'curs BNR publicat' : 'medie calculată din cursurile zilnice',
                     )
-                    : sprintf('%s: chiria este în %s (%s/lună × %d luni), iar cursul mediu anual pe %d nu a putut fi obținut; completează venitBrut în lei.', $dosar->getTitle(), $moneda, $chirie, $months, $incomeYear);
+                    : sprintf('%s: chiria este în %s (%s/lună × %s luni), iar cursul mediu anual pe %d nu a putut fi obținut; completează venitBrut în lei.', $dosar->getTitle(), $moneda, $chirie, self::number($months), $incomeYear);
             }
             $chirii[] = [
                 'numarContract' => (string) ($s['numar'] ?? ''),
@@ -987,5 +991,36 @@ final class DosarService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * How many monthly rents a period carries. `$endExclusive` is the day the rental stops:
+     * a contract running "01.12.2023 – 01.12.2024" ends on 1 December, so November is the last
+     * month paid. A month that only started is counted pro rata on its days.
+     */
+    public static function rentMonths(\DateTimeImmutable $from, \DateTimeImmutable $endExclusive): float
+    {
+        if ($endExclusive <= $from) {
+            return 0.0;
+        }
+        $complete = 0;
+        $cursor = $from;
+        while (($next = $from->modify('+' . ($complete + 1) . ' months')) <= $endExclusive) {
+            $cursor = $next;
+            ++$complete;
+        }
+        $remainingDays = (int) $cursor->diff($endExclusive)->days;
+        if ($remainingDays <= 0) {
+            return (float) $complete;
+        }
+        $daysInMonth = (int) $cursor->diff($cursor->modify('+1 month'))->days;
+
+        return round($complete + $remainingDays / max(1, $daysInMonth), 4);
+    }
+
+    /** 12 → "12", 2.5 → "2,5" — for the notes. */
+    private static function number(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, ',', '.'), '0'), ',');
     }
 }
