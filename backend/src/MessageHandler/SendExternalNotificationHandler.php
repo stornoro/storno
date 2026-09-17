@@ -51,6 +51,9 @@ class SendExternalNotificationHandler
         'backup_ready' => 'emails/notification_backup_ready.html.twig',
         'restore_completed' => 'emails/notification_restore_completed.html.twig',
         'expiry.due' => 'emails/notification_expiry_due.html.twig',
+        'fiscal.deadline' => 'emails/notification_fiscal_deadline.html.twig',
+        'dosar.deadline' => 'emails/notification_dosar_deadline.html.twig',
+        'partner.status_changed' => 'emails/notification_partner_status_changed.html.twig',
     ];
 
     public function __construct(

@@ -99,8 +99,12 @@ final class RemindDosareCommand extends Command
                 } else {
                     $this->notifications->createNotification($user, 'dosar.deadline', $title, $message, [
                         'dosarId' => $dosar->getId()?->toRfc4122(),
+                        'dosarTitle' => $dosar->getTitle(),
+                        'label' => $dosar->getDeadlineLabel(),
                         'companyId' => $company->getId()?->toRfc4122(),
+                        'companyName' => $company->getName(),
                         'deadlineAt' => $dosar->getDeadlineAt()?->format(DATE_ATOM),
+                        'deadlineAtLabel' => $dosar->getDeadlineAt()?->format('d.m.Y'),
                         'days' => $days,
                         'url' => '/dosare/' . $dosar->getId()?->toRfc4122(),
                     ]);

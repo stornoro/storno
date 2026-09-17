@@ -102,7 +102,10 @@ class FiscalDeadlineReminderCommand extends Command
                     $this->notificationService->createNotification($user, self::TYPE, $title, $message, [
                         'key' => $key,
                         'code' => $item['code'],
+                        'label' => $item['label'],
+                        'periodLabel' => $params['period'],
                         'dueDate' => $item['dueDate'],
+                        'dueDateLabel' => $dueDate->format('d.m.Y'),
                         'daysLeft' => $item['daysLeft'],
                         'declarationType' => $item['declarationType'],
                         'period' => $item['period'],
