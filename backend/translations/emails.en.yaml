@@ -242,6 +242,38 @@ notifications:
     hint: 'Once renewed, open the document in Storno and press Renew: the next deadline is created automatically and the old one stays in the history.'
     cta: 'Open the document'
 
+  fiscal_deadline:
+    heading: 'A filing deadline is coming up'
+    heading_today: 'A filing is due today'
+    heading_named: '%code% is due in %count% days'
+    heading_named_today: '%code% is due today'
+    declaration: 'Declaration'
+    period: 'Period'
+    due_date: 'Due date'
+    hint: 'Storno fills the declaration from the invoices of the period and checks it with ANAF own validator before you file it.'
+    cta_create: 'Create the declaration'
+    cta_calendar: 'Open the fiscal calendar'
+
+  dosar_deadline:
+    heading: 'A case file is due in %count% days'
+    heading_today: 'A case file is due today'
+    dosar: 'Case file'
+    step: 'To do'
+    due_date: 'Due date'
+    hint: 'Open the case file: its documents, declarations and ANAF messages are all there.'
+    cta: 'Open the case file'
+
+  partner_status_changed:
+    heading: 'A partner changed its status'
+    client: 'Client'
+    supplier: 'Supplier'
+    identifier: 'VAT / registration number'
+    changes: 'What changed'
+    checked_at: 'Checked on'
+    hint: 'Check the partner before the next invoice: a VAT or status change affects how you invoice it.'
+    cta_client: 'Open the client'
+    cta_supplier: 'Open the supplier'
+
   backup_ready:
     heading: 'Backup ready'
     download: 'Download backup'

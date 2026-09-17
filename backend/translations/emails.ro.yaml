@@ -225,6 +225,38 @@ notifications:
     hint: 'Dupa ce reinnoiesti, deschide documentul in Storno si apasa Reinnoieste: se creeaza automat termenul urmator, iar cel vechi ramane in istoric.'
     cta: 'Vezi documentul'
 
+  fiscal_deadline:
+    heading: 'Se apropie un termen de depunere'
+    heading_today: 'Astazi e termenul de depunere'
+    heading_named: '%code% se depune in %count% zile'
+    heading_named_today: '%code% se depune astazi'
+    declaration: 'Declaratie'
+    period: 'Perioada'
+    due_date: 'Termen'
+    hint: 'Storno completeaza declaratia din facturile perioadei si o valideaza cu validatorul ANAF inainte de depunere.'
+    cta_create: 'Creeaza declaratia'
+    cta_calendar: 'Vezi calendarul fiscal'
+
+  dosar_deadline:
+    heading: 'Termen intr-un dosar peste %count% zile'
+    heading_today: 'Termen intr-un dosar astazi'
+    dosar: 'Dosar'
+    step: 'De facut'
+    due_date: 'Termen'
+    hint: 'Deschide dosarul: documentele, declaratiile si mesajele ANAF legate de el sunt acolo.'
+    cta: 'Deschide dosarul'
+
+  partner_status_changed:
+    heading: 'Un partener si-a schimbat starea'
+    client: 'Client'
+    supplier: 'Furnizor'
+    identifier: 'CUI / CIF'
+    changes: 'Ce s-a schimbat'
+    checked_at: 'Verificat la'
+    hint: 'Verifica partenerul inainte de urmatoarea factura: o schimbare de TVA sau de stare afecteaza modul in care facturezi.'
+    cta_client: 'Vezi clientul'
+    cta_supplier: 'Vezi furnizorul'
+
   backup_ready:
     heading: 'Backup disponibil'
     download: 'Descarca backup'
