@@ -13,6 +13,7 @@ use App\Security\Permission;
 use App\Constants\Pagination;
 use App\Service\Anaf\AnafTokenResolver;
 use App\Service\Declaration\AnafDeclarationClient;
+use App\Service\Declaration\AnafWebFormPdfService;
 use App\Service\Declaration\DeclarationPdfService;
 use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DukIntegratorService;
@@ -38,6 +39,7 @@ class TaxDeclarationController extends AbstractController
         private readonly \App\Service\Declaration\PdfEmbeddedXmlExtractor $pdfXml,
         private readonly TaxDeclarationManager $manager,
         private readonly DeclarationPdfService $declarationPdf,
+        private readonly AnafWebFormPdfService $webFormPdf,
         private readonly OrganizationContext $organizationContext,
         private readonly FilesystemOperator $defaultStorage,
         private readonly AnafTokenResolver $anafTokenResolver,
@@ -367,9 +369,13 @@ class TaxDeclarationController extends AbstractController
                         $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
                     }
                 }
-                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
-                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
-                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // A form ANAF moved to its web application is rendered there; the downloadable
+                // validator still carries the previous shape of that campaign.
+                $pdfBinary = $this->webFormPdf->handles($declaration->getType()->value, $declaration->getYear())
+                    ? $this->webFormPdf->render($declaration->getType()->value, $xml)
+                    : ($attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                        ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                        : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value));
 
                 $pdfPath = sprintf(
                     'declarations/%s/%s/%s.pdf',
@@ -476,7 +482,9 @@ class TaxDeclarationController extends AbstractController
                         $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
                     }
                 }
-                $pdfBinary = $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments);
+                $pdfBinary = $this->webFormPdf->handles($declaration->getType()->value, $declaration->getYear())
+                    ? $this->webFormPdf->render($declaration->getType()->value, $xml)
+                    : $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments);
                 $company = $declaration->getCompany();
                 $xmlPath = sprintf('declarations/%s/%s/%s.xml', $company->getId(), $declaration->getType()->value, $declaration->getId());
                 $pdfPath = sprintf('declarations/%s/%s/%s.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
@@ -641,9 +649,13 @@ class TaxDeclarationController extends AbstractController
                         $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
                     }
                 }
-                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
-                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
-                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // A form ANAF moved to its web application is rendered there; the downloadable
+                // validator still carries the previous shape of that campaign.
+                $pdfBinary = $this->webFormPdf->handles($declaration->getType()->value, $declaration->getYear())
+                    ? $this->webFormPdf->render($declaration->getType()->value, $xml)
+                    : ($attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                        ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                        : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value));
 
                 // Store PDF
                 $pdfPath = sprintf(
@@ -770,9 +782,13 @@ class TaxDeclarationController extends AbstractController
                         $attachments[] = ['name' => (string) ($a['name'] ?? ('document-' . ($i + 1) . '.pdf')), 'content' => $bin];
                     }
                 }
-                $pdfBinary = $attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
-                    ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
-                    : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value);
+                // A form ANAF moved to its web application is rendered there; the downloadable
+                // validator still carries the previous shape of that campaign.
+                $pdfBinary = $this->webFormPdf->handles($declaration->getType()->value, $declaration->getYear())
+                    ? $this->webFormPdf->render($declaration->getType()->value, $xml)
+                    : ($attachments !== [] || $this->declarationPdf->requiresAttachment($declaration->getType()->value)
+                        ? $this->declarationPdf->render($declaration->getType()->value, $xml, $attachments)
+                        : $this->dukIntegrator->generatePdf($xml, $declaration->getType()->value));
 
                 // Store PDF
                 $pdfPath = sprintf(
