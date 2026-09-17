@@ -442,7 +442,8 @@ function buildCurlOptions(req: ProxyRequest, config: AgentConfig, toolchain: Pkc
   } else if (req.method !== 'GET' && req.method !== 'HEAD') {
     opts.push({ opt: 'data', value: '@-' });
   }
-  for (const [key, value] of Object.entries(req.headers)) {
+  // headers is optional: a caller that sends none must not crash the proxy
+  for (const [key, value] of Object.entries(req.headers ?? {})) {
     opts.push({ opt: 'header', value: `${key}: ${value}` });
   }
   opts.push({ opt: 'url', value: req.url });
@@ -557,7 +558,7 @@ function execCurlBatch(auth: ProxyRequest, requests: ProxyRequest[], config: Age
     requests.forEach((req, i) => {
       if (i > 0) opts.push({ opt: 'next' });
       opts.push(...common);
-      for (const [key, value] of Object.entries(req.headers)) opts.push({ opt: 'header', value: `${key}: ${value}` });
+      for (const [key, value] of Object.entries(req.headers ?? {})) opts.push({ opt: 'header', value: `${key}: ${value}` });
       opts.push(
         { opt: 'dump-header', value: join(workDir, `h${i}`) },
         { opt: 'output', value: join(workDir, `b${i}`) },
