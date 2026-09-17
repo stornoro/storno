@@ -280,8 +280,9 @@ final class CheckDeclarationStatusHandler
 
     /**
      * The errors a recipisa lists, or null when it confirms the filing. ANAF writes
-     * "Au fost identificat(e) următoarele ERORI:" followed by the rules that failed, while an
-     * accepted one says "Nu există erori de validare".
+     * "Au fost identificate următoarele ERORI:" followed by the rules that failed, while an
+     * accepted one says "Nu există erori de validare". The PDF text comes out with the
+     * diacritics of a legacy encoding, so it is flattened to ASCII before matching.
      */
     public static function errorsInRecipisa(string $pdf): ?string
     {
@@ -290,18 +291,37 @@ final class CheckDeclarationStatusHandler
         } catch (\Throwable) {
             return null;
         }
-        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
-        $normalized = mb_strtolower(strtr($text, ['ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't']));
-        if (!str_contains($normalized, 'erori') || str_contains($normalized, 'nu exista erori')) {
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($text === '') {
             return null;
         }
-        if (preg_match('/(?:ERORI:?)(.*)$/u', $text, $m) === 1) {
-            $details = trim($m[1]);
-            if ($details !== '') {
-                return mb_substr($details, 0, 1000);
-            }
+        $flat = mb_strtolower(self::toAscii($text));
+
+        // Only these three phrasings mean the declaration did not enter ANAF's records.
+        $isError = str_contains($flat, 'au fost identificate') && str_contains($flat, 'erori');
+        $isError = $isError || str_contains($flat, 'eroare regula') || str_contains($flat, 'eroare atribut');
+        if (!$isError) {
+            return null;
         }
 
-        return 'Recipisa listează erori de prelucrare; deschide-o pentru detalii.';
+        if (preg_match('/ERORI:?(.*)$/u', $text, $m) === 1 && trim($m[1]) !== '') {
+            return mb_substr(trim($m[1]), 0, 1000);
+        }
+
+        return mb_substr($text, 0, 1000);
     }
+
+    /** "Nu existã erori" and "Nu există erori" must compare equal. */
+    private static function toAscii(string $text): string
+    {
+        $map = [
+            'ă' => 'a', 'â' => 'a', 'ã' => 'a', 'á' => 'a', 'à' => 'a', 'Ă' => 'A', 'Â' => 'A', 'Ã' => 'A',
+            'î' => 'i', 'í' => 'i', 'Î' => 'I', 'Í' => 'I',
+            'ș' => 's', 'ş' => 's', 'š' => 's', 'Ș' => 'S', 'Ş' => 'S',
+            'ț' => 't', 'ţ' => 't', 'þ' => 't', 'Ț' => 'T', 'Ţ' => 'T', 'Þ' => 'T',
+        ];
+
+        return strtr($text, $map);
+    }
+
 }
