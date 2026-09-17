@@ -360,7 +360,8 @@ final class D212Form implements DeclarationFormInterface
             'nume_c' => $numeFamilie,
             'initiala_c' => $initiala,
             'prenume_c' => $prenume,
-            'adresa_c' => $adresa,
+            // the 2026 campaign dropped the free-text address of the taxpayer
+            'adresa_c' => $campaign2026 ? null : $adresa,
             'telefon_c' => $this->digits($c['telefon'] ?? null),
             'email_c' => $this->str($c['email'] ?? null),
             'cif' => $cnp,
