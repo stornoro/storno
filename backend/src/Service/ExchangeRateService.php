@@ -11,20 +11,14 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class ExchangeRateService
 {
-    private const BNR_URL = 'https://www.bnr.ro/nbrfxrates.xml';
+    /** BNR serves its rate files from curs.bnr.ro; www.bnr.ro answers those paths with its home page. */
+    private const BNR_URL = 'https://curs.bnr.ro/nbrfxrates.xml';
+    private const BNR_YEAR_URL = 'https://curs.bnr.ro/files/xml/years/nbrfxrates%d.xml';
     private const LAST_GOOD_KEY = 'bnr_exchange_rates_last_good';
     private const LAST_GOOD_TTL = 86400 * 365; // ~1 year — effectively persistent
     private const FRESH_TTL = 86400; // 24h cache for successful fetches
     private const STALE_RETRY_TTL = 600; // 10min retry window when serving fallback / empty
     private const FAILURE_NOTIFICATION_TTL = 86400; // dedupe critical warning to once per day
-    /**
-     * Average annual exchange rates published by BNR (mean of the twelve monthly means).
-     * Add the new year every January; until then the service computes an estimate.
-     */
-    private const BNR_ANNUAL_AVERAGE = [
-        'EUR' => [2023 => 4.9464, 2024 => 4.9746, 2025 => 5.0415],
-    ];
-
     private const ECB_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.%s.EUR.SP00.A';
     private const ECB_WINDOW_DAYS = 7; // publication gap the dated lookup bridges (weekends, holidays)
 
@@ -180,40 +174,77 @@ class ExchangeRateService
         if ($currency === 'RON' || $currency === '') {
             return ['rate' => 1.0, 'source' => 'ron'];
         }
-        if (isset(self::BNR_ANNUAL_AVERAGE[$currency][$year])) {
-            return ['rate' => self::BNR_ANNUAL_AVERAGE[$currency][$year], 'source' => 'bnr'];
-        }
-        if ($year > (int) date('Y')) {
+        if ($year < 2005 || $year > (int) date('Y')) {
             return null;
         }
 
-        $monthly = [];
-        for ($month = 1; $month <= 12; ++$month) {
-            $days = [];
-            $start = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-            $end = $start->modify('last day of this month');
-            if ($end > new \DateTimeImmutable('today')) {
-                break;
-            }
-            $series = $currency === 'EUR' ? ['RON'] : ['RON', $currency];
-            $table = $this->fetchEcbWindow($series, $start, $end);
-            foreach (array_keys($table['RON'] ?? []) as $day) {
-                $ron = $table['RON'][$day] ?? null;
-                $other = $currency === 'EUR' ? 1.0 : ($table[$currency][$day] ?? null);
-                if ($ron !== null && $other !== null && $other > 0.0) {
-                    $days[] = $ron / $other;
-                }
-            }
-            if ($days === []) {
+        $complete = $year < (int) date('Y');
+        $cacheKey = sprintf('bnr_annual_average_%s_%d', $currency, $year);
+        $cached = $this->cache->get($cacheKey, function (ItemInterface $item) use ($currency, $year, $complete) {
+            // A closed year never changes; the running one is refreshed daily.
+            $item->expiresAfter($complete ? self::LAST_GOOD_TTL : self::FRESH_TTL);
+            $monthly = $this->monthlyAveragesFromBnr($currency, $year);
+            if ($monthly === []) {
+                $item->expiresAfter(self::STALE_RETRY_TTL);
+
                 return null;
             }
-            $monthly[] = array_sum($days) / count($days);
+
+            return ['months' => count($monthly), 'rate' => round(array_sum($monthly) / count($monthly), 4)];
+        });
+
+        if (!is_array($cached)) {
+            return null;
         }
-        if (count($monthly) < 12) {
+        if ($complete && $cached['months'] < 12) {
             return null;
         }
 
-        return ['rate' => round(array_sum($monthly) / 12, 4), 'source' => 'computed'];
+        return ['rate' => $cached['rate'], 'source' => 'bnr', 'months' => $cached['months']];
+    }
+
+    /**
+     * The mean rate of each month of a year, from BNR's own file for that year. BNR computes
+     * the annual average as the simple mean of these monthly means, which is why the yearly
+     * figure differs slightly from the mean of all daily rates.
+     *
+     * @return list<float>
+     */
+    private function monthlyAveragesFromBnr(string $currency, int $year): array
+    {
+        try {
+            $response = $this->httpClient->request('GET', sprintf(self::BNR_YEAR_URL, $year), [
+                'timeout' => 20,
+                'verify_peer' => false,
+                'verify_host' => false,
+            ]);
+            $xml = new \SimpleXMLElement($response->getContent());
+        } catch (\Throwable $e) {
+            $this->logger->error('[BNR] Failed to load the yearly exchange rates', ['year' => $year, 'error' => $e->getMessage()]);
+
+            return [];
+        }
+
+        $perMonth = [];
+        foreach ($xml->Body->Cube as $cube) {
+            $date = (string) ($cube->attributes()['date'] ?? '');
+            if ($date === '') {
+                continue;
+            }
+            foreach ($cube->children() as $rate) {
+                if ((string) ($rate->attributes()['currency'] ?? '') !== $currency) {
+                    continue;
+                }
+                $multiplier = (int) ($rate->attributes()['multiplier'] ?? 1);
+                $value = (float) $rate;
+                if ($value > 0.0) {
+                    $perMonth[substr($date, 0, 7)][] = $value / max(1, $multiplier);
+                }
+            }
+        }
+        ksort($perMonth);
+
+        return array_values(array_map(static fn (array $days) => array_sum($days) / count($days), $perMonth));
     }
 
     /**

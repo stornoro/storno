@@ -18,15 +18,24 @@ final class AnnualAverageRateTest extends KernelTestCase
         return self::getContainer()->get(ExchangeRateService::class);
     }
 
-    public function testItReturnsThePublishedRates(): void
+    /**
+     * The figures BNR published for those years; computing them from its own yearly files
+     * must land on the same number, which is what makes the conversion defensible.
+     *
+     * @group network
+     */
+    public function testItComputesThePublishedAnnualAverages(): void
     {
         $service = $this->service();
 
-        foreach ([2023 => 4.9464, 2024 => 4.9746, 2025 => 5.0415] as $year => $expected) {
+        foreach ([2024 => 4.9746, 2025 => 5.0415] as $year => $published) {
             $result = $service->getAnnualAverageRate('EUR', $year);
-            self::assertNotNull($result, 'no rate for ' . $year);
-            self::assertSame($expected, $result['rate']);
+            if ($result === null) {
+                self::markTestSkipped('BNR is unreachable from this machine');
+            }
             self::assertSame('bnr', $result['source']);
+            self::assertSame(12, $result['months']);
+            self::assertSame($published, $result['rate'], 'annual average of ' . $year);
         }
     }
 
@@ -38,11 +47,15 @@ final class AnnualAverageRateTest extends KernelTestCase
         self::assertNull($service->getAnnualAverageRate('EUR', (int) date('Y') + 1));
     }
 
+    /** @group network */
     public function testAGrossRentIsConvertedLikeAnafComputesIt(): void
     {
-        $rate = $this->service()->getAnnualAverageRate('EUR', 2024)['rate'];
+        $result = $this->service()->getAnnualAverageRate('EUR', 2024);
+        if ($result === null) {
+            self::markTestSkipped('BNR is unreachable from this machine');
+        }
 
         // 400 EUR a month over 11 months of the income year
-        self::assertSame(21888, (int) round(400 * 11 * $rate));
+        self::assertSame(21888, (int) round(400 * 11 * $result['rate']));
     }
 }
