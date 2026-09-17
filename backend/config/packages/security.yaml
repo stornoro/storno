@@ -26,6 +26,11 @@ security:
             pattern: ^/webhook/
             security: false
 
+        integration_lookup:
+            # are cheia ei de integrare, verificată în controller
+            pattern: ^/api/v1/integrations/invoicing-activity$
+            security: false
+
         licensing_validate:
             pattern: ^/api/v1/licensing/validate$
             security: false
@@ -107,6 +112,7 @@ security:
         - { path: ^/webhook/, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/(register|forgot-password|reset-password|google|apple|passkey|confirm-email|resend-confirmation|mfa), roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/invitations/accept/.+, methods: [GET], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/integrations/invoicing-activity, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/licensing/validate, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/version$, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/plans$, roles: PUBLIC_ACCESS }

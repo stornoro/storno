@@ -16,6 +16,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        integration_lookup:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
         anaf_global:
             policy: 'sliding_window'
             limit: 999999
@@ -136,6 +140,11 @@ when@prod:
                 policy: 'sliding_window'
                 limit: 10
                 interval: '1 hour'
+            # o cheie de partener nu trebuie să poată parcurge registrul fiscal
+            integration_lookup:
+                policy: 'sliding_window'
+                limit: 600
+                interval: '1 minute'
             anaf_global:
                 policy: 'sliding_window'
                 limit: 1000
