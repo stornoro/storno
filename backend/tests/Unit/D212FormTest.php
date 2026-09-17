@@ -85,7 +85,9 @@ final class D212FormTest extends TestCase
         self::assertContains('D212-PERIOD', $codes);
         self::assertContains('D212-PJ', $codes);
         self::assertContains('STORNO-ASCII', $codes);
-        self::assertStringContainsString('adresa_c="Bucuresti, Sos. Stefan cel Mare 1"', $result->xml);
+        // diacritics are stripped for ANAF; the 2026 campaign keeps the address out of the XML
+        self::assertStringNotContainsString('adresa_c', $result->xml);
+        self::assertStringContainsString('nume_c="POPESCU"', $result->xml);
         self::assertSame(1, substr_count($result->xml, '<cap11 '), 'the legal-entity tenant contract is not written');
 
         $input['an'] = 2024;
