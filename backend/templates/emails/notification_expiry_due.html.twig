@@ -1,0 +1,88 @@
+{% extends 'emails/notification_base.html.twig' %}
+
+{% set days = data.daysLeft|default(0) %}
+{% set urgent = days <= 1 %}
+
+{% block accent_gradient %}background: linear-gradient(90deg, {{ urgent ? '#ef4444 0%, #f87171 50%, #fca5a5' : '#f59e0b 0%, #fbbf24 50%, #fcd34d' }} 100%);{% endblock %}
+
+{% block icon_emoji %}
+    <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, {{ urgent ? '#fef2f2 0%, #fee2e2' : '#fffbeb 0%, #fef3c7' }} 100%); text-align: center; line-height: 64px; font-size: 30px; box-shadow: 0 4px 12px rgba({{ urgent ? '239,68,68' : '245,158,11' }},0.15);">
+        &#128663;
+    </div>
+{% endblock %}
+
+{% set subject = data.label|default(data.kindLabel|default('')) %}
+{% block heading %}{{ subject ? (days == 0 ? 'notifications.expiry_due.heading_named_today' : 'notifications.expiry_due.heading_named')|trans({'%document%': subject, '%count%': days}, 'emails', locale)
+    : (days == 0 ? 'notifications.expiry_due.heading_today' : 'notifications.expiry_due.heading')|trans({}, 'emails', locale) }}{% endblock %}
+
+{% block content %}
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: {{ urgent ? '#fef2f2' : '#fffbeb' }}; border: 1px solid {{ urgent ? '#fecaca' : '#fde68a' }}; border-radius: 10px; margin-bottom: 20px;">
+        <tr>
+            <td style="padding: 18px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                        <td style="width: 24px; vertical-align: top; padding-top: 1px;">
+                            <div style="width: 20px; height: 20px; border-radius: 50%; background: {{ urgent ? '#ef4444' : '#f59e0b' }}; text-align: center; line-height: 20px; font-size: 12px; color: #fff;">!</div>
+                        </td>
+                        <td style="padding-left: 12px;">
+                            {% if data.vehicle is defined and data.vehicle %}
+                            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: {{ urgent ? '#991b1b' : '#92400e' }};">{{ data.vehicle }}</p>
+                            {% endif %}
+                            <p style="margin: 0; font-size: 14px; color: {{ urgent ? '#7f1d1d' : '#78350f' }}; line-height: 1.5;">{{ message }}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+        {% if data.vehicle is defined and data.vehicle %}
+        <tr style="background-color: #f9fafb;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280;">{{ 'notifications.expiry_due.vehicle'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ data.vehicle }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">{{ 'notifications.expiry_due.document'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-top: 1px solid #e5e7eb;">{{ data.label|default(data.kindLabel|default('—')) }}</td>
+        </tr>
+        {% if data.number is defined and data.number %}
+        <tr style="background-color: #f9fafb;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">{{ 'notifications.expiry_due.number'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-top: 1px solid #e5e7eb;">{{ data.number }}</td>
+        </tr>
+        {% endif %}
+        {% if data.provider is defined and data.provider %}
+        <tr>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">{{ 'notifications.expiry_due.provider'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-top: 1px solid #e5e7eb;">{{ data.provider }}</td>
+        </tr>
+        {% endif %}
+        <tr style="background-color: #f9fafb;">
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">{{ 'notifications.expiry_due.expires_at'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: {{ urgent ? '#b91c1c' : '#111827' }}; font-weight: 700; text-align: right; border-top: 1px solid #e5e7eb;">{{ data.expiresAtLabel|default(data.expiresAt|default('—')) }}</td>
+        </tr>
+        {% if data.companyName is defined and data.companyName %}
+        <tr>
+            <td style="padding: 13px 20px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">{{ 'notifications.expiry_due.company'|trans({}, 'emails', locale) }}</td>
+            <td style="padding: 13px 20px; font-size: 14px; color: #111827; font-weight: 600; text-align: right; border-top: 1px solid #e5e7eb;">{{ data.companyName }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <p style="margin: 18px 0 0 0; font-size: 13px; color: #6b7280; line-height: 1.6;">{{ 'notifications.expiry_due.hint'|trans({}, 'emails', locale) }}</p>
+{% endblock %}
+
+{% block cta %}
+    {% if data.companyId is defined %}
+    <tr>
+        <td style="padding: 0 36px 32px 36px;" align="center">
+            <a href="{{ frontendUrl }}{{ data.url|default('/expiries') }}?company={{ data.companyId }}" target="_blank"
+               style="display: inline-block; background: linear-gradient(135deg, {{ urgent ? '#dc2626 0%, #ef4444' : '#d97706 0%, #f59e0b' }} 100%); color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba({{ urgent ? '220,38,38' : '217,119,6' }},0.3);">
+                {{ 'notifications.expiry_due.cta'|trans({}, 'emails', locale) }}
+            </a>
+        </td>
+    </tr>
+    {% endif %}
+{% endblock %}

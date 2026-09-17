@@ -226,6 +226,22 @@ notifications:
     submit: 'Submit to ANAF'
 
   # Backup ready
+  expiry_due:
+    heading_named: '%document% expires in %count% days'
+    heading_named_today: '%document% expires today'
+    heading: 'A vehicle document is about to expire'
+    heading_today: 'A vehicle document expires today'
+    today: 'Expires today'
+    in_days: 'Expires in %count% days'
+    vehicle: 'Vehicle'
+    document: 'Document'
+    number: 'Number / policy'
+    provider: 'Issuer'
+    expires_at: 'Expires on'
+    company: 'Company'
+    hint: 'Once renewed, open the document in Storno and press Renew: the next deadline is created automatically and the old one stays in the history.'
+    cta: 'Open the document'
+
   backup_ready:
     heading: 'Backup ready'
     download: 'Download backup'
