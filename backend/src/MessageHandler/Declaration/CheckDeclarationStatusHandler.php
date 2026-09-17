@@ -160,18 +160,34 @@ final class CheckDeclarationStatusHandler
         $result = ['_source' => 'stared112', 'stare' => $portal['stare'], 'text' => $portal['text'], 'index' => $portal['index']];
 
         if ($portal['stare'] === 'ok') {
-            $declaration->setStatus(DeclarationStatus::ACCEPTED);
-            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['statusResult' => $result]));
+            $recipisaErrors = null;
             try {
                 $recipisa = $this->anafClient->downloadPortalRecipisa($portal['index']);
                 if ($recipisa !== '') {
                     $recipisaPath = sprintf('declarations/%s/%s/%s_recipisa.pdf', $company->getId(), $declaration->getType()->value, $declaration->getId());
                     $this->defaultStorage->write($recipisaPath, $recipisa);
                     $declaration->setRecipisaPath($recipisaPath);
+                    $recipisaErrors = self::errorsInRecipisa($recipisa);
                 }
             } catch (\Throwable $e) {
                 $this->logger->warning('Failed to download portal recipisa.', ['error' => $e->getMessage()]);
             }
+
+            // "Documentul este valid" on the portal only says the file was read; the recipisa is
+            // where ANAF reports whether the declaration entered its records (e.g. R_NO_INIT_DEC).
+            if ($recipisaErrors !== null) {
+                $result['recipisaErrors'] = $recipisaErrors;
+                $declaration->setStatus(DeclarationStatus::REJECTED);
+                $declaration->setErrorMessage('ANAF: ' . mb_substr($recipisaErrors, 0, 500));
+                $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['statusResult' => $result]));
+                $this->entityManager->flush();
+                $this->eventDispatcher->dispatch(new DeclarationRejectedEvent($declaration));
+
+                return;
+            }
+
+            $declaration->setStatus(DeclarationStatus::ACCEPTED);
+            $declaration->setMetadata(array_merge($declaration->getMetadata() ?? [], ['statusResult' => $result]));
             $this->entityManager->flush();
             $this->eventDispatcher->dispatch(new DeclarationAcceptedEvent($declaration));
 
@@ -260,5 +276,32 @@ final class CheckDeclarationStatusHandler
                 ]);
             }
         }
+    }
+
+    /**
+     * The errors a recipisa lists, or null when it confirms the filing. ANAF writes
+     * "Au fost identificat(e) următoarele ERORI:" followed by the rules that failed, while an
+     * accepted one says "Nu există erori de validare".
+     */
+    public static function errorsInRecipisa(string $pdf): ?string
+    {
+        try {
+            $text = (new \Smalot\PdfParser\Parser())->parseContent($pdf)->getText();
+        } catch (\Throwable) {
+            return null;
+        }
+        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+        $normalized = mb_strtolower(strtr($text, ['ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't']));
+        if (!str_contains($normalized, 'erori') || str_contains($normalized, 'nu exista erori')) {
+            return null;
+        }
+        if (preg_match('/(?:ERORI:?)(.*)$/u', $text, $m) === 1) {
+            $details = trim($m[1]);
+            if ($details !== '') {
+                return mb_substr($details, 0, 1000);
+            }
+        }
+
+        return 'Recipisa listează erori de prelucrare; deschide-o pentru detalii.';
     }
 }
