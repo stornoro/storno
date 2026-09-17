@@ -313,6 +313,18 @@ final class D212Form implements DeclarationFormInterface
 
         $rectif = !empty($input['rectificativa']);
         $imp = is_array($input['imputernicit'] ?? null) ? $input['imputernicit'] : [];
+        // ANAF splits the name in the newer campaigns: "POPESCU I ION" → nume_c, initiala_c, prenume_c
+        $parts = preg_split('/\s+/u', trim($nume)) ?: [];
+        $numeFamilie = $parts[0] ?? $nume;
+        $prenume = trim(implode(' ', array_slice($parts, 1)));
+        if ($prenume === '') {
+            $prenume = $numeFamilie;
+        }
+        $campaign2026 = (int) $an >= 2026;
+        if (!$campaign2026) {
+            $numeFamilie = $nume;
+            $prenume = null;
+        }
         $this->attrs($root, [
             'an_r' => $an,
             'luna_r' => '12',
@@ -320,7 +332,8 @@ final class D212Form implements DeclarationFormInterface
             'rectif1' => $rectif ? '1' : '0',
             'rectif2' => '0',
             'totalPlata_A' => (string) array_sum(array_map('intval', str_split($cnp !== '' ? $cnp : '0'))),
-            'bifa_succesor' => '0',
+            // dropped by the 2026 campaign, required before it
+            'bifa_succesor' => $campaign2026 ? null : '0',
             'anulare_litA' => '0',
             'anulare_litB' => '0',
             'bifa_conformare' => '0',
@@ -334,7 +347,11 @@ final class D212Form implements DeclarationFormInterface
             'bifa14' => '0',
             'bifa15' => '0',
             'bifa18' => '0',
-            'nume_c' => $nume,
+            // the 2026 campaign of the form carries two more chapter flags
+            'bifa19' => $campaign2026 ? '0' : null,
+            'bifa23' => $campaign2026 ? '0' : null,
+            'nume_c' => $numeFamilie,
+            'prenume_c' => $prenume,
             'adresa_c' => $adresa,
             'telefon_c' => $this->digits($c['telefon'] ?? null),
             'email_c' => $this->str($c['email'] ?? null),
