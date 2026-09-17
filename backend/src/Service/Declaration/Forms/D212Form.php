@@ -314,9 +314,15 @@ final class D212Form implements DeclarationFormInterface
         $rectif = !empty($input['rectificativa']);
         $imp = is_array($input['imputernicit'] ?? null) ? $input['imputernicit'] : [];
         // ANAF splits the name in the newer campaigns: "POPESCU I ION" → nume_c, initiala_c, prenume_c
-        $parts = preg_split('/\s+/u', trim($nume)) ?: [];
+        $parts = array_values(array_filter(preg_split('/\s+/u', trim($nume)) ?: []));
         $numeFamilie = $parts[0] ?? $nume;
-        $prenume = trim(implode(' ', array_slice($parts, 1)));
+        $initiala = null;
+        $rest = array_slice($parts, 1);
+        // "POPESCU I ION": the middle token, when it is a single letter, is the father's initial
+        if (count($rest) > 1 && mb_strlen(rtrim($rest[0], '.')) === 1) {
+            $initiala = rtrim(array_shift($rest), '.');
+        }
+        $prenume = trim(implode(' ', $rest));
         if ($prenume === '') {
             $prenume = $numeFamilie;
         }
@@ -324,6 +330,7 @@ final class D212Form implements DeclarationFormInterface
         if (!$campaign2026) {
             $numeFamilie = $nume;
             $prenume = null;
+            $initiala = null;
         }
         $this->attrs($root, [
             'an_r' => $an,
@@ -351,6 +358,7 @@ final class D212Form implements DeclarationFormInterface
             'bifa19' => $campaign2026 ? '0' : null,
             'bifa23' => $campaign2026 ? '0' : null,
             'nume_c' => $numeFamilie,
+            'initiala_c' => $initiala,
             'prenume_c' => $prenume,
             'adresa_c' => $adresa,
             'telefon_c' => $this->digits($c['telefon'] ?? null),
