@@ -116,6 +116,46 @@ class SagaXmlExportServiceTest extends TestCase
         $this->assertStringContainsString('<FacturaDiscount>15.50</FacturaDiscount>', $xml);
     }
 
+    /** An invoice of an OSS-registered company to a buyer of the given country. */
+    private function makeOssInvoice(string $country, string $vatTotal, ?bool $viesValid = null): Invoice
+    {
+        $invoice = $this->makeInvoice('UEP2026000003', '380', '0');
+        $invoice->getCompany()?->setOss(true);
+        $invoice->setVatTotal($vatTotal);
+
+        $client = new Client();
+        $client->setName('Kunde GmbH');
+        $client->setCountry($country);
+        $client->setViesValid($viesValid);
+        $invoice->setClient($client);
+        $invoice->setBuyerSnapshot(['name' => 'Kunde GmbH', 'country' => $country]);
+
+        return $invoice;
+    }
+
+    public function testOssInvoiceCarriesTheSpecialRegimeType(): void
+    {
+        $xml = $this->service->generateInvoicesXml([$this->makeOssInvoice('DE', '38.19')], $this->makeCompany());
+
+        $this->assertStringContainsString('<FacturaTip>X</FacturaTip>', $xml);
+    }
+
+    public function testAnInvoiceWithoutVatIsNotOss(): void
+    {
+        // no VAT: an exemption or a non-taxable operation, whatever the buyer's country
+        $xml = $this->service->generateInvoicesXml([$this->makeOssInvoice('DE', '0.00')], $this->makeCompany());
+        $this->assertStringContainsString('<FacturaTip> </FacturaTip>', $xml);
+        $this->assertStringNotContainsString('<FacturaTip>X</FacturaTip>', $xml);
+
+        // outside the EU there is no OSS at all
+        $xmlNonEu = $this->service->generateInvoicesXml([$this->makeOssInvoice('CH', '38.19')], $this->makeCompany());
+        $this->assertStringContainsString('<FacturaTip> </FacturaTip>', $xmlNonEu);
+
+        // a buyer with a valid VAT number is an intra-community supply, not OSS
+        $xmlVies = $this->service->generateInvoicesXml([$this->makeOssInvoice('DE', '38.19', true)], $this->makeCompany());
+        $this->assertStringContainsString('<FacturaTip> </FacturaTip>', $xmlVies);
+    }
+
     public function testDiscountOmittedWhenZeroOrFlagOff(): void
     {
         $xmlFlagOff = $this->service->generateInvoicesXml([$this->makeInvoice('UEP2026000002', '389', '15.50')], $this->makeCompany(), false);
