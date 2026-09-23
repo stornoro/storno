@@ -243,14 +243,15 @@ notifications:
     cta: 'Open the document'
 
   fiscal_deadline:
-    heading: 'A filing deadline is coming up'
+    heading: 'Declarations due in the next days'
     heading_today: 'A filing is due today'
     heading_named: '%code% is due in %count% days'
     heading_named_today: '%code% is due today'
+    intro: '{1} One declaration due in the next days, at a company with activity.|]1,Inf[ %count% declarations due in the next days, at the companies with activity (%companies%). Companies with no invoices in the period are not listed.'
     declaration: 'Declaration'
     period: 'Period'
     due_date: 'Due date'
-    hint: 'Storno fills the declaration from the invoices of the period and checks it with ANAF own validator before you file it.'
+    hint: "Click the declaration code to create it from the invoices of the period: Storno checks it with ANAF's own validator before you file it."
     cta_create: 'Create the declaration'
     cta_calendar: 'Open the fiscal calendar'
 

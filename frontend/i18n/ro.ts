@@ -5227,6 +5227,8 @@ export default defineI18nLocale(async () => {
     'notification.anaf_missing_token.message': 'Factura {number} emisă pe {date} nu poate fi trimisă la ANAF — niciun token SPV nu este configurat. Conectează SPV până pe {deadline} pentru a evita amenzile.',
     'notification.fiscal_deadline.title': '{company} — {code} până pe {date}',
     'notification.fiscal_deadline.message': '{label} pentru {period} se depune astăzi, {date}. | {label} pentru {period} se depune mâine, pe {date}. | {label} pentru {period} se depune în {count} zile, până pe {date}.',
+    'notification.fiscal_deadline.digest_title': 'Declarații de depus în următoarele zile',
+    'notification.fiscal_deadline.digest_message': '{summary}',
     'notification.expiry.due.title': '{subject}: {label} expiră în {days} zile',
     'notification.expiry.due.message': '{label} ({kind}) pentru {subject} expiră pe {date}. Reînnoiește și actualizează data în Storno.',
     'notification.expiry.due_today.title': '{subject}: {label} expiră astăzi',

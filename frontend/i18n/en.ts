@@ -5226,6 +5226,8 @@ export default defineI18nLocale(async () => {
     'notification.anaf_missing_token.message': 'Invoice {number} issued on {date} cannot be submitted to ANAF — no SPV token is configured. Connect SPV by {deadline} to avoid penalties.',
     'notification.fiscal_deadline.title': '{company} — {code} due by {date}',
     'notification.fiscal_deadline.message': '{label} for {period} is due today, {date}. | {label} for {period} is due tomorrow, {date}. | {label} for {period} is due in {count} days, by {date}.',
+    'notification.fiscal_deadline.digest_title': 'Declarations due in the next days',
+    'notification.fiscal_deadline.digest_message': '{summary}',
     'notification.expiry.due.title': '{subject}: {label} expires in {days} days',
     'notification.expiry.due.message': '{label} ({kind}) for {subject} expires on {date}. Renew it and update the date in Storno.',
     'notification.expiry.due_today.title': '{subject}: {label} expires today',

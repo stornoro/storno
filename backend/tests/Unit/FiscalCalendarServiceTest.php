@@ -280,4 +280,18 @@ class FiscalCalendarServiceTest extends TestCase
         self::assertCount(1, $c168);
         self::assertSame('overdue', $c168[0]['status'], 'a C168 accepted for another dosar does not file this one');
     }
+
+    public function testActivityIsReadFromTheInvoicesOfThePeriodExceptForEmployeesAndDosare(): void
+    {
+        $this->invoices->expects(self::exactly(2))->method('hasActivity')
+            ->willReturnCallback(static fn (Company $c, \DateTimeInterface $from, \DateTimeInterface $to): bool => $from->format('Y-m-d') === '2026-08-01' && $to->format('Y-m-d H:i:s') === '2026-08-31 23:59:59');
+        $company = $this->company();
+        $august = ['year' => 2026, 'month' => 8, 'from' => '2026-08-01', 'to' => '2026-08-31'];
+        $july = ['year' => 2026, 'month' => 7, 'from' => '2026-07-01', 'to' => '2026-07-31'];
+
+        self::assertTrue($this->service->hasActivity($company, ['code' => 'D300', 'period' => $august]));
+        self::assertFalse($this->service->hasActivity($company, ['code' => 'D300', 'period' => $july]));
+        self::assertTrue($this->service->hasActivity($company, ['code' => 'D112', 'period' => $july]), 'employees are activity on their own');
+        self::assertTrue($this->service->hasActivity($company, ['code' => 'D212_ESTIMAT', 'period' => $july, 'dosarId' => 'x']), 'a dosar deadline always applies');
+    }
 }
