@@ -311,6 +311,29 @@ class InvoiceRepository extends ServiceEntityRepository
         return (int) $count > 0;
     }
 
+    /**
+     * True when the company issued or received at least one invoice in the period — the activity
+     * that makes a declaration of that period worth a reminder. Draft, cancelled, rejected and
+     * converted documents do not count.
+     */
+    public function hasActivity(Company $company, \DateTimeInterface $from, \DateTimeInterface $to): bool
+    {
+        $count = $this->createQueryBuilder('i')
+            ->select('COUNT(i.id)')
+            ->where('i.company = :company')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.status NOT IN (:excluded)')
+            ->andWhere('i.issueDate BETWEEN :from AND :to')
+            ->setParameter('company', $company)
+            ->setParameter('excluded', [DocumentStatus::DRAFT, DocumentStatus::CANCELLED, DocumentStatus::REJECTED, DocumentStatus::CONVERTED])
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $count > 0;
+    }
+
     private function periodCounterpartyQuery(Company $company, \DateTimeInterface $from, \DateTimeInterface $to): \Doctrine\ORM\QueryBuilder
     {
         return $this->createQueryBuilder('i')

@@ -65,6 +65,34 @@ final class NotificationEmailTemplatesTest extends KernelTestCase
         self::assertStringNotContainsString('notifications.fiscal_deadline.', $html);
     }
 
+    public function testFiscalDeadlineDigestGroupsTheDeadlinesByCompany(): void
+    {
+        $html = $this->render('emails/notification_fiscal_deadline.html.twig', [
+            'key' => 'digest:2026-09-22',
+            'count' => 3,
+            'companyCount' => 2,
+            'companyId' => '00000000-0000-0000-0000-000000000001',
+            'companies' => [
+                ['companyId' => '00000000-0000-0000-0000-000000000001', 'companyName' => 'Firma Unu SRL', 'items' => [
+                    ['code' => 'D300', 'label' => 'Decont de TVA', 'periodLabel' => '08.2026', 'dueDate' => '2026-09-25', 'dueDateLabel' => '25.09.2026', 'daysLeft' => 3, 'declarationType' => 'd300', 'period' => ['year' => 2026, 'month' => 8]],
+                    ['code' => 'D112', 'label' => 'Contribuții sociale', 'periodLabel' => '08.2026', 'dueDate' => '2026-09-25', 'dueDateLabel' => '25.09.2026', 'daysLeft' => 3, 'declarationType' => 'd112', 'period' => ['year' => 2026, 'month' => 8]],
+                ]],
+                ['companyId' => '00000000-0000-0000-0000-000000000002', 'companyName' => 'Firma Doi SRL', 'items' => [
+                    ['code' => 'D394', 'label' => 'Declarație informativă', 'periodLabel' => '08.2026', 'dueDate' => '2026-09-30', 'dueDateLabel' => '30.09.2026', 'daysLeft' => 8, 'declarationType' => 'd394', 'period' => ['year' => 2026, 'month' => 8]],
+                ]],
+            ],
+        ], 'Firma Unu SRL: D300 (25.09.2026), D112 (25.09.2026) · Firma Doi SRL: D394 (30.09.2026)');
+
+        self::assertStringContainsString('Firma Unu SRL', $html);
+        self::assertStringContainsString('Firma Doi SRL', $html);
+        self::assertStringContainsString('3 declaratii de depus', $html);
+        self::assertStringContainsString('https://app.storno.ro/declarations?create=d300&amp;year=2026&amp;company=00000000-0000-0000-0000-000000000001', $html);
+        self::assertStringContainsString('https://app.storno.ro/declarations?create=d394&amp;year=2026&amp;company=00000000-0000-0000-0000-000000000002', $html);
+        self::assertStringContainsString('https://app.storno.ro/fiscal-calendar?company=00000000-0000-0000-0000-000000000001', $html);
+        self::assertStringContainsString('30.09.2026', $html);
+        self::assertStringNotContainsString('notifications.fiscal_deadline.', $html);
+    }
+
     public function testDosarDeadlineShowsTheCaseFileAndItsStep(): void
     {
         $html = $this->render('emails/notification_dosar_deadline.html.twig', [

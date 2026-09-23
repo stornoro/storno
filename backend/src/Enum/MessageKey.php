@@ -17,6 +17,7 @@ final class MessageKey
     const TITLE_ANAF_DEADLINE = 'notification.anaf_deadline.title';
     const TITLE_ANAF_MISSING_TOKEN = 'notification.anaf_missing_token.title';
     const TITLE_FISCAL_DEADLINE = 'notification.fiscal_deadline.title';
+    const TITLE_FISCAL_DEADLINE_DIGEST = 'notification.fiscal_deadline.digest_title';
     const TITLE_PAYMENT_RECEIVED = 'notification.payment_received.title';
     const TITLE_PARTNER_STATUS_CHANGED = 'notification.partner_status_changed.title';
     const TITLE_EXPIRY_DUE = 'notification.expiry.due.title';
@@ -36,6 +37,7 @@ final class MessageKey
     const MSG_ANAF_DEADLINE = 'notification.anaf_deadline.message';
     const MSG_ANAF_MISSING_TOKEN = 'notification.anaf_missing_token.message';
     const MSG_FISCAL_DEADLINE = 'notification.fiscal_deadline.message';
+    const MSG_FISCAL_DEADLINE_DIGEST = 'notification.fiscal_deadline.digest_message';
     const MSG_PAYMENT_RECEIVED_TITLE = 'notification.payment_received.title_format';
     const MSG_PAYMENT_RECEIVED = 'notification.payment_received.message';
     const MSG_PARTNER_STATUS_CHANGED = 'notification.partner_status_changed.message';

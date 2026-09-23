@@ -126,6 +126,27 @@ final class FiscalCalendarService
         return $items;
     }
 
+    /**
+     * Whether the company had any activity behind a deadline: a deadline carried by a dosar or owed
+     * for the employees always has, the others only when an invoice was issued or received in the
+     * period. A company without activity still owes the declaration (often a nil one), but is not
+     * reminded of it.
+     *
+     * @param array{code: string, period: array{from: string, to: string}, dosarId?: string} $item
+     */
+    public function hasActivity(Company $company, array $item): bool
+    {
+        if (isset($item['dosarId']) || $item['code'] === 'D112') {
+            return true;
+        }
+        $period = $item['period'];
+        if (($period['from'] ?? '') === '' || ($period['to'] ?? '') === '') {
+            return true;
+        }
+
+        return $this->invoiceRepository->hasActivity($company, new \DateTimeImmutable($period['from']), new \DateTimeImmutable($period['to'] . ' 23:59:59'));
+    }
+
     /** @return list<array<string, mixed>> the deadlines whose nominal due date is in the given month */
     private function deadlinesDueIn(Company $company, int $year, int $month): array
     {

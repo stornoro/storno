@@ -31,6 +31,8 @@ notification:
   fiscal_deadline:
     title: '%company% — %code% due by %date%'
     message: '{1} %label% for %period% is due tomorrow, %date%.|]1,Inf[ %label% for %period% is due in %count% days, by %date%.'
+    digest_title: 'Declarations due in the next days'
+    digest_message: '%summary%'
   anaf_missing_token:
     title: '%company% — connect SPV to submit to ANAF'
     message: 'Invoice %number% issued on %date% cannot be submitted to ANAF — no SPV token is configured. Connect SPV by %deadline% to avoid penalties.'

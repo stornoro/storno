@@ -226,14 +226,15 @@ notifications:
     cta: 'Vezi documentul'
 
   fiscal_deadline:
-    heading: 'Se apropie un termen de depunere'
+    heading: 'Declaratii de depus in urmatoarele zile'
     heading_today: 'Astazi e termenul de depunere'
     heading_named: '%code% se depune in %count% zile'
     heading_named_today: '%code% se depune astazi'
+    intro: '{1} O declaratie de depus in urmatoarele zile, la o firma cu activitate.|]1,Inf[ %count% declaratii de depus in urmatoarele zile, la firmele cu activitate (%companies%). Firmele fara facturi in perioada nu apar aici.'
     declaration: 'Declaratie'
     period: 'Perioada'
     due_date: 'Termen'
-    hint: 'Storno completeaza declaratia din facturile perioadei si o valideaza cu validatorul ANAF inainte de depunere.'
+    hint: "Apasa pe codul declaratiei ca sa o creezi din facturile perioadei: Storno o valideaza cu validatorul ANAF inainte de depunere."
     cta_create: 'Creeaza declaratia'
     cta_calendar: 'Vezi calendarul fiscal'
 
