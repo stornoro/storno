@@ -11,6 +11,12 @@ use App\Entity\Supplier;
 
 class SagaXmlExportService
 {
+    private const EU_COUNTRY_CODES = [
+        'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES',
+        'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+        'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ];
+
     public function __construct(
         private readonly \App\Service\ExchangeRateService $exchangeRateService,
     ) {}
@@ -456,7 +462,8 @@ class SagaXmlExportService
     }
 
     /**
-     * SAGA invoice type: space = regular, 1 = OSS, A = aviz, T = reverse-tax.
+     * Document type: space = regular invoice, A = delivery note, T = reverse charge,
+     * X = the special regime of art. 314-315 (OSS).
      */
     private function getSagaInvoiceType(Invoice $invoice): string
     {
@@ -465,12 +472,17 @@ class SagaXmlExportService
         }
 
         if ($this->isOss($invoice)) {
-            return '1';
+            return 'X';
         }
 
         return ' ';
     }
 
+    /**
+     * OSS: the company is registered for it and sells to a buyer of another member state who has no
+     * valid VAT number, at the VAT rate of that state. An invoice carrying no VAT is an exemption,
+     * an export or a non-taxable operation — not OSS, and it keeps the regular document type.
+     */
     private function isOss(Invoice $invoice): bool
     {
         $company = $invoice->getCompany();
@@ -480,9 +492,11 @@ class SagaXmlExportService
 
         return $company
             && $company->isOss()
-            && $country !== 'RO'
             && $country !== null
-            && $client?->isViesValid() !== true;
+            && $country !== 'RO'
+            && in_array($country, self::EU_COUNTRY_CODES, true)
+            && $client?->isViesValid() !== true
+            && bccomp($invoice->getVatTotal(), '0', 2) > 0;
     }
 
     /**
