@@ -66,6 +66,7 @@ async function remove(item: ExpiryItem) {
           <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/vehicles" />
         </template>
         <template #right>
+          <CalendarFeedButton size="md" />
           <UButton icon="i-lucide-plus" @click="openAdd">{{ $t('fleet.newExpiry') }}</UButton>
         </template>
       </UDashboardNavbar>

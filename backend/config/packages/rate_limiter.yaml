@@ -120,6 +120,10 @@ framework:
             policy: 'sliding_window'
             limit: 999999
             interval: '1 minute'
+        calendar_feed:
+            policy: 'sliding_window'
+            limit: 999999
+            interval: '1 minute'
 
 when@prod:
     framework:
@@ -245,3 +249,7 @@ when@prod:
                 policy: 'sliding_window'
                 limit: 600
                 interval: '1 minute'
+            calendar_feed:
+                policy: 'sliding_window'
+                limit: 120
+                interval: '1 hour'

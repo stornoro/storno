@@ -90,6 +90,7 @@ function daysText(days: number): string {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <CalendarFeedButton size="md" />
           <UButton icon="i-lucide-calendar-clock" color="neutral" variant="ghost" to="/expiries">{{ $t('fleet.allExpiries') }}</UButton>
           <UButton icon="i-lucide-plus" @click="openCreate">{{ $t('fleet.newVehicle') }}</UButton>
         </template>

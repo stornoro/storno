@@ -96,6 +96,7 @@ function createLink(item: FiscalCalendarItem): string {
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <CalendarFeedButton />
           <UButton to="/companies" icon="i-lucide-settings-2" color="neutral" variant="ghost" size="sm">
             {{ $t('fiscalCalendar.openSettings') }}
           </UButton>
