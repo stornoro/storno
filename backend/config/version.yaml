@@ -8,10 +8,11 @@ parameters:
             min: '2.6.0'
             releaseNotes: 'https://github.com/stornoro/storno/releases'
         # Per-platform mobile gate. The endpoint computes a `tier` per request:
-        #   - blocking      : client < min     → must update
-        #   - recommended   : min ≤ client < latest → skippable prompt
+        #   - blocking      : client < min, or the client's major.minor is older
+        #                     than latest's → must update (every minor release is mandatory)
+        #   - recommended   : same major.minor as latest, older patch → skippable prompt
         #   - ok            : client ≥ latest  → no prompt
-        # Bump `min` only on a breaking server change or a security incident.
+        # `min` is a second floor for breaking server changes or security incidents.
         # Optional `message` is shown to the user under the prompt; key per
         # locale (ro/en/de/fr). Optional `releaseNotesUrl` shows a "what's new"
         # link. `storeUrl` is the deep link the Update button opens.

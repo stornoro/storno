@@ -10,8 +10,8 @@ use App\Repository\AppVersionOverrideRepository;
  * Computes the upgrade tier a client should be placed in based on its
  * platform and reported version. The contract returned to the client:
  *
- *   tier = "blocking"      → client < min, must update before continuing
- *   tier = "recommended"   → min ≤ client < latest, prompt with skippable modal
+ *   tier = "blocking"      → client < min, or client's major.minor < latest's: must update
+ *   tier = "recommended"   → same major.minor as latest but an older patch: skippable prompt
  *   tier = "ok"            → client ≥ latest, render nothing
  *   tier = "unknown"       → client did not report a version, render nothing
  *
@@ -60,7 +60,7 @@ final class VersionGateService
         $min = (string) ($config['min'] ?? '0.0.0');
 
         return [
-            'tier' => $this->resolveTier($clientVersion, $min, $latest),
+            'tier' => self::resolveTier($clientVersion, $min, $latest),
             'latest' => $latest,
             'min' => $min,
             'storeUrl' => isset($config['storeUrl']) ? (string) $config['storeUrl'] : null,
@@ -125,19 +125,29 @@ final class VersionGateService
         return $platforms[$platform];
     }
 
-    private function resolveTier(?string $clientVersion, string $min, string $latest): string
+    /** The tier of a client version against the effective `min` and `latest` of its platform. */
+    public static function resolveTier(?string $clientVersion, string $min, string $latest): string
     {
-        $client = $this->normalizeVersion($clientVersion);
+        $client = self::normalizeVersion($clientVersion);
         if ($client === null) {
             return self::TIER_UNKNOWN;
         }
-        if (version_compare($client, $this->normalizeVersion($min) ?? '0.0.0', '<')) {
+        $latest = self::normalizeVersion($latest) ?? '0.0.0';
+        if (version_compare($client, self::normalizeVersion($min) ?? '0.0.0', '<')) {
             return self::TIER_BLOCKING;
         }
-        if (version_compare($client, $this->normalizeVersion($latest) ?? '0.0.0', '<')) {
-            return self::TIER_RECOMMENDED;
+        if (version_compare($client, $latest, '>=')) {
+            return self::TIER_OK;
         }
-        return self::TIER_OK;
+        // Every major or minor release is mandatory; only a patch behind is optional.
+        return self::majorMinor($client) === self::majorMinor($latest) ? self::TIER_RECOMMENDED : self::TIER_BLOCKING;
+    }
+
+    private static function majorMinor(string $version): string
+    {
+        $parts = explode('.', preg_replace('/[^0-9.].*$/', '', $version) ?? '');
+
+        return (int) ($parts[0] ?? 0) . '.' . (int) ($parts[1] ?? 0);
     }
 
     /**
@@ -145,7 +155,7 @@ final class VersionGateService
      * version_compare receives a clean PEP 440-ish string. Pre-release tags
      * (`-beta`) are preserved — version_compare handles them natively.
      */
-    private function normalizeVersion(?string $version): ?string
+    private static function normalizeVersion(?string $version): ?string
     {
         if (!is_string($version)) {
             return null;

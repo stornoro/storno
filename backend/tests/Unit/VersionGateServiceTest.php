@@ -44,10 +44,21 @@ class VersionGateServiceTest extends TestCase
         $this->assertSame('1.2.0', $result['min']);
     }
 
-    public function testReturnsRecommendedWhenBetweenMinAndLatest(): void
+    public function testAnOlderMinorAboveMinIsStillBlocking(): void
     {
+        // Every major or minor release is mandatory, even above `min`.
         $result = $this->service()->evaluate('ios', '1.3.0');
-        $this->assertSame(VersionGateService::TIER_RECOMMENDED, $result['tier']);
+        $this->assertSame(VersionGateService::TIER_BLOCKING, $result['tier']);
+    }
+
+    public function testOnlyAnOlderPatchIsRecommended(): void
+    {
+        $svc = $this->service(['ios' => ['latest' => '1.5.2']]);
+        $this->assertSame(VersionGateService::TIER_RECOMMENDED, $svc->evaluate('ios', '1.5.0')['tier']);
+        $this->assertSame(VersionGateService::TIER_RECOMMENDED, $svc->evaluate('ios', '1.5.1')['tier']);
+        $this->assertSame(VersionGateService::TIER_OK, $svc->evaluate('ios', '1.5.2')['tier']);
+        $this->assertSame(VersionGateService::TIER_BLOCKING, $svc->evaluate('ios', '1.4.9')['tier']);
+        $this->assertSame(VersionGateService::TIER_BLOCKING, $svc->evaluate('ios', '0.9.0')['tier']);
     }
 
     public function testReturnsOkWhenAtLatest(): void
@@ -73,9 +84,11 @@ class VersionGateServiceTest extends TestCase
         // Lexicographic compare would call 1.10.0 < 1.9.0; version_compare must
         // place 1.10.0 above 1.9.0 (which is the lexical bug we explicitly
         // guard against).
-        $svc = $this->service(['ios' => ['min' => '1.9.0', 'latest' => '1.10.0']]);
-        $this->assertSame(VersionGateService::TIER_RECOMMENDED, $svc->evaluate('ios', '1.9.5')['tier']);
-        $this->assertSame(VersionGateService::TIER_OK, $svc->evaluate('ios', '1.10.0')['tier']);
+        $svc = $this->service(['ios' => ['min' => '1.9.0', 'latest' => '1.10.2']]);
+        $this->assertSame(VersionGateService::TIER_BLOCKING, $svc->evaluate('ios', '1.9.5')['tier'], 'an older minor is mandatory');
+        $this->assertSame(VersionGateService::TIER_RECOMMENDED, $svc->evaluate('ios', '1.10.0')['tier']);
+        $this->assertSame(VersionGateService::TIER_OK, $svc->evaluate('ios', '1.10.2')['tier']);
+        $this->assertSame(VersionGateService::TIER_OK, $svc->evaluate('ios', '1.11.0')['tier']);
         $this->assertSame(VersionGateService::TIER_BLOCKING, $svc->evaluate('ios', '1.8.9')['tier']);
     }
 
@@ -128,18 +141,22 @@ class VersionGateServiceTest extends TestCase
         $this->assertSame('1.5.0', $result['latest']);
     }
 
-    public function testDbOverrideForLatestPromotesRecommended(): void
+    public function testDbOverrideForLatestDrivesTheTier(): void
     {
-        // YAML latest=1.5.0; admin pushes 1.6.0 ahead of next release.
-        // Client at 1.5.0 used to be `ok`, should now be `recommended`.
+        // YAML latest=1.5.0; admin pushes 1.5.3 ahead of next release.
+        // Client at 1.5.0 used to be `ok`, should now be `recommended`;
+        // a new minor (1.6.0) would make it `blocking`.
         $override = new AppVersionOverride('ios');
-        $override->setLatestOverride('1.6.0');
+        $override->setLatestOverride('1.5.3');
 
         $svc = $this->service([], $this->repoStub($override));
         $result = $svc->evaluate('ios', '1.5.0');
 
         $this->assertSame(VersionGateService::TIER_RECOMMENDED, $result['tier']);
-        $this->assertSame('1.6.0', $result['latest']);
+        $this->assertSame('1.5.3', $result['latest']);
+
+        $override->setLatestOverride('1.6.0');
+        $this->assertSame(VersionGateService::TIER_BLOCKING, $this->service([], $this->repoStub($override))->evaluate('ios', '1.5.0')['tier']);
     }
 
     public function testDbOverrideForMessageReplacesYamlMessage(): void
