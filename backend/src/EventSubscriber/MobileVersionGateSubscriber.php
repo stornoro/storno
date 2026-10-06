@@ -82,6 +82,12 @@ final class MobileVersionGateSubscriber implements EventSubscriberInterface
         if ($gate === null || $gate['tier'] !== VersionGateService::TIER_BLOCKING) {
             return;
         }
+        // The server only refuses clients below `min`. An older minor is `blocking` too, but that
+        // is enforced by the app's non-dismissible update screen: a phone that has not yet seen
+        // the new release must keep syncing, receiving pushes and rendering widgets meanwhile.
+        if (version_compare((string) preg_replace('/\+.*$/', '', trim($clientVersion)), (string) $gate['min'], '>=')) {
+            return;
+        }
 
         $body = [
             'type' => 'https://storno.ro/errors/upgrade-required',

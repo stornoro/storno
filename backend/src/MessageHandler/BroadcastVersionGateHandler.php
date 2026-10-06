@@ -68,7 +68,7 @@ class BroadcastVersionGateHandler
             $userId = $row['user_id'];
             $version = (string) $row['app_version'];
 
-            $tier = $this->resolveTier($version, $min, $latest);
+            $tier = VersionGateService::resolveTier($version, $min, $latest);
             if ($tier === VersionGateService::TIER_OK || $tier === VersionGateService::TIER_UNKNOWN) {
                 $sent['skipped']++;
                 continue;
@@ -127,17 +127,6 @@ class BroadcastVersionGateHandler
             'platform' => $platform,
             'since' => $since,
         ]);
-    }
-
-    private function resolveTier(string $clientVersion, string $min, string $latest): string
-    {
-        if (version_compare($clientVersion, $min, '<')) {
-            return VersionGateService::TIER_BLOCKING;
-        }
-        if (version_compare($clientVersion, $latest, '<')) {
-            return VersionGateService::TIER_RECOMMENDED;
-        }
-        return VersionGateService::TIER_OK;
     }
 
     /**
