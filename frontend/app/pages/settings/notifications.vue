@@ -284,6 +284,19 @@ onMounted(() => {
       </UPageCard>
     </div>
 
+    <!-- Calendar subscription -->
+    <div class="mb-8">
+      <UPageCard
+        :title="$t('calendarFeed.title')"
+        :description="$t('calendarFeed.description')"
+        variant="naked"
+        class="mb-4"
+      />
+      <UPageCard variant="subtle">
+        <CalendarFeedCard />
+      </UPageCard>
+    </div>
+
     <div v-if="loading" class="flex justify-center py-12">
       <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
     </div>

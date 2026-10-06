@@ -63,6 +63,10 @@ security:
             pattern: ^/api/v1/unsubscribe$
             security: false
 
+        calendar_feed:
+            pattern: ^/api/v1/calendar/feed/
+            security: false
+
         oauth2_token:
             pattern: ^/api/v1/oauth2/token$
             security: false
@@ -127,6 +131,7 @@ security:
         - { path: ^/api/v1/public/anaf/nomenclator/, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/public/documents, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/unsubscribe$, methods: [POST], roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/calendar/feed/, methods: [GET, HEAD], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/token$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/oauth2/revoke$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/telegram/webhook$, methods: [POST], roles: PUBLIC_ACCESS }
