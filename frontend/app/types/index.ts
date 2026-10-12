@@ -1643,6 +1643,8 @@ export interface RecurringInvoice {
   penaltyEnabled: boolean
   penaltyPercentPerDay: string | null
   penaltyGraceDays: number | null
+  balance: string | null
+  balanceStep: string | null
   subtotal: string
   vatTotal: string
   total: string
@@ -1701,6 +1703,8 @@ export interface CreateRecurringInvoicePayload {
   penaltyEnabled?: boolean
   penaltyPercentPerDay?: string | null
   penaltyGraceDays?: number | null
+  balance?: string | null
+  balanceStep?: string | null
   lines: RecurringInvoiceLinePayload[]
 }
 

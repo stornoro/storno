@@ -229,6 +229,12 @@ class RecurringInvoiceManager
         if (array_key_exists('paymentTerms', $data)) {
             $ri->setPaymentTerms($data['paymentTerms']);
         }
+        if (array_key_exists('balance', $data)) {
+            $ri->setBalance($data['balance'] !== null && $data['balance'] !== '' ? number_format((float) $data['balance'], 2, '.', '') : null);
+        }
+        if (array_key_exists('balanceStep', $data)) {
+            $ri->setBalanceStep($data['balanceStep'] !== null ? (string) $data['balanceStep'] : null);
+        }
 
         // Auto-email
         if (array_key_exists('autoEmailEnabled', $data)) {

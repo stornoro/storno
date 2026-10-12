@@ -12,7 +12,7 @@ class RecurringInvoiceCrudTest extends ApiTestCase
             'currency' => 'RON',
             'frequency' => 'monthly',
             'frequencyDay' => 15,
-            'nextIssuanceDate' => '2026-03-15',
+            'nextIssuanceDate' => (new \DateTimeImmutable('first day of next month'))->format('Y-m-15'),
             'notes' => 'Factura chirie [[luna]] [[an]]',
             'paymentTerms' => 'Net 30',
             'dueDateType' => 'days',

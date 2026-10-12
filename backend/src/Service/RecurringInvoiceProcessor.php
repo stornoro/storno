@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\DocumentEvent;
 use App\Entity\RecurringInvoice;
+use App\Service\Recurring\TemplateExpression;
 use App\Enum\DocumentStatus;
 use App\Enum\DocumentType;
 use App\Manager\InvoiceManager;
@@ -167,9 +168,31 @@ class RecurringInvoiceProcessor
             $documentData['dueDate'] = $dueDate->format('Y-m-d');
         }
 
+        // BNR rates of the issue date, fetched once per currency; each one also gets an audit note
+        $rates = [];
+        $rateNotes = [];
+        $rateFor = function (string $currency) use (&$rates, &$rateNotes, $issueDate, $ri): ?float {
+            $currency = strtoupper($currency);
+            if (!array_key_exists($currency, $rates)) {
+                $rates[$currency] = $this->exchangeRateService->getRate($currency);
+                if ($rates[$currency] !== null) {
+                    $rateNotes[$currency] = sprintf('Curs BNR %s: 1 %s = %s RON', $issueDate->format('d.m.Y'), $currency, number_format($rates[$currency], 4, '.', ''));
+                } else {
+                    $this->logger->warning('Cannot resolve exchange rate for {currency}, using template prices as-is', [
+                        'currency' => $currency,
+                        'recurringInvoiceId' => (string) $ri->getId(),
+                    ]);
+                }
+            }
+
+            return $rates[$currency];
+        };
+
+        // Values the [[suma:…]] / [[sold]] placeholders can use, and the balance this issuance leaves
+        [$vars, $balanceAfter] = $this->expressionVars($ri, $rateFor, $month, $year);
+
         // Lines with template variable replacement and per-line currency conversion
         $lines = [];
-        $rateNotes = [];
         foreach ($ri->getLines() as $line) {
             $unitPrice = $line->getUnitPrice();
             $discount = $line->getDiscount();
@@ -185,29 +208,17 @@ class RecurringInvoiceProcessor
             // or legacy behaviour when referenceCurrency is set)
             $lineRefCurrency = $line->getReferenceCurrency();
             if ($lineRefCurrency && $ri->getCurrency() === 'RON') {
-                $rate = $this->exchangeRateService->getRate($lineRefCurrency);
+                $rate = $rateFor($lineRefCurrency);
                 if ($rate !== null) {
                     $markup = $line->getMarkupPercent() ? (float) $line->getMarkupPercent() : 0;
                     $multiplier = $rate * (1 + $markup / 100);
                     $unitPrice = number_format((float) $unitPrice * $multiplier, 2, '.', '');
                     $discount = number_format((float) $discount * $multiplier, 2, '.', '');
-
-                    // Track for audit note (one per currency)
-                    $noteKey = $lineRefCurrency;
-                    if (!isset($rateNotes[$noteKey])) {
-                        $rateNote = sprintf('Curs BNR %s: 1 %s = %s RON', $issueDate->format('d.m.Y'), $lineRefCurrency, number_format($rate, 4, '.', ''));
-                        $rateNotes[$noteKey] = $rateNote;
-                    }
-                } else {
-                    $this->logger->warning('Cannot resolve exchange rate for {currency}, using template prices as-is', [
-                        'currency' => $lineRefCurrency,
-                        'recurringInvoiceId' => (string) $ri->getId(),
-                    ]);
                 }
             }
 
             $lines[] = [
-                'description' => $this->replaceTemplateVars($line->getDescription(), $month, $year),
+                'description' => $this->replaceTemplateVars($line->getDescription(), $month, $year, '', $vars),
                 'quantity' => $line->getQuantity(),
                 'unitOfMeasure' => $line->getUnitOfMeasure(),
                 'unitPrice' => $unitPrice,
@@ -227,8 +238,8 @@ class RecurringInvoiceProcessor
         // Build exchange rate text for [[curs]] template variable
         $rateText = !empty($rateNotes) ? implode("\n", $rateNotes) : '';
 
-        // Now replace template variables in notes (including [[curs]])
-        $documentData['notes'] = $this->replaceTemplateVars($documentData['notes'], $month, $year, $rateText);
+        // Now replace template variables in notes (including [[curs]], [[suma:…]] and [[sold]])
+        $documentData['notes'] = $this->replaceTemplateVars($documentData['notes'], $month, $year, $rateText, $vars);
 
         if ($dryRun) {
             $this->advanceNextIssuanceDate($ri);
@@ -240,11 +251,104 @@ class RecurringInvoiceProcessor
         }
 
         // Create the document based on documentType
-        if ($ri->getDocumentType() === DocumentType::PROFORMA) {
-            return $this->createProforma($ri, $company, $documentData, $issueDate, $user);
+        $result = $ri->getDocumentType() === DocumentType::PROFORMA
+            ? $this->createProforma($ri, $company, $documentData, $issueDate, $user)
+            : $this->createInvoice($ri, $company, $documentData, $issueDate, $user);
+
+        $this->settleBalance($ri, $balanceAfter);
+
+        return $result;
+    }
+
+    /**
+     * The values available to [[suma:…]] and the balance placeholders for this issuance:
+     * `curs` (BNR rate of the first reference currency, EUR when the lines have none), `curs_XXX`
+     * for any currency named in an expression, `luna_nr`, `an`, and when the template keeps a
+     * running balance: `sold_anterior` (before this invoice), `rata` (what this invoice deducts,
+     * never more than what is left) and `sold` (what remains afterwards).
+     *
+     * @param callable(string): ?float $rateFor
+     * @return array{0: array<string, float>, 1: ?string} the vars and the balance to store after issuing
+     */
+    private function expressionVars(RecurringInvoice $ri, callable $rateFor, int $month, int $year): array
+    {
+        $vars = ['luna_nr' => (float) $month, 'an' => (float) $year];
+
+        $referenced = [];
+        foreach ([$ri->getNotes(), $ri->getBalanceStep()] as $text) {
+            if ($text !== null && preg_match_all('/\[\[suma:([^\]]+)\]\]/u', $text, $m)) {
+                foreach ($m[1] as $expr) {
+                    $referenced = array_merge($referenced, TemplateExpression::names($expr));
+                }
+            }
+        }
+        foreach ($ri->getLines() as $line) {
+            if ($line->getDescription() !== null && preg_match_all('/\[\[suma:([^\]]+)\]\]/u', $line->getDescription(), $m)) {
+                foreach ($m[1] as $expr) {
+                    $referenced = array_merge($referenced, TemplateExpression::names($expr));
+                }
+            }
+        }
+        if ($ri->getBalanceStep() !== null) {
+            $referenced = array_merge($referenced, TemplateExpression::names($ri->getBalanceStep()));
         }
 
-        return $this->createInvoice($ri, $company, $documentData, $issueDate, $user);
+        $firstCurrency = null;
+        foreach ($ri->getLines() as $line) {
+            if ($line->getReferenceCurrency()) {
+                $firstCurrency = strtoupper($line->getReferenceCurrency());
+                break;
+            }
+        }
+        foreach (array_unique($referenced) as $name) {
+            if ($name === 'curs') {
+                $vars['curs'] = (float) ($rateFor($firstCurrency ?? 'EUR') ?? 0.0);
+            } elseif (preg_match('/^curs_([A-Za-z]{3})$/', $name, $cm)) {
+                $vars[$name] = (float) ($rateFor($cm[1]) ?? 0.0);
+            }
+        }
+
+        $balanceAfter = null;
+        if ($ri->getBalance() !== null) {
+            $before = (float) $ri->getBalance();
+            $step = 0.0;
+            if ($ri->getBalanceStep() !== null) {
+                try {
+                    $step = max(0.0, TemplateExpression::evaluate($ri->getBalanceStep(), $vars + ['sold_anterior' => $before]));
+                } catch (\InvalidArgumentException $e) {
+                    $this->logger->warning('Recurring template {id}: balance step cannot be evaluated ({error}); the balance is left unchanged', [
+                        'id' => (string) $ri->getId(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            $rata = round(min($step, $before), 2);
+            $after = round($before - $rata, 2);
+            $vars += ['sold_anterior' => $before, 'rata' => $rata, 'sold' => $after];
+            $balanceAfter = number_format($after, 2, '.', '');
+        }
+
+        return [$vars, $balanceAfter];
+    }
+
+    /** Stores the balance left after an issuance; a template whose balance reached zero is paused. */
+    private function settleBalance(RecurringInvoice $ri, ?string $balanceAfter): void
+    {
+        if ($balanceAfter === null || $ri->getBalance() === null) {
+            return;
+        }
+        $ri->setBalance($balanceAfter);
+        if ((float) $balanceAfter <= 0.0 && $ri->isActive()) {
+            $ri->setIsActive(false);
+            $this->logger->info('Recurring template {id}: the balance reached zero, the template was paused', ['id' => (string) $ri->getId()]);
+        }
+        $this->entityManager->flush();
+    }
+
+    /** The values a balance step is validated against (any rate-like name resolves to 1). */
+    public static function sampleExpressionVars(): array
+    {
+        return ['curs' => 1.0, 'sold' => 0.0, 'sold_anterior' => 0.0, 'rata' => 0.0, 'luna_nr' => 1.0, 'an' => 2026.0];
     }
 
     /**
@@ -348,11 +452,27 @@ class RecurringInvoiceProcessor
         ]);
     }
 
-    private function replaceTemplateVars(?string $text, int $month, int $year, string $rateText = ''): ?string
+    /** @param array<string, float> $vars */
+    private function replaceTemplateVars(?string $text, int $month, int $year, string $rateText = '', array $vars = []): ?string
     {
         if ($text === null) {
             return null;
         }
+
+        // [[suma:expr]] → an amount computed from the BNR rate and the running balance, e.g. [[suma:1900*curs]]
+        $text = preg_replace_callback('/\[\[suma:([^\]]+)\]\]/u', function (array $m) use ($vars): string {
+            try {
+                return self::formatAmount(TemplateExpression::evaluate($m[1], $vars));
+            } catch (\InvalidArgumentException $e) {
+                $this->logger->warning('Recurring template placeholder {placeholder} cannot be evaluated: {error}', ['placeholder' => $m[0], 'error' => $e->getMessage()]);
+
+                return $m[0];
+            }
+        }, $text);
+        // [[sold]], [[sold_anterior]], [[rata]] → the running balance figures of this issuance
+        $text = preg_replace_callback('/\[\[(sold|sold_anterior|rata)\]\]/', function (array $m) use ($vars): string {
+            return isset($vars[$m[1]]) ? self::formatAmount($vars[$m[1]]) : $m[0];
+        }, $text);
 
         return preg_replace_callback(
             '/\[\[(luna|luna_nr|an)([+-]\d+)?\]\]|\[\[curs\]\]/',
@@ -385,6 +505,12 @@ class RecurringInvoiceProcessor
             },
             $text,
         );
+    }
+
+    /** Romanian number format: 9.633,00 */
+    public static function formatAmount(float $value): string
+    {
+        return number_format($value, 2, ',', '.');
     }
 
     private function calculateDueDate(RecurringInvoice $ri, \DateTimeInterface $issueDate): ?\DateTimeInterface
