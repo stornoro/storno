@@ -29,6 +29,11 @@ class RecurringInvoiceLine implements DocumentLineInterface
     #[Groups(['recurring_invoice:detail'])]
     private string $priceRule = 'fixed';
 
+    /** With priceRule `expression`: the unit price computed at issuance, e.g. `2000*curs - rata`. */
+    #[ORM\Column(length: 200, nullable: true)]
+    #[Groups(['recurring_invoice:detail'])]
+    private ?string $priceExpression = null;
+
     public function __construct()
     {
         $this->initId();
@@ -78,6 +83,18 @@ class RecurringInvoiceLine implements DocumentLineInterface
     public function setPriceRule(string $priceRule): static
     {
         $this->priceRule = $priceRule;
+
+        return $this;
+    }
+
+    public function getPriceExpression(): ?string
+    {
+        return $this->priceExpression;
+    }
+
+    public function setPriceExpression(?string $priceExpression): static
+    {
+        $this->priceExpression = $priceExpression !== null && trim($priceExpression) !== '' ? trim($priceExpression) : null;
 
         return $this;
     }

@@ -275,6 +275,9 @@ class RecurringInvoiceManager
             if (array_key_exists('markupPercent', $lineData)) {
                 $line->setMarkupPercent($lineData['markupPercent'] !== null ? (string) $lineData['markupPercent'] : null);
             }
+            if (array_key_exists('priceExpression', $lineData)) {
+                $line->setPriceExpression($lineData['priceExpression'] !== null ? (string) $lineData['priceExpression'] : null);
+            }
 
             // Product link
             if (!empty($lineData['productId'])) {

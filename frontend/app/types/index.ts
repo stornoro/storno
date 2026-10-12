@@ -1610,6 +1610,7 @@ export interface RecurringInvoiceLine {
   referenceCurrency: string | null
   markupPercent: string | null
   priceRule: string
+  priceExpression: string | null
   productId: string | null
   productCode: string | null
   productName: string | null
@@ -1674,6 +1675,7 @@ export interface RecurringInvoiceLinePayload {
   referenceCurrency?: string | null
   markupPercent?: string | null
   priceRule?: string
+  priceExpression?: string | null
   productId?: string | null
   productCode?: string | null
 }

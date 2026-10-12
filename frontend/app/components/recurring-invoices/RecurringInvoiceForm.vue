@@ -356,6 +356,11 @@
             />
           </UFormField>
 
+          <!-- Price expression -->
+          <UFormField v-if="line.priceRule === 'expression'" :label="$t('recurringInvoices.priceExpression')" :help="$t('recurringInvoices.priceExpressionHint')">
+            <UInput v-model="line.priceExpression" placeholder="2000*curs - rata" class="font-mono w-full" />
+          </UFormField>
+
           <!-- Reference currency (for bnr_rate / bnr_rate_markup) -->
           <template v-if="(line.priceRule === 'bnr_rate' || line.priceRule === 'bnr_rate_markup') && form.currency === 'RON'">
             <div class="grid grid-cols-2 gap-3">
@@ -651,6 +656,7 @@ interface LineForm {
   referenceCurrency: string | null
   markupPercent: string
   priceRule: string
+  priceExpression: string
   productId: string
   productCode: string
 }
@@ -669,6 +675,7 @@ function emptyLine(): LineForm {
     referenceCurrency: null,
     markupPercent: '',
     priceRule: 'fixed',
+    priceExpression: '',
     productId: '',
     productCode: '',
   }
@@ -751,6 +758,7 @@ if (props.recurringInvoice) {
         referenceCurrency: l.referenceCurrency || null,
         markupPercent: l.markupPercent || '',
         priceRule: l.priceRule || 'fixed',
+        priceExpression: l.priceExpression || '',
         productId: l.productId || '',
         productCode: l.productCode || '',
       }))
@@ -894,6 +902,7 @@ const priceRuleOptions = computed(() => [
   { label: $t('priceRules.updated_product'), value: 'updated_product' },
   { label: $t('priceRules.bnr_rate'), value: 'bnr_rate' },
   { label: $t('priceRules.bnr_rate_markup'), value: 'bnr_rate_markup' },
+  { label: $t('priceRules.expression'), value: 'expression' },
 ])
 
 const dueDateTypeOptions = computed(() => [
@@ -1093,6 +1102,7 @@ async function onSave() {
     referenceCurrency: l.referenceCurrency || null,
     markupPercent: l.markupPercent || null,
     priceRule: l.priceRule || 'fixed',
+    priceExpression: l.priceRule === 'expression' ? l.priceExpression.trim() || null : null,
     productId: l.productId || null,
     productCode: l.productCode || null,
   }))

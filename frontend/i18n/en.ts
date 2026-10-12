@@ -1364,6 +1364,8 @@ export default defineI18nLocale(async () => {
     balanceHint: 'Updated automatically after every issuance',
     balanceStep: 'Deduction per invoice (expression)',
     balanceStepHint: 'E.g. 1900*curs = 1,900 EUR at the BNR rate of the invoice date',
+    priceExpression: 'Unit price expression (RON)',
+    priceExpressionHint: 'E.g. 2000*curs - rata = 2,000 EUR at the BNR rate minus what this month deducts from the balance. Names: curs, curs_EUR, rata, sold, sold_anterior',
     penalties: 'Penalties',
     penaltyEnabled: 'Enable penalties',
     penaltyPercentPerDay: 'Penalty percentage per day',
@@ -1395,6 +1397,7 @@ export default defineI18nLocale(async () => {
     updated_product: 'Updated product price',
     bnr_rate: 'Price in RON at BNR rate',
     bnr_rate_markup: 'Price in RON at BNR rate + percentage',
+    expression: 'Price computed from an expression',
   },
 
   // ── Invoice direction ────────────────────────────────────────
