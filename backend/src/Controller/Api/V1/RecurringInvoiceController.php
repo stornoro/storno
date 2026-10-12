@@ -420,6 +420,21 @@ class RecurringInvoiceController extends AbstractController
             return 'penaltyGraceDays must be non-negative.';
         }
 
+        // Running balance
+        if (isset($data['balance']) && $data['balance'] !== '' && (!is_numeric($data['balance']) || (float) $data['balance'] < 0)) {
+            return 'balance must be a non-negative amount.';
+        }
+        if (!empty($data['balanceStep'])) {
+            if (!is_string($data['balanceStep'])) {
+                return 'balanceStep must be an expression such as "1900*curs".';
+            }
+            try {
+                \App\Service\Recurring\TemplateExpression::evaluate($data['balanceStep'], \App\Service\RecurringInvoiceProcessor::sampleExpressionVars());
+            } catch (\InvalidArgumentException $e) {
+                return 'balanceStep: ' . $e->getMessage();
+            }
+        }
+
         return null;
     }
 }

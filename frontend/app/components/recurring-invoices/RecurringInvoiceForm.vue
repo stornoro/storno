@@ -444,6 +444,27 @@
       </div>
     </div>
 
+    <!-- Running balance -->
+    <div>
+      <button type="button" class="flex items-center gap-2 w-full py-2 group" @click="showBalance = !showBalance">
+        <UIcon name="i-lucide-trending-down" class="size-4 text-(--ui-text-muted)" />
+        <span class="text-xs font-semibold uppercase tracking-wide text-(--ui-text-muted)">{{ $t('recurringInvoices.balanceSection') }}</span>
+        <div class="flex-1 border-t border-(--ui-border) mx-2" />
+        <UIcon :name="showBalance ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-3.5 text-(--ui-text-muted) group-hover:text-(--ui-text) transition-colors" />
+      </button>
+      <div v-if="showBalance" class="pb-3 pl-6 space-y-3">
+        <p class="text-xs text-(--ui-text-muted)">{{ $t('recurringInvoices.balanceHelp') }}</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <UFormField :label="$t('recurringInvoices.balance')" :help="$t('recurringInvoices.balanceHint')">
+            <UInput v-model="form.balance" type="number" step="0.01" min="0" placeholder="0.00" />
+          </UFormField>
+          <UFormField :label="$t('recurringInvoices.balanceStep')" :help="$t('recurringInvoices.balanceStepHint')">
+            <UInput v-model="form.balanceStep" placeholder="1900*curs" class="font-mono" />
+          </UFormField>
+        </div>
+      </div>
+    </div>
+
     <!-- Penalties -->
     <div>
       <button type="button" class="flex items-center gap-2 w-full py-2 group" @click="showPenalties = !showPenalties">
@@ -572,6 +593,7 @@ const saving = ref(false)
 const showNotes = ref(false)
 const showAutoEmail = ref(false)
 const showPenalties = ref(false)
+const showBalance = ref(!!(props.recurringInvoice?.balance))
 const productPickerOpen = ref(false)
 const productPickerLineIndex = ref(0)
 
@@ -677,6 +699,8 @@ const form = reactive({
   penaltyEnabled: false,
   penaltyPercentPerDay: '',
   penaltyGraceDays: 0 as number,
+  balance: '' as string | number,
+  balanceStep: '',
   vatIncluded: false,
   lines: [emptyLine()] as LineForm[],
 })
@@ -710,6 +734,8 @@ if (props.recurringInvoice) {
   form.penaltyEnabled = ri.penaltyEnabled ?? false
   form.penaltyPercentPerDay = ri.penaltyPercentPerDay || ''
   form.penaltyGraceDays = ri.penaltyGraceDays ?? 0
+  form.balance = ri.balance ?? ''
+  form.balanceStep = ri.balanceStep ?? ''
   form.vatIncluded = ri.lines.some(l => l.vatIncluded)
   form.lines = ri.lines.length > 0
     ? ri.lines.map(l => ({
@@ -818,6 +844,10 @@ const templateVariables = [
   { token: '[[luna_nr-1]]', example: String(prevMonth.month + 1).padStart(2, '0') },
   { token: '[[luna_nr+1]]', example: String(nextMonth.month + 1).padStart(2, '0') },
   { token: '[[curs]]', example: 'Curs BNR' },
+  { token: '[[suma:1900*curs]]', example: '9.633,00' },
+  { token: '[[rata]]', example: '9.633,00' },
+  { token: '[[sold]]', example: '28.899,00' },
+  { token: '[[sold_anterior]]', example: '38.532,00' },
 ]
 
 const frequencyOptions = computed(() => [
@@ -1092,6 +1122,8 @@ async function onSave() {
     penaltyEnabled: form.penaltyEnabled,
     penaltyPercentPerDay: form.penaltyEnabled ? form.penaltyPercentPerDay || null : null,
     penaltyGraceDays: form.penaltyEnabled ? form.penaltyGraceDays : null,
+    balance: form.balance === '' || form.balance === null ? null : String(form.balance),
+    balanceStep: form.balanceStep.trim() || null,
     lines,
   }
 

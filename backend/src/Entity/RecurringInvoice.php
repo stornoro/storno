@@ -140,6 +140,18 @@ class RecurringInvoice
     #[Groups(['recurring_invoice:detail'])]
     private ?string $paymentTerms = null;
 
+    /**
+     * A running balance printed in the notes as [[sold]] and reduced on every issuance by the
+     * amount of `balanceStep` (an expression such as `1900*curs`). Null when the template has none.
+     */
+    #[ORM\Column(type: Types::DECIMAL, precision: 14, scale: 2, nullable: true)]
+    #[Groups(['recurring_invoice:list', 'recurring_invoice:detail'])]
+    private ?string $balance = null;
+
+    #[ORM\Column(length: 200, nullable: true)]
+    #[Groups(['recurring_invoice:list', 'recurring_invoice:detail'])]
+    private ?string $balanceStep = null;
+
     #[ORM\OneToMany(mappedBy: 'recurringInvoice', targetEntity: RecurringInvoiceLine::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['position' => 'ASC'])]
     #[Groups(['recurring_invoice:detail'])]
@@ -477,6 +489,30 @@ class RecurringInvoice
     public function setNotes(?string $notes): static
     {
         $this->notes = $notes;
+
+        return $this;
+    }
+
+    public function getBalance(): ?string
+    {
+        return $this->balance;
+    }
+
+    public function setBalance(?string $balance): static
+    {
+        $this->balance = $balance;
+
+        return $this;
+    }
+
+    public function getBalanceStep(): ?string
+    {
+        return $this->balanceStep;
+    }
+
+    public function setBalanceStep(?string $balanceStep): static
+    {
+        $this->balanceStep = $balanceStep !== null && trim($balanceStep) !== '' ? trim($balanceStep) : null;
 
         return $this;
     }
