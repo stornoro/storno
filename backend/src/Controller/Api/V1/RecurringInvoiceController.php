@@ -420,6 +420,21 @@ class RecurringInvoiceController extends AbstractController
             return 'penaltyGraceDays must be non-negative.';
         }
 
+        // Lines priced by an expression
+        foreach (is_array($data['lines'] ?? null) ? $data['lines'] : [] as $i => $lineData) {
+            if (!is_array($lineData) || ($lineData['priceRule'] ?? null) !== 'expression') {
+                continue;
+            }
+            if (empty($lineData['priceExpression']) || !is_string($lineData['priceExpression'])) {
+                return sprintf('lines[%d].priceExpression is required with priceRule "expression".', $i);
+            }
+            try {
+                \App\Service\Recurring\TemplateExpression::evaluate($lineData['priceExpression'], \App\Service\RecurringInvoiceProcessor::sampleExpressionVars());
+            } catch (\InvalidArgumentException $e) {
+                return sprintf('lines[%d].priceExpression: %s', $i, $e->getMessage());
+            }
+        }
+
         // Running balance
         if (isset($data['balance']) && $data['balance'] !== '' && (!is_numeric($data['balance']) || (float) $data['balance'] < 0)) {
             return 'balance must be a non-negative amount.';

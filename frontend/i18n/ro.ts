@@ -1363,6 +1363,8 @@ export default defineI18nLocale(async () => {
       balanceHint: 'Se actualizeaza automat dupa fiecare emitere',
       balanceStep: 'Scadere la fiecare factura (expresie)',
       balanceStepHint: 'Ex: 1900*curs = 1.900 EUR la cursul BNR din ziua facturii',
+      priceExpression: 'Expresie pret unitar (RON)',
+      priceExpressionHint: 'Ex: 2000*curs - rata = 2.000 EUR la curs BNR minus ce se scade din sold luna aceasta. Nume: curs, curs_EUR, rata, sold, sold_anterior',
       penalties: 'Penalitati',
       penaltyEnabled: 'Activeaza penalitatile',
       penaltyPercentPerDay: 'Procent penalizare pe zi',
@@ -1394,6 +1396,7 @@ export default defineI18nLocale(async () => {
       updated_product: 'Pret actualizat articol',
       bnr_rate: 'Pret in RON la curs BNR',
       bnr_rate_markup: 'Pret in RON la curs BNR + procent',
+      expression: 'Pret calculat din expresie',
     },
 
     // ── Invoice direction ────────────────────────────────────────

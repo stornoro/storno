@@ -34,6 +34,11 @@ class RecurringInvoiceBalanceTest extends ApiTestCase
                 'description' => 'Chirie [[luna]] [[an]] (reducere [[suma:1900*2]])',
                 'quantity' => '1.00', 'unitOfMeasure' => 'buc', 'unitPrice' => '10000.00',
                 'vatRate' => '0.00', 'vatCategoryCode' => 'E', 'discount' => '3800.00', 'discountPercent' => '0.00',
+            ], [
+                'description' => 'Chirie neta (2000 EUR minus rata)',
+                'quantity' => '1.00', 'unitOfMeasure' => 'buc', 'unitPrice' => '0.00',
+                'vatRate' => '0.00', 'vatCategoryCode' => 'E', 'discount' => '0.00', 'discountPercent' => '0.00',
+                'priceRule' => 'expression', 'priceExpression' => '2000*2 - rata',
             ]],
         ], $h);
         $this->assertResponseStatusCodeSame(201);
@@ -45,6 +50,7 @@ class RecurringInvoiceBalanceTest extends ApiTestCase
         $invoice = $this->apiGet('/api/v1/invoices/' . $first['invoiceId'], $h);
         $this->assertStringContainsString('Reducere chirie (1.900 EUR): 3.800,00 lei; rata: 3.800,00 lei; sold investitie ramas: 1.200,00 lei (inainte: 5.000,00).', $invoice['notes']);
         $this->assertStringContainsString('(reducere 3.800,00)', $invoice['lines'][0]['description']);
+        $this->assertSame('200.00', $invoice['lines'][1]['unitPrice'], '2000*2 minus the 3.800 deducted');
         $this->assertStringNotContainsString('[[', $invoice['notes']);
 
         $after = $this->apiGet('/api/v1/recurring-invoices/' . $ri['id'], $h);
@@ -56,6 +62,7 @@ class RecurringInvoiceBalanceTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $invoice2 = $this->apiGet('/api/v1/invoices/' . $second['invoiceId'], $h);
         $this->assertStringContainsString('rata: 1.200,00 lei; sold investitie ramas: 0,00 lei (inainte: 1.200,00).', $invoice2['notes']);
+        $this->assertSame('2800.00', $invoice2['lines'][1]['unitPrice'], 'the last month pays 2000*2 minus what was left');
         $final = $this->apiGet('/api/v1/recurring-invoices/' . $ri['id'], $h);
         $this->assertSame('0.00', $final['balance']);
         $this->assertFalse($final['isActive'], 'a template whose balance reached zero is paused');
@@ -63,6 +70,19 @@ class RecurringInvoiceBalanceTest extends ApiTestCase
         $this->apiDelete('/api/v1/invoices/' . $second['invoiceId'], $h);
         $this->apiDelete('/api/v1/invoices/' . $first['invoiceId'], $h);
         $this->apiDelete('/api/v1/recurring-invoices/' . $ri['id'], $h);
+    }
+
+    public function testInvalidPriceExpressionIsRejected(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $this->apiPost('/api/v1/recurring-invoices', [
+            'documentType' => 'invoice', 'currency' => 'RON', 'frequency' => 'monthly', 'frequencyDay' => 1,
+            'nextIssuanceDate' => (new \DateTimeImmutable('today'))->format('Y-m-d'), 'dueDateType' => 'days', 'dueDateDays' => 15,
+            'lines' => [['description' => 'x', 'quantity' => '1', 'unitOfMeasure' => 'buc', 'unitPrice' => '1', 'vatRate' => '19.00', 'vatCategoryCode' => 'S', 'priceRule' => 'expression', 'priceExpression' => '2000*curs -']],
+        ], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(400);
+        $this->assertStringContainsString('priceExpression', $this->decodeResponse()['error'] ?? '');
     }
 
     public function testInvalidBalanceStepIsRejected(): void

@@ -204,6 +204,20 @@ class RecurringInvoiceProcessor
                 $unitPrice = $line->getProduct()->getDefaultPrice();
             }
 
+            // Price rule: a unit price computed from the rates and the running balance, e.g. 2000*curs - rata
+            $priced = false;
+            if ($priceRule === 'expression' && $line->getPriceExpression() !== null) {
+                try {
+                    $unitPrice = number_format(max(0.0, TemplateExpression::evaluate($line->getPriceExpression(), $vars)), 2, '.', '');
+                    $priced = true;
+                } catch (\InvalidArgumentException $e) {
+                    $this->logger->warning('Recurring template {id}: price expression cannot be evaluated ({error}); the template price is used', [
+                        'id' => (string) $ri->getId(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             // Per-line reference currency conversion (applies for bnr_rate / bnr_rate_markup price rules,
             // or legacy behaviour when referenceCurrency is set)
             $lineRefCurrency = $line->getReferenceCurrency();
@@ -212,7 +226,9 @@ class RecurringInvoiceProcessor
                 if ($rate !== null) {
                     $markup = $line->getMarkupPercent() ? (float) $line->getMarkupPercent() : 0;
                     $multiplier = $rate * (1 + $markup / 100);
-                    $unitPrice = number_format((float) $unitPrice * $multiplier, 2, '.', '');
+                    if (!$priced) { // an expression already yields the document currency
+                        $unitPrice = number_format((float) $unitPrice * $multiplier, 2, '.', '');
+                    }
                     $discount = number_format((float) $discount * $multiplier, 2, '.', '');
                 }
             }
@@ -287,6 +303,9 @@ class RecurringInvoiceProcessor
                 foreach ($m[1] as $expr) {
                     $referenced = array_merge($referenced, TemplateExpression::names($expr));
                 }
+            }
+            if ($line->getPriceRule() === 'expression' && $line->getPriceExpression() !== null) {
+                $referenced = array_merge($referenced, TemplateExpression::names($line->getPriceExpression()));
             }
         }
         if ($ri->getBalanceStep() !== null) {
