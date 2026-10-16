@@ -74,6 +74,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $microsoftId = null;
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $signupAttribution = null;
+
     #[ORM\OneToMany(mappedBy: 'user', targetEntity: OrganizationMembership::class, cascade: ['persist', 'remove'])]
     private Collection $organizationMemberships;
 
@@ -364,6 +367,28 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAppleId(?string $appleId): static
     {
         $this->appleId = $appleId;
+
+        return $this;
+    }
+
+    /**
+     * Where the sign-up came from: utm_* parameters, the landing page, the
+     * referrer and whether a Meta ad click preceded it. Kept so the source of
+     * each account can be read without depending on Meta's own attribution.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getSignupAttribution(): ?array
+    {
+        return $this->signupAttribution;
+    }
+
+    /**
+     * @param array<string, mixed>|null $signupAttribution
+     */
+    public function setSignupAttribution(?array $signupAttribution): static
+    {
+        $this->signupAttribution = $signupAttribution;
 
         return $this;
     }

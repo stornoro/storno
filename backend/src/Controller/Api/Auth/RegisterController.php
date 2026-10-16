@@ -126,6 +126,11 @@ class RegisterController extends AbstractController
         $membership->setRole(OrganizationRole::OWNER);
         $membership->setIsActive(true);
 
+        // Where the sign-up came from (utm, landing page, ad click); also fed
+        // to Meta's Conversions API below.
+        $attribution = RegistrationAttribution::fromRequest($request, is_array($data) ? $data : []);
+        $user->setSignupAttribution(RegistrationAttribution::forStorage($attribution));
+
         $this->entityManager->persist($user);
         $this->entityManager->persist($organization);
         $this->entityManager->persist($membership);
@@ -141,7 +146,6 @@ class RegisterController extends AbstractController
         // Report the sign-up to Meta's Conversions API (no-op unless configured).
         // The user id doubles as event_id so a browser pixel firing the same
         // event later is deduplicated instead of counted twice.
-        $attribution = RegistrationAttribution::fromRequest($request, is_array($data) ? $data : []);
         $this->messageBus->dispatch(new SendMetaConversionMessage(
             eventName: 'CompleteRegistration',
             eventId: (string) $user->getId(),

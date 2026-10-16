@@ -17,8 +17,10 @@ final class RegistrationAttribution
     private const FBC_PATTERN = '/^fb\.[0-9]\.\d{10,16}\.[A-Za-z0-9_\-]{1,512}$/';
     private const FBP_PATTERN = '/^fb\.[0-9]\.\d{10,16}\.\d{1,20}$/';
 
+    private const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+
     /**
-     * @return array{fbc: ?string, fbp: ?string, source_url: ?string}
+     * @return array{fbc: ?string, fbp: ?string, source_url: ?string, utm: array<string, string>, referrer: ?string}
      */
     public static function fromRequest(Request $request, array $payload): array
     {
@@ -41,7 +43,44 @@ final class RegistrationAttribution
             }
         }
 
-        return ['fbc' => $fbc, 'fbp' => $fbp, 'source_url' => $sourceUrl];
+        // utm_* values stored by the landing's attribution plugin (first-party
+        // cookie, forwarded in the payload). Whitelisted keys, short plain strings.
+        $utm = [];
+        $rawUtm = is_array($attribution['utm'] ?? null) ? $attribution['utm'] : [];
+        foreach ([...self::UTM_KEYS, 'landing'] as $key) {
+            $value = $rawUtm[$key] ?? null;
+            if (is_string($value) && $value !== '' && mb_strlen($value) <= 200 && !preg_match('/[\x00-\x1f\x7f]/', $value)) {
+                $utm[$key] = $value;
+            }
+        }
+
+        $referrer = $request->headers->get('Referer');
+        $referrer = is_string($referrer) && preg_match('~^https?://[^\s]{1,2000}$~', $referrer) ? $referrer : null;
+
+        return ['fbc' => $fbc, 'fbp' => $fbp, 'source_url' => $sourceUrl, 'utm' => $utm, 'referrer' => $referrer];
+    }
+
+    /**
+     * What gets stored on the account: no raw click ids, only whether an ad
+     * click preceded the sign-up, plus the utm parameters and the landing page.
+     *
+     * @param array{fbc: ?string, fbp: ?string, source_url: ?string, utm: array<string, string>, referrer: ?string} $attribution
+     * @return array<string, mixed>|null null when nothing is known (organic, direct)
+     */
+    public static function forStorage(array $attribution): ?array
+    {
+        $stored = $attribution['utm'];
+        if ($attribution['fbc'] !== null) {
+            $stored['meta_click'] = true;
+        }
+        if ($attribution['referrer'] !== null) {
+            $stored['referrer'] = $attribution['referrer'];
+        }
+        if ($attribution['source_url'] !== null) {
+            $stored['source_url'] = $attribution['source_url'];
+        }
+
+        return $stored === [] ? null : $stored;
     }
 
     private static function pick(mixed $fromPayload, ?string $fromCookie, string $pattern): ?string
