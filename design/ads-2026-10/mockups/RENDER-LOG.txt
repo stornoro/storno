@@ -1,0 +1,4 @@
+OK   ef-gratuit.1080x1080.html
+OK   ef-gratuit.1080x1920.html
+OK   fr-gratuit.1080x1080.html
+OK   fr-gratuit.1080x1920.html
