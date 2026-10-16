@@ -50,7 +50,10 @@ services:
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-1}
       FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-}
-      PUSH_RELAY_URL: ${PUSH_RELAY_URL:-https://hub.storno.ro}
+      # Default relay when the variable is absent; an explicit empty value disables
+      # the relay so the instance sends through its own FIREBASE_CREDENTIALS.
+      PUSH_RELAY_URL: ${PUSH_RELAY_URL-https://hub.storno.ro}
+      PUSH_RELAY_SECRET: ${PUSH_RELAY_SECRET:-}
       VIES_PROXY_URL: ${VIES_PROXY_URL:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
