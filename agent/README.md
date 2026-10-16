@@ -184,6 +184,10 @@ Stored in `~/.storno-agent/config.json`:
 - Another agent instance may be running. Check with `storno-agent status`
 - Change the port with `storno-agent config --port <number>`
 
+### Where is the log?
+- The app runs with no terminal; every console line is also appended to `~/.storno-agent/agent.log` (rotated at 5 MB, `agent.log.1` kept). The PIN is redacted.
+- The SPV monitor retries "token not ready" errors (20/40/90 s) and transient network errors such as `Connection reset by peer` or a timeout (5/15/45 s) before a run counts as failed.
+
 ### curl errors
 - Ensure `curl` is installed and supports your platform's TLS backend
 - On macOS: the built-in curl uses SecureTransport (supports Keychain)

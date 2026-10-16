@@ -7,7 +7,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isTransientTokenError, describeTokenError } from '../src/monitor/spv-monitor.js';
+import { isTransientTokenError, isTransientNetworkError, describeTokenError } from '../src/monitor/spv-monitor.js';
 
 describe('isTransientTokenError', () => {
   it('matches the libp11 "object not found" failure seen right after wake', () => {
@@ -34,5 +34,25 @@ describe('describeTokenError', () => {
     assert.match(text, /Token-ul nu a raspuns/);
     assert.match(text, /Detalii: object not found$/);
     assert.equal(isTransientTokenError(text), true);
+  });
+});
+
+describe('isTransientNetworkError', () => {
+  it('matches curl resets, timeouts and TLS handshake drops', () => {
+    for (const m of [
+      'curl exited with code 56: curl: (56) Recv failure: Connection reset by peer\n',
+      'curl exited with code 28: curl: (28) Operation timed out after 120000 milliseconds with 0 bytes received',
+      'curl exited with code 35: curl: (35) OpenSSL SSL_connect: Connection reset by peer',
+      'curl exited with code 52: curl: (52) Empty reply from server',
+      'TypeError: fetch failed',
+    ]) {
+      assert.equal(isTransientNetworkError(m), true, m);
+    }
+  });
+
+  it('does not retry PIN, token, HTTP or ANAF errors', () => {
+    for (const m of ['PIN verification failed', 'curl exited with code 58: ssl engine cannot load client cert', 'POST /spv/sync-prepare → HTTP 500', 'curl exited with code 22: The requested URL returned error: 403']) {
+      assert.equal(isTransientNetworkError(m), false, m);
+    }
   });
 });
