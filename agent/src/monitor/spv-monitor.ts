@@ -60,6 +60,8 @@ const BOOT_DELAY_MS = 90 * 1000;         // let the token/middleware settle afte
 const WAKE_SETTLE_MS = 60 * 1000;        // same after the computer wakes from sleep (USB re-enumeration)
 /** Retries when the token answers but does not expose the certificate yet (typical right after wake). */
 const TOKEN_RETRY_DELAYS_MS = [20_000, 40_000, 90_000];
+/** ANAF resets or stalls a connection now and then; a short pause is enough. */
+const NETWORK_RETRY_DELAYS_MS = [5_000, 15_000, 45_000];
 const MIN_INTERVAL_HOURS = 1;
 const MAX_INTERVAL_HOURS = 24 * 7;
 const DAYS_BACK = 60;
@@ -249,6 +251,16 @@ export function isTransientTokenError(message: string): boolean {
   return /object not found|cannot load client cert|failed to load private key|CKR_TOKEN_NOT_PRESENT|CKR_DEVICE_REMOVED|CKR_DEVICE_ERROR|CKR_SLOT_ID_INVALID|CKR_CRYPTOKI_NOT_INITIALIZED|CKR_FUNCTION_FAILED|CKR_GENERAL_ERROR|no slot with a token|token not present|Token-ul nu a raspuns/i.test(message);
 }
 
+/**
+ * Errors that mean "the network path to ANAF or to the backend hiccupped":
+ * curl 7 (connect), 28 (timeout), 35 (TLS handshake), 52 (empty reply),
+ * 55/56 (send/recv reset) and Node's fetch failures. They are retried after a
+ * short pause before the run counts as a failure.
+ */
+export function isTransientNetworkError(message: string): boolean {
+  return /curl exited with code (7|28|35|52|55|56)\b|Connection reset by peer|Recv failure|Send failure|Operation timed out|Empty reply from server|Could not resolve host|Failed to connect|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|UND_ERR_(SOCKET|CONNECT_TIMEOUT)|fetch failed/i.test(message);
+}
+
 /** Romanian explanation shown on the ANAF page when every retry failed the same way. */
 export function describeTokenError(message: string): string {
   return `Token-ul nu a raspuns: middleware-ul nu a gasit certificatul pe token (se intampla imediat dupa sleep sau dupa reconectarea token-ului). Verifica sa fie conectat; agentul reincearca la urmatoarea rulare. Detalii: ${message}`;
@@ -256,16 +268,32 @@ export function describeTokenError(message: string): string {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Run `fn`, retrying transient token errors and transient network errors on
+ * their own schedules; anything else (PIN, HTTP 4xx, ANAF errors) fails at once.
+ */
 async function withTokenRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
+  let tokenAttempt = 0;
+  let networkAttempt = 0;
+  for (;;) {
     try {
       return await fn();
     } catch (err) {
       const message = (err as Error).message;
-      if (!isTransientTokenError(message) || attempt >= TOKEN_RETRY_DELAYS_MS.length) throw err;
-      const delay = TOKEN_RETRY_DELAYS_MS[attempt];
-      console.warn(`[spv-monitor] ${label}: token not ready (${redactPin(message).split('\n')[0]}); retry ${attempt + 1}/${TOKEN_RETRY_DELAYS_MS.length} in ${delay / 1000}s`);
-      await sleep(delay);
+      const line = redactPin(message).split('\n')[0];
+      if (isTransientTokenError(message)) {
+        if (tokenAttempt >= TOKEN_RETRY_DELAYS_MS.length) throw err;
+        const delay = TOKEN_RETRY_DELAYS_MS[tokenAttempt++];
+        console.warn(`[spv-monitor] ${label}: token not ready (${line}); retry ${tokenAttempt}/${TOKEN_RETRY_DELAYS_MS.length} in ${delay / 1000}s`);
+        await sleep(delay);
+      } else if (isTransientNetworkError(message)) {
+        if (networkAttempt >= NETWORK_RETRY_DELAYS_MS.length) throw err;
+        const delay = NETWORK_RETRY_DELAYS_MS[networkAttempt++];
+        console.warn(`[spv-monitor] ${label}: network hiccup (${line}); retry ${networkAttempt}/${NETWORK_RETRY_DELAYS_MS.length} in ${delay / 1000}s`);
+        await sleep(delay);
+      } else {
+        throw err;
+      }
     }
   }
 }
@@ -290,7 +318,7 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
   console.log(`[spv-monitor] ${entry.name} (${entry.cif}): sync started`);
 
   try {
-    const prepared = await api<{ anafUrl: string }>(entry, apiKey, 'POST', '/spv/sync-prepare', { days: DAYS_BACK });
+    const prepared = await withTokenRetry(entry.cif, () => api<{ anafUrl: string }>(entry, apiKey, 'POST', '/spv/sync-prepare', { days: DAYS_BACK }));
 
     const listing = await withTokenRetry(entry.cif, () => curlProxy({
       url: prepared.anafUrl,
@@ -301,10 +329,10 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
       pin,
     }, config));
 
-    const result = await api<{
+    const result = await withTokenRetry(entry.cif, () => api<{
       stats: { created: number; skipped: number; received: number };
       documents: Array<{ documentId: string; anafUrl: string; messageType: string }>;
-    }>(entry, apiKey, 'POST', '/spv/sync-agent-result', { statusCode: listing.statusCode, body: listing.body });
+    }>(entry, apiKey, 'POST', '/spv/sync-agent-result', { statusCode: listing.statusCode, body: listing.body }));
 
     let downloaded = 0;
     let failed = 0;

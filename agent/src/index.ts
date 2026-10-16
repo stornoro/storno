@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { startServer } from './server.js';
-import { loadConfig, saveConfig } from './config.js';
+import { loadConfig, saveConfig, getConfigDir } from './config.js';
+import { installFileLog } from './utils/file-log.js';
 import { discoverCertificates } from './certificates/discovery.js';
 import { resolvePkcs11Toolchain } from './utils/toolchain.js';
 import { registerProtocol } from './protocol.js';
@@ -23,6 +24,7 @@ async function main() {
 
   switch (command) {
     case 'start':
+      console.log(`Log file: ${installFileLog(getConfigDir())}`);
       try {
         registerProtocol(resolveBinaryCommand());
       } catch {
@@ -156,6 +158,7 @@ async function main() {
 
     default:
       // No command, URL scheme arg (storno-agent://...), or unknown → start server
+      console.log(`Log file: ${installFileLog(getConfigDir())}`);
       try {
         registerProtocol(resolveBinaryCommand());
       } catch {
