@@ -10,6 +10,8 @@ parameters:
     env(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON): ''   # path to a Play Console service-account key; empty = read the public listing
     env(PDFTOTEXT_BIN): ''   # optional path to poppler's pdftotext; auto-detected on PATH when empty
     env(AWS_ACCESS_KEY_ID): ''
+    env(PUSH_RELAY_URL): ''      # push relay for self-hosted instances; the SaaS (the relay itself) leaves the secret empty and sends via Firebase
+    env(PUSH_RELAY_SECRET): ''
     env(AWS_S3_BUCKET): ''
     app.jwt_refresh_token_cookie_name: "%env(JWT_REFRESH_COOKIE_NAME)%"
     redirect_after_oauth2: '%env(REDIRECT_AFTER_OAUTH)%'
@@ -453,8 +455,8 @@ services:
 
     App\Service\PushRelayService:
         arguments:
-            $pushRelayUrl: '%env(default::PUSH_RELAY_URL)%'
-            $pushRelaySecret: '%env(default::PUSH_RELAY_SECRET)%'
+            $pushRelayUrl: '%env(PUSH_RELAY_URL)%'
+            $pushRelaySecret: '%env(PUSH_RELAY_SECRET)%'
 
     App\MessageHandler\SendPushNotificationHandler:
         arguments:
