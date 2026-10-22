@@ -84,8 +84,8 @@
         {{ $t('reports.noData') }}
       </div>
 
-      <!-- OSS (One Stop Shop) quarterly VAT -->
-      <UCard class="mt-6">
+      <!-- OSS (One Stop Shop) quarterly VAT — shrink-0: a card placed directly in the panel body is otherwise flex-squeezed to its header -->
+      <UCard class="mt-6 shrink-0">
         <template #header>
           <div class="flex flex-wrap items-center gap-2">
             <div class="mr-auto">
