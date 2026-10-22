@@ -101,9 +101,10 @@ class UblXmlGenerator
         $typeCodeTag = $isCreditNote ? 'cbc:CreditNoteTypeCode' : 'cbc:InvoiceTypeCode';
         $this->addElement($dom, $root, $typeCodeTag, $typeCode);
 
-        // Note (BT-22) [BR-RO-A020 max 20 occurrences] [BR-RO-L302 max 300 chars each]
+        // Note (BT-22) [BR-RO-A020 max 20 occurrences] [BR-RO-L300 max 300 chars each]
+        // A longer note is split into several cbc:Note elements so nothing is lost.
         if ($invoice->getNotes()) {
-            $this->addElement($dom, $root, 'cbc:Note', $invoice->getNotes());
+            $this->addNotes($dom, $root, $invoice->getNotes());
         }
 
         // UBL extensions
@@ -599,7 +600,8 @@ class UblXmlGenerator
 
         if ($termsNote) {
             $paymentTerms = $dom->createElement('cac:PaymentTerms');
-            $this->addElement($dom, $paymentTerms, 'cbc:Note', $termsNote);
+            // BT-20 [BR-RO-L300 max 300 chars]
+            $this->addElement($dom, $paymentTerms, 'cbc:Note', $this->truncate($termsNote, self::NOTE_MAX_LENGTH));
             $root->appendChild($paymentTerms);
         }
     }
@@ -851,9 +853,9 @@ class UblXmlGenerator
             $this->addElement($dom, $invoiceLine, 'cbc:AccountingCost', $line->getBuyerAccountingRef());
         }
 
-        // BT-127 Invoice line note
+        // BT-127 Invoice line note [BR-RO-L300 max 300 chars]
         if ($line->getLineNote()) {
-            $this->addElement($dom, $invoiceLine, 'cbc:Note', $line->getLineNote());
+            $this->addNotes($dom, $invoiceLine, $line->getLineNote());
         }
 
         // Line-level ublExtensions
@@ -1078,6 +1080,48 @@ class UblXmlGenerator
         }
 
         return [$allowanceTotal, $chargeTotal];
+    }
+
+    /** [BR-RO-L300] maximum characters in one cbc:Note (BT-20, BT-22, BT-127). */
+    public const NOTE_MAX_LENGTH = 300;
+
+    /** [BR-RO-A020] maximum number of cbc:Note elements on the document. */
+    public const NOTE_MAX_COUNT = 20;
+
+    /**
+     * Emit a note as one or more cbc:Note elements of at most NOTE_MAX_LENGTH
+     * characters each, so a long comment reaches ANAF in full instead of being
+     * rejected with [BR-RO-L300]. Chunks break on whitespace where possible and
+     * are capped at NOTE_MAX_COUNT; anything beyond that is dropped.
+     *
+     * @return string[] the chunks that were written
+     */
+    public function splitNote(string $text): array
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+        $chunks = [];
+        while ($text !== '' && count($chunks) < self::NOTE_MAX_COUNT) {
+            if (mb_strlen($text) <= self::NOTE_MAX_LENGTH) {
+                $chunks[] = $text;
+                break;
+            }
+            $head = mb_substr($text, 0, self::NOTE_MAX_LENGTH + 1);
+            $cut = mb_strrpos($head, ' ');
+            if ($cut === false || $cut < (int) (self::NOTE_MAX_LENGTH / 2)) {
+                $cut = self::NOTE_MAX_LENGTH;
+            }
+            $chunks[] = rtrim(mb_substr($text, 0, $cut));
+            $text = ltrim(mb_substr($text, $cut));
+        }
+
+        return $chunks;
+    }
+
+    private function addNotes(\DOMDocument $dom, \DOMElement $parent, string $text): void
+    {
+        foreach ($this->splitNote($text) as $chunk) {
+            $this->addElement($dom, $parent, 'cbc:Note', $chunk);
+        }
     }
 
     private function addElement(\DOMDocument $dom, \DOMElement $parent, string $name, string $value): void
