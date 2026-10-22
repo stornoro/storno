@@ -1010,6 +1010,57 @@ export interface VatReport {
   }
 }
 
+// ── VAT OSS (One Stop Shop) quarterly report ─────────────────────────
+export interface VatOssRateRow {
+  vatRate: string
+  currency: string
+  taxableBase: string
+  vatAmount: string
+  taxableBaseEur: string | null
+  vatAmountEur: string | null
+}
+
+export interface VatOssCountry {
+  country: string
+  rates: VatOssRateRow[]
+  taxableBaseEur: string | null
+  vatAmountEur: string | null
+  invoiceCount: number
+}
+
+export interface VatOssReport {
+  period: string
+  year: number
+  quarter: number
+  from: string
+  to: string
+  ossEnabled: boolean
+  currency: 'EUR'
+  exchange: {
+    date: string | null
+    rates: Record<string, { eurPerUnit: string, unitsPerEur: string }>
+    missing: string[]
+    source: string
+  }
+  countries: VatOssCountry[]
+  totals: {
+    taxableBaseEur: string | null
+    vatAmountEur: string | null
+    invoiceCount: number
+    complete: boolean
+  }
+  payment: {
+    iban: string
+    bic: string
+    bank: string
+    beneficiary: string
+    beneficiaryCif: string
+    currency: string
+    dueDate: string
+    reference: string
+  }
+}
+
 // ── Sales Analysis Report ────────────────────────────────────────────
 export interface SalesKpiAnnualTotal {
   amount: string

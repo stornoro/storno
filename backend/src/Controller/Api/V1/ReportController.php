@@ -59,6 +59,44 @@ class ReportController extends AbstractController
         return $this->json($report);
     }
 
+    /**
+     * The quarterly OSS (One Stop Shop) view of the VAT charged to EU consumers,
+     * in euro at the quarter-end ECB rate, as declared in the special VAT return (D398).
+     */
+    #[Route('/reports/vat/oss', methods: ['GET'])]
+    public function vatOssReport(Request $request): JsonResponse
+    {
+        $company = $this->organizationContext->resolveCompany($request);
+        if (!$company) {
+            return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->organizationContext->hasPermission(Permission::REPORT_VIEW)) {
+            return $this->json(['error' => 'Permission denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        $org = $company->getOrganization();
+        if (!$this->licenseManager->canViewReports($org)) {
+            return $this->json([
+                'error' => 'Reports are not available on your plan.',
+                'code' => 'PLAN_LIMIT',
+            ], Response::HTTP_PAYMENT_REQUIRED);
+        }
+
+        $year = $request->query->getInt('year', (int) date('Y'));
+        $quarter = $request->query->getInt('quarter', (int) ceil((int) date('n') / 3));
+
+        if ($quarter < 1 || $quarter > 4) {
+            return $this->json(['error' => 'Invalid quarter.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($year < 2000 || $year > 2100) {
+            return $this->json(['error' => 'Invalid year.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        return $this->json($this->vatReportService->generateOss($company, $year, $quarter));
+    }
+
     #[Route('/reports/sales', methods: ['GET'])]
     public function salesAnalysis(Request $request): JsonResponse
     {

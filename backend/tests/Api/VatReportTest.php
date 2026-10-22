@@ -21,6 +21,36 @@ class VatReportTest extends ApiTestCase
         $this->assertArrayHasKey('invoiceCount', $data);
     }
 
+    public function testVatOssReport(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $data = $this->apiGet('/api/v1/reports/vat/oss?year=2026&quarter=3', ['X-Company' => $companyId]);
+
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertEquals('2026-Q3', $data['period']);
+        $this->assertEquals('2026-07-01', $data['from']);
+        $this->assertEquals('2026-09-30', $data['to']);
+        $this->assertEquals('EUR', $data['currency']);
+        $this->assertArrayHasKey('countries', $data);
+        $this->assertArrayHasKey('exchange', $data);
+        $this->assertArrayHasKey('totals', $data);
+        $this->assertEquals('2026-10-31', $data['payment']['dueDate']);
+        $this->assertStringStartsWith('RO/', $data['payment']['reference']);
+        $this->assertStringEndsWith('/Q3.2026', $data['payment']['reference']);
+    }
+
+    public function testVatOssReportInvalidQuarter(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $this->apiGet('/api/v1/reports/vat/oss?year=2026&quarter=5', ['X-Company' => $companyId]);
+
+        $this->assertResponseStatusCodeSame(400);
+    }
+
     public function testVatReportDefaultsToCurrentMonth(): void
     {
         $this->login();
@@ -52,14 +82,14 @@ class VatReportTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(200);
 
         // Check VAT rate buckets exist
-        $this->assertArrayHasKey('19.00', $data['outgoing']);
+        $this->assertArrayHasKey('21.00', $data['outgoing']);
         $this->assertArrayHasKey('9.00', $data['outgoing']);
         $this->assertArrayHasKey('5.00', $data['outgoing']);
         $this->assertArrayHasKey('0.00', $data['outgoing']);
 
         // Check structure of each bucket
-        $this->assertArrayHasKey('taxableBase', $data['outgoing']['19.00']);
-        $this->assertArrayHasKey('vatAmount', $data['outgoing']['19.00']);
+        $this->assertArrayHasKey('taxableBase', $data['outgoing']['21.00']);
+        $this->assertArrayHasKey('vatAmount', $data['outgoing']['21.00']);
     }
 
     public function testVatReportRequiresAuth(): void
