@@ -590,7 +590,7 @@ function summaryFor(doc: SpvDocument): string {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="font-semibold text-sm">{{ $t('dosare.documents') }} ({{ detail.documents.length }})</span>
+              <span class="font-semibold text-sm">{{ $t('dosare.anafMessages') }} ({{ detail.documents.length }})</span>
               <UButton size="xs" variant="soft" icon="i-lucide-link" @click="openAttach('document')">{{ $t('dosare.attachDocument') }}</UButton>
             </div>
           </template>

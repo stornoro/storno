@@ -68,10 +68,7 @@ export default defineNuxtConfig({
     },
   },
 
-  components: [
-    { path: '~/components/common', pathPrefix: false },
-    '~/components',
-  ],
+  components: ['~/components'],
 
   css: ['~/assets/css/main.css'],
 
