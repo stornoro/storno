@@ -45,6 +45,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // Fiscal calendar — 7 / 3 / 1 days before an unfiled declaration deadline
             ->add(RecurringMessage::cron('20 8 * * *', new RunCommandMessage('app:notifications:fiscal-deadlines')))
             ->add(RecurringMessage::cron('15 8 * * *', new RunCommandMessage('app:dosare:remind')))
+            // OSS: the D398 draft for the quarter that just closed, for companies under the scheme (nothing is filed)
+            ->add(RecurringMessage::cron('10 8 * * *', new RunCommandMessage('app:declarations:oss-draft')))
             // Fleet / expiry items — at remindDaysBefore, 7, 1 and 0 days before RCA, ITP, rovinietă, certificates … expire
             ->add(RecurringMessage::cron('25 8 * * *', new RunCommandMessage('app:notifications:expiries')))
             // Partner verification — re-check clients / suppliers at ANAF / VIES after 30 days

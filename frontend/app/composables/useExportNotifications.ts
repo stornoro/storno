@@ -147,6 +147,7 @@ const _useNotifications = () => {
       'proforma.expiring_soon': 'i-lucide-clock',
       'proforma.expired': 'i-lucide-calendar-x',
       'fiscal.deadline': 'i-lucide-calendar-days',
+      'declaration.draft_ready': 'i-lucide-file-check',
       'expiry.due': 'i-lucide-car',
       'partner.status_changed': 'i-lucide-shield-alert',
     }
@@ -165,6 +166,7 @@ const _useNotifications = () => {
       'proforma.expiring_soon': 'warning',
       'proforma.expired': 'warning',
       'fiscal.deadline': 'warning',
+      'declaration.draft_ready': 'info',
       'expiry.due': 'warning',
       'partner.status_changed': 'warning',
     }

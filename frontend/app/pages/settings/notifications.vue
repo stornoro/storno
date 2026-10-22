@@ -83,7 +83,7 @@ const categories = [
   {
     key: 'fiscal',
     label: $t('notificationPreferences.categories.fiscal'),
-    events: ['fiscal.deadline'],
+    events: ['fiscal.deadline', 'declaration.draft_ready'],
   },
   {
     key: 'partners',

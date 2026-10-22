@@ -3524,6 +3524,9 @@ export default defineI18nLocale(async () => {
       fiscal: {
         deadline: 'Filing deadline approaching (7, 3 and 1 days before)',
       },
+      declaration: {
+        draft_ready: 'Return prepared automatically from invoices (D398 OSS, after each quarter)',
+      },
       partner: {
         status_changed: 'Partner became inactive / lost VAT registration / VAT on collection',
       },

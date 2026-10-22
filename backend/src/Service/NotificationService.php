@@ -24,6 +24,7 @@ class NotificationService
         'export_ready',
         'payment.received',
         'report.monthly_summary',
+        'declaration.draft_ready',
     ];
 
     public function __construct(

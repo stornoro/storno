@@ -238,6 +238,16 @@ notifications:
     cta_create: 'Creeaza declaratia'
     cta_calendar: 'Vezi calendarul fiscal'
 
+  declaration_draft_ready:
+    heading: 'Declaratie pregatita din facturi'
+    declaration: 'Declaratie'
+    period: 'Perioada'
+    amount: 'De plata'
+    due_date: 'Termen de depunere si plata'
+    reference: 'Referinta platii'
+    hint: 'Declaratia este o ciorna: verifica sumele, apoi depune-o din Storno sau trimite-o contabilului. Nu se depune automat.'
+    cta: 'Deschide declaratia'
+
   dosar_deadline:
     heading: 'Termen intr-un dosar peste %count% zile'
     heading_today: 'Termen intr-un dosar astazi'

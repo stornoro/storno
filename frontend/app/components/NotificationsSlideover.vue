@@ -42,6 +42,7 @@ function channelIcon(notification: BackendNotification): string {
     'proforma.expiring_soon': 'i-lucide-clock',
     'proforma.expired': 'i-lucide-calendar-x',
     'fiscal.deadline': 'i-lucide-calendar-days',
+    'declaration.draft_ready': 'i-lucide-file-check',
     'partner.status_changed': 'i-lucide-shield-alert',
     'expiry.due': 'i-lucide-car',
   }
@@ -102,6 +103,10 @@ function notificationLink(n: BackendNotification): string | null {
   if (n.type === 'sync.error' || n.type === 'sync.completed') return '/efactura'
   if (n.type === 'token.expiring_soon' || n.type === 'token.refresh_failed') return '/efactura'
   if (n.type === 'fiscal.deadline') return '/fiscal-calendar'
+  if (n.type === 'declaration.draft_ready') {
+    const declarationId = n.data?.declarationId as string | undefined
+    return declarationId ? `/declarations/${declarationId}` : '/declarations'
+  }
   if (n.type === 'expiry.due') {
     const vehicleId = n.data?.vehicleId as string | undefined
     return vehicleId ? `/vehicles/${vehicleId}` : '/expiries'

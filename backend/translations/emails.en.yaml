@@ -255,6 +255,16 @@ notifications:
     cta_create: 'Create the declaration'
     cta_calendar: 'Open the fiscal calendar'
 
+  declaration_draft_ready:
+    heading: 'A return has been prepared from your invoices'
+    declaration: 'Return'
+    period: 'Period'
+    amount: 'Amount due'
+    due_date: 'Filing and payment due'
+    reference: 'Payment reference'
+    hint: 'The return is a draft: check the amounts, then file it from Storno or hand it to your accountant. It is not filed automatically.'
+    cta: 'Open the return'
+
   dosar_deadline:
     heading: 'A case file is due in %count% days'
     heading_today: 'A case file is due today'

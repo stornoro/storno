@@ -31,6 +31,7 @@ class NotificationPreferenceController extends AbstractController
         'token.expiring_soon',
         'token.refresh_failed',
         'fiscal.deadline',
+        'declaration.draft_ready',
         'partner.status_changed',
         'expiry.due',
         'export_ready',

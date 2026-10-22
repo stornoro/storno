@@ -67,6 +67,13 @@ notification:
       message: 'You sent an invoice to %counterparty% · %amount%'
     new_documents_multi:
       message: 'You have %count% new documents (%incoming% incoming, %outgoing% outgoing)'
+  declaration:
+    oss_draft:
+      title: '%company%: D398 Q%quarter% prepared — %amount% EUR due'
+      message: 'The special VAT return (OSS) for quarter %quarter% has been prepared from the invoices: %amount% EUR due by %date%, reference %reference%. Review it, file it or hand it to your accountant; it is not filed automatically.'
+    oss_draft_nil:
+      title: '%company%: D398 Q%quarter% prepared — no operations'
+      message: 'The special VAT return (OSS) for quarter %quarter% has been prepared: no sales to consumers in other EU member states, a nil return is due by %date%. It is not filed automatically.'
   dosar:
     deadline:
       title: '%company%: deadline in %days% days'

@@ -67,6 +67,13 @@ notification:
       message: 'Ai emis o factura catre %counterparty% · %amount%'
     new_documents_multi:
       message: 'Ai %count% documente noi (%incoming% primite, %outgoing% emise)'
+  declaration:
+    oss_draft:
+      title: '%company%: D398 T%quarter% pregatita — %amount% EUR de plata'
+      message: 'Declaratia speciala de TVA (OSS) pentru trimestrul %quarter% a fost pregatita din facturi: %amount% EUR de plata pana la %date%, cu referinta %reference%. Verific-o, depune-o sau trimite-o contabilului; nu se depune automat.'
+    oss_draft_nil:
+      title: '%company%: D398 T%quarter% pregatita — fara operatiuni'
+      message: 'Declaratia speciala de TVA (OSS) pentru trimestrul %quarter% a fost pregatita: nicio vanzare catre consumatori din alte state UE, se depune fara operatiuni pana la %date%. Nu se depune automat.'
   dosar:
     deadline:
       title: '%company%: termen in %days% zile'

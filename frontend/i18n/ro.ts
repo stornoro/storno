@@ -3523,6 +3523,9 @@ export default defineI18nLocale(async () => {
         fiscal: {
           deadline: 'Termen de depunere apropiat (7, 3 si 1 zile inainte)',
         },
+        declaration: {
+          draft_ready: 'Declaratie pregatita automat din facturi (D398 OSS, dupa fiecare trimestru)',
+        },
         partner: {
           status_changed: 'Partener devenit inactiv / neplătitor TVA / TVA la încasare',
         },
