@@ -995,8 +995,22 @@ export interface VatTotalBucket {
   total: string
 }
 
+export interface VatReportFilters {
+  direction: 'outgoing' | 'incoming' | null
+  clientId: string | null
+  supplierId: string | null
+  currency: string | null
+  vatRate: string | null
+  documentType: 'invoice' | 'credit_note' | null
+  finalOnly: boolean
+}
+
 export interface VatReport {
   period: string
+  from: string
+  to: string
+  filters: VatReportFilters
+  currencies: string[]
   outgoing: Record<string, VatBucket>
   incoming: Record<string, VatBucket>
   totals: {

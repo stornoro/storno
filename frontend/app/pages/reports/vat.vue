@@ -11,22 +11,85 @@
     <template #body>
       <UPageHeader :title="$t('reports.title')" :description="$t('reports.description')" />
 
-      <UDashboardToolbar class="mb-4">
-        <div class="flex flex-wrap items-center gap-2 w-full">
-          <h2 class="text-lg font-semibold mr-auto">{{ $t('reports.vatReportTitle') }}</h2>
-          <USelectMenu v-model="selectedMonth" :items="monthOptions" value-key="value" class="w-full sm:w-40" />
-          <USelectMenu v-model="selectedYear" :items="yearOptions" value-key="value" class="w-full sm:w-28" />
+      <!-- Filters: period mode + the period itself, then the optional filters -->
+      <UCard class="mb-4 shrink-0" :ui="{ body: 'space-y-3' }">
+        <div class="flex flex-wrap items-end gap-2">
+          <h2 class="text-lg font-semibold mr-auto self-center">{{ $t('reports.vatReportTitle') }}</h2>
+          <UFormField :label="$t('reports.filters.periodMode')" size="sm">
+            <USelectMenu v-model="periodMode" :items="periodModeOptions" value-key="value" class="w-full sm:w-36" />
+          </UFormField>
+          <UFormField v-if="periodMode === 'month'" :label="$t('reports.month')" size="sm">
+            <USelectMenu v-model="selectedMonth" :items="monthOptions" value-key="value" class="w-full sm:w-40" />
+          </UFormField>
+          <UFormField v-if="periodMode === 'quarter'" :label="$t('reports.oss.quarter')" size="sm">
+            <USelectMenu v-model="selectedQuarter" :items="quarterOptions" value-key="value" class="w-full sm:w-28" />
+          </UFormField>
+          <UFormField v-if="periodMode !== 'range'" :label="$t('reports.year')" size="sm">
+            <USelectMenu v-model="selectedYear" :items="yearOptions" value-key="value" class="w-full sm:w-28" />
+          </UFormField>
+          <UFormField v-if="periodMode === 'range'" :label="$t('period.dateFrom')" size="sm">
+            <UInput v-model="rangeFrom" type="date" class="w-full sm:w-40" />
+          </UFormField>
+          <UFormField v-if="periodMode === 'range'" :label="$t('period.dateTo')" size="sm">
+            <UInput v-model="rangeTo" type="date" class="w-full sm:w-40" />
+          </UFormField>
           <UButton icon="i-lucide-refresh-cw" :loading="loading" class="w-full sm:w-auto" @click="fetchReport">
             {{ $t('reports.generate') }}
           </UButton>
         </div>
-      </UDashboardToolbar>
+
+        <div class="flex flex-wrap items-end gap-2">
+          <UFormField :label="$t('reports.filters.direction')" size="sm">
+            <USelectMenu v-model="filterDirection" :items="directionOptions" value-key="value" class="w-full sm:w-44" />
+          </UFormField>
+          <UFormField :label="$t('reports.filters.client')" size="sm">
+            <USelectMenu
+              v-model="filterClientId"
+              :items="clientOptions"
+              value-key="value"
+              :search-input="{ placeholder: $t('common.search') }"
+              class="w-full sm:w-56"
+              @update:open="loadPartners"
+            />
+          </UFormField>
+          <UFormField :label="$t('reports.filters.supplier')" size="sm">
+            <USelectMenu
+              v-model="filterSupplierId"
+              :items="supplierOptions"
+              value-key="value"
+              :search-input="{ placeholder: $t('common.search') }"
+              class="w-full sm:w-56"
+              @update:open="loadPartners"
+            />
+          </UFormField>
+          <UFormField :label="$t('reports.filters.currency')" size="sm">
+            <USelectMenu v-model="filterCurrency" :items="currencyOptions" value-key="value" class="w-full sm:w-28" />
+          </UFormField>
+          <UFormField :label="$t('reports.vatRate')" size="sm">
+            <USelectMenu v-model="filterVatRate" :items="vatRateOptions" value-key="value" class="w-full sm:w-28" />
+          </UFormField>
+          <UFormField :label="$t('reports.filters.documentType')" size="sm">
+            <USelectMenu v-model="filterDocumentType" :items="documentTypeOptions" value-key="value" class="w-full sm:w-40" />
+          </UFormField>
+          <UFormField :label="$t('reports.filters.status')" size="sm">
+            <USelectMenu v-model="filterFinalOnly" :items="statusOptions" value-key="value" class="w-full sm:w-52" />
+          </UFormField>
+          <UButton v-if="activeFilterCount" variant="ghost" color="neutral" icon="i-lucide-x" class="w-full sm:w-auto" @click="resetFilters">
+            {{ $t('reports.filters.reset') }}
+          </UButton>
+        </div>
+      </UCard>
 
       <div v-if="loading" class="text-center py-20">
         <UIcon name="i-lucide-loader-2" class="animate-spin h-8 w-8 mx-auto text-(--ui-text-muted)" />
       </div>
 
       <div v-else-if="report" class="space-y-6">
+        <div class="text-sm text-(--ui-text-muted)">
+          {{ $t('reports.filters.showing', { from: formatDate(report.from), to: formatDate(report.to) }) }}
+          <span v-if="report.currencies.length > 1" class="ml-2">· {{ $t('reports.filters.mixedCurrencies', { currencies: report.currencies.join(', ') }) }}</span>
+        </div>
+
         <!-- Summary cards -->
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
           <UCard>
@@ -54,7 +117,7 @@
         </div>
 
         <!-- Outgoing VAT table -->
-        <UCard>
+        <UCard v-if="filterDirection !== 'incoming'">
           <template #header>
             <h3 class="font-semibold">{{ $t('reports.outgoing') }}</h3>
           </template>
@@ -67,7 +130,7 @@
         </UCard>
 
         <!-- Incoming VAT table -->
-        <UCard>
+        <UCard v-if="filterDirection !== 'outgoing'">
           <template #header>
             <h3 class="font-semibold">{{ $t('reports.incoming') }}</h3>
           </template>
@@ -148,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import type { VatReport, VatOssReport } from '~/types'
+import type { VatReport, VatOssReport, Client, Supplier } from '~/types'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -157,9 +220,24 @@ useHead({ title: $t('reports.title') })
 const companyStore = useCompanyStore()
 const { formatMoney } = useMoney()
 
+type PeriodMode = 'month' | 'quarter' | 'year' | 'range'
+
 const now = new Date()
+const periodMode = ref<PeriodMode>('month')
 const selectedYear = ref(String(now.getFullYear()))
 const selectedMonth = ref(String(now.getMonth() + 1))
+const selectedQuarter = ref(String(Math.ceil((now.getMonth() + 1) / 3)))
+const rangeFrom = ref('')
+const rangeTo = ref('')
+
+const filterDirection = ref<'' | 'outgoing' | 'incoming'>('')
+const filterClientId = ref('')
+const filterSupplierId = ref('')
+const filterCurrency = ref('')
+const filterVatRate = ref('')
+const filterDocumentType = ref<'' | 'invoice' | 'credit_note'>('')
+const filterFinalOnly = ref<'all' | 'final'>('all')
+
 const loading = ref(false)
 const report = ref<VatReport | null>(null)
 
@@ -168,11 +246,22 @@ const ossQuarter = ref(String(Math.ceil((now.getMonth() + 1) / 3)))
 const ossLoading = ref(false)
 const oss = ref<VatOssReport | null>(null)
 
+const periodModeOptions = computed(() => [
+  { label: $t('reports.filters.modeMonth'), value: 'month' },
+  { label: $t('reports.filters.modeQuarter'), value: 'quarter' },
+  { label: $t('reports.filters.modeYear'), value: 'year' },
+  { label: $t('reports.filters.modeRange'), value: 'range' },
+])
+
 const monthOptions = computed(() =>
   Array.from({ length: 12 }, (_, i) => ({
     label: $t(`reports.months.${i + 1}`),
     value: String(i + 1),
   })),
+)
+
+const quarterOptions = computed(() =>
+  [1, 2, 3, 4].map(n => ({ label: $t('reports.oss.quarterLabel', { n }), value: String(n) })),
 )
 
 const yearOptions = computed(() => {
@@ -183,9 +272,83 @@ const yearOptions = computed(() => {
   }))
 })
 
-const quarterOptions = computed(() =>
-  [1, 2, 3, 4].map(n => ({ label: $t('reports.oss.quarterLabel', { n }), value: String(n) })),
+const directionOptions = computed(() => [
+  { label: $t('reports.filters.bothDirections'), value: '' },
+  { label: $t('common.outgoing'), value: 'outgoing' },
+  { label: $t('common.incoming'), value: 'incoming' },
+])
+
+const currencyOptions = computed(() => {
+  const fromReport = report.value?.currencies ?? []
+  const codes = Array.from(new Set(['RON', 'EUR', 'USD', 'GBP', ...fromReport])).sort()
+  return [{ label: $t('common.all'), value: '' }, ...codes.map(c => ({ label: c, value: c }))]
+})
+
+const vatRateOptions = computed(() => [
+  { label: $t('common.all'), value: '' },
+  ...['21', '19', '11', '9', '5', '0'].map(r => ({ label: `${r}%`, value: r })),
+])
+
+const documentTypeOptions = computed(() => [
+  { label: $t('common.all'), value: '' },
+  { label: $t('reports.filters.invoices'), value: 'invoice' },
+  { label: $t('reports.filters.creditNotes'), value: 'credit_note' },
+])
+
+const statusOptions = computed(() => [
+  { label: $t('reports.filters.statusAll'), value: 'all' },
+  { label: $t('reports.filters.statusFinal'), value: 'final' },
+])
+
+// Partners for the client / supplier filters, loaded once when a picker opens
+const clients = ref<Client[]>([])
+const suppliers = ref<Supplier[]>([])
+let partnersLoaded = false
+async function loadPartners(open?: boolean) {
+  if (open === false || partnersLoaded) return
+  partnersLoaded = true
+  const { get } = useApi()
+  try {
+    const [c, s] = await Promise.all([
+      get<{ data: Client[] }>('/v1/clients', { limit: 200, sort: 'name' }),
+      get<{ data: Supplier[] }>('/v1/suppliers', { limit: 200, sort: 'name' }),
+    ])
+    clients.value = c.data ?? []
+    suppliers.value = s.data ?? []
+  }
+  catch {
+    partnersLoaded = false
+  }
+}
+const clientOptions = computed(() => [
+  { label: $t('common.all'), value: '' },
+  ...clients.value.map(c => ({ label: c.name, value: c.id })),
+])
+const supplierOptions = computed(() => [
+  { label: $t('common.all'), value: '' },
+  ...suppliers.value.map(s => ({ label: s.name, value: s.id })),
+])
+
+const activeFilterCount = computed(() =>
+  [filterDirection.value, filterClientId.value, filterSupplierId.value, filterCurrency.value, filterVatRate.value, filterDocumentType.value].filter(Boolean).length
+  + (filterFinalOnly.value === 'final' ? 1 : 0),
 )
+
+function resetFilters() {
+  filterDirection.value = ''
+  filterClientId.value = ''
+  filterSupplierId.value = ''
+  filterCurrency.value = ''
+  filterVatRate.value = ''
+  filterDocumentType.value = ''
+  filterFinalOnly.value = 'all'
+}
+
+const vatColumns = [
+  { accessorKey: 'vatRate', header: $t('reports.vatRate') },
+  { accessorKey: 'taxableBase', header: $t('reports.taxableBase') },
+  { accessorKey: 'vatAmount', header: $t('reports.vatAmount') },
+]
 
 const ossColumns = [
   { accessorKey: 'country', header: $t('reports.oss.country') },
@@ -205,6 +368,18 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('ro-RO')
 }
 
+function bucketRows(buckets: Record<string, { taxableBase: string, vatAmount: string }>) {
+  return Object.entries(buckets)
+    .filter(([rate, bucket]) => !filterVatRate.value || Number(rate) === Number(filterVatRate.value) || Number(bucket.taxableBase) !== 0)
+    .map(([rate, bucket]) => ({
+      vatRate: `${rate}%`,
+      taxableBase: formatMoney(bucket.taxableBase),
+      vatAmount: formatMoney(bucket.vatAmount),
+    }))
+}
+const outgoingRows = computed(() => report.value ? bucketRows(report.value.outgoing) : [])
+const incomingRows = computed(() => report.value ? bucketRows(report.value.incoming) : [])
+
 const ossRows = computed(() => {
   if (!oss.value) return []
   return oss.value.countries.flatMap(c => c.rates.map((r, i) => ({
@@ -218,38 +393,36 @@ const ossRows = computed(() => {
   })))
 })
 
-const vatColumns = [
-  { accessorKey: 'vatRate', header: $t('reports.vatRate') },
-  { accessorKey: 'taxableBase', header: $t('reports.taxableBase') },
-  { accessorKey: 'vatAmount', header: $t('reports.vatAmount') },
-]
-
-const outgoingRows = computed(() => {
-  if (!report.value) return []
-  return Object.entries(report.value.outgoing).map(([rate, bucket]) => ({
-    vatRate: `${rate}%`,
-    taxableBase: formatMoney(bucket.taxableBase),
-    vatAmount: formatMoney(bucket.vatAmount),
-  }))
-})
-
-const incomingRows = computed(() => {
-  if (!report.value) return []
-  return Object.entries(report.value.incoming).map(([rate, bucket]) => ({
-    vatRate: `${rate}%`,
-    taxableBase: formatMoney(bucket.taxableBase),
-    vatAmount: formatMoney(bucket.vatAmount),
-  }))
-})
+function periodParams(): Record<string, string> | null {
+  switch (periodMode.value) {
+    case 'month':
+      return { year: selectedYear.value, month: selectedMonth.value }
+    case 'quarter':
+      return { year: selectedYear.value, quarter: selectedQuarter.value }
+    case 'year':
+      return { year: selectedYear.value, period: 'year' }
+    case 'range':
+      if (!rangeFrom.value || !rangeTo.value || rangeFrom.value > rangeTo.value) return null
+      return { from: rangeFrom.value, to: rangeTo.value }
+  }
+}
 
 async function fetchReport() {
+  const period = periodParams()
+  if (!period) return
+  const params: Record<string, string> = { ...period }
+  if (filterDirection.value) params.direction = filterDirection.value
+  if (filterClientId.value) params.clientId = filterClientId.value
+  if (filterSupplierId.value) params.supplierId = filterSupplierId.value
+  if (filterCurrency.value) params.currency = filterCurrency.value
+  if (filterVatRate.value) params.vatRate = filterVatRate.value
+  if (filterDocumentType.value) params.documentType = filterDocumentType.value
+  if (filterFinalOnly.value === 'final') params.finalOnly = '1'
+
   const { get } = useApi()
   loading.value = true
   try {
-    report.value = await get<VatReport>('/v1/reports/vat', {
-      year: selectedYear.value,
-      month: selectedMonth.value,
-    })
+    report.value = await get<VatReport>('/v1/reports/vat', params)
   }
   catch {
     report.value = null
@@ -276,9 +449,16 @@ async function fetchOss() {
   }
 }
 
+// Filters and the period selects apply as soon as they change; a date range applies on "Generate"
+watch([filterDirection, filterClientId, filterSupplierId, filterCurrency, filterVatRate, filterDocumentType, filterFinalOnly], () => fetchReport())
+watch([periodMode, selectedYear, selectedMonth, selectedQuarter], () => fetchReport())
+
 watch(() => companyStore.currentCompanyId, () => {
   report.value = null
   oss.value = null
+  partnersLoaded = false
+  clients.value = []
+  suppliers.value = []
   fetchReport()
   fetchOss()
 })

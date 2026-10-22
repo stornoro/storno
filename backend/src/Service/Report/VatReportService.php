@@ -3,6 +3,8 @@
 namespace App\Service\Report;
 
 use App\Entity\Company;
+use App\Entity\Invoice;
+use App\Enum\DocumentStatus;
 use App\Enum\InvoiceDirection;
 use App\Repository\InvoiceRepository;
 use App\Service\ExchangeRateService;
@@ -179,17 +181,66 @@ class VatReportService
 
     public function generate(Company $company, int $year, int $month): array
     {
-        $dateFrom = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
-        $dateTo = (clone $dateFrom)->modify('last day of this month');
+        $from = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
 
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, [
-            'dateFrom' => $dateFrom->format('Y-m-d'),
-            'dateTo' => $dateTo->format('Y-m-d'),
+        return $this->generateFor($company, ['from' => $from, 'to' => $from->modify('last day of this month'), 'period' => sprintf('%04d-%02d', $year, $month)]);
+    }
+
+    /**
+     * The VAT summary of any period with optional filters.
+     *
+     * Options: `from` / `to` (DateTimeInterface, inclusive), `period` (label), `direction`
+     * (outgoing | incoming), `clientId`, `supplierId`, `currency` (ISO code), `vatRate`
+     * (only the lines at that rate count, and the totals are then summed from those lines),
+     * `documentType` (invoice | credit_note), `finalOnly` (leave drafts, rejected and
+     * converted documents out; cancelled ones are always out).
+     *
+     * @param array{from: \DateTimeInterface, to: \DateTimeInterface, period?: string, direction?: string|null, clientId?: string|null, supplierId?: string|null, currency?: string|null, vatRate?: string|float|null, documentType?: string|null, finalOnly?: bool} $options
+     */
+    public function generateFor(Company $company, array $options): array
+    {
+        $from = \DateTimeImmutable::createFromInterface($options['from'])->setTime(0, 0);
+        $to = \DateTimeImmutable::createFromInterface($options['to'])->setTime(23, 59, 59);
+        $direction = $options['direction'] ?? null;
+        $vatRate = isset($options['vatRate']) && $options['vatRate'] !== '' ? number_format((float) $options['vatRate'], 2, '.', '') : null;
+        $finalOnly = (bool) ($options['finalOnly'] ?? false);
+
+        $repoFilters = [
+            'dateFrom' => $from->format('Y-m-d'),
+            'dateTo' => $to->format('Y-m-d H:i:s'),
             'excludeCancelled' => true,
-        ], 10000);
+        ];
+        if ($direction !== null) {
+            $repoFilters['direction'] = $direction;
+        }
+        foreach (['clientId', 'supplierId', 'currency'] as $key) {
+            if (!empty($options[$key])) {
+                $repoFilters[$key] = $options[$key];
+            }
+        }
+        if (!empty($options['documentType'])) {
+            $repoFilters['type'] = $options['documentType'];
+        }
+
+        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $repoFilters, 10000);
+        if ($finalOnly) {
+            $excluded = [DocumentStatus::DRAFT, DocumentStatus::REJECTED, DocumentStatus::CONVERTED];
+            $invoices = array_values(array_filter($invoices, static fn (Invoice $i) => !in_array($i->getStatus(), $excluded, true)));
+        }
 
         $summary = [
-            'period' => sprintf('%04d-%02d', $year, $month),
+            'period' => $options['period'] ?? sprintf('%s..%s', $from->format('Y-m-d'), $to->format('Y-m-d')),
+            'from' => $from->format('Y-m-d'),
+            'to' => $to->format('Y-m-d'),
+            'filters' => [
+                'direction' => $direction,
+                'clientId' => $options['clientId'] ?? null,
+                'supplierId' => $options['supplierId'] ?? null,
+                'currency' => $options['currency'] ?? null,
+                'vatRate' => $vatRate,
+                'documentType' => $options['documentType'] ?? null,
+                'finalOnly' => $finalOnly,
+            ],
             'outgoing' => $this->initVatBuckets(),
             'incoming' => $this->initVatBuckets(),
             'totals' => [
@@ -197,35 +248,42 @@ class VatReportService
                 'incoming' => ['taxableBase' => '0.00', 'vatAmount' => '0.00', 'total' => '0.00'],
             ],
         ];
+        $counts = ['outgoing' => 0, 'incoming' => 0];
+        $currencies = [];
 
         foreach ($invoices as $invoice) {
-            $direction = $invoice->getDirection() === InvoiceDirection::OUTGOING ? 'outgoing' : 'incoming';
-
-            $subtotal = $invoice->getSubtotal();
-            $vatTotal = $invoice->getVatTotal();
-            $total = $invoice->getTotal();
-
-            // Aggregate totals
-            $summary['totals'][$direction]['taxableBase'] = bcadd($summary['totals'][$direction]['taxableBase'], $subtotal, 2);
-            $summary['totals'][$direction]['vatAmount'] = bcadd($summary['totals'][$direction]['vatAmount'], $vatTotal, 2);
-            $summary['totals'][$direction]['total'] = bcadd($summary['totals'][$direction]['total'], $total, 2);
+            $dir = $invoice->getDirection() === InvoiceDirection::OUTGOING ? 'outgoing' : 'incoming';
+            $matched = false;
 
             // Break down by VAT rate from invoice lines
             foreach ($invoice->getLines() as $line) {
                 $rate = $this->normalizeRate($line->getVatRate());
-                if (!isset($summary[$direction][$rate])) {
-                    $summary[$direction][$rate] = ['taxableBase' => '0.00', 'vatAmount' => '0.00'];
+                if ($vatRate !== null && $rate !== $vatRate) {
+                    continue;
                 }
-                $summary[$direction][$rate]['taxableBase'] = bcadd(
-                    $summary[$direction][$rate]['taxableBase'],
-                    $line->getLineTotal(),
-                    2
-                );
-                $summary[$direction][$rate]['vatAmount'] = bcadd(
-                    $summary[$direction][$rate]['vatAmount'],
-                    $line->getVatAmount(),
-                    2
-                );
+                $matched = true;
+                if (!isset($summary[$dir][$rate])) {
+                    $summary[$dir][$rate] = ['taxableBase' => '0.00', 'vatAmount' => '0.00'];
+                }
+                $summary[$dir][$rate]['taxableBase'] = bcadd($summary[$dir][$rate]['taxableBase'], $line->getLineTotal(), 2);
+                $summary[$dir][$rate]['vatAmount'] = bcadd($summary[$dir][$rate]['vatAmount'], $line->getVatAmount(), 2);
+                if ($vatRate !== null) {
+                    // Filtered by rate: the totals are the sums of the matching lines
+                    $summary['totals'][$dir]['taxableBase'] = bcadd($summary['totals'][$dir]['taxableBase'], $line->getLineTotal(), 2);
+                    $summary['totals'][$dir]['vatAmount'] = bcadd($summary['totals'][$dir]['vatAmount'], $line->getVatAmount(), 2);
+                    $summary['totals'][$dir]['total'] = bcadd($summary['totals'][$dir]['total'], bcadd($line->getLineTotal(), $line->getVatAmount(), 2), 2);
+                }
+            }
+
+            if ($vatRate === null) {
+                $matched = true;
+                $summary['totals'][$dir]['taxableBase'] = bcadd($summary['totals'][$dir]['taxableBase'], $invoice->getSubtotal(), 2);
+                $summary['totals'][$dir]['vatAmount'] = bcadd($summary['totals'][$dir]['vatAmount'], $invoice->getVatTotal(), 2);
+                $summary['totals'][$dir]['total'] = bcadd($summary['totals'][$dir]['total'], $invoice->getTotal(), 2);
+            }
+            if ($matched) {
+                $counts[$dir]++;
+                $currencies[strtoupper($invoice->getCurrency() ?: 'RON')] = true;
             }
         }
 
@@ -235,10 +293,10 @@ class VatReportService
             $summary['totals']['incoming']['vatAmount'],
             2
         );
-        $summary['invoiceCount'] = [
-            'outgoing' => count(array_filter($invoices, fn($i) => $i->getDirection() === InvoiceDirection::OUTGOING)),
-            'incoming' => count(array_filter($invoices, fn($i) => $i->getDirection() === InvoiceDirection::INCOMING)),
-        ];
+        $summary['invoiceCount'] = $counts;
+        $currencies = array_keys($currencies);
+        sort($currencies);
+        $summary['currencies'] = $currencies;
 
         return $summary;
     }

@@ -422,6 +422,16 @@ class InvoiceRepository extends ServiceEntityRepository
                 ->setParameter('clientId', $filters['clientId']);
         }
 
+        if (isset($filters['supplierId'])) {
+            $qb->andWhere('i.supplier = :supplierId')
+                ->setParameter('supplierId', $filters['supplierId']);
+        }
+
+        if (isset($filters['currency'])) {
+            $qb->andWhere('i.currency = :currency')
+                ->setParameter('currency', strtoupper((string) $filters['currency']));
+        }
+
         return $qb->getQuery()->getResult();
     }
 

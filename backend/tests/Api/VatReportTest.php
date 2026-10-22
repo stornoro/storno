@@ -21,6 +21,43 @@ class VatReportTest extends ApiTestCase
         $this->assertArrayHasKey('invoiceCount', $data);
     }
 
+    public function testVatReportQuarterYearAndRange(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $data = $this->apiGet('/api/v1/reports/vat?year=2026&quarter=3', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertEquals('2026-Q3', $data['period']);
+        $this->assertEquals('2026-07-01', $data['from']);
+        $this->assertEquals('2026-09-30', $data['to']);
+
+        $data = $this->apiGet('/api/v1/reports/vat?year=2026&period=year', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertEquals('2026', $data['period']);
+        $this->assertEquals('2026-12-31', $data['to']);
+
+        $data = $this->apiGet('/api/v1/reports/vat?from=2026-03-15&to=2026-04-14&direction=outgoing&finalOnly=1&vatRate=21', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertEquals('2026-03-15..2026-04-14', $data['period']);
+        $this->assertEquals('outgoing', $data['filters']['direction']);
+        $this->assertTrue($data['filters']['finalOnly']);
+        $this->assertEquals('21.00', $data['filters']['vatRate']);
+        $this->assertArrayHasKey('currencies', $data);
+    }
+
+    public function testVatReportInvalidRangeAndDirection(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $this->apiGet('/api/v1/reports/vat?from=2026-04-01&to=2026-03-01', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(400);
+
+        $this->apiGet('/api/v1/reports/vat?year=2026&month=3&direction=sideways', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(400);
+    }
+
     public function testVatOssReport(): void
     {
         $this->login();

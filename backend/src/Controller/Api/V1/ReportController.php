@@ -43,20 +43,83 @@ class ReportController extends AbstractController
             ], Response::HTTP_PAYMENT_REQUIRED);
         }
 
-        $year = $request->query->getInt('year', (int) date('Y'));
-        $month = $request->query->getInt('month', (int) date('m'));
-
-        if ($month < 1 || $month > 12) {
-            return $this->json(['error' => 'Invalid month.'], Response::HTTP_BAD_REQUEST);
-        }
-
+        $q = $request->query;
+        $year = $q->getInt('year', (int) date('Y'));
         if ($year < 2000 || $year > 2100) {
             return $this->json(['error' => 'Invalid year.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $report = $this->vatReportService->generate($company, $year, $month);
+        // Period: an explicit range, a quarter, the whole year, or (the default) a month
+        if ($q->has('from') || $q->has('to')) {
+            $from = self::parseDate($q->get('from'));
+            $to = self::parseDate($q->get('to'));
+            if ($from === null || $to === null || $from > $to) {
+                return $this->json(['error' => 'Invalid date range: from and to must be YYYY-MM-DD, from <= to.'], Response::HTTP_BAD_REQUEST);
+            }
+            $period = sprintf('%s..%s', $from->format('Y-m-d'), $to->format('Y-m-d'));
+        } elseif ($q->has('quarter')) {
+            $quarter = $q->getInt('quarter');
+            if ($quarter < 1 || $quarter > 4) {
+                return $this->json(['error' => 'Invalid quarter.'], Response::HTTP_BAD_REQUEST);
+            }
+            $from = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, ($quarter - 1) * 3 + 1));
+            $to = $from->modify('+3 months -1 day');
+            $period = sprintf('%04d-Q%d', $year, $quarter);
+        } elseif ($q->get('period') === 'year') {
+            $from = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
+            $to = new \DateTimeImmutable(sprintf('%04d-12-31', $year));
+            $period = (string) $year;
+        } else {
+            $month = $q->getInt('month', (int) date('m'));
+            if ($month < 1 || $month > 12) {
+                return $this->json(['error' => 'Invalid month.'], Response::HTTP_BAD_REQUEST);
+            }
+            $from = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+            $to = $from->modify('last day of this month');
+            $period = sprintf('%04d-%02d', $year, $month);
+        }
+
+        $direction = $q->get('direction');
+        if ($direction !== null && $direction !== '' && !in_array($direction, ['outgoing', 'incoming'], true)) {
+            return $this->json(['error' => 'Invalid direction: outgoing or incoming.'], Response::HTTP_BAD_REQUEST);
+        }
+        $documentType = $q->get('documentType');
+        if ($documentType !== null && $documentType !== '' && !in_array($documentType, ['invoice', 'credit_note'], true)) {
+            return $this->json(['error' => 'Invalid documentType: invoice or credit_note.'], Response::HTTP_BAD_REQUEST);
+        }
+        $currency = strtoupper(trim((string) $q->get('currency', '')));
+        if ($currency !== '' && !preg_match('/^[A-Z]{3}$/', $currency)) {
+            return $this->json(['error' => 'Invalid currency.'], Response::HTTP_BAD_REQUEST);
+        }
+        $vatRate = $q->get('vatRate');
+        if ($vatRate !== null && $vatRate !== '' && !is_numeric($vatRate)) {
+            return $this->json(['error' => 'Invalid vatRate.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $report = $this->vatReportService->generateFor($company, [
+            'from' => $from,
+            'to' => $to,
+            'period' => $period,
+            'direction' => $direction ?: null,
+            'clientId' => $q->get('clientId') ?: null,
+            'supplierId' => $q->get('supplierId') ?: null,
+            'currency' => $currency ?: null,
+            'vatRate' => $vatRate !== '' ? $vatRate : null,
+            'documentType' => $documentType ?: null,
+            'finalOnly' => $q->getBoolean('finalOnly', false),
+        ]);
 
         return $this->json($report);
+    }
+
+    private static function parseDate(?string $value): ?\DateTimeImmutable
+    {
+        if ($value === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date instanceof \DateTimeImmutable && $date->format('Y-m-d') === $value ? $date : null;
     }
 
     /**
