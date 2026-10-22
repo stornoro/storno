@@ -4,6 +4,28 @@ namespace App\Tests\Api;
 
 class BalanceAnalysisTest extends ApiTestCase
 {
+    public function testAnalysisCarriesTheProfitTaxEstimateFromInvoices(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $data = $this->apiGet('/api/v1/balances/analysis?year=2026', ['X-Company' => $companyId]);
+
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertArrayHasKey('profitTaxEstimate', $data);
+        $est = $data['profitTaxEstimate'];
+        $this->assertSame(2026, $est['year']);
+        $this->assertSame('RON', $est['currency']);
+        $this->assertSame(16, $est['profitTaxRate']);
+        $this->assertIsArray($est['quarters']);
+        $this->assertNotEmpty($est['quarters']);
+        foreach (['revenue', 'invoicedExpenses', 'grossProfit', 'estimatedProfitTax', 'microTax1', 'microTax3', 'invoiceCount'] as $key) {
+            $this->assertArrayHasKey($key, $est['ytd']);
+            $this->assertArrayHasKey($key, $est['quarters'][0]);
+        }
+        $this->assertArrayHasKey('closed', $est['quarters'][0]);
+    }
+
     public function testAnalysisIncludesGroupedSections(): void
     {
         $this->login();

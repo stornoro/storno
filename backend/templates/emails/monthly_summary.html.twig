@@ -176,6 +176,25 @@
                         </td>
                     </tr>
 
+                    {% if fiscal is defined and fiscal %}
+                    <tr>
+                        <td style="padding: 0 36px 24px 36px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #92400e;">Impozit pe profit estimat din facturi (informativ)</p>
+                                        <p style="margin: 0; font-size: 13px; color: #78350f; line-height: 1.6;">
+                                            {% if fiscal.quarter %}{{ fiscal.quarterLabel }}: <strong>{{ fiscal.quarter.estimatedProfitTax|number_format(0, ',', '.') }} RON</strong> (venituri {{ fiscal.quarter.revenue|number_format(0, ',', '.') }} RON, cheltuieli facturate {{ fiscal.quarter.invoicedExpenses|number_format(0, ',', '.') }} RON) &middot; {% endif %}
+                                            cumulat {{ fiscal.year }}: <strong>{{ fiscal.ytd.estimatedProfitTax|number_format(0, ',', '.') }} RON</strong>.
+                                            {% if fiscal.sponsorshipHeadroom is not null %}Sponsorizari cu cost zero disponibile in {{ fiscal.year }}: <strong>{{ fiscal.sponsorshipHeadroom|number_format(0, ',', '.') }} RON</strong>.{% endif %}
+                                        </p>
+                                        <p style="margin: 8px 0 0 0; font-size: 11px; color: #a16207;">Salariile, comisioanele de plata si furnizorii fara e-Factura nu apar in facturi, deci impozitul real este mai mic. Detalii si sfaturi in Rapoarte &rarr; Analiza balante.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% if topClients|length > 0 %}
                     <!-- Divider -->
                     <tr>

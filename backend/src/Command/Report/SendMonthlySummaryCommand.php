@@ -9,6 +9,7 @@ use App\Enum\EmailStatus;
 use App\Repository\CompanyRepository;
 use App\Repository\EmailLogRepository;
 use App\Repository\OrganizationMembershipRepository;
+use App\Service\Balance\BalanceAnalysisService;
 use App\Service\EmailUnsubscribeService;
 use App\Service\MonthlySummaryService;
 use App\Service\NotificationService;
@@ -23,6 +24,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
 #[AsCommand(
@@ -44,6 +46,8 @@ class SendMonthlySummaryCommand extends Command
         private readonly EmailLogRepository $emailLogRepository,
         private readonly NotificationService $notificationService,
         private readonly EmailUnsubscribeService $emailUnsubscribeService,
+        private readonly BalanceAnalysisService $balanceAnalysis,
+        private readonly TranslatorInterface $translator,
         private readonly EntityManagerInterface $entityManager,
         private readonly Environment $twig,
         private readonly MailerInterface $mailer,
@@ -118,9 +122,11 @@ class SendMonthlySummaryCommand extends Command
                     continue;
                 }
 
-                // Check email preference
+                // Email, or the in-app / Telegram / push digest — whichever the user keeps on
                 $preference = $this->notificationService->getUserPreference($user, 'report.monthly_summary');
-                if (!$preference->isEmailEnabled()) {
+                $wantsEmail = $preference->isEmailEnabled();
+                $wantsDigest = $preference->isInAppEnabled() || $preference->isTelegramEnabled() || $preference->isPushEnabled();
+                if (!$wantsEmail && !$wantsDigest) {
                     $skipped++;
                     continue;
                 }
@@ -144,6 +150,10 @@ class SendMonthlySummaryCommand extends Command
                     $skipped++;
                     continue;
                 }
+                if (!$wantsEmail && (int) $existing === 0 && $this->digestAlreadySent($user, $company, $monthLabel)) {
+                    $skipped++;
+                    continue;
+                }
 
                 // Get summary data
                 $summary = $this->summaryService->getCompanySummary($company, $monthStart, $monthEnd);
@@ -152,6 +162,9 @@ class SendMonthlySummaryCommand extends Command
                     $skipped++;
                     continue;
                 }
+
+                // The fiscal digest: profit tax estimated from the invoices, with the sponsorship headroom
+                $fiscal = $this->fiscalDigest($company, $monthYear, $monthNumber);
 
                 $userName = $user->getFirstName() ?: explode('@', $user->getEmail())[0];
                 $companyName = $company->getName();
@@ -175,6 +188,13 @@ class SendMonthlySummaryCommand extends Command
                     continue;
                 }
 
+                $this->notifyDigest($user, $company, $monthLabel, $summary, $fiscal);
+                if (!$wantsEmail) {
+                    $sent++;
+                    $io->text(sprintf('  [DIGEST] %s → %s (%s)', $companyName, $user->getEmail(), $monthLabel));
+                    continue;
+                }
+
                 try {
                     $subject = sprintf('Raport lunar %s — %s', $monthLabel, $companyName);
 
@@ -192,6 +212,7 @@ class SendMonthlySummaryCommand extends Command
                         'receivables' => $summary['receivables'],
                         'topClients' => $summary['topClients'],
                         'comparison' => $summary['comparison'],
+                        'fiscal' => $fiscal,
                         'dashboardUrl' => $dashboardUrl,
                         'unsubscribeUrl' => $unsubscribeUrl,
                     ]);
@@ -247,5 +268,98 @@ class SendMonthlySummaryCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * The numbers the digest quotes: the quarter the month belongs to and the year to date,
+     * from the profit tax estimated from invoices, plus the zero-cost sponsorship headroom.
+     *
+     * @return array<string, mixed>|null null when the company has no invoices this year
+     */
+    private function fiscalDigest(Company $company, int $year, int $month): ?array
+    {
+        try {
+            $estimate = $this->balanceAnalysis->profitTaxEstimate($company, $year);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Monthly summary: profit tax estimate failed.', ['company' => $company->getName(), 'error' => $e->getMessage()]);
+
+            return null;
+        }
+        if (empty($estimate['hasData'])) {
+            return null;
+        }
+        $quarterNo = intdiv($month - 1, 3) + 1;
+        $quarter = null;
+        foreach ($estimate['quarters'] as $q) {
+            if ((int) $q['quarter'] === $quarterNo) {
+                $quarter = $q;
+            }
+        }
+        $sponsorship = null;
+        foreach ($estimate['tips'] ?? [] as $tip) {
+            if ($tip['code'] === 'sponsorship') {
+                $sponsorship = $tip['params']['headroom'];
+            }
+        }
+
+        return [
+            'year' => $year,
+            'quarterLabel' => sprintf('T%d %d', $quarterNo, $year),
+            'quarter' => $quarter,
+            'ytd' => $estimate['ytd'],
+            'sponsorshipHeadroom' => $sponsorship,
+            'tips' => $estimate['tips'] ?? [],
+        ];
+    }
+
+    private function notifyDigest(User $user, Company $company, string $monthLabel, array $summary, ?array $fiscal): void
+    {
+        $locale = $user->getLocale() ?? 'ro';
+        $fmt = static fn (?string $v): string => $v === null ? '—' : number_format((float) $v, 0, ',', '.');
+        $params = [
+            '%company%' => $company->getName() ?? '—',
+            '%month%' => $monthLabel,
+            '%invoiced%' => $summary['totalInvoicedFormatted'] . ' ' . $summary['currency'],
+            '%collected%' => $summary['totalCollectedFormatted'] . ' ' . $summary['currency'],
+            '%quarter%' => $fiscal['quarterLabel'] ?? '',
+            '%taxQuarter%' => $fmt($fiscal['quarter']['estimatedProfitTax'] ?? null),
+            '%taxYtd%' => $fmt($fiscal['ytd']['estimatedProfitTax'] ?? null),
+            '%year%' => (string) ($fiscal['year'] ?? ''),
+            '%sponsorship%' => $fmt($fiscal['sponsorshipHeadroom'] ?? null),
+        ];
+        $key = $fiscal === null ? 'notification.report.monthly_summary' : 'notification.report.monthly_fiscal';
+        $this->notificationService->createNotification(
+            $user,
+            'report.monthly_summary',
+            $this->translator->trans($key . '.title', $params, 'notifications', $locale),
+            $this->translator->trans($key . '.message', $params, 'notifications', $locale),
+            [
+                'companyId' => $company->getId()?->toRfc4122(),
+                'companyName' => $company->getName(),
+                'month' => $monthLabel,
+                'fiscal' => $fiscal === null ? null : [
+                    'quarter' => $fiscal['quarterLabel'],
+                    'estimatedProfitTaxQuarter' => $fiscal['quarter']['estimatedProfitTax'] ?? null,
+                    'estimatedProfitTaxYtd' => $fiscal['ytd']['estimatedProfitTax'] ?? null,
+                    'sponsorshipHeadroom' => $fiscal['sponsorshipHeadroom'],
+                ],
+                'url' => '/reports/balances',
+            ],
+        );
+    }
+
+    /** A digest-only user has no EmailLog row; the in-app notification of the month is the marker. */
+    private function digestAlreadySent(User $user, Company $company, string $monthLabel): bool
+    {
+        $count = $this->entityManager->createQuery(
+            'SELECT COUNT(n.id) FROM App\Entity\Notification n WHERE n.user = :user AND n.type = :type AND n.createdAt >= :since AND n.title LIKE :label'
+        )->setParameters([
+            'user' => $user,
+            'type' => 'report.monthly_summary',
+            'since' => new \DateTimeImmutable('-40 days'),
+            'label' => '%' . $company->getName() . '%' . $monthLabel . '%',
+        ])->getSingleScalarResult();
+
+        return (int) $count > 0;
     }
 }

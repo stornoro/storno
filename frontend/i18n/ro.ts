@@ -1976,6 +1976,53 @@ export default defineI18nLocale(async () => {
           cashflow: 'Cash flow',
           aging: 'Vechime creante',
           concentration: 'Concentrare clienti',
+          profitTaxEstimate: 'Impozit pe profit estimat din facturi',
+        },
+        profitTaxEstimate: {
+          subtitle: 'Doar informativ: venituri din facturile emise minus cheltuielile din facturile primite, in lei (cursul facturii sau media lunara BNR), si 16% din diferenta. Salariile, comisioanele de plata, furnizorii fara e-Factura si amortizarile nu apar in facturi, deci impozitul real este mai mic.',
+          quarter: 'Trimestru',
+          ytd: 'Cumulat {year}',
+          revenue: 'Venituri facturate',
+          invoicedExpenses: 'Cheltuieli din facturi primite',
+          grossProfit: 'Profit brut din facturi',
+          estimatedProfitTax: 'Impozit pe profit 16% (estimare)',
+          microTax: 'Impozit micro 1% / 3%',
+          invoices: 'Facturi emise / primite',
+          share: 'Cheltuielile facturate acopera {percent}% din venituri',
+          open: 'in curs',
+          missingRates: 'Fara curs BNR pentru {currencies}: facturile in aceste monede nu au fost incluse.',
+          noData: 'Nicio factura in acest an.',
+          tipsTitle: 'Sfaturi utile (informativ, de validat cu contabilul)',
+          tips: {
+            sponsorship: {
+              title: 'Sponsorizari cu cost zero: {headroom} RON in {year}',
+              text: 'Creditul fiscal pentru sponsorizare este minimul dintre 0,75% din cifra de afaceri ({turnoverCap} RON) si 20% din impozitul pe profit ({taxCap} RON). Ce nu folosesti pana la finalul anului se pierde; poate fi redirectionat prin formularul 177 in 6 luni de la depunerea declaratiei.',
+            },
+            reinvested_profit: {
+              title: '{quarter}: {daysLeft} zile pana la {quarterEnd}, impozit estimat {tax} RON',
+              text: 'Echipamentele si tehnica de calcul puse in functiune pana la {quarterEnd} intra la scutirea pentru profit reinvestit, pana la limita impozitului trimestrului: o investitie de pana la {maxInvestment} RON ar acoperi integral impozitul estimat. Conditii: pastrate cel putin jumatate din durata de amortizare (max 5 ani), profitul scutit trece la rezerve si nu se distribuie. Cumpara doar ce era oricum in plan.',
+            },
+            missing_expenses: {
+              title: 'Facturile primite acopera doar {share}% din venituri',
+              text: 'Sub {threshold}% inseamna de obicei ca lipsesc facturile furnizorilor externi platiti cu cardul (comisioane Stripe/PayPal, AWS, abonamente SaaS). Fara document nu sunt deductibile. Descarca-le lunar si inregistreaza-le ca facturi primite.',
+            },
+            dividends: {
+              title: 'Dividende: {available} RON disponibili dupa taxe',
+              text: 'Din profitul brut din facturi raman {netProfit} RON dupa impozitul pe profit; impozitul pe dividende de {dividendTaxRate}% ({dividendTax} RON) lasa {available} RON. Distribuirea se face prin hotarare AGA, iar CASS pe dividende se planifica pe ani.',
+            },
+            employee_benefits: {
+              title: 'Beneficii netaxabile pentru angajati',
+              text: 'In plafonul lunar de 33% din salariul de baza: telemunca 400 RON/luna, pensie facultativa pilon III 400 EUR/an, asigurare medicala 400 EUR/an, abonament sport 100 EUR/an, cadouri 300 RON/eveniment (Paste, Craciun, 8 Martie, 1 Iunie). Tichetele de masa (impozit 10% + CASS) raman mai ieftine decat salariul. Cheltuielile sociale sunt deductibile pana la 5% din fondul de salarii.',
+            },
+            rd_deduction: {
+              title: 'Cercetare-dezvoltare: deducere suplimentara de 50%',
+              text: 'Pentru proiecte cu element de noutate sau incertitudine tehnica (obiectiv, buget, echipa, rezultat): deducere suplimentara de 50% pe cheltuielile eligibile si amortizare accelerata pe echipamentele R&D. Tine un dosar lunar al proiectelor; contabilul aplica deducerea anual.',
+            },
+            advance_payments: {
+              title: 'Plati anticipate trimestriale',
+              text: 'Poti opta pentru plati anticipate egale cu impozitul anului precedent, cu regularizare la final de an; util cand anul curent este mai slab, ca sa nu blochezi cash.',
+            },
+          },
         },
         statusBadge: {
           normal: 'Bun',

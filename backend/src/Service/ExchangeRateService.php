@@ -204,6 +204,41 @@ class ExchangeRateService
     }
 
     /**
+     * BNR's mean rate of each month of a year, keyed by month number (1–12; a running year
+     * has only the months published so far). Cached like the annual average. Empty when BNR
+     * is unreachable; RON maps to 1.0 for every month.
+     *
+     * @return array<int, float>
+     */
+    public function getMonthlyAverageRates(string $currency, int $year): array
+    {
+        $currency = strtoupper(trim($currency));
+        if ($currency === 'RON' || $currency === '') {
+            return array_fill_keys(range(1, 12), 1.0);
+        }
+        if ($year < 2005 || $year > (int) date('Y')) {
+            return [];
+        }
+        $complete = $year < (int) date('Y');
+        $cacheKey = sprintf('bnr_monthly_averages_%s_%d', $currency, $year);
+        $months = $this->cache->get($cacheKey, function (ItemInterface $item) use ($currency, $year, $complete) {
+            $item->expiresAfter($complete ? self::LAST_GOOD_TTL : self::FRESH_TTL);
+            $monthly = $this->monthlyAveragesFromBnr($currency, $year);
+            if ($monthly === []) {
+                $item->expiresAfter(self::STALE_RETRY_TTL);
+            }
+
+            return $monthly;
+        });
+        $out = [];
+        foreach (array_values((array) $months) as $i => $rate) {
+            $out[$i + 1] = round((float) $rate, 4);
+        }
+
+        return $out;
+    }
+
+    /**
      * The mean rate of each month of a year, from BNR's own file for that year. BNR computes
      * the annual average as the simple mean of these monthly means, which is why the yearly
      * figure differs slightly from the mean of all daily rates.

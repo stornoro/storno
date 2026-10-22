@@ -74,6 +74,16 @@ notification:
     oss_draft_nil:
       title: '%company%: D398 T%quarter% pregatita — fara operatiuni'
       message: 'Declaratia speciala de TVA (OSS) pentru trimestrul %quarter% a fost pregatita: nicio vanzare catre consumatori din alte state UE, se depune fara operatiuni pana la %date%. Nu se depune automat.'
+  report:
+    monthly_summary:
+      title: '%company%: raport lunar %month%'
+      message: 'Facturat %invoiced%, incasat %collected% in %month%.'
+    monthly_fiscal:
+      title: '%company%: raport lunar %month%'
+      message: 'Facturat %invoiced%, incasat %collected%. Impozit pe profit estimat doar din facturi: %taxQuarter% RON pe %quarter%, %taxYtd% RON cumulat %year% (costurile nefacturate lipsesc, impozitul real e mai mic). Sponsorizari cu cost zero disponibile in %year%: %sponsorship% RON. Detalii in Analiza balante.'
+    quarter_planning:
+      title: '%company%: %days% zile pana la inchiderea %quarter%'
+      message: 'Impozit pe profit estimat din facturi pentru %quarter%: %tax% RON. Echipamentele puse in functiune pana la %date% intra la scutirea pentru profit reinvestit, pana la %maxInvestment% RON investitie acoperita. Sponsorizari cu cost zero ramase in %year%: %sponsorship% RON. Decizia si aplicarea raman la contabil.'
   dosar:
     deadline:
       title: '%company%: termen in %days% zile'

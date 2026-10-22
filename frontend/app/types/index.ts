@@ -2187,6 +2187,43 @@ export interface BalanceAnalysisReport {
   cashflow: BalanceCashflow
   aging: BalanceAging
   concentration: BalanceClientConcentration
+  profitTaxEstimate: BalanceProfitTaxEstimate
+}
+
+export interface BalanceProfitTaxEstimateRow {
+  revenue: string
+  invoicedExpenses: string
+  grossProfit: string
+  estimatedProfitTax: string
+  microTax1: string
+  microTax3: string
+  invoiceCount: { outgoing: number, incoming: number }
+  invoicedExpenseShare: number | null
+}
+
+export interface BalanceProfitTaxEstimateQuarter extends BalanceProfitTaxEstimateRow {
+  quarter: number
+  from: string
+  to: string
+  closed: boolean
+}
+
+export interface BalanceProfitTaxEstimate {
+  hasData: boolean
+  year: number
+  currency: 'RON'
+  profitTaxRate: number
+  fxSource: string
+  missingRates: string[]
+  quarters: BalanceProfitTaxEstimateQuarter[]
+  ytd: BalanceProfitTaxEstimateRow
+  tips: BalanceProfitTaxTip[]
+}
+
+export interface BalanceProfitTaxTip {
+  code: 'sponsorship' | 'reinvested_profit' | 'missing_expenses' | 'dividends' | 'employee_benefits' | 'rd_deduction' | 'advance_payments' | string
+  level: 'action' | 'warning' | 'info'
+  params: Record<string, string | number>
 }
 
 // ── Tax Declarations ──────────────────────────────────────────────

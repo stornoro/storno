@@ -1977,6 +1977,53 @@ export default defineI18nLocale(async () => {
         cashflow: 'Cash flow',
         aging: 'Receivables aging',
         concentration: 'Client concentration',
+        profitTaxEstimate: 'Profit tax estimated from invoices',
+      },
+      profitTaxEstimate: {
+        subtitle: 'Information only: revenue from issued invoices minus the expenses in received invoices, in lei (the invoice rate or the BNR monthly average), and 16% of the difference. Salaries, payment-processor fees, suppliers without e-Factura and depreciation never appear in invoices, so the real tax is lower.',
+        quarter: 'Quarter',
+        ytd: 'Year to date {year}',
+        revenue: 'Invoiced revenue',
+        invoicedExpenses: 'Expenses in received invoices',
+        grossProfit: 'Gross profit from invoices',
+        estimatedProfitTax: 'Profit tax 16% (estimate)',
+        microTax: 'Micro-enterprise tax 1% / 3%',
+        invoices: 'Invoices issued / received',
+        share: 'Invoiced expenses cover {percent}% of revenue',
+        open: 'running',
+        missingRates: 'No BNR rate for {currencies}: invoices in those currencies were left out.',
+        noData: 'No invoices this year.',
+        tipsTitle: 'Useful hints (information only, to validate with the accountant)',
+        tips: {
+          sponsorship: {
+            title: 'Zero-cost sponsorship: {headroom} RON in {year}',
+            text: 'The sponsorship tax credit is the lesser of 0.75% of turnover ({turnoverCap} RON) and 20% of the profit tax ({taxCap} RON). What is not used by year end is lost; it can be redirected with form 177 within 6 months of filing the return.',
+          },
+          reinvested_profit: {
+            title: '{quarter}: {daysLeft} days to {quarterEnd}, estimated tax {tax} RON',
+            text: 'Equipment and computers put into service by {quarterEnd} qualify for the reinvested-profit exemption, up to the tax of the quarter: an investment of up to {maxInvestment} RON would cover the estimated tax in full. Conditions: kept for at least half the depreciation period (max 5 years), the exempt profit goes to reserves and is not distributed. Buy only what was planned anyway.',
+          },
+          missing_expenses: {
+            title: 'Received invoices cover only {share}% of revenue',
+            text: 'Below {threshold}% usually means the invoices of card-paid foreign suppliers are missing (Stripe/PayPal fees, AWS, SaaS subscriptions). Without a document they are not deductible. Download them monthly and record them as received invoices.',
+          },
+          dividends: {
+            title: 'Dividends: {available} RON available after taxes',
+            text: 'Of the gross profit from invoices, {netProfit} RON remain after the profit tax; the {dividendTaxRate}% dividend tax ({dividendTax} RON) leaves {available} RON. Distribution needs a shareholders\' resolution; CASS on dividends is planned per year.',
+          },
+          employee_benefits: {
+            title: 'Tax-free employee benefits',
+            text: 'Within the monthly cap of 33% of the base salary: remote-work allowance 400 RON/month, voluntary pension (pillar III) 400 EUR/year, health insurance 400 EUR/year, gym 100 EUR/year, gifts 300 RON per event (Easter, Christmas, 8 March, 1 June). Meal vouchers (10% tax + CASS) stay cheaper than salary. Social expenses are deductible up to 5% of the payroll.',
+          },
+          rd_deduction: {
+            title: 'Research & development: extra 50% deduction',
+            text: 'For projects with novelty or technical uncertainty (objective, budget, team, result): an extra 50% deduction on eligible costs and accelerated depreciation on R&D equipment. Keep a monthly project file; the accountant applies the deduction yearly.',
+          },
+          advance_payments: {
+            title: 'Quarterly advance payments',
+            text: 'You may opt for advance payments equal to last year\'s tax, settled at year end; useful when the current year is weaker, so cash is not tied up.',
+          },
+        },
       },
       statusBadge: {
         normal: 'Healthy',

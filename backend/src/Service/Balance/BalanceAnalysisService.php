@@ -60,6 +60,7 @@ class BalanceAnalysisService
         $cashflow = $this->computeCashflowIndicators($sheet, $monthlyEvolution, $latestMonth);
         $aging = $this->computeReceivablesAging($conn, $companyId);
         $concentration = $this->computeClientConcentration($conn, $companyId, $year);
+        $profitTaxEstimate = $this->profitTaxEstimate($company, $year);
 
         return [
             'year' => $year,
@@ -86,6 +87,135 @@ class BalanceAnalysisService
             'cashflow' => $cashflow,
             'aging' => $aging,
             'concentration' => $concentration,
+            'profitTaxEstimate' => $profitTaxEstimate,
+        ];
+    }
+
+    /**
+     * An order-of-magnitude estimate of the income tax from the invoices alone, per quarter:
+     * revenue = issued invoices, invoiced expenses = received invoices, both in lei (an
+     * invoice's own exchange rate when it has one, else BNR's monthly average), gross profit
+     * from invoices = revenue − invoiced expenses, and 16 % of it as the profit tax; the
+     * 1 % and 3 % micro-enterprise tax on revenue are given for comparison. Drafts, cancelled,
+     * rejected and converted documents are left out.
+     *
+     * It is information, not a figure to file: salaries and their contributions, card and
+     * payment-processor fees, foreign suppliers without e-Factura, depreciation and every
+     * other cost that never becomes an invoice in Storno are missing, so the real tax is
+     * lower. `invoicedExpenseShare` tells how much of the revenue the invoiced costs cover.
+     */
+    public function profitTaxEstimate(Company $company, int $year): array
+    {
+        $estimate = $this->computeProfitTaxEstimate($this->entityManager->getConnection(), (string) $company->getId(), $year);
+        $estimate['tips'] = $estimate['hasData'] ? ProfitTaxTipsBuilder::build($estimate, $company, new \DateTimeImmutable('today')) : [];
+
+        return $estimate;
+    }
+
+    private function computeProfitTaxEstimate(Connection $conn, string $companyId, int $year): array
+    {
+        $rows = $conn->fetchAllAssociative(
+            "SELECT MONTH(issue_date) AS m, direction, UPPER(currency) AS currency,
+                    COUNT(*) AS n,
+                    SUM(CASE WHEN exchange_rate IS NOT NULL AND exchange_rate > 0 THEN subtotal * exchange_rate ELSE 0 END) AS ron_with_rate,
+                    SUM(CASE WHEN exchange_rate IS NOT NULL AND exchange_rate > 0 THEN 0 ELSE subtotal END) AS amount_without_rate
+             FROM invoice
+             WHERE company_id = :companyId
+               AND deleted_at IS NULL
+               AND status NOT IN ('cancelled', 'draft', 'rejected', 'converted')
+               AND YEAR(issue_date) = :year
+             GROUP BY MONTH(issue_date), direction, UPPER(currency)",
+            ['companyId' => $companyId, 'year' => $year]
+        );
+
+        $monthly = ['outgoing' => array_fill(1, 12, 0.0), 'incoming' => array_fill(1, 12, 0.0)];
+        $counts = ['outgoing' => array_fill(1, 12, 0), 'incoming' => array_fill(1, 12, 0)];
+        $rates = [];
+        $missingRates = [];
+        foreach ($rows as $r) {
+            $month = (int) $r['m'];
+            $dir = $r['direction'] === 'outgoing' ? 'outgoing' : 'incoming';
+            $currency = (string) $r['currency'] ?: 'RON';
+            $ron = (float) $r['ron_with_rate'];
+            $rest = (float) $r['amount_without_rate'];
+            if ($rest != 0.0) {
+                if ($currency === 'RON') {
+                    $ron += $rest;
+                } else {
+                    $rates[$currency] ??= $this->exchangeRateService->getMonthlyAverageRates($currency, $year);
+                    $rate = $rates[$currency][$month] ?? null;
+                    if ($rate === null) {
+                        // Month not published yet (or BNR unreachable): the latest month known, else the live rate
+                        $known = $rates[$currency];
+                        $rate = $known !== [] ? end($known) : $this->exchangeRateService->getRate($currency);
+                    }
+                    if ($rate === null || $rate <= 0) {
+                        $missingRates[$currency] = true;
+                        continue;
+                    }
+                    $ron += $rest * $rate;
+                }
+            }
+            $monthly[$dir][$month] += $ron;
+            $counts[$dir][$month] += (int) $r['n'];
+        }
+
+        $today = new \DateTimeImmutable('today');
+        $quarters = [];
+        $ytd = ['revenue' => 0.0, 'invoicedExpenses' => 0.0, 'outgoing' => 0, 'incoming' => 0];
+        $hasData = false;
+        for ($q = 1; $q <= 4; $q++) {
+            $months = range(($q - 1) * 3 + 1, $q * 3);
+            $revenue = array_sum(array_map(fn ($m) => $monthly['outgoing'][$m], $months));
+            $expenses = array_sum(array_map(fn ($m) => $monthly['incoming'][$m], $months));
+            $out = array_sum(array_map(fn ($m) => $counts['outgoing'][$m], $months));
+            $in = array_sum(array_map(fn ($m) => $counts['incoming'][$m], $months));
+            $from = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $months[0]));
+            $to = $from->modify('+3 months -1 day');
+            if ($from > $today) {
+                continue; // a quarter that has not started
+            }
+            $hasData = $hasData || $out > 0 || $in > 0;
+            $gross = $revenue - $expenses;
+            $quarters[] = [
+                'quarter' => $q,
+                'from' => $from->format('Y-m-d'),
+                'to' => $to->format('Y-m-d'),
+                'closed' => $to < $today,
+                'revenue' => self::money($revenue),
+                'invoicedExpenses' => self::money($expenses),
+                'grossProfit' => self::money($gross),
+                'estimatedProfitTax' => self::money(max(0.0, $gross) * 0.16),
+                'microTax1' => self::money(max(0.0, $revenue) * 0.01),
+                'microTax3' => self::money(max(0.0, $revenue) * 0.03),
+                'invoiceCount' => ['outgoing' => $out, 'incoming' => $in],
+                'invoicedExpenseShare' => $revenue > 0 ? round($expenses / $revenue * 100, 1) : null,
+            ];
+            $ytd['revenue'] += $revenue;
+            $ytd['invoicedExpenses'] += $expenses;
+            $ytd['outgoing'] += $out;
+            $ytd['incoming'] += $in;
+        }
+        $ytdGross = $ytd['revenue'] - $ytd['invoicedExpenses'];
+
+        return [
+            'hasData' => $hasData,
+            'year' => $year,
+            'currency' => 'RON',
+            'profitTaxRate' => 16,
+            'fxSource' => 'invoice rate, else BNR monthly average',
+            'missingRates' => array_keys($missingRates),
+            'quarters' => $quarters,
+            'ytd' => [
+                'revenue' => self::money($ytd['revenue']),
+                'invoicedExpenses' => self::money($ytd['invoicedExpenses']),
+                'grossProfit' => self::money($ytdGross),
+                'estimatedProfitTax' => self::money(max(0.0, $ytdGross) * 0.16),
+                'microTax1' => self::money(max(0.0, $ytd['revenue']) * 0.01),
+                'microTax3' => self::money(max(0.0, $ytd['revenue']) * 0.03),
+                'invoiceCount' => ['outgoing' => $ytd['outgoing'], 'incoming' => $ytd['incoming']],
+                'invoicedExpenseShare' => $ytd['revenue'] > 0 ? round($ytd['invoicedExpenses'] / $ytd['revenue'] * 100, 1) : null,
+            ],
         ];
     }
 

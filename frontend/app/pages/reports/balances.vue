@@ -69,6 +69,11 @@
         <!-- YoY comparison -->
         <ReportsBalanceYoyChart :data="report.yoyComparison" />
       </div>
+
+      <!-- From invoices only, so it shows even before any trial balance is uploaded -->
+      <div v-if="!loading && report?.profitTaxEstimate" class="mt-6 shrink-0">
+        <ReportsBalanceProfitTaxEstimateCard :data="report.profitTaxEstimate" />
+      </div>
     </template>
   </UDashboardPanel>
 

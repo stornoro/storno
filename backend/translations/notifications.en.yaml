@@ -74,6 +74,16 @@ notification:
     oss_draft_nil:
       title: '%company%: D398 Q%quarter% prepared — no operations'
       message: 'The special VAT return (OSS) for quarter %quarter% has been prepared: no sales to consumers in other EU member states, a nil return is due by %date%. It is not filed automatically.'
+  report:
+    monthly_summary:
+      title: '%company%: monthly report %month%'
+      message: 'Invoiced %invoiced%, collected %collected% in %month%.'
+    monthly_fiscal:
+      title: '%company%: monthly report %month%'
+      message: 'Invoiced %invoiced%, collected %collected%. Profit tax estimated from invoices alone: %taxQuarter% RON for %quarter%, %taxYtd% RON year to date %year% (non-invoiced costs are missing, the real tax is lower). Zero-cost sponsorship still available in %year%: %sponsorship% RON. Details under Balance analysis.'
+    quarter_planning:
+      title: '%company%: %days% days to the end of %quarter%'
+      message: 'Profit tax estimated from invoices for %quarter%: %tax% RON. Equipment put into service by %date% qualifies for the reinvested-profit exemption, up to %maxInvestment% RON of investment covered. Zero-cost sponsorship left in %year%: %sponsorship% RON. The decision and the filing stay with the accountant.'
   dosar:
     deadline:
       title: '%company%: deadline in %days% days'
