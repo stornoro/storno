@@ -40,7 +40,7 @@ class D398PopulatorTest extends TestCase
         $inv->setIssueDate(new \DateTime($issueDate));
         $inv->setNumber($opts['number'] ?? 'F-1');
         $inv->setCurrency($opts['currency'] ?? 'EUR');
-        $inv->setInvoiceTypeCode($opts['type'] ?? InvoiceTypeCode::SPECIAL_REGIME_ART_314_315->value);
+        $inv->setInvoiceTypeCode(array_key_exists('type', $opts) ? $opts['type'] : InvoiceTypeCode::SPECIAL_REGIME_ART_314_315->value);
         if (isset($opts['exchangeRate'])) {
             $inv->setExchangeRate($opts['exchangeRate']);
         }
@@ -72,7 +72,7 @@ class D398PopulatorTest extends TestCase
 
     /** @param Invoice[] $invoices */
     /** @param array{rate: float, date: string}|null $datedEurRate what ExchangeRateService::getRateForDate answers for the quarter end */
-    private function populate(array $invoices, ?array $liveRates = null, ?float $eurRate = 5.0, int $year = 2026, int $month = 4, ?array $datedEurRate = null): array
+    private function populate(array $invoices, ?array $liveRates = null, ?float $eurRate = 5.0, int $year = 2026, int $month = 4, ?array $datedEurRate = null, array $datedRates = []): array
     {
         $repo = $this->createMock(InvoiceRepository::class);
         $repo->method('findForVatReturn')->willReturn($invoices);
@@ -80,10 +80,12 @@ class D398PopulatorTest extends TestCase
         $eu->method('getAllRates')->willReturnCallback(static fn (string $c) => $liveRates[$c] ?? null);
         $fx = $this->createMock(ExchangeRateService::class);
         $fx->method('getRate')->willReturn($eurRate);
-        $fx->method('getRateForDate')->willReturnCallback(static function (string $currency, \DateTimeInterface $date, bool $nextPublished = false) use ($datedEurRate): ?array {
-            self::assertSame('EUR', $currency);
+        $fx->method('getRateForDate')->willReturnCallback(static function (string $currency, \DateTimeInterface $date, bool $nextPublished = false) use ($datedEurRate, $datedRates): ?array {
             self::assertSame('2026-06-30', $date->format('Y-m-d'), 'the rate of the last day of the quarter is asked for');
             self::assertTrue($nextPublished, 'when nothing was published on the last day, the next publication counts');
+            if ($currency !== 'EUR') {
+                return $datedRates[$currency] ?? null; // no ECB rate → the invoice's own rate is used
+            }
             return $datedEurRate;
         });
         return (new D398Populator($repo, $eu, $fx))->populate($this->company, $year, $month, 'quarterly');
@@ -194,6 +196,25 @@ class D398PopulatorTest extends TestCase
 
         $this->company->setVatPayer(false);
         self::assertContains('COMPANY_NOT_VAT_PAYER', array_column($this->populate([])['warnings'], 'code'));
+    }
+
+    public function testUntypedSalesWithVatToEuConsumersCountAndForeignCurrencyUsesTheEcbRate(): void
+    {
+        // A USD invoice with 19% German VAT, not marked as special regime, with no stored rate:
+        // 1 EUR = 5.0 RON and 1 USD = 4.0 RON at the quarter end → 37.82 USD = 30.26 EUR
+        $inv = $this->invoice('DE', '2026-04-10', [['base' => '37.82', 'rate' => '19']], ['type' => null, 'currency' => 'USD']);
+        $inv->getLines()->first()->setVatAmount('7.18');
+        $b2b = $this->invoice('DE', '2026-04-11', [['base' => '45.00']], ['type' => null, 'currency' => 'USD']);
+        $b2b->getClient()->setIsVatPayer(true);
+
+        $data = $this->populate([$inv, $b2b], ['DE' => ['standard' => 19.0, 'reduced' => 7.0]], 5.0, 2026, 4, ['rate' => 5.0, 'date' => '2026-06-30'], ['USD' => ['rate' => 4.0, 'date' => '2026-06-30']]);
+
+        self::assertCount(1, $data['states']);
+        self::assertSame('DE', $data['states'][0]['mscon_state']);
+        self::assertSame('30.26', $data['states'][0]['supplies'][0]['taxable_amount']);
+        self::assertSame('5.75', $data['states'][0]['supplies'][0]['vat_amount']);
+        self::assertSame(1, $data['invoiceCounts']['untyped']);
+        self::assertContains('UNTYPED_OSS_INCLUDED', array_column($data['warnings'], 'code'));
     }
 
     public function testXmlStructureAndRecomputedTotals(): void

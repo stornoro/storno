@@ -26,7 +26,13 @@ use App\Service\ExchangeRateService;
  *    ExchangeRateService::getRateForDate). While the quarter is still running, or when the
  *    ECB is unreachable, the BNR rate of the day is used instead and the declaration carries
  *    the EUR_RATE_FALLBACK warning so the user regenerates it once the quarter has ended;
- *  - other currencies go to RON with the invoice's exchange rate and then to EUR as above.
+ *  - other currencies go to RON with the ECB rate of the currency on the same day, else with
+ *    the invoice's exchange rate, and then to EUR as above.
+ *
+ * Invoices typed as special regime (art. 314–315) always count; an invoice without that type
+ * still counts when it plainly is an OSS sale — VAT charged to a consumer (buyer not VAT
+ * registered) in another member state — and the declaration then carries the
+ * UNTYPED_OSS_INCLUDED warning.
  *
  * The VAT rate is the destination state's: a line's own rate is kept when it is one of that
  * state's rates (EuVatRateService, with the list ANAF's validator ships as a fallback), else
@@ -93,14 +99,20 @@ class D398Populator implements DeclarationDataPopulatorInterface
                 continue;
             }
             $counts['issued']++;
-            if ($invoice->getInvoiceTypeCode() !== InvoiceTypeCode::SPECIAL_REGIME_ART_314_315->value) {
-                continue;
-            }
-            $counts['oss']++;
             $country = strtoupper(trim((string) ($invoice->getClient()?->getCountry() ?: ($invoice->getBuyerSnapshot()['country'] ?? 'RO')))) ?: 'RO';
             if ($country === 'GR') {
                 $country = 'EL';
             }
+            if ($invoice->getInvoiceTypeCode() !== InvoiceTypeCode::SPECIAL_REGIME_ART_314_315->value) {
+                // Not marked as special regime: counts anyway when it is plainly an OSS sale —
+                // VAT charged to a consumer in another member state (the invoice carries the
+                // destination rate); anything else is a domestic, B2B or non-EU sale.
+                if (!$this->isUntypedOssSale($invoice, $country)) {
+                    continue;
+                }
+                $counts['untyped'] = ($counts['untyped'] ?? 0) + 1;
+            }
+            $counts['oss']++;
             if ($country === 'RO') {
                 $counts['domestic']++;
                 continue;
@@ -224,6 +236,9 @@ class D398Populator implements DeclarationDataPopulatorInterface
         if ($ratesUnknown) {
             $warnings[] = ['code' => 'RATE_NOT_IN_LIST', 'message' => sprintf('Linii cu o cota care nu exista in statul de consum (%s); s-a aplicat cota standard a statului.', implode(', ', array_unique($ratesUnknown)))];
         }
+        if (($counts['untyped'] ?? 0) > 0) {
+            $warnings[] = ['code' => 'UNTYPED_OSS_INCLUDED', 'message' => sprintf('%d facturi cu TVA catre consumatori din alte state membre nu au regimul special (art. 314-315) setat ca tip de factura; au fost incluse in D398. Setati tipul pe seria sau pe facturile viitoare.', $counts['untyped'])];
+        }
         if ($counts['domestic'] > 0) {
             $warnings[] = ['code' => 'DOMESTIC_EXCLUDED', 'message' => sprintf('%d facturi in regim special catre clienti din Romania nu intra in D398.', $counts['domestic'])];
         }
@@ -246,6 +261,33 @@ class D398Populator implements DeclarationDataPopulatorInterface
             'invoiceCounts' => $counts,
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * An invoice without the special-regime type code that is still an OSS sale: the buyer
+     * is a consumer (not VAT registered) in an EU member state other than Romania and at
+     * least one line carries VAT. Business buyers are reverse-charged and stay out.
+     */
+    private function isUntypedOssSale(Invoice $invoice, string $country): bool
+    {
+        $type = $invoice->getInvoiceTypeCode();
+        if ($type !== null && $type !== InvoiceTypeCode::STANDARD->value) {
+            return false;
+        }
+        if ($country === 'RO' || !in_array($country, self::EU, true)) {
+            return false;
+        }
+        $snapshot = $invoice->getBuyerSnapshot() ?? [];
+        $vatPayer = (bool) ($snapshot['isVatPayer'] ?? $invoice->getClient()?->isVatPayer() ?? false);
+        if ($vatPayer) {
+            return false;
+        }
+        foreach ($invoice->getLines() as $line) {
+            if (bccomp((string) $line->getVatAmount(), '0', 2) > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The company's VAT identification for the union scheme: its VAT code, or RO + CIF. */
@@ -310,6 +352,26 @@ class D398Populator implements DeclarationDataPopulatorInterface
         return ['rate' => number_format($live, 4, '.', ''), 'date' => date('Y-m-d'), 'source' => 'bnr'];
     }
 
+    /** @var array<string, string|null> RON per unit of a currency at the quarter end (ECB), memoised */
+    private array $currencyRates = [];
+
+    private function currencyRonRate(string $currency, \DateTimeInterface $quarterEnd): ?string
+    {
+        if (!array_key_exists($currency, $this->currencyRates)) {
+            $rate = null;
+            try {
+                $dated = $this->exchangeRates?->getRateForDate($currency, $quarterEnd, true);
+                if (is_array($dated) && ($dated['rate'] ?? 0) > 0) {
+                    $rate = number_format((float) $dated['rate'], 6, '.', '');
+                }
+            } catch (\Throwable) {
+                $rate = null;
+            }
+            $this->currencyRates[$currency] = $rate;
+        }
+        return $this->currencyRates[$currency];
+    }
+
     private function toEur(string $amount, Invoice $invoice, \DateTimeInterface $quarterEnd, ?float &$eurRate, ?array &$eurRateInfo, bool &$eurRateUsed, array &$missing): ?string
     {
         $currency = strtoupper($invoice->getCurrency() ?: 'RON');
@@ -318,8 +380,15 @@ class D398Populator implements DeclarationDataPopulatorInterface
         }
         $ron = $amount;
         if ($currency !== 'RON') {
-            $rate = $invoice->getExchangeRate();
-            $ron = ($rate !== null && bccomp($rate, '0', 6) > 0) ? bcmul($amount, $rate, 4) : $amount;
+            // Other currencies: the ECB reference rate of the currency on the same day as the
+            // EUR rate (so the cross rate is the ECB's own), else the rate stored on the invoice.
+            $dated = $this->currencyRonRate($currency, $quarterEnd);
+            $rate = $dated ?? $invoice->getExchangeRate();
+            if ($rate === null || bccomp((string) $rate, '0', 6) <= 0) {
+                $missing[] = (string) $invoice->getNumber();
+                return null;
+            }
+            $ron = bcmul($amount, (string) $rate, 6);
         }
         if ($eurRateInfo === null) {
             $eurRateInfo = $this->eurRate($quarterEnd);
