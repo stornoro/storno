@@ -386,8 +386,114 @@ TEXT;
         $this->assertSame('1171', $result->rows[0]['accountCode']);
         $this->assertSame('0.00', $result->rows[0]['initialDebit']);
         $this->assertSame('1101657.93', $result->rows[0]['initialCredit']);
-        $this->assertSame('1101657.93', $result->rows[0]['finalDebit']);
-        $this->assertSame('0.00', $result->rows[0]['finalCredit']);
+        // The extractor yields the "Sume precedente" group last (credit, then debit);
+        // the arithmetic identities put the columns back in place.
+        $this->assertSame('1101657.93', $result->rows[0]['previousCredit']);
+        $this->assertSame('2052519.58', $result->rows[0]['currentCredit']);
+        $this->assertSame('3154177.51', $result->rows[0]['totalCredit']);
+        $this->assertSame('0.00', $result->rows[0]['finalDebit']);
+        $this->assertSame('3154177.51', $result->rows[0]['finalCredit']);
+    }
+
+    // ── Column order detection ─────────────────────────────────────────
+
+    public function testParseRowsRemapsColumnsDrawnOutOfVisualOrder(): void
+    {
+        // Text order: initialD initialC currentD currentC totalD totalC finalD finalC previousC previousD
+        $text = <<<TEXT
+5121CONTURI LA BANCA IN LEI      100 000.00            0.00       50 000.00        5 000.00      350 000.00       45 000.00      305 000.00            0.00       40 000.00      300 000.00
+4111CLIENTI            0.00            0.00       70 000.00       72 000.00      420 000.00      410 000.00       10 000.00            0.00      338 000.00      350 000.00
+1012CAPITAL SUBSCRIS VARSAT            0.00          200.00            0.00            0.00            0.00          200.00            0.00          200.00          200.00            0.00
+TEXT;
+
+        $result = $this->parser->parseFromText($text);
+        $this->assertCount(3, $result->rows);
+
+        $bank = $result->rows[0];
+        $this->assertSame('100000.00', $bank['initialDebit']);
+        $this->assertSame('300000.00', $bank['previousDebit']);
+        $this->assertSame('40000.00', $bank['previousCredit']);
+        $this->assertSame('50000.00', $bank['currentDebit']);
+        $this->assertSame('5000.00', $bank['currentCredit']);
+        $this->assertSame('350000.00', $bank['totalDebit']);
+        $this->assertSame('45000.00', $bank['totalCredit']);
+        $this->assertSame('305000.00', $bank['finalDebit']);
+        $this->assertSame('0.00', $bank['finalCredit']);
+
+        $clients = $result->rows[1];
+        $this->assertSame('350000.00', $clients['previousDebit']);
+        $this->assertSame('338000.00', $clients['previousCredit']);
+        $this->assertSame('10000.00', $clients['finalDebit']);
+
+        $capital = $result->rows[2];
+        $this->assertSame('0.00', $capital['finalDebit']);
+        $this->assertSame('200.00', $capital['finalCredit']);
+    }
+
+    public function testParseRowsKeepsStandardColumnOrderWhenConsistent(): void
+    {
+        // Visual order already: initialD initialC previousD previousC currentD currentC totalD totalC finalD finalC
+        $text = <<<TEXT
+5121  CONTURI LA BANCA IN LEI  100.000,00  0,00  300.000,00  40.000,00  50.000,00  5.000,00  350.000,00  45.000,00  305.000,00  0,00
+401  FURNIZORI  0,00  1.000,00  30.000,00  35.000,00  6.000,00  7.000,00  36.000,00  42.000,00  0,00  6.000,00
+TEXT;
+
+        $result = $this->parser->parseFromText($text);
+        $this->assertCount(2, $result->rows);
+        $this->assertSame('300000.00', $result->rows[0]['previousDebit']);
+        $this->assertSame('305000.00', $result->rows[0]['finalDebit']);
+        $this->assertSame('35000.00', $result->rows[1]['previousCredit']);
+        $this->assertSame('6000.00', $result->rows[1]['finalCredit']);
+    }
+
+    public function testParseRowsKeepsStandardColumnOrderWhenNothingIsConsistent(): void
+    {
+        // Numbers that satisfy no identity under any order: fall back to the visual order.
+        $text = <<<TEXT
+5121  CONTURI LA BANCA IN LEI  1,00  2,00  3,00  4,00  5,00  6,00  7,00  8,00  9,00  10,00
+TEXT;
+
+        $result = $this->parser->parseFromText($text);
+        $this->assertCount(1, $result->rows);
+        $this->assertSame('3.00', $result->rows[0]['previousDebit']);
+        $this->assertSame('9.00', $result->rows[0]['finalDebit']);
+        $this->assertSame('10.00', $result->rows[0]['finalCredit']);
+    }
+
+    // ── Negative amounts ───────────────────────────────────────────────
+
+    public function testParseAccountLineKeepsNegativeSign(): void
+    {
+        $line = "4315  CONTR. DE ASIGURARI SOCIALE  0.00  -1 005.00  0.00  -1 005.00  0.00  0.00  0.00  -1 005.00  0.00  -1 005.00";
+
+        $row = $this->callParseAccountLine($line);
+        $this->assertNotNull($row);
+        $this->assertSame('-1005.00', $row['initialCredit']);
+        $this->assertSame('-1005.00', $row['previousCredit']);
+        $this->assertSame('0.00', $row['currentCredit']);
+        $this->assertSame('-1005.00', $row['finalCredit']);
+    }
+
+    public function testParseAccountLineKeepsNegativeSignRomanianFormat(): void
+    {
+        $line = "4411  IMPOZITUL PE PROFIT  0,00  -15.934,00  15.944,00  12.553,00  0,00  16.742,00  15.944,00  29.295,00  0,00  13.351,00";
+
+        $row = $this->callParseAccountLine($line);
+        $this->assertNotNull($row);
+        $this->assertSame('-15934.00', $row['initialCredit']);
+        $this->assertSame('13351.00', $row['finalCredit']);
+    }
+
+    public function testParseAccountLineStillTreatsStandaloneDashAsZero(): void
+    {
+        $line = "5311  CASA IN LEI  200,03  -  -  -  200,03  -  200,03  -  -  200,03";
+
+        $row = $this->callParseAccountLine($line);
+        $this->assertNotNull($row);
+        $this->assertSame('200.03', $row['initialDebit']);
+        $this->assertSame('0.00', $row['initialCredit']);
+        $this->assertSame('0.00', $row['finalDebit']);
+        $this->assertSame('200.03', $row['finalCredit']);
     }
 
     public function testParseRowsSkipsTotalLines(): void
@@ -536,7 +642,7 @@ TEXT;
 
     // ── Full text simulation (EXEMPLU CONSULT format) ───────────────
 
-    public function testFullParseTimeSaverFormat(): void
+    public function testFullParseSplitColumnGroupsFormat(): void
     {
         $text = <<<'TEXT'
 Cont
@@ -581,27 +687,32 @@ TEXT;
         $this->assertArrayHasKey('1012', $rowsByCode);
         $this->assertSame('0.00', $rowsByCode['1012']['initialDebit']);
         $this->assertSame('200.00', $rowsByCode['1012']['initialCredit']);
-        $this->assertSame('200.00', $rowsByCode['1012']['finalDebit']);
-        $this->assertSame('0.00', $rowsByCode['1012']['finalCredit']);
+        $this->assertSame('0.00', $rowsByCode['1012']['finalDebit']);
+        $this->assertSame('200.00', $rowsByCode['1012']['finalCredit']);
 
         // Account 1171 - Multi-line account name
         $this->assertArrayHasKey('1171', $rowsByCode);
         $this->assertSame('0.00', $rowsByCode['1171']['initialDebit']);
         $this->assertSame('1101657.93', $rowsByCode['1171']['initialCredit']);
-        $this->assertSame('1101657.93', $rowsByCode['1171']['finalDebit']);
-        $this->assertSame('0.00', $rowsByCode['1171']['finalCredit']);
+        $this->assertSame('1101657.93', $rowsByCode['1171']['previousCredit']);
+        $this->assertSame('0.00', $rowsByCode['1171']['finalDebit']);
+        $this->assertSame('3154177.51', $rowsByCode['1171']['finalCredit']);
 
         // Account 401 - Furnizori
         $this->assertArrayHasKey('401', $rowsByCode);
         $this->assertSame('0.00', $rowsByCode['401']['initialDebit']);
         $this->assertSame('1639.81', $rowsByCode['401']['initialCredit']);
-        $this->assertSame('1639.81', $rowsByCode['401']['finalDebit']);
-        $this->assertSame('0.00', $rowsByCode['401']['finalCredit']);
+        $this->assertSame('325924.91', $rowsByCode['401']['currentDebit']);
+        $this->assertSame('0.00', $rowsByCode['401']['finalDebit']);
+        $this->assertSame('4279.62', $rowsByCode['401']['finalCredit']);
 
         // Account 5121 - Banca
         $this->assertArrayHasKey('5121', $rowsByCode);
         $this->assertSame('85268.11', $rowsByCode['5121']['initialDebit']);
-        $this->assertSame('923712.30', $rowsByCode['5121']['totalDebit']);
+        $this->assertSame('85268.11', $rowsByCode['5121']['previousDebit']);
+        $this->assertSame('1427877.22', $rowsByCode['5121']['totalDebit']);
+        $this->assertSame('923712.30', $rowsByCode['5121']['finalDebit']);
+        $this->assertSame('0.00', $rowsByCode['5121']['finalCredit']);
 
         // Account 641 - Salarii
         $this->assertArrayHasKey('641', $rowsByCode);
@@ -610,7 +721,7 @@ TEXT;
         // Account 7041 - Venituri
         $this->assertArrayHasKey('7041', $rowsByCode);
         $this->assertSame('0.00', $rowsByCode['7041']['finalDebit']);
-        $this->assertSame('0.00', $rowsByCode['7041']['finalCredit']);
+        $this->assertSame('2409897.00', $rowsByCode['7041']['finalCredit']);
         $this->assertSame('2409897.00', $rowsByCode['7041']['totalCredit']);
     }
 

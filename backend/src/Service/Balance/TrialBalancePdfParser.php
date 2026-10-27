@@ -11,6 +11,28 @@ class TrialBalancePdfParser
      *
      * Supports common accounting software exports: SAGA C, Ciel, FGO, etc.
      */
+    /**
+     * Visual column order: initialD, initialC, previousD, previousC, currentD, currentC, totalD, totalC, finalD, finalC.
+     * Each entry is the index, among the 10 extracted numbers, of the field at that position.
+     */
+    private const ORDER_STANDARD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+    /**
+     * Some PDF generators draw the "Sume precedente" group as a separate text object, after all
+     * the other columns, with the credit column before the debit one. The text extractor then
+     * yields: initialD, initialC, currentD, currentC, totalD, totalC, finalD, finalC, previousC, previousD.
+     */
+    private const ORDER_PREVIOUS_LAST_CREDIT_FIRST = [0, 1, 9, 8, 2, 3, 4, 5, 6, 7];
+
+    /** Same as above but with the previous-sums group in debit/credit order. */
+    private const ORDER_PREVIOUS_LAST = [0, 1, 8, 9, 2, 3, 4, 5, 6, 7];
+
+    private const CANDIDATE_ORDERS = [
+        self::ORDER_STANDARD,
+        self::ORDER_PREVIOUS_LAST_CREDIT_FIRST,
+        self::ORDER_PREVIOUS_LAST,
+    ];
+
     public function parse(string $pdfContent): TrialBalanceParsedResult
     {
         $parser = new Parser();
@@ -136,6 +158,8 @@ class TrialBalancePdfParser
         // An account entry starts with a line matching an account code (3-6 digits).
         // Continuation lines (wrapped account names, number-only lines) are appended.
         $currentEntry = null;
+        /** @var string[] $entries complete account lines, in document order */
+        $entries = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -147,10 +171,7 @@ class TrialBalancePdfParser
             if ($this->isSkippableLine($line)) {
                 // Flush pending entry before skipping
                 if ($currentEntry !== null) {
-                    $row = $this->parseAccountLine($currentEntry);
-                    if ($row !== null) {
-                        $result->rows[] = $row;
-                    }
+                    $entries[] = $currentEntry;
                     $currentEntry = null;
                 }
                 continue;
@@ -160,10 +181,7 @@ class TrialBalancePdfParser
             if (preg_match('/^\s*\d{3,6}(?:\s|[A-Z])/u', $line)) {
                 // Flush previous entry
                 if ($currentEntry !== null) {
-                    $row = $this->parseAccountLine($currentEntry);
-                    if ($row !== null) {
-                        $result->rows[] = $row;
-                    }
+                    $entries[] = $currentEntry;
                 }
                 $currentEntry = $line;
             } else {
@@ -176,11 +194,62 @@ class TrialBalancePdfParser
 
         // Flush final entry
         if ($currentEntry !== null) {
-            $row = $this->parseAccountLine($currentEntry);
+            $entries[] = $currentEntry;
+        }
+
+        // The text extractor does not always yield the columns in their visual order,
+        // so the mapping is decided once per document from the rows' arithmetic.
+        $order = $this->detectColumnOrder($entries);
+
+        foreach ($entries as $entry) {
+            $row = $this->parseAccountLine($entry, $order);
             if ($row !== null) {
                 $result->rows[] = $row;
             }
         }
+    }
+
+    /**
+     * Pick the column order under which the most rows satisfy the trial balance identities:
+     *   total = previous + current (debit and credit), and finalD - finalC = totalD - totalC.
+     * The standard order wins ties, so well-behaved documents are never re-mapped.
+     *
+     * @param string[] $entries
+     * @return int[]
+     */
+    private function detectColumnOrder(array $entries): array
+    {
+        $best = self::ORDER_STANDARD;
+        $bestScore = -1;
+
+        foreach (self::CANDIDATE_ORDERS as $order) {
+            $score = 0;
+            foreach ($entries as $entry) {
+                $row = $this->parseAccountLine($entry, $order);
+                if ($row !== null && $this->rowIsArithmeticallyConsistent($row)) {
+                    $score++;
+                }
+            }
+            if ($score > $bestScore) {
+                $best = $order;
+                $bestScore = $score;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * @param array<string, string> $row
+     */
+    private function rowIsArithmeticallyConsistent(array $row): bool
+    {
+        $v = static fn (string $key): float => (float) $row[$key];
+        $eq = static fn (float $a, float $b): bool => abs($a - $b) < 0.011;
+
+        return $eq($v('totalDebit'), $v('previousDebit') + $v('currentDebit'))
+            && $eq($v('totalCredit'), $v('previousCredit') + $v('currentCredit'))
+            && $eq($v('finalDebit') - $v('finalCredit'), $v('totalDebit') - $v('totalCredit'));
     }
 
     private function isSkippableLine(string $line): bool
@@ -241,8 +310,12 @@ class TrialBalancePdfParser
      *
      * @return array{accountCode: string, accountName: string, initialDebit: string, initialCredit: string, previousDebit: string, previousCredit: string, currentDebit: string, currentCredit: string, totalDebit: string, totalCredit: string, finalDebit: string, finalCredit: string}|null
      */
-    private function parseAccountLine(string $line): ?array
+    /**
+     * @param int[]|null $order index, among the 10 column values, of each field in visual order
+     */
+    private function parseAccountLine(string $line, ?array $order = null): ?array
     {
+        $order ??= self::ORDER_STANDARD;
         // Match account code (3-6 digits) at the start
         // Allow no space between code and name (e.g., "1012CAPITAL SUBSCRIS VARSAT")
         if (!preg_match('/^\s*(\d{3,6})(?:\s+|(?=[A-Z]))/u', $line, $codeMatch)) {
@@ -260,8 +333,9 @@ class TrialBalancePdfParser
             return null;
         }
 
-        // Take the last 10 numbers (column values)
-        $columnValues = array_slice($numbers, -10);
+        // Take the last 10 numbers (column values), then put them in visual column order
+        $extracted = array_slice($numbers, -10);
+        $columnValues = array_map(static fn (int $i): string => $extracted[$i], $order);
 
         // Extract account name: text between account code and the numeric section
         $accountName = $this->extractAccountName($line, $codeMatch[0]);
@@ -291,6 +365,7 @@ class TrialBalancePdfParser
      * - Standard: 1234567.89 (no thousands sep, dot as decimal)
      * - Plain integer: 12345
      * - Standalone dash (-, –, —): treated as zero (common in Romanian trial balances)
+     * - A leading minus sign is kept: -1 005.00, -1.005,00, -1005.00
      *
      * @return string[]
      */
@@ -313,10 +388,10 @@ class TrialBalancePdfParser
         // 3. Standard decimal: 1234.56
         // 4. Plain integer: 12345
         preg_match_all(
-            '/(?<!\w)((?:\d{1,3}(?:\.\d{3})*),\d{1,2})(?!\w)'
-            . '|(\d{1,3}(?:\s\d{3})+\.\d{1,2})'
-            . '|(?<!\w)(\d+\.\d{1,2})(?!\w)'
-            . '|(?<!\w)(\d+)(?!\w)/',
+            '/(?<![\w-])(-?(?:\d{1,3}(?:\.\d{3})*),\d{1,2})(?!\w)'
+            . '|(?<![\w-])(-?\d{1,3}(?:\s\d{3})+\.\d{1,2})'
+            . '|(?<![\w-])(-?\d+\.\d{1,2})(?!\w)'
+            . '|(?<![\w-])(-?\d+)(?!\w)/',
             $remainder,
             $matches,
             PREG_SET_ORDER
