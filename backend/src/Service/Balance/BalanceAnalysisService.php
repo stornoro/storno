@@ -269,17 +269,19 @@ class BalanceAnalysisService
 
         $sql = "
             SELECT
-                -- P&L
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '7%' THEN r.current_credit ELSE 0 END), 0) AS revenue,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '6%' THEN r.current_debit ELSE 0 END), 0) AS expenses,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '70%' OR r.account_code LIKE '71%' THEN r.current_credit ELSE 0 END), 0) AS turnover,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '60%' THEN r.current_debit ELSE 0 END), 0) AS cogs,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '61%' OR r.account_code LIKE '62%' THEN r.current_debit ELSE 0 END), 0) AS services_expense,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '641%' OR r.account_code LIKE '642%' THEN r.current_debit ELSE 0 END), 0) AS salaries,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '681%' THEN r.current_debit ELSE 0 END), 0) AS depreciation,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '666%' THEN r.current_debit ELSE 0 END), 0) AS interest_expense,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '691%' THEN r.current_debit ELSE 0 END), 0) AS profit_tax,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '698%' THEN r.current_debit ELSE 0 END), 0) AS micro_tax,
+                -- P&L, cumulated since the start of the year: class 6/7 accounts open at zero,
+                -- so their Sume totale column is the year-to-date movement; the Rulaje perioada
+                -- column is only the latest month and feeds monthlyEvolution instead
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '7%' THEN r.total_credit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '6%' THEN r.total_debit ELSE 0 END), 0) AS expenses,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '70%' OR r.account_code LIKE '71%' THEN r.total_credit ELSE 0 END), 0) AS turnover,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '60%' THEN r.total_debit ELSE 0 END), 0) AS cogs,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '61%' OR r.account_code LIKE '62%' THEN r.total_debit ELSE 0 END), 0) AS services_expense,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '641%' OR r.account_code LIKE '642%' THEN r.total_debit ELSE 0 END), 0) AS salaries,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '681%' THEN r.total_debit ELSE 0 END), 0) AS depreciation,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '666%' THEN r.total_debit ELSE 0 END), 0) AS interest_expense,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '691%' THEN r.total_debit ELSE 0 END), 0) AS profit_tax,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '698%' THEN r.total_debit ELSE 0 END), 0) AS micro_tax,
                 -- Active circulante
                 COALESCE(SUM(CASE WHEN r.account_code LIKE '3%' AND r.account_code NOT LIKE '39%' THEN $bsDebit ELSE 0 END), 0) AS inventory,
                 COALESCE(SUM(CASE WHEN r.account_code LIKE '411%' OR r.account_code LIKE '413%' OR r.account_code LIKE '418%' OR r.account_code LIKE '461%' THEN $bsDebit ELSE 0 END), 0) AS receivables,
@@ -469,7 +471,7 @@ class BalanceAnalysisService
         $rows = $conn->fetchAllAssociative(
             "SELECT LEFT(r.account_code, 3) AS account_group,
                     MIN(r.account_name) AS account_name,
-                    COALESCE(SUM(r.current_debit), 0) AS amount
+                    COALESCE(SUM(r.total_debit), 0) AS amount
              FROM trial_balance_row r
              INNER JOIN trial_balance tb ON r.trial_balance_id = tb.id
              WHERE tb.company_id = :companyId
@@ -532,8 +534,8 @@ class BalanceAnalysisService
 
         $row = $conn->fetchAssociative(
             "SELECT
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '7%' THEN r.current_credit ELSE 0 END), 0) AS revenue,
-                COALESCE(SUM(CASE WHEN r.account_code LIKE '6%' THEN r.current_debit ELSE 0 END), 0) AS expenses
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '7%' THEN r.total_credit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN r.account_code LIKE '6%' THEN r.total_debit ELSE 0 END), 0) AS expenses
              FROM trial_balance_row r
              INNER JOIN trial_balance tb ON r.trial_balance_id = tb.id
              WHERE tb.company_id = :companyId
