@@ -3782,6 +3782,10 @@ export default defineI18nLocale(async () => {
     exportSagaXml: 'SAGA XML',
     exportCsv: 'CSV',
     exportError: 'Export failed',
+    exportPeriodFrom: 'From',
+    exportPeriodTo: 'To',
+    exportPeriodHint: 'The period applies to invoices, receipts and payments. Clients, suppliers and products are exported in full.',
+    exportPeriodInvalid: 'Choose a valid export period.',
 
     // Migration section
     onboardingBannerTitle: 'Coming from SmartBill, Oblio or another app?',

@@ -223,6 +223,13 @@ interface ExportCategory {
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+// Period for the invoice, receipt and payment exports. Defaults to the current month;
+// without it the backend would serialize the company's whole history in one response.
+const fmtLocalDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const exportDateFrom = ref(fmtLocalDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
+const exportDateTo = ref(fmtLocalDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)))
+const DATED_EXPORT_CATEGORIES = ['invoices', 'receipts', 'payments']
+
 const exportCategories = computed<ExportCategory[]>(() => [
   {
     key: 'clients',
@@ -264,8 +271,8 @@ const exportCategories = computed<ExportCategory[]>(() => [
     iconColor: 'text-orange-600 dark:text-orange-400',
     iconBg: 'bg-orange-100 dark:bg-orange-900/30',
     formats: [
-      { label: 'CSV', url: '/v1/invoices/export/csv', filename: () => `facturi-${today()}.csv` },
-      { label: 'SAGA XML', url: '/v1/invoices/export/saga-xml', filename: () => `FCT_${today()}.xml` },
+      { label: 'CSV', url: '/v1/invoices/export/csv', filename: () => `facturi-${exportDateFrom.value}_${exportDateTo.value}.csv` },
+      { label: 'SAGA XML', url: '/v1/invoices/export/saga-xml', filename: () => `FCT_${exportDateFrom.value}_${exportDateTo.value}.xml` },
     ],
   },
   {
@@ -275,7 +282,7 @@ const exportCategories = computed<ExportCategory[]>(() => [
     iconColor: 'text-emerald-600 dark:text-emerald-400',
     iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
     formats: [
-      { label: 'SAGA XML', url: '/v1/invoices/export/receipts-saga-xml', filename: () => `INC_${today()}.xml` },
+      { label: 'SAGA XML', url: '/v1/invoices/export/receipts-saga-xml', filename: () => `INC_${exportDateFrom.value}_${exportDateTo.value}.xml` },
     ],
   },
   {
@@ -285,7 +292,7 @@ const exportCategories = computed<ExportCategory[]>(() => [
     iconColor: 'text-red-600 dark:text-red-400',
     iconBg: 'bg-red-100 dark:bg-red-900/30',
     formats: [
-      { label: 'SAGA XML', url: '/v1/invoices/export/payments-saga-xml', filename: () => `PLT_${today()}.xml` },
+      { label: 'SAGA XML', url: '/v1/invoices/export/payments-saga-xml', filename: () => `PLT_${exportDateFrom.value}_${exportDateTo.value}.xml` },
     ],
   },
 ])
@@ -295,11 +302,17 @@ const exportingKey = ref<string | null>(null)
 async function runExport(categoryKey: string, format: ExportFormat) {
   const { apiFetch } = useApi()
   const key = `${categoryKey}-${format.label}`
+  const dated = DATED_EXPORT_CATEGORIES.includes(categoryKey)
+  if (dated && (!exportDateFrom.value || !exportDateTo.value || exportDateFrom.value > exportDateTo.value)) {
+    toast.add({ title: $t('importExport.exportTitle'), description: $t('importExport.exportPeriodInvalid'), color: 'error' })
+    return
+  }
   exportingKey.value = key
   try {
     const blob = await apiFetch<Blob>(format.url, {
       method: 'GET',
       responseType: 'blob',
+      query: dated ? { dateFrom: exportDateFrom.value, dateTo: exportDateTo.value } : undefined,
     })
     downloadBlob(blob, format.filename())
   }
@@ -669,6 +682,15 @@ onUnmounted(() => {
       :description="$t('importExport.exportDescription')"
       variant="subtle"
     >
+      <div class="flex flex-wrap items-end gap-3 mb-4">
+        <UFormField :label="$t('importExport.exportPeriodFrom')" size="sm">
+          <UInput v-model="exportDateFrom" type="date" size="sm" />
+        </UFormField>
+        <UFormField :label="$t('importExport.exportPeriodTo')" size="sm">
+          <UInput v-model="exportDateTo" type="date" size="sm" />
+        </UFormField>
+        <p class="text-xs text-muted pb-2">{{ $t('importExport.exportPeriodHint') }}</p>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="category in exportCategories"

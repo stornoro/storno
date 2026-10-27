@@ -3781,6 +3781,10 @@ export default defineI18nLocale(async () => {
       exportSagaXml: 'SAGA XML',
       exportCsv: 'CSV',
       exportError: 'Export esuat',
+      exportPeriodFrom: 'De la',
+      exportPeriodTo: 'Pana la',
+      exportPeriodHint: 'Perioada se aplica la facturi, incasari si plati. Clientii, furnizorii si articolele se exporta integral.',
+      exportPeriodInvalid: 'Alege o perioada valida pentru export.',
 
       // Migration section
       onboardingBannerTitle: 'Vii din SmartBill, Oblio sau alt program?',

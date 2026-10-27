@@ -32,6 +32,43 @@ class InvoiceExportTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(200);
     }
 
+    public function testExportCsvAcceptsFromToAliases(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        // A range in the far past must come back empty: the aliases are applied, not ignored
+        $this->client->request('GET', '/api/v1/invoices/export/csv?from=2000-01-01&to=2000-01-31', [], [], $this->buildHeaders(['X-Company' => $companyId]));
+
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertStringNotContainsString('UEP2026000001', $this->client->getResponse()->getContent());
+    }
+
+    public function testExportSagaXmlFiltersByDateRange(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $this->client->request('GET', '/api/v1/invoices/export/saga-xml?dateFrom=2000-01-01&dateTo=2000-01-31', [], [], $this->buildHeaders(['X-Company' => $companyId]));
+
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertStringContainsString('application/xml', $this->client->getResponse()->headers->get('Content-Type'));
+        $this->assertStringNotContainsString('UEP2026000001', $this->client->getResponse()->getContent());
+    }
+
+    public function testReceiptsAndPaymentsSagaXmlAcceptDateRange(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        foreach (['receipts-saga-xml', 'payments-saga-xml'] as $endpoint) {
+            $this->client->request('GET', "/api/v1/invoices/export/$endpoint?from=2000-01-01&to=2000-01-31", [], [], $this->buildHeaders(['X-Company' => $companyId]));
+            $this->assertResponseStatusCodeSame(200);
+            $this->assertStringContainsString('application/xml', $this->client->getResponse()->headers->get('Content-Type'));
+            $this->assertStringNotContainsString('<Linie>', $this->client->getResponse()->getContent(), "$endpoint: no document should fall in January 2000");
+        }
+    }
+
     public function testExportCsvRequiresAuth(): void
     {
         $this->client->request('GET', '/api/v1/invoices/export/csv');

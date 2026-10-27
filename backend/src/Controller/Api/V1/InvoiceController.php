@@ -94,7 +94,7 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $filters = $request->query->all();
+        $filters = $this->normalizeDateFilters($request->query->all());
         $page = $request->query->getInt('page', 1);
         $limit = Pagination::clamp($request->query->getInt('limit', Pagination::DEFAULT_LIMIT));
 
@@ -1325,7 +1325,7 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $filters = $request->query->all();
+        $filters = $this->normalizeDateFilters($request->query->all());
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
         // No limit: exports must contain every invoice in range, not a page.
@@ -1351,7 +1351,7 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $filters = $request->query->all();
+        $filters = $this->normalizeDateFilters($request->query->all());
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
         // No limit: exports must contain every invoice in range, not a page.
@@ -1379,7 +1379,8 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::OUTGOING);
+        [$dateFrom, $dateTo] = $this->exportDateRange($request);
+        $payments = $this->paymentRepository->findByCompanyAndDirectionFiltered($company, InvoiceDirection::OUTGOING, $dateFrom, $dateTo);
         [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
         $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $accountMap);
 
@@ -1403,7 +1404,8 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $payments = $this->paymentRepository->findByCompanyAndDirection($company, InvoiceDirection::INCOMING);
+        [$dateFrom, $dateTo] = $this->exportDateRange($request);
+        $payments = $this->paymentRepository->findByCompanyAndDirectionFiltered($company, InvoiceDirection::INCOMING, $dateFrom, $dateTo);
         [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
         $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $accountMap);
 
@@ -1842,6 +1844,46 @@ class InvoiceController extends AbstractController
      * @param \App\Entity\Payment[] $payments
      * @return array{0: \App\Entity\Payment[], 1: array<string,string>, 2: ?string}
      */
+    /**
+     * The list and export filters are keyed dateFrom/dateTo; `from`/`to` are accepted as
+     * aliases so a caller using the short names still gets a filtered result instead of
+     * the whole history.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function normalizeDateFilters(array $filters): array
+    {
+        foreach (['from' => 'dateFrom', 'to' => 'dateTo'] as $alias => $key) {
+            if (!isset($filters[$key]) && isset($filters[$alias]) && is_string($filters[$alias]) && $filters[$alias] !== '') {
+                $filters[$key] = $filters[$alias];
+            }
+            unset($filters[$alias]);
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string} [dateFrom, dateTo] as YYYY-MM-DD, or null when absent or malformed
+     */
+    private function exportDateRange(Request $request): array
+    {
+        $filters = $this->normalizeDateFilters($request->query->all());
+        $parse = static function (mixed $value): ?string {
+            if (!is_string($value) || $value === '') {
+                return null;
+            }
+            try {
+                return (new \DateTimeImmutable($value))->format('Y-m-d');
+            } catch (\Exception) {
+                return null;
+            }
+        };
+
+        return [$parse($filters['dateFrom'] ?? null), $parse($filters['dateTo'] ?? null)];
+    }
+
     private function filterPaymentsByCurrency(Request $request, \App\Entity\Company $company, array $payments): array
     {
         $requested = $request->query->get('currency');
