@@ -62,6 +62,25 @@ class Payment
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?ImportJob $importJob = null;
 
+    // ── Chitanță: the cash receipt issued for this payment (a cash payment on an issued invoice).
+    // The receipt documents the payment that already exists, it never records a second one.
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?DocumentSeries $receiptSeries = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['payment:list', 'payment:detail'])]
+    private ?string $receiptNumber = null;
+
+    #[ORM\Column(type: Types::DATE_MUTABLE, nullable: true)]
+    #[Groups(['payment:list', 'payment:detail'])]
+    private ?\DateTimeInterface $receiptDate = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    #[Groups(['payment:list', 'payment:detail'])]
+    private ?\DateTimeImmutable $receiptIssuedAt = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -198,5 +217,65 @@ class Payment
         $this->importJob = $importJob;
 
         return $this;
+    }
+
+    public function getReceiptSeries(): ?DocumentSeries
+    {
+        return $this->receiptSeries;
+    }
+
+    public function setReceiptSeries(?DocumentSeries $series): static
+    {
+        $this->receiptSeries = $series;
+
+        return $this;
+    }
+
+    #[Groups(['payment:list', 'payment:detail'])]
+    #[SerializedName('receiptSeriesId')]
+    public function getReceiptSeriesId(): ?string
+    {
+        return $this->receiptSeries?->getId()?->toRfc4122();
+    }
+
+    public function getReceiptNumber(): ?string
+    {
+        return $this->receiptNumber;
+    }
+
+    public function setReceiptNumber(?string $receiptNumber): static
+    {
+        $this->receiptNumber = $receiptNumber;
+
+        return $this;
+    }
+
+    public function getReceiptDate(): ?\DateTimeInterface
+    {
+        return $this->receiptDate;
+    }
+
+    public function setReceiptDate(?\DateTimeInterface $receiptDate): static
+    {
+        $this->receiptDate = $receiptDate;
+
+        return $this;
+    }
+
+    public function getReceiptIssuedAt(): ?\DateTimeImmutable
+    {
+        return $this->receiptIssuedAt;
+    }
+
+    public function setReceiptIssuedAt(?\DateTimeImmutable $at): static
+    {
+        $this->receiptIssuedAt = $at;
+
+        return $this;
+    }
+
+    public function hasReceipt(): bool
+    {
+        return $this->receiptNumber !== null;
     }
 }

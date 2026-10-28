@@ -81,8 +81,9 @@ class CashRegisterController extends AbstractController
             'openingDate' => $openingDate,
         ]);
 
-        // Cash OUT: payments paid in cash since opening date.
-        $paymentsSql = "SELECT COALESCE(SUM(amount), 0) AS total
+        // Cash payments since the opening date: on issued invoices they come IN (the chitanță),
+        // on received invoices they go OUT (paying a supplier in cash). Signed sum: in − out.
+        $paymentsSql = "SELECT COALESCE(SUM(CASE WHEN i.direction = 'outgoing' THEN p.amount ELSE -p.amount END), 0) AS total
             FROM payment p
             INNER JOIN invoice i ON i.id = p.invoice_id
             WHERE i.company_id = :companyId
@@ -90,11 +91,12 @@ class CashRegisterController extends AbstractController
               AND p.currency = :currency
               AND p.payment_date >= :openingDate";
 
-        $cashPayments = (string) $conn->fetchOne($paymentsSql, [
+        $cashPaymentsNet = (string) $conn->fetchOne($paymentsSql, [
             'companyId' => $companyId,
             'currency' => $currency,
             'openingDate' => $openingDate,
         ]);
+        $cashPayments = bcmul($cashPaymentsNet, '-1', 2); // kept as the OUT figure the formula below subtracts
 
         // Manual cash movements (deposits, withdrawals, miscellaneous)
         $movementsNet = $this->cashMovementRepository->sumNetInRange(
@@ -192,9 +194,9 @@ class CashRegisterController extends AbstractController
             ['companyId' => $companyId, 'currency' => $currency, 'fromStr' => $fromStr, 'toStr' => $toStr],
         );
 
-        // Cash OUT entries from payments paid in cash
+        // Cash payments: IN on issued invoices (with the chitanță number when one was issued), OUT on received ones
         $paymentRows = $conn->fetchAllAssociative(
-            "SELECT p.id, p.amount, p.payment_date AS doc_date, p.reference, p.notes, i.number AS invoice_number, i.id AS invoice_id, i.sender_name
+            "SELECT p.id, p.amount, p.payment_date AS doc_date, p.reference, p.notes, p.receipt_number, i.direction, i.number AS invoice_number, i.id AS invoice_id, i.sender_name, i.receiver_name
              FROM payment p
              INNER JOIN invoice i ON i.id = p.invoice_id
              WHERE i.company_id = :companyId
@@ -228,8 +230,8 @@ class CashRegisterController extends AbstractController
                   AND issue_date < :fromStr",
                 ['companyId' => $companyId, 'currency' => $currency, 'openingDate' => $openingDateStr, 'fromStr' => $fromStr],
             );
-            $preOut = (float) $conn->fetchOne(
-                "SELECT COALESCE(SUM(p.amount), 0)
+            $preOut = -(float) $conn->fetchOne(
+                "SELECT COALESCE(SUM(CASE WHEN i.direction = 'outgoing' THEN p.amount ELSE -p.amount END), 0)
                 FROM payment p
                 INNER JOIN invoice i ON i.id = p.invoice_id
                 WHERE i.company_id = :companyId
@@ -279,13 +281,16 @@ class CashRegisterController extends AbstractController
         foreach ($paymentRows as $p) {
             $key = substr((string) $p['doc_date'], 0, 10);
             if (!isset($buckets[$key])) continue;
+            $isIn = $p['direction'] === 'outgoing';
             $buckets[$key]['entries'][] = [
                 'kind' => 'payment',
-                'documentNumber' => $p['invoice_number'] ?: $p['reference'] ?: '-',
-                'documentType' => 'plata',
-                'description' => $p['sender_name'] ?: ($p['notes'] ?: '-'),
-                'in' => '0.00',
-                'out' => (string) $p['amount'],
+                'paymentId' => (string) $p['id'],
+                'invoiceId' => (string) $p['invoice_id'],
+                'documentNumber' => ($isIn ? ($p['receipt_number'] ?: $p['invoice_number']) : $p['invoice_number']) ?: $p['reference'] ?: '-',
+                'documentType' => $isIn ? 'chitanta' : 'plata',
+                'description' => ($isIn ? $p['receiver_name'] : $p['sender_name']) ?: ($p['notes'] ?: '-'),
+                'in' => $isIn ? (string) $p['amount'] : '0.00',
+                'out' => $isIn ? '0.00' : (string) $p['amount'],
                 'sourceId' => bin2hex((string) $p['id']),
                 'sortKey' => (string) $p['doc_date'],
             ];

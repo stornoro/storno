@@ -1,0 +1,62 @@
+{% extends 'documents/pdf/_base.html.twig' %}
+
+{% block styles %}
+.header { border-bottom: 2px solid {{ primaryColor|default('#2563eb') }}; padding-bottom: 10px; margin-bottom: 16px; overflow: hidden; }
+.header-left { float: left; width: 58%; }
+.header-right { float: right; width: 42%; text-align: right; }
+.doc-title { font-size: 22px; font-weight: bold; color: {{ primaryColor|default('#2563eb') }}; letter-spacing: 2px; }
+.doc-number { font-size: 13px; font-weight: bold; margin-top: 2px; }
+.doc-date { font-size: 11px; color: #555; }
+.company-name { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+.small { font-size: 10px; color: #555; line-height: 1.4; }
+.body { font-size: 12px; line-height: 1.8; }
+.body .label { color: #666; }
+.body strong { font-size: 12.5px; }
+.amount-box { margin: 12px 0; padding: 10px 14px; border: 1px solid #e2e8f0; border-left: 4px solid {{ primaryColor|default('#2563eb') }}; border-radius: 4px; }
+.amount { font-size: 20px; font-weight: bold; }
+.words { font-size: 11px; color: #333; font-style: italic; margin-top: 2px; }
+.note { font-size: 9.5px; color: #777; margin-top: 10px; }
+.signatures { margin-top: 26px; overflow: hidden; }
+.signature { float: left; width: 45%; font-size: 10px; color: #555; }
+.signature + .signature { float: right; text-align: right; }
+.signature .line { border-top: 1px solid #999; margin-top: 28px; padding-top: 3px; }
+.footer { margin-top: 18px; font-size: 9px; color: #999; text-align: center; }
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="header-left">
+        <div class="company-name">{{ company.name }}</div>
+        <div class="small">
+            CUI: {{ company.vatCode ?: ('RO' ~ company.cif) }}{% if company.registrationNumber %} &middot; Nr. Reg. Com.: {{ company.registrationNumber }}{% endif %}<br>
+            {% if company.address %}{{ company.address }}{% if company.city %}, {{ company.city }}{% endif %}{% endif %}
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="doc-title">CHITANȚĂ</div>
+        <div class="doc-number">Seria {{ payment.receiptSeries ? payment.receiptSeries.prefix : '' }} nr. {{ payment.receiptNumber }}</div>
+        <div class="doc-date">Data: {{ payment.receiptDate|date('d.m.Y') }}</div>
+    </div>
+</div>
+
+<div class="body">
+    <div><span class="label">Am primit de la</span> <strong>{{ payer.name }}</strong>{% if payer.cui %}, <span class="label">CUI/CNP</span> {{ payer.cui }}{% endif %}{% if payer.registrationNumber %}, <span class="label">Nr. Reg. Com.</span> {{ payer.registrationNumber }}{% endif %}{% if payer.address %}, {{ payer.address }}{% endif %}</div>
+
+    <div class="amount-box">
+        <div class="amount">{{ payment.amount|number_format(2, ',', '.') }} {{ payment.currency }}</div>
+        <div class="words">adică {{ amountInWords }}</div>
+    </div>
+
+    <div><span class="label">Reprezentând</span> contravaloarea facturii <strong>{{ invoice.number }}</strong> din {{ invoice.issueDate|date('d.m.Y') }}{% if payment.reference %} ({{ payment.reference }}){% endif %}.</div>
+    <div><span class="label">Încasare în numerar la data de</span> {{ payment.paymentDate|date('d.m.Y') }}.</div>
+    {% if payment.notes %}<div class="small">{{ payment.notes }}</div>{% endif %}
+</div>
+
+<div class="signatures">
+    <div class="signature">Casier,<div class="line">{{ company.name }}</div></div>
+    <div class="signature">Am primit,<div class="line">{{ payer.name }}</div></div>
+</div>
+
+<div class="note">Chitanța documentează încasarea deja înregistrată pe factura {{ invoice.number }}; nu reprezintă o a doua încasare.</div>
+{% if not whiteLabelHideBranding %}<div class="footer">Document generat cu Storno.ro</div>{% endif %}
+{% endblock %}

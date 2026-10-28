@@ -680,6 +680,7 @@
                 :invoice="invoice"
                 :can-delete="invoice.status !== 'cancelled'"
                 @deleted="refreshInvoiceData"
+                @receipt-issued="refreshInvoiceData"
               />
             </UCard>
           </template>

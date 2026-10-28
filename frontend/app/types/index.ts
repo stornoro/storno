@@ -603,6 +603,11 @@ export interface Payment {
   notes: string | null
   isReconciled: boolean
   createdAt: string
+  /** The chitanță issued for this (cash) payment, if any */
+  receiptNumber?: string | null
+  receiptDate?: string | null
+  receiptSeriesId?: string | null
+  receiptIssuedAt?: string | null
 }
 
 // ── Invoice ─────────────────────────────────────────────────────────

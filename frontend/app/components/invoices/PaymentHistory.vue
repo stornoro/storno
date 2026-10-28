@@ -46,9 +46,31 @@
               <span>{{ formatDate(payment.paymentDate) }}</span>
               <UBadge variant="subtle" size="xs">{{ $t(`invoices.paymentMethods.${payment.paymentMethod}`) }}</UBadge>
               <span v-if="payment.reference">{{ payment.reference }}</span>
+              <UBadge v-if="payment.receiptNumber" color="success" variant="subtle" size="xs" icon="i-lucide-receipt">
+                {{ $t('invoices.receipt.badge', { number: payment.receiptNumber, date: formatDate(payment.receiptDate!) }) }}
+              </UBadge>
             </div>
           </div>
         </div>
+        <div class="flex items-center gap-1">
+          <UButton
+            v-if="payment.receiptNumber"
+            icon="i-lucide-file-down"
+            variant="ghost"
+            size="sm"
+            :loading="receiptPdfId === payment.id"
+            :title="$t('invoices.receipt.downloadPdf')"
+            @click="downloadReceipt(payment)"
+          />
+          <UButton
+            v-else-if="payment.paymentMethod === 'cash' && invoice.direction === 'outgoing' && props.canDelete !== false"
+            icon="i-lucide-receipt"
+            variant="soft"
+            size="sm"
+            @click="openReceiptModal(payment)"
+          >
+            {{ $t('invoices.receipt.issue') }}
+          </UButton>
         <UButton
           v-if="props.canDelete !== false"
           icon="i-lucide-trash-2"
@@ -58,11 +80,35 @@
           :loading="deletingId === payment.id"
           @click="confirmDelete(payment)"
         />
+        </div>
       </div>
     </div>
     <div v-else class="text-center py-4 text-(--ui-text-muted)">
       {{ $t('invoices.noPayments') }}
     </div>
+
+    <!-- Issue receipt (chitanță) modal -->
+    <UModal v-model:open="receiptModalOpen" :title="$t('invoices.receipt.issueTitle')">
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-(--ui-text-muted)">{{ $t('invoices.receipt.issueDescription') }}</p>
+          <div v-if="paymentForReceipt" class="p-3 rounded border border-(--ui-border) bg-(--ui-bg-elevated) text-sm">
+            <div class="font-medium">{{ formatMoney(paymentForReceipt.amount, paymentForReceipt.currency as 'RON' | 'EUR' | 'USD' | 'GBP') }}</div>
+            <div class="text-xs text-(--ui-text-muted)">{{ formatDate(paymentForReceipt.paymentDate) }} &middot; {{ $t('invoices.paymentMethods.cash') }}</div>
+          </div>
+          <UFormField :label="$t('invoices.receipt.series')" :help="receiptSeriesOptions.length ? undefined : $t('invoices.receipt.noSeries')">
+            <USelectMenu v-model="receiptSeriesId" :items="receiptSeriesOptions" value-key="value" class="w-full" />
+          </UFormField>
+          <UFormField :label="$t('invoices.receipt.date')">
+            <UInput v-model="receiptDate" type="date" class="w-full" />
+          </UFormField>
+          <div class="flex justify-end gap-2">
+            <UButton variant="outline" color="neutral" @click="receiptModalOpen = false">{{ $t('common.cancel') }}</UButton>
+            <UButton icon="i-lucide-receipt" :loading="issuingReceipt" :disabled="!receiptSeriesOptions.length" @click="issueReceipt">{{ $t('invoices.receipt.issue') }}</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Delete confirmation modal -->
     <UModal v-model:open="deleteModalOpen">
@@ -110,6 +156,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   deleted: []
+  receiptIssued: []
 }>()
 
 const { t: $t } = useI18n()
@@ -118,6 +165,62 @@ const { formatDate } = useDate()
 const invoiceStore = useInvoiceStore()
 
 const deletingId = ref<string | null>(null)
+
+// Chitanță for a cash payment: number from the receipt series, dated, documents the existing payment
+const seriesStore = useDocumentSeriesStore()
+const receiptModalOpen = ref(false)
+const paymentForReceipt = ref<Payment | null>(null)
+const receiptSeriesId = ref('')
+const receiptDate = ref('')
+const issuingReceipt = ref(false)
+const receiptPdfId = ref<string | null>(null)
+
+const receiptSeriesOptions = computed(() =>
+  seriesStore.items.filter(s => s.type === 'receipt' && s.active !== false).map(s => ({ label: `${s.prefix} (${s.nextNumber})`, value: s.id })),
+)
+
+async function openReceiptModal(payment: Payment) {
+  paymentForReceipt.value = payment
+  receiptDate.value = payment.paymentDate.slice(0, 10)
+  if (!seriesStore.items.length) await seriesStore.fetchSeries()
+  const def = seriesStore.items.find(s => s.type === 'receipt' && s.isDefault) ?? seriesStore.items.find(s => s.type === 'receipt')
+  receiptSeriesId.value = def?.id ?? ''
+  receiptModalOpen.value = true
+}
+
+async function issueReceipt() {
+  if (!paymentForReceipt.value) return
+  issuingReceipt.value = true
+  const result = await invoiceStore.issuePaymentReceipt(props.invoice.id, paymentForReceipt.value.id, {
+    seriesId: receiptSeriesId.value || undefined,
+    date: receiptDate.value || undefined,
+  })
+  issuingReceipt.value = false
+  if (result) {
+    receiptModalOpen.value = false
+    useToast().add({ title: $t('invoices.receipt.issued', { number: result.receiptNumber }), color: 'success' })
+    emit('receiptIssued')
+  }
+  else {
+    useToast().add({ title: invoiceStore.error || $t('invoices.paymentError'), color: 'error' })
+  }
+}
+
+async function downloadReceipt(payment: Payment) {
+  receiptPdfId.value = payment.id
+  const blob = await invoiceStore.downloadPaymentReceiptPdf(props.invoice.id, payment.id)
+  receiptPdfId.value = null
+  if (!blob) {
+    useToast().add({ title: invoiceStore.error || $t('invoices.paymentError'), color: 'error' })
+    return
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `chitanta-${payment.receiptNumber}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 const deleteModalOpen = ref(false)
 const paymentToDelete = ref<Payment | null>(null)
 

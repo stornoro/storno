@@ -204,6 +204,31 @@ export const useInvoiceStore = defineStore('invoices', () => {
     }
   }
 
+  /** Issue the chitanță for a cash payment already recorded on the invoice (idempotent). */
+  async function issuePaymentReceipt(invoiceId: string, paymentId: string, body: { seriesId?: string, date?: string } = {}): Promise<Payment | null> {
+    const { post } = useApi()
+    error.value = null
+    try {
+      return await post<Payment>(`/v1/invoices/${invoiceId}/payments/${paymentId}/receipt`, body)
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut emite chitanța.'
+      return null
+    }
+  }
+
+  async function downloadPaymentReceiptPdf(invoiceId: string, paymentId: string): Promise<Blob | null> {
+    const { apiFetch } = useApi()
+    error.value = null
+    try {
+      return await apiFetch<Blob>(`/v1/invoices/${invoiceId}/payments/${paymentId}/receipt/pdf`, { method: 'GET', responseType: 'blob' })
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut descărca chitanța.'
+      return null
+    }
+  }
+
   async function exportCsv(): Promise<Blob | null> {
     const { apiFetch } = useApi()
     error.value = null
@@ -526,6 +551,8 @@ export const useInvoiceStore = defineStore('invoices', () => {
     fetchPayments,
     recordPayment,
     deletePayment,
+    issuePaymentReceipt,
+    downloadPaymentReceiptPdf,
     sendEmail,
     fetchEmailLogs,
     fetchEmailDefaults,
