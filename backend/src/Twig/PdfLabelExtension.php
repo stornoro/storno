@@ -3,6 +3,7 @@
 namespace App\Twig;
 
 use App\Util\AddressNormalizer;
+use App\Util\UnitOfMeasure;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
@@ -83,6 +84,7 @@ class PdfLabelExtension extends AbstractExtension
         return [
             new TwigFilter('county_name', [$this, 'countyName']),
             new TwigFilter('country_name', [$this, 'countryName']),
+            new TwigFilter('unit_label', [$this, 'unitLabel']),
         ];
     }
 
@@ -107,6 +109,22 @@ class PdfLabelExtension extends AbstractExtension
             default => self::COUNTRY_NAMES_RO,
         };
         return $map[$upper] ?? $code;
+    }
+
+    /**
+     * The unit of measure of a line in the document's language: "buc" → "pcs" on an English
+     * invoice, "H87" / "C62" (e-Factura codes) → "buc" on a Romanian one. Unknown values are
+     * printed as they are.
+     */
+    public function unitLabel(?string $unit, string $locale = 'ro'): string
+    {
+        $key = UnitOfMeasure::canonical($unit);
+        if ($key === null || !in_array($key, UnitOfMeasure::TRANSLATED, true)) {
+            return (string) $unit;
+        }
+        $translated = $this->translator->trans('units.' . $key, [], 'pdf', $locale);
+
+        return $translated === 'units.' . $key ? (string) $unit : $translated;
     }
 
     /**

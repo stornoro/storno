@@ -159,7 +159,7 @@
             :columns="lineColumns"
           >
             <template #quantity-cell="{ row }">
-              {{ row.original.quantity }} {{ row.original.unitOfMeasure }}
+              {{ row.original.quantity }} {{ unitLabel(row.original.unitOfMeasure) }}
             </template>
             <template #unitPrice-cell="{ row }">
               {{ formatMoney(row.original.unitPrice, proforma.currency) }}
@@ -295,6 +295,7 @@
 </template>
 
 <script setup lang="ts">
+const { unitLabel } = useUnitLabel()
 import type { ProformaInvoice } from '~/types'
 
 definePageMeta({ middleware: 'auth' })

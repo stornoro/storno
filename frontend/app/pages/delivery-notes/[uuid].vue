@@ -280,7 +280,7 @@
             :columns="lineColumns"
           >
             <template #quantity-cell="{ row }">
-              {{ row.original.quantity }} {{ row.original.unitOfMeasure }}
+              {{ row.original.quantity }} {{ unitLabel(row.original.unitOfMeasure) }}
             </template>
             <template #unitPrice-cell="{ row }">
               {{ formatMoney(row.original.unitPrice, deliveryNote.currency) }}
@@ -454,6 +454,7 @@
 </template>
 
 <script setup lang="ts">
+const { unitLabel } = useUnitLabel()
 import type { DeliveryNote } from '~/types'
 import { ETRANSPORT_STATUS_COLORS, ETRANSPORT_STATUS_LABELS, ETRANSPORT_COUNTIES } from '~/types/etransport'
 

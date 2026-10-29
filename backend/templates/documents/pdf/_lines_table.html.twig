@@ -45,7 +45,7 @@
                 <td class="text-center{% if negativeValues|default(false) %} negative{% endif %}">{{ line.quantity }}</td>
             {% endif %}
             {% if pdf_visible('col_unit', labelOverrides|default(null)) %}
-                <td class="text-center">{{ line.unitOfMeasure }}</td>
+                <td class="text-center">{{ line.unitOfMeasure|unit_label(locale|default('ro')) }}</td>
             {% endif %}
             {% if showPrices|default(true) %}
                 {% if pdf_visible('col_unit_price', labelOverrides|default(null)) %}

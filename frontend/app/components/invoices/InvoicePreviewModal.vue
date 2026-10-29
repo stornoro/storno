@@ -55,7 +55,7 @@
               <td class="py-2 pr-2 text-(--ui-text-muted)">{{ idx + 1 }}</td>
               <td class="py-2 px-2">{{ line.description }}</td>
               <td class="py-2 px-2 text-right">{{ formatNumber(line.quantity) }}</td>
-              <td class="py-2 px-2">{{ line.unitOfMeasure }}</td>
+              <td class="py-2 px-2">{{ unitLabel(line.unitOfMeasure) }}</td>
               <td class="py-2 px-2 text-right">{{ formatNumber(line.unitPrice) }}</td>
               <td class="py-2 px-2 text-right">{{ line.vatRate }}%</td>
               <td class="py-2 pl-2 text-right font-medium">{{ formatMoney(line.lineTotal, invoice.currency) }}</td>
@@ -100,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+const { unitLabel } = useUnitLabel()
 import type { Invoice } from '~/types'
 
 defineProps<{

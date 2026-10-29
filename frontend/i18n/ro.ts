@@ -587,6 +587,12 @@ export default defineI18nLocale(async () => {
     },
 
     // ── Period selector ────────────────────────────────────────────
+    // Unitati de masura (chei canonice, vezi useUnitLabel)
+    units: {
+      buc: 'buc', kg: 'kg', g: 'g', l: 'l', ml: 'ml', m: 'm', cm: 'cm', km: 'km', mp: 'mp', mc: 'mc', t: 't',
+      ora: 'ora', min: 'min', zi: 'zi', sapt: 'sapt', luna: 'luna', an: 'an', set: 'set', pereche: 'pereche',
+      pachet: 'pachet', cutie: 'cutie', kwh: 'kWh', mwh: 'MWh', serv: 'serv', proc: '%', ftq: 'ft²',
+    },
     period: {
       today: 'Azi',
       yesterday: 'Ieri',

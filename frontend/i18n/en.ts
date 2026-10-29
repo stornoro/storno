@@ -587,6 +587,12 @@ export default defineI18nLocale(async () => {
     },
 
     // ── Period selector ────────────────────────────────────────────
+    // Units of measure (canonical keys, see useUnitLabel)
+    units: {
+      buc: 'pcs', kg: 'kg', g: 'g', l: 'l', ml: 'ml', m: 'm', cm: 'cm', km: 'km', mp: 'm²', mc: 'm³', t: 't',
+      ora: 'hour', min: 'min', zi: 'day', sapt: 'week', luna: 'month', an: 'year', set: 'set', pereche: 'pair',
+      pachet: 'pack', cutie: 'box', kwh: 'kWh', mwh: 'MWh', serv: 'service', proc: '%', ftq: 'sq ft',
+    },
     period: {
       today: 'Today',
       yesterday: 'Yesterday',

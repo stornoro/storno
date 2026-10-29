@@ -186,7 +186,7 @@
                     <div class="line-desc">{{ line.description }}</div>
                     <div class="line-detail">
                         {{ line.quantity|number_format(line.quantity|number_format(4) matches '/0000$/' ? 0 : 3, ',', '.') }}
-                        {{ line.unitOfMeasure }}
+                        {{ line.unitOfMeasure|unit_label(locale|default('ro')) }}
                         × {{ line.unitPrice|number_format(2, ',', '.') }}
                         <span class="right b">{{ line.lineTotal|number_format(2, ',', '.') }}</span>
                     </div>
