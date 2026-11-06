@@ -90,7 +90,14 @@ class DeleteUserAccountHandler
             $conn->executeStatement('DELETE FROM api_token WHERE user_id = ?', [$userId]);
             $conn->executeStatement('DELETE FROM notification WHERE user_id = ?', [$userId]);
             $conn->executeStatement('DELETE FROM anaf_token WHERE user_id = ?', [$userId]);
-            $conn->executeStatement('DELETE FROM user_billing WHERE user_id = ?', [$userId]);
+            // Billing profile hangs off the user (user.user_billing_id), not the
+            // other way round: detach it first, then drop the orphaned row.
+            $userTable = $conn->getDatabasePlatform()->quoteSingleIdentifier('user');
+            $billingId = $conn->fetchOne("SELECT user_billing_id FROM {$userTable} WHERE id = ?", [$userId]);
+            if ($billingId) {
+                $conn->executeStatement("UPDATE {$userTable} SET user_billing_id = NULL WHERE id = ?", [$userId]);
+                $conn->executeStatement('DELETE FROM user_billing WHERE id = ?', [$billingId]);
+            }
 
             // 3. Nullify soft-delete audit references (deletedBy)
             $conn->executeStatement('UPDATE company SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
@@ -102,7 +109,6 @@ class DeleteUserAccountHandler
             // 4. Hard-delete the user. `user` is reserved on both MySQL and
             // Postgres, so let DBAL quote it the way the active platform
             // expects (backticks on MySQL, double quotes on Postgres).
-            $userTable = $conn->getDatabasePlatform()->quoteSingleIdentifier('user');
             $conn->executeStatement("DELETE FROM {$userTable} WHERE id = ?", [$userId]);
 
             $this->logger->info('DeleteUserAccount: Cascade deletion completed.', ['userId' => $userId]);

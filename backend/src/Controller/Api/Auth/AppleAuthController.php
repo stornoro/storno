@@ -7,6 +7,8 @@ use App\Entity\OrganizationMembership;
 use App\Entity\User;
 use App\Entity\UserBilling;
 use App\Enum\OrganizationRole;
+use App\Message\SendMetaConversionMessage;
+use App\Service\Marketing\RegistrationAttribution;
 use App\Service\LicenseValidationService;
 use App\Service\MfaService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,6 +20,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\String\Slugger\SluggerInterface;
@@ -41,6 +44,7 @@ class AppleAuthController extends AbstractController
         private readonly SluggerInterface $slugger,
         private readonly LicenseValidationService $licenseValidationService,
         private readonly MfaService $mfaService,
+        private readonly MessageBusInterface $messageBus,
         #[Autowire(env: 'APPLE_CLIENT_IDS')]
         ?string $appleClientIds = null,
     ) {
@@ -57,6 +61,8 @@ class AppleAuthController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+        $isNewUser = false;
+        $attribution = ['fbc' => null, 'fbp' => null, 'source_url' => null, 'utm' => [], 'referrer' => null];
         $identityToken = $data['identityToken'] ?? null;
         $fullName = $data['fullName'] ?? null;
         $providedEmail = $data['email'] ?? null;
@@ -136,6 +142,11 @@ class AppleAuthController extends AbstractController
                 $user->setAppleId($appleId);
                 $user->setActive(true);
                 $user->setRoles(['ROLE_USER']);
+                // Same sign-up attribution as the email form: utm/landing from
+                // the first-party cookies, so social sign-ups are not "organic".
+                $attribution = RegistrationAttribution::fromRequest($request, is_array($data) ? $data : []);
+                $user->setSignupAttribution(RegistrationAttribution::forStorage($attribution));
+                $isNewUser = true;
                 $user->setUserBilling(
                     (new UserBilling())
                         ->setFirstName($firstName)
@@ -164,6 +175,22 @@ class AppleAuthController extends AbstractController
 
         $user->setLastConnectedAt(new \DateTimeImmutable());
         $this->em->flush();
+
+        if ($isNewUser) {
+            // Report the sign-up to Meta's Conversions API (no-op unless configured).
+            $this->messageBus->dispatch(new SendMetaConversionMessage(
+                eventName: 'CompleteRegistration',
+                eventId: (string) $user->getId(),
+                eventTime: time(),
+                email: $user->getEmail(),
+                externalId: (string) $user->getId(),
+                clientIp: $request->getClientIp(),
+                clientUserAgent: $request->headers->get('User-Agent'),
+                eventSourceUrl: $attribution['source_url'],
+                fbc: $attribution['fbc'],
+                fbp: $attribution['fbp'],
+            ));
+        }
 
         // Check if MFA is required
         if ($user->requiresMfa()) {

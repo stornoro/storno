@@ -141,7 +141,7 @@ if [ "$QUICK" = true ]; then
 
     info "Clearing Symfony cache..."
     cd "$SCRIPT_DIR"
-    docker_compose exec -T backend php bin/console cache:clear --env=prod
+    docker_compose exec -T -u www-data backend php bin/console cache:clear --env=prod
 
     info "Running migrations..."
     docker_compose exec -T backend php bin/console doctrine:migrations:migrate --no-interaction || warn "No pending migrations"

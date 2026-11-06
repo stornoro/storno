@@ -182,7 +182,7 @@ export const useAuthStore = defineStore('auth', () => {
           baseURL: apiBase,
           method: 'POST',
           credentials: 'include',
-          body: { credential },
+          body: { credential, attribution: readAttribution() },
         },
       )
 
