@@ -85,13 +85,8 @@ class DeleteUserAccountHandler
                 }
             }
 
-            // 2. Delete user-level data
-            $conn->executeStatement('DELETE FROM login_history WHERE user_id = ?', [$userId]);
-            $conn->executeStatement('DELETE FROM api_token WHERE user_id = ?', [$userId]);
-            $conn->executeStatement('DELETE FROM notification WHERE user_id = ?', [$userId]);
-            $conn->executeStatement('DELETE FROM anaf_token WHERE user_id = ?', [$userId]);
-            // Billing profile hangs off the user (user.user_billing_id), not the
-            // other way round: detach it first, then drop the orphaned row.
+            // 2. Billing profile hangs off the user (user.user_billing_id), not
+            //    the other way round: detach it first, then drop the orphaned row.
             $userTable = $conn->getDatabasePlatform()->quoteSingleIdentifier('user');
             $billingId = $conn->fetchOne("SELECT user_billing_id FROM {$userTable} WHERE id = ?", [$userId]);
             if ($billingId) {
@@ -99,12 +94,34 @@ class DeleteUserAccountHandler
                 $conn->executeStatement('DELETE FROM user_billing WHERE id = ?', [$billingId]);
             }
 
-            // 3. Nullify soft-delete audit references (deletedBy)
-            $conn->executeStatement('UPDATE company SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
-            $conn->executeStatement('UPDATE invoice SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
-            $conn->executeStatement('UPDATE client SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
-            $conn->executeStatement('UPDATE product SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
-            $conn->executeStatement('UPDATE supplier SET deleted_by_id = NULL WHERE deleted_by_id = ?', [$userId]);
+            // 3. Every other foreign key that points at the user, discovered from
+            //    the schema so new tables cannot break deletion again. Audit
+            //    references (created_by, updated_by, deleted_by, ...) are nullable
+            //    and get detached; per-user rows (tokens, devices, passkeys,
+            //    preferences, ...) have a NOT NULL user_id and are removed.
+            $schema = $conn->createSchemaManager();
+            foreach ($schema->listTableNames() as $tableName) {
+                if ($tableName === 'user') {
+                    continue;
+                }
+                $columns = null;
+                foreach ($schema->listTableForeignKeys($tableName) as $fk) {
+                    if ($fk->getForeignTableName() !== 'user') {
+                        continue;
+                    }
+                    $columns ??= $schema->listTableColumns($tableName);
+                    $quotedTable = $conn->getDatabasePlatform()->quoteSingleIdentifier($tableName);
+                    foreach ($fk->getLocalColumns() as $column) {
+                        $quotedColumn = $conn->getDatabasePlatform()->quoteSingleIdentifier($column);
+                        $nullable = isset($columns[$column]) ? !$columns[$column]->getNotnull() : true;
+                        if ($nullable) {
+                            $conn->executeStatement("UPDATE {$quotedTable} SET {$quotedColumn} = NULL WHERE {$quotedColumn} = ?", [$userId]);
+                        } else {
+                            $conn->executeStatement("DELETE FROM {$quotedTable} WHERE {$quotedColumn} = ?", [$userId]);
+                        }
+                    }
+                }
+            }
 
             // 4. Hard-delete the user. `user` is reserved on both MySQL and
             // Postgres, so let DBAL quote it the way the active platform
