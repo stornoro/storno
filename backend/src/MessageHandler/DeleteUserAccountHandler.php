@@ -101,9 +101,7 @@ class DeleteUserAccountHandler
             //    preferences, ...) have a NOT NULL user_id and are removed.
             $schema = $conn->createSchemaManager();
             foreach ($schema->listTableNames() as $tableName) {
-                if ($tableName === 'user') {
-                    continue;
-                }
+                // `user` itself is included: user.deleted_by_id points back at users.
                 $columns = null;
                 foreach ($schema->listTableForeignKeys($tableName) as $fk) {
                     if ($fk->getForeignTableName() !== 'user') {
@@ -114,6 +112,9 @@ class DeleteUserAccountHandler
                     foreach ($fk->getLocalColumns() as $column) {
                         $quotedColumn = $conn->getDatabasePlatform()->quoteSingleIdentifier($column);
                         $nullable = isset($columns[$column]) ? !$columns[$column]->getNotnull() : true;
+                        if ($tableName === 'user' && $column === 'id') {
+                            continue;
+                        }
                         if ($nullable) {
                             $conn->executeStatement("UPDATE {$quotedTable} SET {$quotedColumn} = NULL WHERE {$quotedColumn} = ?", [$userId]);
                         } else {
