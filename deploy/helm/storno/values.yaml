@@ -186,7 +186,7 @@ redis:
 centrifugo:
   image:
     repository: centrifugo/centrifugo
-    tag: "v5"
+    tag: "v6"
 
   resources:
     requests:

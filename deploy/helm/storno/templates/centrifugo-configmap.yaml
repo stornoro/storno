@@ -6,22 +6,17 @@ metadata:
   labels:
     {{- include "storno.componentLabels" (dict "component" "centrifugo" "context" .) | nindent 4 }}
 data:
+  # Centrifugo v6 format. Namespaces must stay identical to deploy/centrifugo.json
+  # (deploy/tests/centrifugo checks it). Secrets and origins come from the env.
   config.json: |
     {
+      "health": {
+        "enabled": true
+      },
       "channel": {
-        "without_namespace": {
-          "presence": false,
-          "allow_subscribe_for_client": true,
-          "allow_publish_for_client": false,
-          "allow_presence_for_client": false,
-          "allow_history_for_client": false
-        },
         "namespaces": [
           {
             "name": "invoices",
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
-            "allow_presence_for_client": false,
             "allow_history_for_client": true,
             "history_size": 20,
             "history_ttl": "120s"
@@ -29,8 +24,6 @@ data:
           {
             "name": "notifications",
             "presence": true,
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
             "allow_presence_for_client": true,
             "allow_history_for_client": true,
             "force_recovery": true,
@@ -40,49 +33,26 @@ data:
           {
             "name": "dashboard",
             "presence": true,
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
-            "allow_presence_for_client": true,
-            "allow_history_for_client": false
+            "allow_presence_for_client": true
           },
           {
             "name": "user",
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
-            "allow_presence_for_client": false,
             "allow_history_for_client": true,
             "history_size": 10,
             "history_ttl": "60s"
           },
           {
             "name": "import",
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
-            "allow_presence_for_client": false,
             "allow_history_for_client": true,
             "history_size": 10,
             "history_ttl": "300s"
           },
           {
             "name": "backup",
-            "allow_subscribe_for_client": true,
-            "allow_publish_for_client": false,
-            "allow_presence_for_client": false,
             "allow_history_for_client": true,
             "history_size": 10,
             "history_ttl": "300s"
           }
         ]
-      },
-      "client": {
-        "subscription_token": {
-          "enabled": true
-        },
-        "stale_close_delay": "10s",
-        "ping_interval": "25s",
-        "pong_timeout": "10s"
-      },
-      "log": {
-        "level": "info"
       }
     }

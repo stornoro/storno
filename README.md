@@ -90,7 +90,7 @@ docker compose exec backend php bin/console app:user:create
 | Frontend (Nuxt SSR) | `ghcr.io/stornoro/frontend` | 8901 |
 | MySQL 8.0 | `mysql:8.0` | 3306 |
 | Redis 7 | `redis:7-alpine` | 6379 |
-| Centrifugo v5 (WebSockets) | `centrifugo/centrifugo:v5` | 8445 |
+| Centrifugo v6 (WebSockets) | `centrifugo/centrifugo:v6` | 8445 |
 
 ### Requirements
 

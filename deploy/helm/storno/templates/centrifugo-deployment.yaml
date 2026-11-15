@@ -30,25 +30,26 @@ spec:
         - name: centrifugo
           image: "{{ .Values.centrifugo.image.repository }}:{{ .Values.centrifugo.image.tag }}"
           imagePullPolicy: IfNotPresent
-          # --health enables the /health HTTP endpoint used for probes.
-          command: ["centrifugo", "--health", "--config", "/centrifugo/config.json"]
+          # The /health endpoint used by the probes is enabled in the config file.
+          command: ["centrifugo", "--config", "/centrifugo/config.json"]
           ports:
             - name: http
               containerPort: 8000
               protocol: TCP
+          # The values keep their historical names; these are the names Centrifugo v6 reads.
           env:
-            - name: CENTRIFUGO_API_KEY
+            - name: CENTRIFUGO_HTTP_API_KEY
               value: {{ .Values.centrifugo.env.CENTRIFUGO_API_KEY | quote }}
-            - name: CENTRIFUGO_TOKEN_HMAC_SECRET_KEY
+            - name: CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
               value: {{ .Values.centrifugo.env.CENTRIFUGO_TOKEN_HMAC_SECRET_KEY | quote }}
-            - name: CENTRIFUGO_ADMIN
+            - name: CENTRIFUGO_ADMIN_ENABLED
               value: {{ .Values.centrifugo.env.CENTRIFUGO_ADMIN | quote }}
             - name: CENTRIFUGO_ADMIN_PASSWORD
               value: {{ .Values.centrifugo.env.CENTRIFUGO_ADMIN_PASSWORD | quote }}
             - name: CENTRIFUGO_ADMIN_SECRET
               # Default the admin secret to the API key when not explicitly set.
               value: {{ default .Values.centrifugo.env.CENTRIFUGO_API_KEY .Values.centrifugo.env.CENTRIFUGO_ADMIN_SECRET | quote }}
-            - name: CENTRIFUGO_ALLOWED_ORIGINS
+            - name: CENTRIFUGO_CLIENT_ALLOWED_ORIGINS
               value: {{ .Values.centrifugo.env.CENTRIFUGO_ALLOWED_ORIGINS | quote }}
           livenessProbe:
             httpGet:
