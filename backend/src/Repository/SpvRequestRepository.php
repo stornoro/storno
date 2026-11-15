@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Company;
+use App\Entity\SpvDocument;
 use App\Entity\SpvRequest;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -33,5 +34,26 @@ class SpvRequestRepository extends ServiceEntityRepository
     public function findOneByAnafRequestId(Company $company, string $anafRequestId): ?SpvRequest
     {
         return $this->findOneBy(['company' => $company, 'anafRequestId' => $anafRequestId]);
+    }
+
+    /** The most recent request of a type that was not rejected by ANAF (pending, requested or answered). */
+    public function findLatestOfType(Company $company, string $type): ?SpvRequest
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.company = :company')
+            ->andWhere('r.requestType = :type')
+            ->andWhere('r.status != :error')
+            ->setParameter('company', $company)
+            ->setParameter('type', $type)
+            ->setParameter('error', SpvRequest::STATUS_ERROR)
+            ->orderBy('r.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    public function findOneByAnswerDocument(SpvDocument $document): ?SpvRequest
+    {
+        return $this->findOneBy(['answerDocument' => $document]);
     }
 }

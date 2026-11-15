@@ -31,12 +31,16 @@ use Symfony\Component\Routing\Attribute\Route;
 class SpvDocumentController extends AbstractController
 {
     private const MAX_DAYS = 60;
+    /** How often the agent asks ANAF for the fișa rol when it syncs with `includeRequests`. */
+    public const FISA_ROL_EVERY_DAYS = 28;
 
     public function __construct(
         private readonly SpvDocumentRepository $repository,
         private readonly SpvDocumentIngestionService $ingestion,
         private readonly OrganizationContext $organizationContext,
         private readonly EntityManagerInterface $entityManager,
+        private readonly \App\Repository\SpvRequestRepository $requestRepository,
+        private readonly \App\Service\Spv\SpvRequestCatalog $requestCatalog,
     ) {}
 
     #[Route('/documents', methods: ['GET'])]
@@ -192,7 +196,45 @@ class SpvDocumentController extends AbstractController
             'cif' => $cif,
             'days' => $days,
             'pendingDownloads' => $this->ingestion->pendingDownloads($company),
+            'requests' => ($data['includeRequests'] ?? false) === true ? $this->periodicRequests($company) : [],
         ]);
+    }
+
+    /**
+     * Requests the agent should place alongside the sync, so the account is watched without anyone
+     * asking: the fișa rol once every FISA_ROL_EVERY_DAYS days. ANAF answers into the inbox, the
+     * next sync archives it and the balance is read (an unpaid amount notifies the users).
+     *
+     * @return list<array{requestId: string, type: string, anafUrl: string}>
+     */
+    private function periodicRequests(\App\Entity\Company $company): array
+    {
+        $type = 'Fisa Rol';
+        $latest = $this->requestRepository->findLatestOfType($company, $type);
+        if ($latest !== null && $latest->getCreatedAt() > new \DateTimeImmutable(sprintf('-%d days', self::FISA_ROL_EVERY_DAYS))) {
+            return [];
+        }
+        try {
+            $built = $this->requestCatalog->buildRequest($type, (string) $company->getCif(), []);
+        } catch (\InvalidArgumentException) {
+            return [];
+        }
+        if (($built['channel'] ?? 'ws') !== 'ws' || empty($built['url'])) {
+            return [];
+        }
+        $spvRequest = (new \App\Entity\SpvRequest())
+            ->setCompany($company)
+            ->setRequestType($type)
+            ->setParams($built['params'])
+            ->setStatus(\App\Entity\SpvRequest::STATUS_PENDING);
+        $this->entityManager->persist($spvRequest);
+        $this->entityManager->flush();
+
+        return [[
+            'requestId' => (string) $spvRequest->getId()?->toRfc4122(),
+            'type' => $type,
+            'anafUrl' => $built['url'],
+        ]];
     }
 
     /**

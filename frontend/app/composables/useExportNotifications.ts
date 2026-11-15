@@ -148,6 +148,8 @@ const _useNotifications = () => {
       'proforma.expired': 'i-lucide-calendar-x',
       'fiscal.deadline': 'i-lucide-calendar-days',
       'declaration.draft_ready': 'i-lucide-file-check',
+      'declaration.payment_due': 'i-lucide-banknote-arrow-up',
+      'spv.unpaid_balance': 'i-lucide-alert-octagon',
       'expiry.due': 'i-lucide-car',
       'partner.status_changed': 'i-lucide-shield-alert',
     }
@@ -167,6 +169,8 @@ const _useNotifications = () => {
       'proforma.expired': 'warning',
       'fiscal.deadline': 'warning',
       'declaration.draft_ready': 'info',
+      'declaration.payment_due': 'warning',
+      'spv.unpaid_balance': 'error',
       'expiry.due': 'warning',
       'partner.status_changed': 'warning',
     }

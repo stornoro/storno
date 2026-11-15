@@ -74,6 +74,10 @@ notification:
     oss_draft_nil:
       title: '%company%: D398 T%quarter% pregatita — fara operatiuni'
       message: 'Declaratia speciala de TVA (OSS) pentru trimestrul %quarter% a fost pregatita: nicio vanzare catre consumatori din alte state UE, se depune fara operatiuni pana la %date%. Nu se depune automat.'
+    payment_due:
+      title: '%company% — plata %code% pana pe %date%'
+      message_tomorrow: '%label% pentru %period% (%code%, depusa pe %filed%): plata%amount% este scadenta maine, %date%. Verifica daca ordinul de plata a plecat; declaratia depusa nu inseamna taxa platita.'
+      message_today: '%label% pentru %period% (%code%, depusa pe %filed%): plata%amount% este scadenta astazi, %date%. Daca nu a plecat inca, fa plata azi; de maine curg dobanzi si penalitati.'
   report:
     monthly_summary:
       title: '%company%: raport lunar %month%'
@@ -120,6 +124,9 @@ notification:
     new_documents:
       title: '%company%'
       message: 'Ai %count% documente noi in SPV (%summary%)'
+    unpaid_balance:
+      title: '%company% — %amount% lei neachitati la ANAF'
+      message: 'Fisa de rol din %date% arata obligatii neachitate de %amount% lei si accesorii calculate de %accessories% lei. %breakdown%. Verifica platile si achita diferenta inainte sa vina o somatie.'
   version_gate:
     blocking_title: 'Actualizare critica obligatorie'
     blocking_body: 'Versiunea ta (%current%) nu mai este suportata. Actualizeaza la %latest% pentru a continua sa folosesti Storno.ro.'

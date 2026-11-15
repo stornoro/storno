@@ -38,6 +38,7 @@ final class SpvDocumentIngestionService
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
         private readonly DosarService $dosare,
+        private readonly FisaRolBalanceParser $fisaRolParser,
         private readonly OrganizationStorageResolver $storageResolver,
         private readonly FilesystemOperator $defaultStorage,
         private readonly TranslatorInterface $translator,
@@ -176,6 +177,99 @@ final class SpvDocumentIngestionService
         $doc->setDownloadError($warning);
         $doc->setPurgedAt(null);
         $this->entityManager->flush();
+
+        if ($isPdf && $this->isFisaRol($doc)) {
+            $this->readFisaRol($doc, $binary);
+        }
+    }
+
+    /** The answer to a "Fisa Rol" request (ours or made on the portal): the taxpayer's account statement. */
+    private function isFisaRol(SpvDocument $doc): bool
+    {
+        if (preg_match('/fisa\s+rol|fisa\s+pe\s+platitor|fisa\s+sintetica/i', (string) $doc->getDetails()) === 1) {
+            return true;
+        }
+        $request = $this->requestRepository->findOneByAnswerDocument($doc);
+
+        return $request !== null && stripos($request->getRequestType(), 'Fisa Rol') === 0;
+    }
+
+    /**
+     * Read the balance out of the fișa rol: the summary says what the account looks like, and
+     * an unpaid amount (or accessories waiting to be charged) alerts the users — a payment that
+     * never left, or went to the wrong account, shows here weeks before a somație would.
+     */
+    private function readFisaRol(SpvDocument $doc, string $binary): void
+    {
+        try {
+            $balance = $this->fisaRolParser->parsePdf($binary);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Fisa rol: parsing failed', ['document' => $doc->getId()?->toRfc4122(), 'error' => $e->getMessage()]);
+            return;
+        }
+        if ($balance === null) {
+            return;
+        }
+        $company = $doc->getCompany();
+        $asOf = $balance['asOf'] ? (new \DateTimeImmutable($balance['asOf']))->format('d.m.Y') : ($doc->getAnafCreatedAt()?->format('d.m.Y') ?? '—');
+        $accessories = $balance['interest'] + $balance['penalties'];
+        $fmt = static fn (float $v): string => number_format($v, 0, ',', '.');
+
+        $breakdownRo = $this->shortBreakdown($balance['unpaidByTax'], $fmt);
+        if ($balance['unpaid'] > 0 || $accessories > 0) {
+            $doc->setSummary(sprintf('Fisa de rol la %s: obligatii neachitate %s lei, dobanzi si penalitati calculate si neinstituite %s lei.%s', $asOf, $fmt($balance['unpaid']), $fmt($accessories), $breakdownRo !== '' ? ' Pe impozite: ' . $breakdownRo . '.' : ''));
+            $doc->setSummaryEn(sprintf('Taxpayer account statement as of %s: unpaid obligations %s lei, interest and penalties computed and not yet charged %s lei.%s', $asOf, $fmt($balance['unpaid']), $fmt($accessories), $breakdownRo !== '' ? ' By tax: ' . $breakdownRo . '.' : ''));
+            $doc->setSeverity($balance['unpaid'] > 0 ? SpvDocumentSeverity::HIGH : SpvDocumentSeverity::NORMAL);
+        } else {
+            $doc->setSummary(sprintf('Fisa de rol la %s: nicio obligatie neachitata, nicio dobanda sau penalitate in curs. Totul este platit.', $asOf));
+            $doc->setSummaryEn(sprintf('Taxpayer account statement as of %s: no unpaid obligation, no interest or penalty pending. Everything is paid.', $asOf));
+        }
+        $this->entityManager->flush();
+
+        if ($balance['unpaid'] <= 0) {
+            return;
+        }
+
+        try {
+            $users = $this->membershipRepository->findActiveUsersByCompany($company);
+            $companyName = $company->getName() ?? '—';
+            $params = [
+                'company' => $companyName,
+                'amount' => $fmt($balance['unpaid']),
+                'accessories' => $fmt($accessories),
+                'date' => $asOf,
+                'breakdown' => $breakdownRo,
+            ];
+            foreach ($users as $user) {
+                $locale = $user->getLocale() ?? 'ro';
+                $this->notificationService->createNotification(
+                    $user,
+                    'spv.unpaid_balance',
+                    $this->translator->trans('notification.spv.unpaid_balance.title', $this->prefixParams($params), 'notifications', $locale),
+                    $this->translator->trans('notification.spv.unpaid_balance.message', $this->prefixParams($params), 'notifications', $locale),
+                    [
+                        'type' => 'spv.unpaid_balance',
+                        'companyId' => $company->getId()->toRfc4122(),
+                        'companyName' => $companyName,
+                        'documentId' => $doc->getId()->toRfc4122(),
+                        'asOf' => $balance['asOf'],
+                        'asOfLabel' => $asOf,
+                        'unpaid' => $balance['unpaid'],
+                        'interest' => $balance['interest'],
+                        'penalties' => $balance['penalties'],
+                        'unpaidByTax' => $balance['unpaidByTax'],
+                        'titleKey' => 'notification.spv.unpaid_balance.title',
+                        'titleParams' => $params,
+                        'messageKey' => 'notification.spv.unpaid_balance.message',
+                        'messageParams' => $params,
+                    ],
+                );
+            }
+            $doc->setNotifiedAt(new \DateTimeImmutable());
+            $this->entityManager->flush();
+        } catch (\Throwable $e) {
+            $this->logger->error('Fisa rol: notification failed', ['company' => $company->getName(), 'error' => $e->getMessage()]);
+        }
     }
 
     /** Where an archived file lives now: organization storage, else the platform default. */
@@ -301,6 +395,49 @@ final class SpvDocumentIngestionService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * "salarii 3.743 lei; CAS 14.434 lei; CASS 5.774 lei; CAM 1.299 lei" — the unpaid taxes under their
+     * usual short names, trimmed so the notification message stays within its column.
+     *
+     * @param list<array{tax: string, unpaid: float, interest: float, penalties: float}> $byTax
+     * @param callable(float): string $fmt
+     */
+    private function shortBreakdown(array $byTax, callable $fmt, int $maxLength = 160): string
+    {
+        $short = [
+            '/^Impozit pe veniturile din salarii/i' => 'impozit salarii',
+            '/^Impozit pe profit/i' => 'impozit profit',
+            '/^Impozit pe venitul microintreprinderilor/i' => 'impozit micro',
+            '/^Impozit pe dividende/i' => 'impozit dividende',
+            '/^Taxa pe valoarea adaugata/i' => 'TVA',
+            '/^Contributia individuala de asigurari sociale/i' => 'CAS',
+            '/^Contributia pentru asigurari de sanatate/i' => 'CASS',
+            '/^Contributie asiguratorie pentru munca/i' => 'CAM',
+            '/^Contributia de asigurari sociale datorata de persoanele/i' => 'CAS constructii/IT',
+            '/^Obligatii fiscale accesorii/i' => 'accesorii',
+        ];
+        $parts = [];
+        foreach ($byTax as $row) {
+            if ($row['unpaid'] <= 0) {
+                continue;
+            }
+            $name = $row['tax'];
+            foreach ($short as $pattern => $label) {
+                if (preg_match($pattern, $name) === 1) {
+                    $name = $label;
+                    break;
+                }
+            }
+            $parts[] = sprintf('%s %s lei', mb_substr($name, 0, 40), $fmt($row['unpaid']));
+        }
+        $text = implode('; ', $parts);
+        if (mb_strlen($text) > $maxLength) {
+            $text = rtrim(mb_substr($text, 0, $maxLength - 1)) . '…';
+        }
+
+        return $text;
     }
 
     /**

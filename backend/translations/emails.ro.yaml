@@ -247,6 +247,23 @@ notifications:
     reference: 'Referinta platii'
     hint: 'Declaratia este o ciorna: verifica sumele, apoi depune-o din Storno sau trimite-o contabilului. Nu se depune automat.'
     cta: 'Deschide declaratia'
+  declaration_payment_due:
+    heading: 'Plata unei declaratii depuse'
+    declaration: 'Declaratie'
+    period: 'Perioada'
+    filed: 'Depusa pe'
+    amount: 'De plata'
+    due_date: 'Termen de plata'
+    hint: 'Declaratia este depusa, dar plata se face separat, in contul unic al trezoreriei. Daca ai platit deja, ignora acest mesaj.'
+    cta: 'Deschide declaratia'
+  spv_unpaid_balance:
+    heading: 'Obligatii neachitate in fisa de rol'
+    as_of: 'Fisa de rol la'
+    unpaid: 'Obligatii neachitate'
+    accessories: 'Dobanzi si penalitati calculate'
+    by_tax: 'Pe impozite'
+    hint: 'Fisa a fost ceruta automat de Storno prin agentul SPV. O plata facuta in ultimele zile poate sa nu apara inca.'
+    cta: 'Deschide fisa de rol'
 
   dosar_deadline:
     heading: 'Termen intr-un dosar peste %count% zile'

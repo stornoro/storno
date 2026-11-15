@@ -94,6 +94,7 @@ class TaxDeclarationManager
         $year = (int) $data['year'];
         $month = (int) $data['month'];
         $periodType = $data['periodType'] ?? $type->periodType();
+        $this->assertD100Period($company, $type, $month, $data['periodType'] ?? null);
 
         $declaration = new TaxDeclaration();
         $declaration->setCompany($company);
@@ -118,6 +119,27 @@ class TaxDeclarationManager
         $this->eventDispatcher->dispatch(new DeclarationCreatedEvent($declaration));
 
         return $declaration;
+    }
+
+    /**
+     * A company that owes profit tax quarterly files its D100 for the last month of the quarter
+     * (03, 06, 09, 12). A D100 for any other month declares the tax on a period that was already
+     * declared, ANAF books the amount as an extra debt with a scadență months in the past and the
+     * payments made since are re-allocated — the usual road to a somație. A monthly D100 is still
+     * allowed for obligations that are monthly by nature (dividend tax, withholding) when the caller
+     * says so with `periodType: "monthly"`.
+     */
+    private function assertD100Period(Company $company, DeclarationType $type, int $month, ?string $requestedPeriodType): void
+    {
+        if ($type !== DeclarationType::D100 || $requestedPeriodType === 'monthly') {
+            return;
+        }
+        if ($company->getIncomeTaxPeriod() === Company::PERIOD_QUARTERLY && $month % 3 !== 0) {
+            throw new \InvalidArgumentException(sprintf(
+                'D100: firma declara impozitul pe profit trimestrial, iar luna %02d nu incheie un trimestru. Alege 03, 06, 09 sau 12; pentru o obligatie lunara (impozit pe dividende, retineri la sursa) trimite periodType "monthly".',
+                $month,
+            ));
+        }
     }
 
     /**

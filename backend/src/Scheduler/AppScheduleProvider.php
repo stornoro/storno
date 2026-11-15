@@ -44,6 +44,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('45 8 * * *', new RunCommandMessage('app:notifications:anaf-missing-token')))
             // Fiscal calendar — 7 / 3 / 1 days before an unfiled declaration deadline
             ->add(RecurringMessage::cron('20 8 * * *', new RunCommandMessage('app:notifications:fiscal-deadlines')))
+            // Filed is not paid: the day before and on the due date, remind the payment of a filed D100 / D112 / D300 / D301 / D398
+            ->add(RecurringMessage::cron('5 8 * * *', new RunCommandMessage('app:notifications:payment-due')))
             ->add(RecurringMessage::cron('15 8 * * *', new RunCommandMessage('app:dosare:remind')))
             // OSS: the D398 draft for the quarter that just closed, for companies under the scheme (nothing is filed)
             ->add(RecurringMessage::cron('10 8 * * *', new RunCommandMessage('app:declarations:oss-draft')))

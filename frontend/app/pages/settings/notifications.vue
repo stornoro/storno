@@ -73,7 +73,7 @@ const categories = [
   {
     key: 'spv',
     label: $t('notificationPreferences.categories.spv'),
-    events: ['spv.document_received', 'spv.new_documents'],
+    events: ['spv.document_received', 'spv.new_documents', 'spv.unpaid_balance'],
   },
   {
     key: 'tokens',
@@ -83,7 +83,7 @@ const categories = [
   {
     key: 'fiscal',
     label: $t('notificationPreferences.categories.fiscal'),
-    events: ['fiscal.deadline', 'declaration.draft_ready'],
+    events: ['fiscal.deadline', 'declaration.draft_ready', 'declaration.payment_due'],
   },
   {
     key: 'partners',

@@ -3601,6 +3601,7 @@ export default defineI18nLocale(async () => {
       spv: {
         document_received: 'Important SPV document (enforcement notice, decision, notice)',
         new_documents: 'New SPV documents',
+        unpaid_balance: 'Unpaid amounts in the account statement (requested monthly through the agent)',
       },
       token: {
         expiring_soon: 'ANAF token expiring soon',
@@ -3611,6 +3612,7 @@ export default defineI18nLocale(async () => {
       },
       declaration: {
         draft_ready: 'Return prepared automatically from invoices (D398 OSS, after each quarter)',
+        payment_due: 'Payment of a filed return (the day before and on the due date)',
       },
       partner: {
         status_changed: 'Partner became inactive / lost VAT registration / VAT on collection',
@@ -5336,6 +5338,11 @@ export default defineI18nLocale(async () => {
     'notification.new_documents.title': '{company} — new e-Factura documents',
     'notification.spv.document_received.title': '{company}: {type}',
     'notification.spv.document_received.message': '{details}',
+    'notification.spv.unpaid_balance.title': '{company} — {amount} lei unpaid at ANAF',
+    'notification.spv.unpaid_balance.message': 'The account statement of {date} shows unpaid obligations of {amount} lei and accessories of {accessories} lei. {breakdown}. Check the payments and settle the difference before an enforcement notice arrives.',
+    'notification.declaration.payment_due.title': '{company} — pay {code} by {date}',
+    'notification.declaration.payment_due.message_tomorrow': '{label} for {period} ({code}, filed on {filed}): the payment{amount} is due tomorrow, {date}. Check that the transfer went out; a filed return is not a paid tax.',
+    'notification.declaration.payment_due.message_today': '{label} for {period} ({code}, filed on {filed}): the payment{amount} is due today, {date}. If it has not gone out yet, pay today; interest and penalties start tomorrow.',
     'notification.spv.new_documents.title': '{company}',
     'notification.spv.new_documents.message': '{count} new documents in SPV ({summary})',
     'notification.efactura.new_documents.title': '{company}',

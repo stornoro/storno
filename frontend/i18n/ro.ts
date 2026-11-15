@@ -3600,6 +3600,7 @@ export default defineI18nLocale(async () => {
         spv: {
           document_received: 'Document important in SPV (somatie, decizie, notificare)',
           new_documents: 'Documente noi in SPV',
+          unpaid_balance: 'Sume neachitate in fisa de rol (ceruta automat lunar prin agent)',
         },
         token: {
           expiring_soon: 'Token ANAF expira curand',
@@ -3610,6 +3611,7 @@ export default defineI18nLocale(async () => {
         },
         declaration: {
           draft_ready: 'Declaratie pregatita automat din facturi (D398 OSS, dupa fiecare trimestru)',
+          payment_due: 'Plata unei declaratii depuse (cu o zi inainte si in ziua scadentei)',
         },
         partner: {
           status_changed: 'Partener devenit inactiv / neplătitor TVA / TVA la încasare',
@@ -5337,6 +5339,11 @@ export default defineI18nLocale(async () => {
     'notification.new_documents.title': '{company} — documente noi e-Factura',
     'notification.spv.document_received.title': '{company}: {type}',
     'notification.spv.document_received.message': '{details}',
+    'notification.spv.unpaid_balance.title': '{company} — {amount} lei neachitati la ANAF',
+    'notification.spv.unpaid_balance.message': 'Fisa de rol din {date} arata obligatii neachitate de {amount} lei si accesorii calculate de {accessories} lei. {breakdown}. Verifica platile si achita diferenta inainte sa vina o somatie.',
+    'notification.declaration.payment_due.title': '{company} — plata {code} pana pe {date}',
+    'notification.declaration.payment_due.message_tomorrow': '{label} pentru {period} ({code}, depusa pe {filed}): plata{amount} este scadenta maine, {date}. Verifica daca ordinul de plata a plecat; declaratia depusa nu inseamna taxa platita.',
+    'notification.declaration.payment_due.message_today': '{label} pentru {period} ({code}, depusa pe {filed}): plata{amount} este scadenta astazi, {date}. Daca nu a plecat inca, fa plata azi; de maine curg dobanzi si penalitati.',
     'notification.spv.new_documents.title': '{company}',
     'notification.spv.new_documents.message': 'Ai {count} documente noi in SPV ({summary})',
     'notification.efactura.new_documents.title': '{company}',

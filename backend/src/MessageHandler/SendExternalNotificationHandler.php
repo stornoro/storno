@@ -54,6 +54,8 @@ class SendExternalNotificationHandler
         'fiscal.deadline' => 'emails/notification_fiscal_deadline.html.twig',
         'dosar.deadline' => 'emails/notification_dosar_deadline.html.twig',
         'declaration.draft_ready' => 'emails/notification_declaration_draft_ready.html.twig',
+        'declaration.payment_due' => 'emails/notification_declaration_payment_due.html.twig',
+        'spv.unpaid_balance' => 'emails/notification_spv_unpaid_balance.html.twig',
         'partner.status_changed' => 'emails/notification_partner_status_changed.html.twig',
     ];
 

@@ -43,6 +43,8 @@ function channelIcon(notification: BackendNotification): string {
     'proforma.expired': 'i-lucide-calendar-x',
     'fiscal.deadline': 'i-lucide-calendar-days',
     'declaration.draft_ready': 'i-lucide-file-check',
+    'declaration.payment_due': 'i-lucide-banknote-arrow-up',
+    'spv.unpaid_balance': 'i-lucide-alert-octagon',
     'partner.status_changed': 'i-lucide-shield-alert',
     'expiry.due': 'i-lucide-car',
   }
@@ -51,8 +53,8 @@ function channelIcon(notification: BackendNotification): string {
 
 function iconColor(notification: BackendNotification): string {
   if (notification.isRead) return 'text-(--ui-text-muted)'
-  const errorTypes = ['sync.error', 'invoice.rejected', 'token.refresh_failed']
-  const warnTypes = ['invoice.overdue', 'invoice.due_today', 'invoice.due_soon', 'token.expiring_soon', 'proforma.expiring_soon', 'proforma.expired', 'fiscal.deadline', 'partner.status_changed', 'expiry.due']
+  const errorTypes = ['sync.error', 'invoice.rejected', 'token.refresh_failed', 'spv.unpaid_balance']
+  const warnTypes = ['invoice.overdue', 'invoice.due_today', 'invoice.due_soon', 'token.expiring_soon', 'proforma.expiring_soon', 'proforma.expired', 'fiscal.deadline', 'declaration.payment_due', 'partner.status_changed', 'expiry.due']
   const successTypes = ['invoice.validated', 'payment.received', 'efactura.new_documents', 'sync.completed']
   if (errorTypes.includes(notification.type)) return 'text-error'
   if (warnTypes.includes(notification.type)) return 'text-warning'
@@ -100,10 +102,14 @@ function notificationLink(n: BackendNotification): string | null {
     return documentId ? `/spv?document=${documentId}` : '/spv'
   }
   if (n.type === 'spv.new_documents') return '/spv'
+  if (n.type === 'spv.unpaid_balance') {
+    const documentId = n.data?.documentId as string | undefined
+    return documentId ? `/spv?document=${documentId}` : '/spv'
+  }
   if (n.type === 'sync.error' || n.type === 'sync.completed') return '/efactura'
   if (n.type === 'token.expiring_soon' || n.type === 'token.refresh_failed') return '/efactura'
   if (n.type === 'fiscal.deadline') return '/fiscal-calendar'
-  if (n.type === 'declaration.draft_ready') {
+  if (n.type === 'declaration.draft_ready' || n.type === 'declaration.payment_due') {
     const declarationId = n.data?.declarationId as string | undefined
     return declarationId ? `/declarations/${declarationId}` : '/declarations'
   }

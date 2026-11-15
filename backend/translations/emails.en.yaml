@@ -264,6 +264,23 @@ notifications:
     reference: 'Payment reference'
     hint: 'The return is a draft: check the amounts, then file it from Storno or hand it to your accountant. It is not filed automatically.'
     cta: 'Open the return'
+  declaration_payment_due:
+    heading: 'Payment of a filed return'
+    declaration: 'Return'
+    period: 'Period'
+    filed: 'Filed on'
+    amount: 'Amount due'
+    due_date: 'Payment due'
+    hint: 'The return is filed, but the payment is made separately into the treasury account. If you have already paid, ignore this message.'
+    cta: 'Open the return'
+  spv_unpaid_balance:
+    heading: 'Unpaid obligations in the account statement'
+    as_of: 'Statement as of'
+    unpaid: 'Unpaid obligations'
+    accessories: 'Interest and penalties computed'
+    by_tax: 'By tax'
+    hint: 'Storno requested the statement automatically through the SPV agent. A payment made in the last few days may not show yet.'
+    cta: 'Open the statement'
 
   dosar_deadline:
     heading: 'A case file is due in %count% days'

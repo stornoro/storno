@@ -74,6 +74,10 @@ notification:
     oss_draft_nil:
       title: '%company%: D398 Q%quarter% prepared — no operations'
       message: 'The special VAT return (OSS) for quarter %quarter% has been prepared: no sales to consumers in other EU member states, a nil return is due by %date%. It is not filed automatically.'
+    payment_due:
+      title: '%company% — pay %code% by %date%'
+      message_tomorrow: '%label% for %period% (%code%, filed on %filed%): the payment%amount% is due tomorrow, %date%. Check that the transfer went out; a filed return is not a paid tax.'
+      message_today: '%label% for %period% (%code%, filed on %filed%): the payment%amount% is due today, %date%. If it has not gone out yet, pay today; interest and penalties start tomorrow.'
   report:
     monthly_summary:
       title: '%company%: monthly report %month%'
@@ -120,6 +124,9 @@ notification:
     new_documents:
       title: '%company%'
       message: '%count% new documents in SPV (%summary%)'
+    unpaid_balance:
+      title: '%company% — %amount% lei unpaid at ANAF'
+      message: 'The account statement of %date% shows unpaid obligations of %amount% lei and accessories of %accessories% lei. %breakdown%. Check the payments and settle the difference before an enforcement notice arrives.'
   version_gate:
     blocking_title: 'Critical update required'
     blocking_body: 'Your app version (%current%) is no longer supported. Update to %latest% to keep using Storno.ro.'

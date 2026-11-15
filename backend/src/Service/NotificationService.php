@@ -25,6 +25,8 @@ class NotificationService
         'payment.received',
         'report.monthly_summary',
         'declaration.draft_ready',
+        'declaration.payment_due',
+        'spv.unpaid_balance',
     ];
 
     public function __construct(
