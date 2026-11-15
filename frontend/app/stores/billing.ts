@@ -63,6 +63,8 @@ export const useBillingStore = defineStore('billing', () => {
   const billing = ref<BillingState | null>(null)
   const loading = ref(false)
   const plansLoading = ref(false)
+  /** The plan list could not be loaded — not the same thing as "no plans are set up". */
+  const plansLoadFailed = ref(false)
   const error = ref<string | null>(null)
   const billingInterval = ref<'month' | 'year'>('month')
   const invoices = ref<BillingInvoice[]>([])
@@ -122,11 +124,15 @@ export const useBillingStore = defineStore('billing', () => {
     plansLoading.value = true
     error.value = null
 
+    plansLoadFailed.value = false
     try {
-      const data = await get<{ plans: RawPlan[], publishableKey: string }>('/v1/billing/plans')
+      const data = await get<{ plans: RawPlan[], publishableKey: string, configured?: boolean }>('/v1/billing/plans')
       rawPlans.value = data.plans
+      // billing is set up but the list came back empty: the payment provider did not answer
+      plansLoadFailed.value = data.configured === true && data.plans.length === 0
     }
     catch (err: any) {
+      plansLoadFailed.value = true
       error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-au putut incarca planurile.'
     }
     finally {
@@ -252,6 +258,7 @@ export const useBillingStore = defineStore('billing', () => {
     billing,
     loading,
     plansLoading,
+    plansLoadFailed,
     error,
     billingInterval,
     invoices,

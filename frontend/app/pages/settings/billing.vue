@@ -507,7 +507,15 @@ const intervalItems = computed(() => [
       >
         <div class="flex flex-col items-center gap-3 py-6">
           <UIcon name="i-lucide-credit-card" class="size-10 text-(--ui-text-muted)" />
-          <p class="text-center text-(--ui-text-muted) text-sm">
+          <template v-if="billingStore.plansLoadFailed">
+            <p class="text-center text-(--ui-text-muted) text-sm">
+              {{ $t('settings.billingPage.plansLoadFailed') }}
+            </p>
+            <UButton variant="outline" size="sm" icon="i-lucide-refresh-cw" @click="billingStore.fetchPlans()">
+              {{ $t('settings.billingPage.plansRetry') }}
+            </UButton>
+          </template>
+          <p v-else class="text-center text-(--ui-text-muted) text-sm">
             {{ $t('settings.billingPage.noPlansConfigured') }}
           </p>
         </div>

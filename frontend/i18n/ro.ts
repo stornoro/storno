@@ -2977,6 +2977,8 @@ export default defineI18nLocale(async () => {
         comparePlans: 'Compara planurile',
         includesEverythingFrom: 'Tot ce include {plan}, plus:',
         noPlansConfigured: 'Planurile de abonament nu sunt inca configurate. Folosesti in prezent planul gratuit.',
+        plansLoadFailed: 'Planurile nu au putut fi incarcate. Abonamentul tau nu este afectat.',
+        plansRetry: 'Reincearca',
         planChanged: 'Planul a fost schimbat cu succes!',
         confirmUpgradeTitle: 'Confirma upgrade',
         confirmDowngradeTitle: 'Confirma downgrade',

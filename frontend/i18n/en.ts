@@ -2978,6 +2978,8 @@ export default defineI18nLocale(async () => {
       comparePlans: 'Compare plans',
       includesEverythingFrom: 'Everything in {plan}, plus:',
       noPlansConfigured: 'Subscription plans are not yet configured. You are currently using the free plan.',
+      plansLoadFailed: 'The plans could not be loaded. Your subscription is not affected.',
+      plansRetry: 'Try again',
       planChanged: 'Plan has been changed successfully!',
       confirmUpgradeTitle: 'Confirm upgrade',
       confirmDowngradeTitle: 'Confirm downgrade',
