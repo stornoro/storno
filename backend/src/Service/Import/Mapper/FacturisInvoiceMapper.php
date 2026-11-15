@@ -74,6 +74,8 @@ class FacturisInvoiceMapper extends AbstractInvoiceMapper
         $result = parent::mapRow($row, $columnMapping);
 
         $result['direction'] = 'outgoing';
+        // clients missing from the nomenclature are created from the invoice's name and tax code
+        $result['_createClient'] = true;
 
         // Compute invoice-level totals from line data (will be accumulated by persister)
         $lines = $result['lines'] ?? [];

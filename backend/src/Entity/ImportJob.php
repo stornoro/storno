@@ -25,7 +25,7 @@ class ImportJob
     private ?Company $company = null;
 
     /**
-     * 'clients', 'products', 'invoices_issued', 'invoices_received'
+     * 'clients', 'suppliers', 'products', 'invoices_issued', 'invoices_received'
      */
     #[ORM\Column(length: 30)]
     #[Groups(['import_job:list', 'import_job:detail'])]

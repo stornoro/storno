@@ -16,7 +16,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const SOURCES_WITH_TEMPLATE = ['uber', 'bolt', 'glovo', 'tazz', 'woocommerce', 'prestashop']
 
 const acceptedFormats = computed(() => {
-  if (props.source === 'saga') return '.csv,.xlsx,.xml'
+  if (['saga', 'smartbill', 'oblio', 'fgo', 'generic'].includes(props.source)) return '.csv,.xlsx,.xml'
   if (props.source === 'icefact') return '.csv'
   if (props.source === 'cash_register') return '.xml,.zip'
   return '.csv,.xlsx'

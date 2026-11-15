@@ -89,9 +89,15 @@ class Supplier
     #[Groups(['supplier:detail'])]
     private ?string $notes = null;
 
-    #[ORM\Column(length: 20)]
+    /** anaf_sync, manual or import:<program> */
+    #[ORM\Column(length: 40)]
     #[Groups(['supplier:detail'])]
     private string $source = 'anaf_sync';
+
+    /** The import that created the supplier, so reverting the import removes it. */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?ImportJob $importJob = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['supplier:detail'])]
@@ -311,6 +317,18 @@ class Supplier
     public function setSource(string $source): static
     {
         $this->source = $source;
+
+        return $this;
+    }
+
+    public function getImportJob(): ?ImportJob
+    {
+        return $this->importJob;
+    }
+
+    public function setImportJob(?ImportJob $importJob): static
+    {
+        $this->importJob = $importJob;
 
         return $this;
     }

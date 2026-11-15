@@ -39,21 +39,35 @@ const comingSoonSources = [
 
 // When the source changes, reset the import type if the currently selected type
 // is not supported by the new source.
+// The type that had to be dropped because the chosen source cannot import it — said out
+// loud, so that a vanished selection does not look like a fault.
+const droppedType = ref<string | null>(null)
+
 watch(source, (newSource) => {
+  droppedType.value = null
   if (!newSource || !importType.value) return
   const src = props.sources.find(s => s.key === newSource)
   if (src && !src.importTypes.includes(importType.value)) {
+    droppedType.value = props.importTypes.find(t => t.value === importType.value)?.label ?? importType.value
     importType.value = null
   }
 })
 
-// Filter import types based on selected source
-const availableImportTypes = computed(() => {
-  if (!source.value) return props.importTypes
-  const src = props.sources.find(s => s.key === source.value)
-  if (!src) return props.importTypes
-  return props.importTypes.filter(t => src.importTypes.includes(t.value))
+watch(importType, (value) => {
+  if (value) droppedType.value = null
 })
+
+const selectedSource = computed(() => props.sources.find(s => s.key === source.value) ?? null)
+
+// Every type stays on screen; the ones the selected source cannot import are disabled.
+function isTypeSupported(type: string): boolean {
+  return !selectedSource.value || selectedSource.value.importTypes.includes(type)
+}
+
+// A source that cannot import the selected type is still selectable, but marked.
+function supportsSelectedType(src: { importTypes: string[] }): boolean {
+  return !importType.value || src.importTypes.includes(importType.value)
+}
 
 function formatBadge(fmt: string): string {
   if (fmt === 'saga_xml' || fmt === 'a4200_xml') return 'XML'
@@ -68,18 +82,31 @@ function formatBadge(fmt: string): string {
       <h4 class="text-sm font-medium mb-3">{{ $t('importExport.selectImportType') }}</h4>
       <div class="grid grid-cols-2 gap-3">
         <button
-          v-for="type in availableImportTypes"
+          v-for="type in importTypes"
           :key="type.value"
           type="button"
           class="p-4 rounded-lg border-2 text-left transition-colors"
-          :class="importType === type.value
-            ? 'border-primary bg-primary/5'
-            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
+          :class="[
+            importType === type.value
+              ? 'border-primary bg-primary/5'
+              : 'border-gray-200 dark:border-gray-700',
+            isTypeSupported(type.value)
+              ? 'hover:border-gray-300 dark:hover:border-gray-600'
+              : 'opacity-50 cursor-not-allowed border-dashed',
+          ]"
+          :disabled="!isTypeSupported(type.value)"
+          :aria-disabled="!isTypeSupported(type.value)"
           @click="importType = type.value"
         >
-          <span class="text-sm font-medium">{{ type.label }}</span>
+          <span class="text-sm font-medium block">{{ type.label }}</span>
+          <span v-if="!isTypeSupported(type.value)" class="text-xs text-(--ui-text-muted) block mt-1">
+            {{ $t('importExport.typeUnavailableForSource', { source: selectedSource?.label ?? '' }) }}
+          </span>
         </button>
       </div>
+      <p v-if="droppedType && selectedSource" class="mt-3 text-sm text-warning-600 dark:text-warning-400" role="status">
+        {{ $t('importExport.typeDroppedForSource', { type: droppedType, source: selectedSource.label }) }}
+      </p>
     </div>
 
     <!-- Source Selection -->
@@ -91,9 +118,12 @@ function formatBadge(fmt: string): string {
           :key="src.key"
           type="button"
           class="flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left"
-          :class="source === src.key
-            ? 'border-primary bg-primary/5'
-            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
+          :class="[
+            source === src.key
+              ? 'border-primary bg-primary/5'
+              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+            supportsSelectedType(src) ? '' : 'opacity-50',
+          ]"
           @click="source = src.key"
         >
           <!-- Branded color initial square -->

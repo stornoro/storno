@@ -359,7 +359,7 @@ export default defineI18nLocale(async () => {
         addCompanyDesc: 'Configureaza datele firmei pentru facturare.',
         addCompanyTime: '~3 min',
         importData: 'Vii din SmartBill, Oblio sau alt program? Importa datele',
-        importDataDesc: 'Incarca exportul din vechiul program: clienti, produse si facturi, cu seriile pastrate.',
+        importDataDesc: 'Incarca exportul din vechiul program: clienti, furnizori, produse si facturi, cu seriile pastrate.',
         importDataTime: '~2 min',
         connectAnaf: 'Conecteaza ANAF pentru e-Factura',
         connectAnafDesc: 'Sincronizeaza automat facturile emise si primite.',
@@ -3710,7 +3710,7 @@ export default defineI18nLocale(async () => {
 
       // Import
       importTitle: 'Import date',
-      importDescription: 'Importa clienti, produse sau facturi din alte aplicatii de facturare',
+      importDescription: 'Importa clienti, furnizori, produse sau facturi din alte aplicatii de facturare',
       startImport: 'Import nou',
 
       // Wizard steps
@@ -3723,6 +3723,8 @@ export default defineI18nLocale(async () => {
       // Source selection
       selectSource: 'Selecteaza platforma sursa',
       selectImportType: 'Ce doresti sa importi?',
+      typeUnavailableForSource: 'Indisponibil pentru {source}',
+      typeDroppedForSource: '{type} nu se poate importa din {source}. Alege alt tip de date sau sursa "Altul (generic)".',
       sourceSmartbill: 'SmartBill',
       sourceSaga: 'SAGA',
       sourceOblio: 'Oblio',
@@ -3847,7 +3849,7 @@ export default defineI18nLocale(async () => {
 
       // Mark as paid
       markAsPaid: 'Marcheaza facturile importate ca platite',
-      markAsPaidDescription: 'Se vor crea automat incasarile pentru fiecare factura importata',
+      markAsPaidDescription: 'Se creeaza automat incasarea pentru fiecare factura importata. Facturile pentru care fisierul are rest de plata sau stare urmeaza fisierul.',
 
       // Vanzari din platforme, magazine online si casa de marcat
       salesImportsTitle: 'Vanzari din platforme, magazine online si casa de marcat',

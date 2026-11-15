@@ -54,7 +54,7 @@ class ClientPersister implements EntityPersisterInterface
 
         foreach ($rows as $row) {
             if (!empty($row['cui'])) {
-                $this->knownClients[$companyId . ':cui:' . $row['cui']] = true;
+                $this->knownClients[$companyId . ':cui:' . self::cuiKey($row['cui'])] = true;
             }
             if (!empty($row['email'])) {
                 $this->knownClients[$companyId . ':email:' . $row['email']] = true;
@@ -80,7 +80,7 @@ class ClientPersister implements EntityPersisterInterface
         $type = $mappedData['type'] ?? ($cui ? 'company' : 'individual');
 
         $isExisting = false;
-        if ($cui && isset($this->knownClients[$companyId . ':cui:' . $cui])) {
+        if ($cui && isset($this->knownClients[$companyId . ':cui:' . self::cuiKey($cui)])) {
             $isExisting = true;
         } elseif ($email && isset($this->knownClients[$companyId . ':email:' . mb_strtolower($email)])) {
             $isExisting = true;
@@ -132,7 +132,7 @@ class ClientPersister implements EntityPersisterInterface
         $this->entityManager->persist($client);
 
         if ($cui) {
-            $this->knownClients[$companyId . ':cui:' . $cui] = true;
+            $this->knownClients[$companyId . ':cui:' . self::cuiKey($cui)] = true;
         }
         if ($email) {
             $this->knownClients[$companyId . ':email:' . mb_strtolower($email)] = true;
@@ -162,6 +162,14 @@ class ClientPersister implements EntityPersisterInterface
         $this->batchCount = 0;
     }
 
+    /** Fiscal code as an identity key: "RO 12345678" and "12345678" are the same client. */
+    private static function cuiKey(string $cui): string
+    {
+        $cui = strtoupper(preg_replace('/[\s.\-]+/', '', $cui) ?? $cui);
+
+        return preg_match('/^RO\d+$/', $cui) ? substr($cui, 2) : $cui;
+    }
+
     private function setClientFields(Client $client, array $data): void
     {
         $fields = [
@@ -174,10 +182,17 @@ class ClientPersister implements EntityPersisterInterface
             'postalCode'             => 'setPostalCode',
             'email'                  => 'setEmail',
             'phone'                  => 'setPhone',
+            'bankName'               => 'setBankName',
+            'bankAccount'            => 'setBankAccount',
             'contactPerson'          => 'setContactPerson',
             'clientCode'             => 'setClientCode',
             'notes'                  => 'setNotes',
         ];
+
+        // an IBAN is often written in groups of four; the column holds it without spaces
+        if (!empty($data['bankAccount'])) {
+            $data['bankAccount'] = mb_substr(preg_replace('/\s+/', '', (string) $data['bankAccount']) ?? '', 0, 34);
+        }
 
         foreach ($fields as $field => $setter) {
             if (!empty($data[$field])) {

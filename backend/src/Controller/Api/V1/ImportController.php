@@ -54,6 +54,7 @@ class ImportController extends AbstractController
 
     private const IMPORT_TYPE_LABELS = [
         'clients'              => 'Clienți',
+        'suppliers'            => 'Furnizori',
         'products'             => 'Produse',
         'invoices_issued'      => 'Facturi emise',
         'invoices_received'    => 'Facturi primite',
@@ -527,6 +528,12 @@ class ImportController extends AbstractController
             ['jobId' => $jobId]
         );
 
+        // Hard delete suppliers created by this import (the ones it only completed stay)
+        $conn->executeStatement(
+            'DELETE FROM supplier WHERE import_job_id = :jobId',
+            ['jobId' => $jobId]
+        );
+
         $job->setStatus('reverted');
         $this->entityManager->flush();
 
@@ -617,15 +624,19 @@ class ImportController extends AbstractController
                 ['name' => 'SC Exemplu SRL', 'cui' => 'RO12345678', 'registrationNumber' => 'J40/1234/2020', 'address' => 'Str. Exemplu nr. 1', 'city' => 'Bucuresti', 'county' => 'Bucuresti', 'country' => 'RO', 'postalCode' => '010101', 'email' => 'contact@exemplu.ro', 'phone' => '0721000000', 'bankName' => 'Banca Transilvania', 'bankAccount' => 'RO49AAAA1B31007593840000', 'defaultPaymentTermDays' => '30', 'contactPerson' => 'Ion Popescu', 'clientCode' => 'C001'],
                 ['name' => 'SC Test SRL', 'cui' => '87654321', 'registrationNumber' => 'J12/5678/2019', 'address' => 'Bd. Unirii nr. 10', 'city' => 'Cluj-Napoca', 'county' => 'Cluj', 'country' => 'RO', 'postalCode' => '400001', 'email' => 'info@test.ro', 'phone' => '0722000000', 'bankName' => 'BRD', 'bankAccount' => 'RO12BRDE445SV00000001234', 'defaultPaymentTermDays' => '15', 'contactPerson' => 'Maria Ionescu', 'clientCode' => 'C002'],
             ],
+            'suppliers' => [
+                ['name' => 'SC Furnizor Exemplu SRL', 'cui' => 'RO12345678', 'registrationNumber' => 'J40/1234/2020', 'address' => 'Str. Exemplu nr. 1', 'city' => 'Bucuresti', 'county' => 'Bucuresti', 'country' => 'RO', 'postalCode' => '010101', 'email' => 'contact@furnizor-exemplu.ro', 'phone' => '0721000000', 'bankName' => 'Banca Transilvania', 'bankAccount' => 'RO49AAAA1B31007593840000', 'notes' => ''],
+                ['name' => 'SC Alt Furnizor SRL', 'cui' => '87654321', 'registrationNumber' => 'J12/5678/2019', 'address' => 'Bd. Unirii nr. 10', 'city' => 'Cluj-Napoca', 'county' => 'Cluj', 'country' => 'RO', 'postalCode' => '400001', 'email' => 'office@alt-furnizor.ro', 'phone' => '0722000000', 'bankName' => 'BRD', 'bankAccount' => 'RO12BRDE445SV00000001234', 'notes' => 'Termen de plata 30 de zile'],
+            ],
             'products' => [
                 ['name' => 'Serviciu consultanta', 'code' => 'SRV001', 'description' => 'Consultanta IT', 'unitOfMeasure' => 'ora', 'defaultPrice' => '150.00', 'currency' => 'RON', 'vatRate' => '19', 'isService' => 'Da'],
                 ['name' => 'Laptop Dell', 'code' => 'PRD001', 'description' => 'Laptop business', 'unitOfMeasure' => 'buc', 'defaultPrice' => '4500.00', 'currency' => 'RON', 'vatRate' => '19', 'isService' => 'Nu'],
             ],
             'invoices_issued' => [
-                ['number' => 'FV001', 'issueDate' => '2026-01-15', 'dueDate' => '2026-02-15', 'senderName' => '', 'senderCif' => '', 'receiverName' => 'SC Client SRL', 'receiverCif' => 'RO12345678', 'subtotal' => '1000.00', 'vatTotal' => '190.00', 'total' => '1190.00', 'currency' => 'RON', 'paymentMethod' => 'transfer bancar', 'notes' => '', 'lineDescription' => 'Serviciu consultanta', 'lineQuantity' => '10', 'lineUnitOfMeasure' => 'ora', 'lineUnitPrice' => '100.00', 'lineVatRate' => '19', 'lineVatAmount' => '190.00', 'lineTotal' => '1000.00', 'lineProductCode' => 'SRV001'],
+                ['number' => 'FV001', 'issueDate' => '2026-01-15', 'dueDate' => '2026-02-15', 'senderName' => '', 'senderCif' => '', 'receiverName' => 'SC Client SRL', 'receiverCif' => 'RO12345678', 'subtotal' => '1000.00', 'vatTotal' => '210.00', 'total' => '1210.00', 'currency' => 'RON', 'unpaidAmount' => '0.00', 'paymentMethod' => 'transfer bancar', 'notes' => '', 'lineDescription' => 'Serviciu consultanta', 'lineQuantity' => '10', 'lineUnitOfMeasure' => 'ora', 'lineUnitPrice' => '100.00', 'lineVatRate' => '21', 'lineVatAmount' => '210.00', 'lineTotal' => '1000.00', 'lineTotalGross' => '1210.00', 'lineProductCode' => 'SRV001'],
             ],
             'invoices_received' => [
-                ['number' => 'FZ001', 'issueDate' => '2026-01-10', 'dueDate' => '2026-02-10', 'senderName' => 'SC Furnizor SRL', 'senderCif' => 'RO87654321', 'receiverName' => '', 'receiverCif' => '', 'subtotal' => '500.00', 'vatTotal' => '95.00', 'total' => '595.00', 'currency' => 'RON', 'paymentMethod' => 'transfer bancar', 'notes' => '', 'lineDescription' => 'Materiale birou', 'lineQuantity' => '1', 'lineUnitOfMeasure' => 'set', 'lineUnitPrice' => '500.00', 'lineVatRate' => '19', 'lineVatAmount' => '95.00', 'lineTotal' => '500.00', 'lineProductCode' => 'MAT001'],
+                ['number' => 'FZ001', 'issueDate' => '2026-01-10', 'dueDate' => '2026-02-10', 'senderName' => 'SC Furnizor SRL', 'senderCif' => 'RO87654321', 'receiverName' => '', 'receiverCif' => '', 'subtotal' => '500.00', 'vatTotal' => '105.00', 'total' => '605.00', 'currency' => 'RON', 'unpaidAmount' => '605.00', 'paymentMethod' => 'transfer bancar', 'notes' => '', 'lineDescription' => 'Materiale birou', 'lineQuantity' => '1', 'lineUnitOfMeasure' => 'set', 'lineUnitPrice' => '500.00', 'lineVatRate' => '21', 'lineVatAmount' => '105.00', 'lineTotal' => '500.00', 'lineTotalGross' => '605.00', 'lineProductCode' => 'MAT001'],
             ],
             'platform_sales' => [
                 ['externalId' => 'TRIP-0001', 'date' => '2026-09-07', 'description' => 'Cursă', 'counterparty' => 'Popescu Ion', 'gross' => '48.50', 'tips' => '5.00', 'tolls' => '0.00', 'vat' => '0.00', 'commission' => '12.13', 'commissionVat' => '0.00', 'payout' => '41.37', 'currency' => 'RON', 'status' => 'completed'],

@@ -4,9 +4,11 @@ namespace App\Service\Import\Persister;
 
 use App\Entity\Client;
 use App\Entity\Company;
+use App\Entity\ImportJob;
 use App\Entity\Invoice;
 use App\Entity\InvoiceLine;
 use App\Entity\Payment;
+use App\Entity\Supplier;
 use App\Enum\DocumentStatus;
 use App\Enum\DocumentType;
 use App\Enum\InvoiceDirection;
@@ -30,6 +32,15 @@ class InvoicePersister implements EntityPersisterInterface
 
     /** @var array<string, true> Known existing invoice numbers for this company (pre-loaded) */
     private array $existingInvoiceNumbers = [];
+
+    /** @var array<string, string> normalized supplier CIF → supplier UUID (pre-loaded) */
+    private array $supplierCache = [];
+
+    /** @var array<string, array{company: Company, job: mixed, markAsPaid: bool, paid: ?float, fullyPaid: bool, unpaid?: float}> */
+    private array $pendingSettlement = [];
+
+    /** The batch is full: flush before the next new invoice, never between the rows of one. */
+    private bool $flushPending = false;
 
     private bool $initialized = false;
     private ?string $companyId = null;
@@ -71,17 +82,26 @@ class InvoicePersister implements EntityPersisterInterface
                 $this->clientCache[$companyId . ':email:' . $row['email']] = $clientId;
             }
             if (!empty($row['cui'])) {
-                $this->clientCache[$companyId . ':cui:' . $row['cui']] = $clientId;
+                $this->clientCache[$companyId . ':cui:' . self::normalizeCif($row['cui'])] = $clientId;
             }
         }
 
-        // Pre-load all existing invoice numbers for dedup
-        $numbers = $conn->fetchFirstColumn(
-            'SELECT LOWER(number) FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL',
+        $suppliers = $conn->fetchAllAssociative(
+            'SELECT id, cif FROM supplier WHERE company_id = :companyId AND deleted_at IS NULL AND cif IS NOT NULL',
             ['companyId' => $companyId],
         );
-        foreach ($numbers as $num) {
-            $this->existingInvoiceNumbers[$num] = true;
+        foreach ($suppliers as $row) {
+            $this->supplierCache[self::normalizeCif((string) $row['cif'])] = $row['id'];
+        }
+
+        // Pre-load all existing invoice numbers for dedup. A received invoice is identified by
+        // its number and its supplier: two suppliers may well use the same number.
+        $numbers = $conn->fetchAllAssociative(
+            'SELECT LOWER(number) AS number, direction, sender_cif FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL',
+            ['companyId' => $companyId],
+        );
+        foreach ($numbers as $row) {
+            $this->existingInvoiceNumbers[self::numberKey((string) $row['number'], $row['direction'] ?? null, $row['sender_cif'] ?? null)] = true;
         }
 
         $this->companyId = $companyId;
@@ -128,6 +148,8 @@ class InvoicePersister implements EntityPersisterInterface
                 $existingInvoice->addLine($line);
             }
 
+            $this->noteCollection($dedupKey, $mappedData);
+
             // Accumulate invoice-level totals
             if (isset($mappedData['subtotal']) && $mappedData['subtotal'] !== '') {
                 $existingSubtotal = (float) ($existingInvoice->getSubtotal() ?? '0');
@@ -146,11 +168,36 @@ class InvoicePersister implements EntityPersisterInterface
         }
 
         // Fast dedup check against pre-loaded invoice numbers (no DB query)
-        $lowerNumber = mb_strtolower($number);
+        $lowerNumber = self::numberKey(mb_strtolower($number), $this->resolveDirection($mappedData), $senderCif);
         if (isset($this->existingInvoiceNumbers[$lowerNumber])) {
             $this->pendingCache[$dedupKey] = new Invoice(); // placeholder to skip future multi-line rows
             $result->incrementSkipped();
             return;
+        }
+
+        // A file that names both parties says whose invoices it holds: one issued by (or
+        // addressed to) another company does not belong in this company's books.
+        $ownCif = $this->resolveDirection($mappedData) === 'incoming' ? $receiverCif : $senderCif;
+        $companyCif = (string) ($company->getCif() ?? '');
+        if ($ownCif !== null && $companyCif !== '' && self::normalizeCif($ownCif) !== self::normalizeCif($companyCif)) {
+            $this->pendingCache[$dedupKey] = new Invoice(); // its other rows are skipped quietly
+            throw new \RuntimeException(sprintf(
+                'Factura %s apartine altei firme (CUI %s), nu firmei selectate (CUI %s).',
+                $number,
+                $ownCif,
+                $companyCif,
+            ));
+        }
+
+        // A full batch is written here, when a new invoice starts: flushing right after the
+        // invoice was created would drop the remaining lines of a multi-row invoice.
+        if ($this->flushPending) {
+            $this->flush();
+            // flush() clears the entity manager: the company and the job are detached now
+            $company = $this->entityManager->getReference(Company::class, $company->getId());
+            if (isset($mappedData['_importJob'])) {
+                $mappedData['_importJob'] = $this->entityManager->getReference(ImportJob::class, $mappedData['_importJob']->getId());
+            }
         }
 
         // Exports that only know the gross amount: split it with the company's default VAT rate
@@ -177,34 +224,16 @@ class InvoicePersister implements EntityPersisterInterface
             $invoice->addLine($line);
         }
 
-        // Mark as paid: create a Payment and update invoice status
-        $importOptions = $mappedData['_importOptions'] ?? [];
-        if (!empty($importOptions['markAsPaid'])) {
-            $total = $invoice->getTotal() ?? '0.00';
-            $paymentDate = $invoice->getIssueDate() ?? new \DateTime();
-
-            $payment = new Payment();
-            $payment->setCompany($company);
-            $payment->setInvoice($invoice);
-            $payment->setAmount($total);
-            $payment->setCurrency($invoice->getCurrency() ?? 'RON');
-            $payment->setPaymentDate($paymentDate);
-            $payment->setPaymentMethod($invoice->getPaymentMethod() ?? 'bank_transfer');
-            $payment->setReference('Import automat');
-            $payment->setIsReconciled(true);
-            if (isset($mappedData['_importJob'])) {
-                $payment->setImportJob($mappedData['_importJob']);
-            }
-            $this->entityManager->persist($payment);
-
-            // Update invoice paid status
-            $invoice->setAmountPaid($total);
-            $invoice->setStatus(DocumentStatus::PAID);
-            $paidAt = $paymentDate instanceof \DateTime
-                ? \DateTimeImmutable::createFromMutable($paymentDate)
-                : new \DateTimeImmutable();
-            $invoice->setPaidAt($paidAt);
-        }
+        // Collections are settled when the batch is written, once every row of the invoice has
+        // been added to it: only then is the invoice total known.
+        $this->pendingSettlement[$dedupKey] = [
+            'company' => $company,
+            'job' => $mappedData['_importJob'] ?? null,
+            'markAsPaid' => !empty($mappedData['_importOptions']['markAsPaid']),
+            'paid' => null,
+            'fullyPaid' => false,
+        ];
+        $this->noteCollection($dedupKey, $mappedData);
 
         // Track for dedup
         $this->pendingCache[$dedupKey] = $invoice;
@@ -213,22 +242,145 @@ class InvoicePersister implements EntityPersisterInterface
 
         $this->batchCount++;
         if ($this->batchCount >= self::BATCH_SIZE) {
-            $this->flush();
+            $this->flushPending = true;
         }
+    }
+
+    /**
+     * What the row says about the collection of its invoice: an amount (the same on every
+     * row of the invoice, so the largest is kept) or a plain "paid".
+     */
+    private function noteCollection(string $dedupKey, array $data): void
+    {
+        if (!isset($this->pendingSettlement[$dedupKey])) {
+            return;
+        }
+        if (!empty($data['_paid'])) {
+            $this->pendingSettlement[$dedupKey]['fullyPaid'] = true;
+        }
+        if (isset($data['_unpaidAmount']) && is_numeric($data['_unpaidAmount'])) {
+            $this->pendingSettlement[$dedupKey]['unpaid'] = max((float) $data['_unpaidAmount'], (float) ($this->pendingSettlement[$dedupKey]['unpaid'] ?? 0));
+        }
+        if (isset($data['_paidAmount']) && is_numeric($data['_paidAmount'])) {
+            $this->pendingSettlement[$dedupKey]['paid'] = max((float) $data['_paidAmount'], (float) ($this->pendingSettlement[$dedupKey]['paid'] ?? 0));
+        }
+    }
+
+    /**
+     * Create the payments of the invoices in the batch. An export that says how much of each
+     * invoice was collected decides per invoice; the "mark as paid" option covers the others.
+     */
+    private function settleCollections(): void
+    {
+        foreach ($this->pendingSettlement as $dedupKey => $settlement) {
+            $invoice = $this->pendingCache[$dedupKey] ?? null;
+            if ($invoice === null || $invoice->getStatus() === DocumentStatus::CANCELLED) {
+                continue;
+            }
+            $total = (float) ($invoice->getTotal() ?? '0');
+            if ($total <= 0) {
+                continue; // nothing to collect on a zero or a storno invoice
+            }
+            if ($settlement['paid'] === null && isset($settlement['unpaid'])) {
+                $settlement['paid'] = max($total - $settlement['unpaid'], 0.0);
+            }
+            $knowsCollection = $settlement['fullyPaid'] || $settlement['paid'] !== null;
+            $paid = $settlement['fullyPaid'] ? $total : ($settlement['paid'] ?? ($settlement['markAsPaid'] ? $total : 0.0));
+            if (!$knowsCollection && !$settlement['markAsPaid']) {
+                continue;
+            }
+            $paid = min($paid, $total);
+            if ($paid <= 0.004) {
+                continue;
+            }
+
+            $amount = number_format($paid, 2, '.', '');
+            $this->addPayment($invoice, $settlement['company'], $amount, $settlement['job']);
+            $invoice->setAmountPaid($amount);
+            if ($paid >= $total - 0.004) {
+                $invoice->setStatus(DocumentStatus::PAID);
+                $paymentDate = $invoice->getIssueDate();
+                $invoice->setPaidAt($paymentDate instanceof \DateTime
+                    ? \DateTimeImmutable::createFromMutable($paymentDate)
+                    : new \DateTimeImmutable());
+            } else {
+                $invoice->setStatus(DocumentStatus::PARTIALLY_PAID);
+            }
+        }
+        $this->pendingSettlement = [];
+    }
+
+    private function addPayment(Invoice $invoice, Company $company, string $amount, mixed $importJob): void
+    {
+        $paymentDate = $invoice->getIssueDate() ?? new \DateTime();
+
+        $payment = new Payment();
+        $payment->setCompany($company);
+        $payment->setInvoice($invoice);
+        $payment->setAmount($amount);
+        $payment->setCurrency($invoice->getCurrency() ?? 'RON');
+        $payment->setPaymentDate($paymentDate);
+        $payment->setPaymentMethod($invoice->getPaymentMethod() ?? 'bank_transfer');
+        $payment->setReference('Import automat');
+        $payment->setIsReconciled(true);
+        if ($importJob !== null) {
+            $payment->setImportJob($importJob);
+        }
+        $this->entityManager->persist($payment);
+    }
+
+    /** Tax code as an identity key: no spaces, upper case, no RO prefix. */
+    private static function normalizeCif(string $cif): string
+    {
+        $cif = strtoupper(preg_replace('/[\s.\-]+/', '', $cif) ?? $cif);
+
+        return preg_match('/^RO\d+$/', $cif) ? substr($cif, 2) : $cif;
+    }
+
+    private static function numberKey(string $lowerNumber, ?string $direction, ?string $senderCif): string
+    {
+        if ($direction === 'incoming' && $senderCif !== null && trim($senderCif) !== '') {
+            return $lowerNumber . '|' . self::normalizeCif($senderCif);
+        }
+
+        return $lowerNumber;
+    }
+
+    private function resolveDirection(array $data): ?string
+    {
+        $direction = $data['direction'] ?? null;
+        if (empty($direction)) {
+            $direction = match ($data['_importType'] ?? null) {
+                'invoices_issued' => 'outgoing',
+                'invoices_received' => 'incoming',
+                default => null,
+            };
+        }
+
+        return match ($direction) {
+            'issued', 'sale', 'sales', 'out' => 'outgoing',
+            'received', 'purchase', 'in' => 'incoming',
+            default => $direction,
+        };
     }
 
     public function flush(): void
     {
+        $this->settleCollections();
         $this->entityManager->flush();
         $this->entityManager->clear();
         $this->pendingCache = [];
         $this->batchCount = 0;
+        $this->flushPending = false;
     }
 
     public function reset(): void
     {
         $this->pendingCache = [];
         $this->clientCache = [];
+        $this->supplierCache = [];
+        $this->pendingSettlement = [];
+        $this->flushPending = false;
         $this->existingInvoiceNumbers = [];
         $this->initialized = false;
         $this->companyId = null;
@@ -266,6 +418,14 @@ class InvoicePersister implements EntityPersisterInterface
                 if ($cif) {
                     $invoice->setReceiverCif((string) $cif);
                 }
+            }
+        }
+
+        // Received invoices belong to a supplier when the nomenclature has one with that tax code
+        if ($direction === InvoiceDirection::INCOMING && !empty($data['senderCif'])) {
+            $supplierId = $this->supplierCache[self::normalizeCif((string) $data['senderCif'])] ?? null;
+            if ($supplierId !== null) {
+                $invoice->setSupplier($this->entityManager->getReference(Supplier::class, Uuid::fromString($supplierId)));
             }
         }
 
@@ -342,7 +502,7 @@ class InvoicePersister implements EntityPersisterInterface
         $id = $client->getId()->toRfc4122();
         $this->clientCache[$nameKey] = $id;
         if ($cif) {
-            $this->clientCache[$companyId . ':cui:' . trim($cif)] = $id;
+            $this->clientCache[$companyId . ':cui:' . self::normalizeCif($cif)] = $id;
         }
         if ($email) {
             $this->clientCache[$companyId . ':email:' . mb_strtolower(trim($email))] = $id;
@@ -397,7 +557,7 @@ class InvoicePersister implements EntityPersisterInterface
         }
 
         if (!empty($cui)) {
-            $key = $companyId . ':cui:' . trim($cui);
+            $key = $companyId . ':cui:' . self::normalizeCif($cui);
             if (isset($this->clientCache[$key])) {
                 return $this->clientCache[$key];
             }

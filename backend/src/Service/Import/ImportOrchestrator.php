@@ -6,7 +6,10 @@ use App\Entity\Company;
 use App\Entity\ImportJob;
 use App\Service\Centrifugo\CentrifugoService;
 use App\Service\Import\Mapper\ColumnMapperInterface;
+use App\Service\Import\Mapper\GenericInvoiceMapper;
 use App\Service\Import\Mapper\HeaderAwareMappingInterface;
+use App\Service\Import\Mapper\PartnerHeaderAliases;
+use App\Service\Import\Mapper\SupplierMapperAdapter;
 use App\Service\Import\Parser\FileParserInterface;
 use App\Service\Import\Persister\EntityPersisterInterface;
 use App\Service\Import\Persister\SummaryProviderInterface;
@@ -44,6 +47,25 @@ class ImportOrchestrator
         $this->parsers = $parsers instanceof \Traversable ? iterator_to_array($parsers) : $parsers;
         $this->mappers = $mappers instanceof \Traversable ? iterator_to_array($mappers) : $mappers;
         $this->persisters = $persisters instanceof \Traversable ? iterator_to_array($persisters) : $persisters;
+
+        // Supplier files have the columns of client files: every client mapper also reads suppliers.
+        // And every program that exports its clients exports an invoice report too: the sources
+        // without an invoice mapper of their own read it by the usual names of its columns.
+        $own = [];
+        foreach ($this->mappers as $mapper) {
+            $own[$mapper->getSource() . ':' . $mapper->getImportType()] = true;
+        }
+        foreach ($this->mappers as $mapper) {
+            if ($mapper->getImportType() !== 'clients') {
+                continue;
+            }
+            $this->mappers[] = new SupplierMapperAdapter($mapper);
+            foreach ([GenericInvoiceMapper::TYPE_ISSUED, GenericInvoiceMapper::TYPE_RECEIVED] as $type) {
+                if (!isset($own[$mapper->getSource() . ':' . $type])) {
+                    $this->mappers[] = new GenericInvoiceMapper($mapper->getSource(), $type);
+                }
+            }
+        }
     }
 
     /**
@@ -68,11 +90,17 @@ class ImportOrchestrator
             // Try to find the best mapper and suggest mapping
             $mapper = $this->findBestMapper($job->getSource(), $job->getImportType(), $preview['headers']);
             if ($mapper) {
-                $job->setSuggestedMapping(
-                    $mapper instanceof HeaderAwareMappingInterface
-                        ? $mapper->suggestMapping($preview['headers'])
-                        : $mapper->getDefaultMapping(),
-                );
+                $suggested = $mapper instanceof HeaderAwareMappingInterface
+                    ? $mapper->suggestMapping($preview['headers'])
+                    : $mapper->getDefaultMapping();
+                // A client list rarely keeps the exact column names of the program's export
+                // (an XML export spells them differently from the spreadsheet one): match
+                // them whatever their case, and the rest by their usual names.
+                if ($job->getImportType() === 'clients' && !$mapper instanceof HeaderAwareMappingInterface) {
+                    $byHeaders = PartnerHeaderAliases::suggest($preview['headers'], $suggested, array_keys($mapper->getTargetFields()));
+                    $suggested = $byHeaders !== [] ? $byHeaders : $suggested;
+                }
+                $job->setSuggestedMapping($suggested);
             }
 
             $job->setStatus('preview');
@@ -421,7 +449,8 @@ class ImportOrchestrator
     private function getFormatsForSource(string $source): array
     {
         return match ($source) {
-            'saga' => ['csv', 'xlsx', 'saga_xml'],
+            // programs whose accounting export is the invoice / partner XML
+            'saga', 'smartbill', 'oblio', 'fgo', 'generic' => ['csv', 'xlsx', 'saga_xml'],
             'icefact' => ['csv'],
             'bolt' => ['csv'],
             'facturis' => ['csv', 'xlsx'],

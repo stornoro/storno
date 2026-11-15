@@ -359,7 +359,7 @@ export default defineI18nLocale(async () => {
         addCompanyDesc: 'Set up your company details for invoicing.',
         addCompanyTime: '~3 min',
         importData: 'Coming from SmartBill, Oblio or another app? Import your data',
-        importDataDesc: 'Upload the export from your old app: clients, products and invoices, series preserved.',
+        importDataDesc: 'Upload the export from your old app: clients, suppliers, products and invoices, series preserved.',
         importDataTime: '~2 min',
         connectAnaf: 'Connect ANAF for e-Factura',
         connectAnafDesc: 'Automatically sync issued and received invoices.',
@@ -3711,7 +3711,7 @@ export default defineI18nLocale(async () => {
 
     // Import
     importTitle: 'Data import',
-    importDescription: 'Import clients, products, or invoices from other invoicing applications',
+    importDescription: 'Import clients, suppliers, products, or invoices from other invoicing applications',
     startImport: 'New import',
 
     // Wizard steps
@@ -3724,6 +3724,8 @@ export default defineI18nLocale(async () => {
     // Source selection
     selectSource: 'Select source platform',
     selectImportType: 'What would you like to import?',
+    typeUnavailableForSource: 'Not available for {source}',
+    typeDroppedForSource: '{type} cannot be imported from {source}. Pick another data type or the "Other (generic)" source.',
     sourceSmartbill: 'SmartBill',
     sourceSaga: 'SAGA',
     sourceOblio: 'Oblio',
@@ -3848,7 +3850,7 @@ export default defineI18nLocale(async () => {
 
     // Mark as paid
     markAsPaid: 'Mark imported invoices as paid',
-    markAsPaidDescription: 'Collections will be automatically created for each imported invoice',
+    markAsPaidDescription: 'A collection is created for each imported invoice. Invoices whose amount due or state is in the file follow the file.',
 
     // Sales from platforms, web shops and the cash register
     salesImportsTitle: 'Sales from platforms, web shops and the cash register',

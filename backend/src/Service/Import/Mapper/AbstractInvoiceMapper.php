@@ -75,6 +75,10 @@ abstract class AbstractInvoiceMapper implements ColumnMapperInterface
 
         // Build lines array
         if (!empty($lineData)) {
+            // "lineTotal" loses its prefix above; the persister reads the line's net value as lineTotal
+            if (isset($lineData['total']) && !isset($lineData['lineTotal'])) {
+                $lineData['lineTotal'] = $lineData['total'];
+            }
             $result['lines'] = [$lineData];
         }
 
@@ -85,7 +89,7 @@ abstract class AbstractInvoiceMapper implements ColumnMapperInterface
             }
         }
         foreach (($result['lines'] ?? []) as &$line) {
-            foreach (['unitPrice', 'vatAmount', 'total', 'quantity'] as $f) {
+            foreach (['unitPrice', 'vatAmount', 'total', 'lineTotal', 'quantity'] as $f) {
                 if (isset($line[$f])) {
                     $line[$f] = $this->normalizeAmount($line[$f]);
                 }

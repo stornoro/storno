@@ -206,6 +206,9 @@ services:
     App\Service\Import\Persister\ClientPersister:
         tags: ['app.import_persister']
 
+    App\Service\Import\Persister\SupplierPersister:
+        tags: ['app.import_persister']
+
     App\Service\Import\Persister\ProductPersister:
         tags: ['app.import_persister']
 
