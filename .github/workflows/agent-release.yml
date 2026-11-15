@@ -39,10 +39,10 @@ jobs:
       matrix:
         include:
           - target: macos-arm64
-            os: macos-14
+            os: macos-15
             pkg-target: node20-macos-arm64
           - target: macos-x64
-            os: macos-14
+            os: macos-15
             pkg-target: node20-macos-x64
           - target: win-x64
             os: ubuntu-latest
