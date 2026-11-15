@@ -48,6 +48,8 @@ export interface SpvSyncResult {
   skipped: number;
   downloaded: number;
   failed: number;
+  /** Reports asked from ANAF during this run (fișa rol), answered into the inbox later. */
+  requested?: number;
 }
 
 interface MonitorFile {
@@ -318,7 +320,31 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
   console.log(`[spv-monitor] ${entry.name} (${entry.cif}): sync started`);
 
   try {
-    const prepared = await withTokenRetry(entry.cif, () => api<{ anafUrl: string }>(entry, apiKey, 'POST', '/spv/sync-prepare', { days: DAYS_BACK }));
+    const prepared = await withTokenRetry(entry.cif, () => api<{
+      anafUrl: string;
+      requests?: Array<{ requestId: string; type: string; anafUrl: string }>;
+    }>(entry, apiKey, 'POST', '/spv/sync-prepare', { days: DAYS_BACK, includeRequests: true }));
+
+    // Reports the backend wants placed alongside the sync (the fișa rol about once a month):
+    // ANAF answers into the inbox, a later sync archives it and the backend reads the balance.
+    let requested = 0;
+    for (const req of prepared.requests ?? []) {
+      try {
+        const answer = await withTokenRetry(entry.cif, () => curlProxy({
+          url: req.anafUrl,
+          method: 'GET',
+          headers: {},
+          body: '',
+          certificateId: entry.certificateId,
+          pin,
+        }, config));
+        await api(entry, apiKey, 'POST', `/spv/requests/${req.requestId}/agent-result`, { statusCode: answer.statusCode, body: answer.body });
+        requested++;
+        console.log(`[spv-monitor] ${entry.cif}: requested "${req.type}" from ANAF`);
+      } catch (err) {
+        console.error(`[spv-monitor] ${entry.cif}: request "${req.type}" failed: ${redactPin((err as Error).message)}`);
+      }
+    }
 
     const listing = await withTokenRetry(entry.cif, () => curlProxy({
       url: prepared.anafUrl,
@@ -366,9 +392,9 @@ export async function runSync(companyId: string, config: AgentConfig): Promise<S
       }
     }
 
-    const summary: SpvSyncResult = { ...result.stats, downloaded, failed };
+    const summary: SpvSyncResult = { ...result.stats, downloaded, failed, requested };
     persistRun(companyId, { lastRunAt: startedAt, lastSuccessAt: new Date().toISOString(), lastResult: summary, lastError: null, consecutiveFailures: 0 });
-    console.log(`[spv-monitor] ${entry.cif}: ${summary.received} messages, ${summary.created} new, ${downloaded} PDFs archived, ${failed} failed`);
+    console.log(`[spv-monitor] ${entry.cif}: ${summary.received} messages, ${summary.created} new, ${downloaded} PDFs archived, ${failed} failed${requested ? `, ${requested} report(s) requested` : ''}`);
     return summary;
   } catch (err) {
     const raw = redactPin((err as Error).message);
