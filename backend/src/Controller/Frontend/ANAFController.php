@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Events\Anaf\TokenCreatedEvent;
 use App\Manager\UserManager;
 use App\Repository\AnafTokenLinkRepository;
+use App\Service\Anaf\AnafTokenBinder;
 use App\Service\Anaf\EFacturaClient;
 use App\Service\Centrifugo\CentrifugoService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -29,6 +30,7 @@ class ANAFController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly CentrifugoService $centrifugo,
         private readonly EFacturaClient $eFacturaClient,
+        private readonly AnafTokenBinder $tokenBinder,
     ) {}
 
     #[Route(path: '/connect/anaf', name: 'connect_anaf_start', methods: ['GET'])]
@@ -154,17 +156,32 @@ class ANAFController extends AbstractController
 
         // Validate against the link's company CIF, or fall back to all user companies
         $linkCompany = $link->getCompany();
+        $validForLinkCompany = false;
         if ($linkCompany && $linkCompany->getCif()) {
             try {
                 $validation = $this->eFacturaClient->validateToken((string) $linkCompany->getCif(), $anafToken->getToken());
                 if ($validation['valid'] ?? false) {
                     $anafToken->addValidatedCif($linkCompany->getCif());
+                    $validForLinkCompany = true;
                 }
             } catch (\Throwable) {
                 // Skip validation error
             }
         } else {
             $this->validateTokenForUserCompanies($user, $anafToken);
+        }
+
+        // An exclusive link binds the token to its company, so the certificate must have rights on
+        // that CIF. The link stays valid: the holder can retry with the right certificate.
+        if ($link->isExclusive()) {
+            if (!$linkCompany || !$validForLinkCompany) {
+                return $this->json([
+                    'status' => 'fail',
+                    'message' => 'Certificatul nu are drepturi SPV pentru aceasta companie.',
+                    'code' => 'TOKEN_INVALID_FOR_CIF',
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            $this->tokenBinder->bind($linkCompany, $anafToken);
         }
 
         $user->addAnafToken($anafToken);

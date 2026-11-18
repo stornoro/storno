@@ -31,16 +31,32 @@ class AnafTokenResolver
     }
 
     /**
-     * Resolve the best AnafToken entity for a company.
+     * Resolve the AnafToken entity for a company.
+     *
+     * Default (shared) mode: any token of the organization can serve the company, the ones already
+     * validated for its CIF first. One certificate with rights on every company keeps working with
+     * no per-company setup, and a newly added company is covered at once.
+     *
+     * Exclusive mode (Company::isAnafTokenExclusive()): only the token bound to the company by an
+     * exclusive link is used. No fallback, so company B is never sent with the certificate of A, and
+     * deleting the bound token revokes that one company alone.
      */
     public function resolveEntity(Company $company): ?AnafToken
     {
+        if ($company->isAnafTokenExclusive()) {
+            return $this->resolveBound($company);
+        }
+
         $org = $company->getOrganization();
         if (!$org) {
             return null;
         }
 
-        $tokens = $this->anafTokenRepository->findByOrganization($org);
+        // A token bound to one company never serves another one.
+        $tokens = array_values(array_filter(
+            $this->anafTokenRepository->findByOrganization($org),
+            static fn (AnafToken $t) => !$t->isExclusive(),
+        ));
         if (empty($tokens)) {
             return null;
         }
@@ -71,6 +87,23 @@ class AnafTokenResolver
         }
 
         return null;
+    }
+
+    private function resolveBound(Company $company): ?AnafToken
+    {
+        $anafToken = $company->getAnafToken();
+        if (!$anafToken || !$anafToken->getToken()) {
+            return null;
+        }
+
+        if ($this->isExpired($anafToken) && !$this->refreshToken($anafToken)) {
+            return null;
+        }
+
+        $anafToken->setLastUsedAt(new \DateTimeImmutable());
+        $this->entityManager->flush();
+
+        return $anafToken;
     }
 
     public function refreshToken(AnafToken $anafToken): bool

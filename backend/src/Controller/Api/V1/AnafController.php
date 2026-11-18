@@ -32,6 +32,8 @@ use Symfony\Contracts\Cache\ItemInterface;
 #[IsGranted('ROLE_USER')]
 class AnafController extends AbstractController
 {
+    private const DEFAULT_ACTIVE_TOKEN_LINKS = 5;
+
     public function __construct(
         private readonly AnafTokenRepository $anafTokenRepository,
         private readonly AnafTokenLinkRepository $anafTokenLinkRepository,
@@ -327,6 +329,7 @@ class AnafController extends AbstractController
                 'linkToken' => $l->getToken(),
                 'linkUrl' => rtrim($this->frontendUrl, '/') . '/anaf/link/' . $l->getToken(),
                 'companyId' => $l->getCompany()?->getId()?->toRfc4122(),
+                'exclusive' => $l->isExclusive(),
                 'expiresAt' => $l->getExpiresAt()->format('c'),
                 'createdAt' => $l->getCreatedAt()->format('c'),
             ], $links),
@@ -339,11 +342,15 @@ class AnafController extends AbstractController
         /** @var User $user */
         $user = $this->getUser();
 
-        // Rate limit: max 5 active (unused + not expired) links per user
+        // Rate limit: active (unused + not expired) links per user. 5 unless the organization has
+        // a higher limit in its settings (integrators that enrol many companies at once).
+        $maxActiveLinks = $this->maxActiveTokenLinks();
         $activeLinks = $this->anafTokenLinkRepository->countActiveByUser($user);
-        if ($activeLinks >= 5) {
+        if ($activeLinks >= $maxActiveLinks) {
             return $this->json([
                 'error' => 'Aveti deja prea multe link-uri active. Asteptati sa expire sau stergeti-le.',
+                'code' => 'TOO_MANY_ACTIVE_LINKS',
+                'limit' => $maxActiveLinks,
             ], Response::HTTP_TOO_MANY_REQUESTS);
         }
 
@@ -354,12 +361,24 @@ class AnafController extends AbstractController
         $link->setUser($user);
 
         if ($companyId) {
-            $company = $this->companyRepository->find(Uuid::fromString($companyId));
+            $company = Uuid::isValid((string) $companyId) ? $this->companyRepository->find(Uuid::fromString($companyId)) : null;
             // Verify the company belongs to the user's organization
             if ($company && $this->companyBelongsToUser($user, $company)) {
                 $link->setCompany($company);
             }
         }
+
+        // Exclusive link: the resulting token is bound to the company and used for it alone.
+        // A company that is already exclusive stays so, whatever the request says, otherwise a
+        // plain re-authorization would leave it with no usable token.
+        $exclusive = filter_var($data['exclusive'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($exclusive && !$link->getCompany()) {
+            return $this->json([
+                'error' => 'Un link exclusiv are nevoie de companyId (o companie din organizatia dumneavoastra).',
+                'code' => 'EXCLUSIVE_NEEDS_COMPANY',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+        $link->setExclusive($exclusive || ($link->getCompany()?->isAnafTokenExclusive() ?? false));
 
         $this->entityManager->persist($link);
         $this->entityManager->flush();
@@ -369,8 +388,39 @@ class AnafController extends AbstractController
         return $this->json([
             'linkToken' => $link->getToken(),
             'linkUrl' => $linkUrl,
+            'companyId' => $link->getCompany()?->getId()?->toRfc4122(),
+            'exclusive' => $link->isExclusive(),
             'expiresAt' => $link->getExpiresAt()->format('c'),
         ], Response::HTTP_CREATED);
+    }
+
+    /**
+     * Result of a link for the user who created it: the same state the public status route
+     * returns, plus the token the link produced and the company it was created for. The public
+     * route (no session, read by the page the certificate holder opens) never returns those ids.
+     */
+    #[Route('/token-links/{linkToken}/result', methods: ['GET'])]
+    public function tokenLinkResult(string $linkToken): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $link = $this->anafTokenLinkRepository->findOneBy(['token' => $linkToken]);
+
+        if (!$link || !$link->getUser()?->getId()?->equals($user->getId())) {
+            return $this->json(['error' => 'Link not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->json([
+            'linkToken' => $link->getToken(),
+            'expired' => $link->isExpired(),
+            'used' => $link->isUsed(),
+            'completed' => $link->getAnafToken() !== null,
+            'tokenId' => $link->getAnafToken()?->getId()?->toRfc4122(),
+            'companyId' => $link->getCompany()?->getId()?->toRfc4122(),
+            'exclusive' => $link->isExclusive(),
+            'expiresAt' => $link->getExpiresAt()->format('c'),
+            'usedAt' => $link->getUsedAt()?->format('c'),
+        ]);
     }
 
     #[Route('/vat-status/{cif}', methods: ['GET'])]
@@ -420,7 +470,22 @@ class AnafController extends AbstractController
             'lastUsedAt' => $token->getLastUsedAt()?->format('c'),
             'createdAt' => $token->getCreatedAt()?->format('c'),
             'validatedCifs' => $token->getValidatedCifs() ?? [],
+            'exclusive' => $token->isExclusive(),
         ];
+    }
+
+    /**
+     * Active token links a user may hold. Default 5; an organization can carry a higher limit in
+     * settings.anafTokenLinkLimit (set by an admin, capped at 500).
+     */
+    private function maxActiveTokenLinks(): int
+    {
+        $limit = $this->organizationContext->getOrganization()?->getSettings()['anafTokenLinkLimit'] ?? null;
+        if (!is_numeric($limit)) {
+            return self::DEFAULT_ACTIVE_TOKEN_LINKS;
+        }
+
+        return max(self::DEFAULT_ACTIVE_TOKEN_LINKS, min(500, (int) $limit));
     }
 
     private function extractJwtExpiry(string $token): ?\DateTimeImmutable

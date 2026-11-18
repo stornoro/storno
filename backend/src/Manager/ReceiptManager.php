@@ -44,7 +44,11 @@ class ReceiptManager
         // same logical sale. POS clients use this to safely retry queued offline
         // sales and ambiguous timeouts without producing duplicate fiscal receipts.
         if (!empty($data['idempotencyKey'])) {
-            $existing = $this->receiptRepository->findOneBy(['idempotencyKey' => $data['idempotencyKey']]);
+            // Scoped to the company: another company may use the same key for its own receipt.
+            $existing = $this->receiptRepository->findOneBy([
+                'company' => $company,
+                'idempotencyKey' => $data['idempotencyKey'],
+            ]);
             if ($existing) {
                 return $existing;
             }
@@ -344,7 +348,7 @@ class ReceiptManager
     {
         foreach ($linesData as $i => $lineData) {
             $line = new ReceiptLine();
-            $this->populateLineFields($line, $lineData, $i + 1);
+            $this->populateLineFields($line, $lineData, $i + 1, $receipt->getCompany());
             $receipt->addLine($line);
         }
     }

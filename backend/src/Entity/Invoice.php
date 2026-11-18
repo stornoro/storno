@@ -27,6 +27,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'idx_invoice_scheduled_email', columns: ['scheduled_email_at', 'status', 'deleted_at'])]
 #[ORM\Index(name: 'idx_invoice_company_sender_cif', columns: ['company_id', 'sender_cif'])]
 #[ORM\Index(name: 'idx_invoice_company_receiver_cif', columns: ['company_id', 'receiver_cif'])]
+#[ORM\UniqueConstraint(name: 'uniq_invoice_company_idempotency', columns: ['company_id', 'idempotency_key'])]
 class Invoice
 {
     use AuditableTrait;
@@ -302,8 +303,9 @@ class Invoice
     #[Groups(['invoice:detail'])]
     private ?string $deputyAuto = null;
 
-    // Idempotency key for duplicate prevention
-    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    // Idempotency key for duplicate prevention. Unique per company (uniq_invoice_company_idempotency):
+    // two companies may use the same key, e.g. two shops that both have an order 100.
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $idempotencyKey = null;
 
     // Options

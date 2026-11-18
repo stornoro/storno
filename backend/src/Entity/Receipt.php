@@ -16,6 +16,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: ReceiptRepository::class)]
 #[ORM\Index(name: 'idx_receipt_company_status_created', columns: ['company_id', 'status', 'deleted_at', 'created_at'])]
+#[ORM\UniqueConstraint(name: 'uniq_receipt_company_idempotency', columns: ['company_id', 'idempotency_key'])]
 class Receipt
 {
     use AuditableTrait;
@@ -175,7 +176,8 @@ class Receipt
     private ?\DateTimeImmutable $cancelledAt = null;
 
     // Idempotency key for duplicate prevention (POS offline retries, ambiguous timeouts).
-    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    // Unique per company (uniq_receipt_company_idempotency).
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $idempotencyKey = null;
 
     #[ORM\OneToMany(mappedBy: 'receipt', targetEntity: ReceiptLine::class, cascade: ['persist', 'remove'], orphanRemoval: true)]

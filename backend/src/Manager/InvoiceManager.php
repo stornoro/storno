@@ -75,8 +75,13 @@ class InvoiceManager
     public function create(Company $company, array $data, User $user): Invoice
     {
         // Dedup #1 — explicit idempotency key (preferred path for API clients).
+        // The key is scoped to the company: the same key sent for another company is a
+        // different invoice, never a replay of this one.
         if (!empty($data['idempotencyKey'])) {
-            $existing = $this->invoiceRepository->findOneBy(['idempotencyKey' => $data['idempotencyKey']]);
+            $existing = $this->invoiceRepository->findOneBy([
+                'company' => $company,
+                'idempotencyKey' => $data['idempotencyKey'],
+            ]);
             if ($existing) {
                 return $existing;
             }
@@ -1118,7 +1123,7 @@ class InvoiceManager
 
         foreach ($linesData as $i => $lineData) {
             $line = new InvoiceLine();
-            $this->populateLineFields($line, $lineData, $i + 1);
+            $this->populateLineFields($line, $lineData, $i + 1, $company);
 
             // Link product by productId or productCode, auto-creating if needed
             $product = null;

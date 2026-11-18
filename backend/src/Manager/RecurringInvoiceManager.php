@@ -263,7 +263,7 @@ class RecurringInvoiceManager
     {
         foreach ($linesData as $i => $lineData) {
             $line = new RecurringInvoiceLine();
-            $this->populateLineFields($line, $lineData, $i + 1);
+            $this->populateLineFields($line, $lineData, $i + 1, $ri->getCompany());
 
             // Recurring-specific fields
             if (isset($lineData['priceRule'])) {

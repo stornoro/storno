@@ -39,6 +39,10 @@ class AnafTokenLink
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?AnafToken $anafToken = null;
 
+    /** The token this link produces is bound to the link's company and used for that company only. */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $exclusive = false;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -134,6 +138,18 @@ class AnafTokenLink
     public function setAnafToken(?AnafToken $anafToken): static
     {
         $this->anafToken = $anafToken;
+
+        return $this;
+    }
+
+    public function isExclusive(): bool
+    {
+        return $this->exclusive;
+    }
+
+    public function setExclusive(bool $exclusive): static
+    {
+        $this->exclusive = $exclusive;
 
         return $this;
     }

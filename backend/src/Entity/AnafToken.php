@@ -42,6 +42,13 @@ class AnafToken
     #[ORM\Column(nullable: true)]
     private ?array $validatedCifs = null;
 
+    /**
+     * True when the token was obtained through an exclusive link and is bound to one company
+     * (Company::$anafToken). An exclusive token is never offered to another company of the organization.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $exclusive = false;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -187,5 +194,17 @@ class AnafToken
         }
 
         return $this->expireAt < new \DateTimeImmutable();
+    }
+
+    public function isExclusive(): bool
+    {
+        return $this->exclusive;
+    }
+
+    public function setExclusive(bool $exclusive): static
+    {
+        $this->exclusive = $exclusive;
+
+        return $this;
     }
 }

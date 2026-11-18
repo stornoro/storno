@@ -644,7 +644,7 @@ class DeliveryNoteManager
     {
         foreach ($linesData as $i => $lineData) {
             $line = new DeliveryNoteLine();
-            $this->populateLineFields($line, $lineData, $i + 1);
+            $this->populateLineFields($line, $lineData, $i + 1, $deliveryNote->getCompany());
 
             // e-Transport line fields
             if (isset($lineData['tariffCode'])) {

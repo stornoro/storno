@@ -214,6 +214,22 @@ class Company
     #[Groups(['company'])]
     private ?int $efacturaDelayHours = null;
 
+    /**
+     * The ANAF token bound to this company by an exclusive link. Only read when
+     * $anafTokenExclusive is true; otherwise any token of the organization serves the company.
+     */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?AnafToken $anafToken = null;
+
+    /**
+     * When true the company uses its bound token and nothing else: no fallback to the other
+     * tokens of the organization. Deleting the bound token leaves the company without ANAF access.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['company'])]
+    private bool $anafTokenExclusive = false;
+
     #[ORM\Column]
     #[Groups(['company'])]
     private bool $isReadOnly = false;
@@ -799,6 +815,30 @@ class Company
     public function setArchiveRetentionYears(?int $archiveRetentionYears): static
     {
         $this->archiveRetentionYears = $archiveRetentionYears;
+
+        return $this;
+    }
+
+    public function getAnafToken(): ?AnafToken
+    {
+        return $this->anafToken;
+    }
+
+    public function setAnafToken(?AnafToken $anafToken): static
+    {
+        $this->anafToken = $anafToken;
+
+        return $this;
+    }
+
+    public function isAnafTokenExclusive(): bool
+    {
+        return $this->anafTokenExclusive;
+    }
+
+    public function setAnafTokenExclusive(bool $anafTokenExclusive): static
+    {
+        $this->anafTokenExclusive = $anafTokenExclusive;
 
         return $this;
     }

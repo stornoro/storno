@@ -253,4 +253,122 @@ class AnafTokenTest extends ApiTestCase
         $expected = \DateTimeImmutable::createFromFormat('U', '1767225600');
         $this->assertSame($expected->format('Y-m-d'), $expiresAt->format('Y-m-d'));
     }
+
+    // -------------------------------------------------------------------------
+    // Link result for the owner, exclusive links, per-organization link limit
+    // -------------------------------------------------------------------------
+
+    private function removeLinksOfAdmin(): void
+    {
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class);
+        $em->createQuery('DELETE FROM App\Entity\AnafTokenLink l WHERE l.usedAt IS NULL')->execute();
+    }
+
+    private function setLinkLimit(?int $limit): void
+    {
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class);
+        foreach ($em->getRepository(\App\Entity\Organization::class)->findAll() as $org) {
+            $settings = $org->getSettings();
+            if ($limit === null) {
+                unset($settings['anafTokenLinkLimit']);
+            } else {
+                $settings['anafTokenLinkLimit'] = $limit;
+            }
+            $org->setSettings($settings);
+        }
+        $em->flush();
+    }
+
+    public function testLinkStatusShowsTokenAndCompanyToTheOwnerOnly(): void
+    {
+        $this->login();
+        $this->removeLinksOfAdmin();
+        $companyId = $this->getFirstCompanyId();
+
+        $link = $this->apiPost('/api/v1/anaf/token-links', ['companyId' => $companyId]);
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertSame($companyId, $link['companyId']);
+        $this->assertFalse($link['exclusive']);
+
+        $asOwner = $this->apiGet('/api/v1/anaf/token-links/' . $link['linkToken'] . '/result');
+        $this->assertResponseIsSuccessful();
+        $this->assertArrayHasKey('tokenId', $asOwner);
+        $this->assertNull($asOwner['tokenId']);
+        $this->assertSame($companyId, $asOwner['companyId']);
+        $this->assertFalse($asOwner['completed']);
+
+        // Once the holder has authorized, the result names the token the link produced.
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = self::getContainer()->get(\Doctrine\ORM\EntityManagerInterface::class);
+        $entity = $em->getRepository(\App\Entity\AnafTokenLink::class)->findOneBy(['token' => $link['linkToken']]);
+        $anafToken = (new \App\Entity\AnafToken())
+            ->setToken(str_repeat('z', 40))
+            ->setExpireAt(new \DateTimeImmutable('+30 days'))
+            ->setUser($entity->getUser());
+        $entity->setAnafToken($anafToken)->setUsedAt(new \DateTimeImmutable());
+        $em->persist($anafToken);
+        $em->flush();
+
+        $done = $this->apiGet('/api/v1/anaf/token-links/' . $link['linkToken'] . '/result');
+        $this->assertTrue($done['completed']);
+        $this->assertSame($anafToken->getId()->toRfc4122(), $done['tokenId']);
+
+        // The public route, read without a session by the page the holder opens, has no ids.
+        $this->token = null;
+        $anonymous = $this->apiGet('/api/v1/anaf/token-links/' . $link['linkToken']);
+        $this->assertResponseIsSuccessful();
+        $this->assertArrayNotHasKey('tokenId', $anonymous);
+        $this->assertArrayNotHasKey('companyId', $anonymous);
+        $this->assertTrue($anonymous['completed']);
+
+        $this->apiGet('/api/v1/anaf/token-links/' . $link['linkToken'] . '/result');
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testExclusiveLinkNeedsACompany(): void
+    {
+        $this->login();
+        $this->removeLinksOfAdmin();
+
+        $data = $this->apiPost('/api/v1/anaf/token-links', ['exclusive' => true]);
+        $this->assertResponseStatusCodeSame(400);
+        $this->assertSame('EXCLUSIVE_NEEDS_COMPANY', $data['code']);
+
+        $link = $this->apiPost('/api/v1/anaf/token-links', [
+            'exclusive' => true,
+            'companyId' => $this->getFirstCompanyId(),
+        ]);
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertTrue($link['exclusive']);
+    }
+
+    public function testActiveLinkLimitIsFiveUnlessTheOrganizationRaisesIt(): void
+    {
+        $this->login();
+        $this->removeLinksOfAdmin();
+
+        try {
+            for ($i = 0; $i < 5; $i++) {
+                $this->apiPost('/api/v1/anaf/token-links');
+                $this->assertResponseStatusCodeSame(201);
+            }
+            $refused = $this->apiPost('/api/v1/anaf/token-links');
+            $this->assertResponseStatusCodeSame(429);
+            $this->assertSame(5, $refused['limit']);
+
+            $this->setLinkLimit(8);
+            for ($i = 0; $i < 3; $i++) {
+                $this->apiPost('/api/v1/anaf/token-links');
+                $this->assertResponseStatusCodeSame(201);
+            }
+            $refused = $this->apiPost('/api/v1/anaf/token-links');
+            $this->assertResponseStatusCodeSame(429);
+            $this->assertSame(8, $refused['limit']);
+        } finally {
+            $this->setLinkLimit(null);
+            $this->removeLinksOfAdmin();
+        }
+    }
 }

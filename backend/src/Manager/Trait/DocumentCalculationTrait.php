@@ -2,7 +2,9 @@
 
 namespace App\Manager\Trait;
 
+use App\Entity\Company;
 use App\Entity\DocumentLineInterface;
+use App\Entity\VatRate;
 use App\Validator\UblExtensionsValidator;
 
 /**
@@ -15,8 +17,40 @@ trait DocumentCalculationTrait
     /**
      * Populate shared fields on a line entity from request data.
      */
-    private function populateLineFields(DocumentLineInterface $line, array $data, int $position): void
+    /**
+     * `vatRateId` names one of the company's VAT rates (GET /vat-rates). It stands for that rate's
+     * percentage and category, so a caller can pick a rate without repeating its numbers. An
+     * explicit `vatRate` wins over it. An id that is not a rate of this company is an error:
+     * silently falling back to the 21% default would put the wrong VAT on the document.
+     */
+    private function resolveVatRateId(array $data, ?Company $company): array
     {
+        if (empty($data['vatRateId']) || array_key_exists('vatRate', $data) || $company === null) {
+            return $data;
+        }
+
+        $id = (string) $data['vatRateId'];
+        $vatRate = \Symfony\Component\Uid\Uuid::isValid($id)
+            ? $this->entityManager->getRepository(VatRate::class)->find(\Symfony\Component\Uid\Uuid::fromString($id))
+            : null;
+
+        if (
+            !$vatRate instanceof VatRate
+            || $vatRate->getCompany()?->getId()?->equals($company->getId()) !== true
+            || $vatRate->getDeletedAt() !== null
+        ) {
+            throw new \DomainException(sprintf('VAT rate not found: %s. Send vatRateId from GET /vat-rates of this company, or vatRate as a percentage.', $id));
+        }
+
+        $data['vatRate'] = $vatRate->getRate();
+        $data['vatCategoryCode'] ??= $vatRate->getCategoryCode();
+
+        return $data;
+    }
+
+    private function populateLineFields(DocumentLineInterface $line, array $data, int $position, ?Company $company = null): void
+    {
+        $data = $this->resolveVatRateId($data, $company);
         $line->setPosition($position);
         $line->setDescription($data['description'] ?? '');
         $line->setQuantity($data['quantity'] ?? '1.0000');

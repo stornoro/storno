@@ -713,8 +713,11 @@ class InvoiceController extends AbstractController
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
-        // Inline payment on create (collect parameter)
-        if (!empty($data['collect'])) {
+        // Inline payment on create (collect parameter). create() returns the existing invoice on
+        // a retry (same idempotency key), so collect runs only while nothing has been paid: a
+        // retry after a lost response does not record the payment twice, and a retry after a
+        // failed payment still records it.
+        if (!empty($data['collect']) && bccomp((string) ($invoice->getAmountPaid() ?: '0'), '0', 2) === 0) {
             try {
                 $this->paymentService->recordPayment($invoice, [
                     'amount' => $data['collect']['value'] ?? $invoice->getTotal(),

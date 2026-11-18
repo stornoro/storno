@@ -164,6 +164,8 @@ export interface Company {
   archiveEnabled: boolean
   archiveRetentionYears: number | null
   efacturaDelayHours: number | null
+  /** The company uses only the ANAF token bound to it (exclusive link). */
+  anafTokenExclusive?: boolean
   enabledModules?: string[] | null
   isReadOnly?: boolean
   deletedAt?: string | null
@@ -1151,10 +1153,15 @@ export interface AnafToken {
   lastUsedAt: string | null
   createdAt: string | null
   validatedCifs: number[]
+  /** Bound to one company by an exclusive link and used for it alone. */
+  exclusive?: boolean
 }
 
 export interface AnafTokenLink {
   linkToken: string
+  linkUrl?: string
+  companyId?: string | null
+  exclusive?: boolean
   expiresAt: string
 }
 

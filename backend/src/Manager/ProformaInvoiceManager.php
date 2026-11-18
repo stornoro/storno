@@ -340,7 +340,7 @@ class ProformaInvoiceManager
     {
         foreach ($linesData as $i => $lineData) {
             $line = new ProformaInvoiceLine();
-            $this->populateLineFields($line, $lineData, $i + 1);
+            $this->populateLineFields($line, $lineData, $i + 1, $proforma->getCompany());
 
             // Link product by productId or productCode
             if (!empty($lineData['productId'])) {

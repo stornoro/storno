@@ -6,6 +6,7 @@ use App\Entity\AnafToken;
 use App\Enum\MessageKey;
 use App\Events\Anaf\TokenCreatedEvent;
 use App\Repository\AnafTokenLinkRepository;
+use App\Service\Anaf\AnafTokenBinder;
 use App\Service\Anaf\EFacturaClient;
 use App\Service\Centrifugo\CentrifugoService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,6 +33,7 @@ class AnafOAuthCallbackController extends AbstractController
         private readonly CentrifugoService $centrifugo,
         private readonly EFacturaClient $eFacturaClient,
         private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly AnafTokenBinder $tokenBinder,
     ) {}
 
     #[Route(path: '/auth/callback/anaf', name: 'anaf_oauth_callback', methods: ['GET'])]
@@ -94,11 +96,13 @@ class AnafOAuthCallbackController extends AbstractController
 
         // Validate against the link's company CIF, or all user companies
         $linkCompany = $link->getCompany();
+        $validForLinkCompany = false;
         if ($linkCompany && $linkCompany->getCif()) {
             try {
                 $validation = $this->eFacturaClient->validateToken((string) $linkCompany->getCif(), $anafToken->getToken());
                 if ($validation['valid'] ?? false) {
                     $anafToken->addValidatedCif($linkCompany->getCif());
+                    $validForLinkCompany = true;
                 }
             } catch (\Throwable) {
                 // Skip validation error
@@ -126,6 +130,15 @@ class AnafOAuthCallbackController extends AbstractController
                     }
                 }
             }
+        }
+
+        // An exclusive link binds the token to its company, so the certificate must have rights on
+        // that CIF. The link stays valid: the holder can retry with the right certificate.
+        if ($link->isExclusive()) {
+            if (!$linkCompany || !$validForLinkCompany) {
+                return $this->renderResultPage(false, 'This certificate has no SPV rights for the company. Use the certificate of the company and open the link again.');
+            }
+            $this->tokenBinder->bind($linkCompany, $anafToken);
         }
 
         $user->addAnafToken($anafToken);

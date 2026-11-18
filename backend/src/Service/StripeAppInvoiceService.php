@@ -35,7 +35,10 @@ class StripeAppInvoiceService
         $idempotencyKey = 'stripe_app_' . $stripeInvoiceId;
 
         // Check for existing invoice with this idempotency key
-        $existing = $this->invoiceRepository->findOneBy(['idempotencyKey' => $idempotencyKey]);
+        $existing = $this->invoiceRepository->findOneBy([
+            'company' => $company,
+            'idempotencyKey' => $idempotencyKey,
+        ]);
         if ($existing) {
             return $existing;
         }
@@ -170,7 +173,10 @@ class StripeAppInvoiceService
         $stripeInvoiceId = $stripeInvoice['id'] ?? null;
         $idempotencyKey = 'stripe_app_' . $stripeInvoiceId;
 
-        $invoice = $this->invoiceRepository->findOneBy(['idempotencyKey' => $idempotencyKey]);
+        $invoice = $this->invoiceRepository->findOneBy([
+            'company' => $token->getCompany(),
+            'idempotencyKey' => $idempotencyKey,
+        ]);
 
         if (!$invoice) {
             $this->logger->info('Stripe App: no matching invoice for payment recording', [
