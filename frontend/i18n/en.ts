@@ -2696,6 +2696,11 @@ export default defineI18nLocale(async () => {
     addCompany: 'Add company',
     manageCompanies: 'Manage companies',
     selectCompany: 'Select',
+    searchPlaceholder: 'Search by name or tax ID',
+    recent: 'Recently used',
+    all: 'All companies',
+    noResults: 'No company found. Check the name or the tax ID.',
+    countOf: '{shown} of {total}',
   },
 
   // ── Settings ─────────────────────────────────────────────────

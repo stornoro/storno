@@ -2695,6 +2695,11 @@ export default defineI18nLocale(async () => {
       addCompany: 'Adauga companie',
       manageCompanies: 'Gestioneaza companii',
       selectCompany: 'Selecteaza',
+      searchPlaceholder: 'Cauta dupa nume sau CUI',
+      recent: 'Folosite recent',
+      all: 'Toate companiile',
+      noResults: 'Nicio companie gasita. Verifica numele sau CUI-ul.',
+      countOf: '{shown} din {total}',
     },
 
     // ── Settings ─────────────────────────────────────────────────

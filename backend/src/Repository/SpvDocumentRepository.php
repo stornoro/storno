@@ -34,7 +34,10 @@ class SpvDocumentRepository extends ServiceEntityRepository
         $qb = $this->createQueryBuilder('d')
             ->where('d.company = :company')
             ->setParameter('company', $company)
-            ->orderBy('d.anafCreatedAt', 'DESC')
+            // An uploaded document has no ANAF date. Sorting on the ANAF date alone
+            // puts NULLs last, so today's upload would land on the last page.
+            ->addSelect('COALESCE(d.anafCreatedAt, d.createdAt) AS HIDDEN sortDate')
+            ->orderBy('sortDate', 'DESC')
             ->addOrderBy('d.createdAt', 'DESC');
 
         if (!empty($filters['category']) && SpvDocumentCategory::tryFrom($filters['category'])) {
@@ -51,10 +54,10 @@ class SpvDocumentRepository extends ServiceEntityRepository
                 ->setParameter('search', '%' . $filters['search'] . '%');
         }
         if (!empty($filters['from'])) {
-            $qb->andWhere('d.anafCreatedAt >= :from')->setParameter('from', $filters['from']);
+            $qb->andWhere('COALESCE(d.anafCreatedAt, d.createdAt) >= :from')->setParameter('from', $filters['from']);
         }
         if (!empty($filters['to'])) {
-            $qb->andWhere('d.anafCreatedAt <= :to')->setParameter('to', $filters['to']);
+            $qb->andWhere('COALESCE(d.anafCreatedAt, d.createdAt) <= :to')->setParameter('to', $filters['to']);
         }
 
         $qb->setFirstResult(($page - 1) * $limit)->setMaxResults($limit);

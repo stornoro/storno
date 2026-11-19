@@ -354,6 +354,11 @@ class StripeWebhookController extends AbstractController
             $interval,
             $stripeInvoice->id,
             $buyerCompanyId,
+            [
+                'name' => $stripeInvoice->customer_name ?? null,
+                'email' => $stripeInvoice->customer_email ?? null,
+                'address' => isset($stripeInvoice->customer_address) ? $stripeInvoice->customer_address->toArray() : null,
+            ],
         );
 
         // Auto-generate a license key for Business plan if the org doesn't have one yet

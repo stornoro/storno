@@ -55,6 +55,7 @@ class BillingInvoiceService
      * @param string       $currency  Currency code (e.g. RON)
      * @param string       $interval  Billing interval (month, year)
      * @param string       $stripeInvoiceId Stripe invoice ID for reference
+     * @param array{name?: ?string, email?: ?string, address?: ?array} $stripeBuyer Buyer details Stripe holds, used when the organization has no company yet
      */
     public function createSubscriptionInvoice(
         Organization $org,
@@ -64,6 +65,7 @@ class BillingInvoiceService
         string $interval,
         string $stripeInvoiceId,
         ?string $buyerCompanyId = null,
+        array $stripeBuyer = [],
     ): void {
         $company = $this->getBillingCompany();
         if (!$company) {
@@ -109,6 +111,11 @@ class BillingInvoiceService
         $clientId = null;
         if ($buyerCompany) {
             $client = $this->findOrCreateBillingClient($company, $buyerCompany);
+            $clientId = (string) $client->getId();
+        } else {
+            // No company yet: the buyer is a person. A Client makes the XML carry
+            // the buyer party with the 13-zero CNP; a bare receiverName is rejected.
+            $client = $this->findOrCreateIndividualBillingClient($company, $org, $stripeBuyer);
             $clientId = (string) $client->getId();
         }
 
@@ -292,6 +299,54 @@ class BillingInvoiceService
         $client->setIsVatPayer($isVatPayer);
 
         $this->em->persist($client);
+        $this->em->flush();
+
+        return $client;
+    }
+
+    /**
+     * Find or create a person as Client of the billing company, for a subscriber
+     * organization that has no company. No CUI and no CNP are set, so the UBL
+     * generator writes the 13-zero identifier. The address comes from Stripe
+     * Checkout; without one e-Factura validation fails with a message naming it.
+     *
+     * @param array{name?: ?string, email?: ?string, address?: ?array} $stripeBuyer
+     */
+    private function findOrCreateIndividualBillingClient(Company $billingCompany, Organization $org, array $stripeBuyer): Client
+    {
+        $email = trim((string) ($stripeBuyer['email'] ?? '')) ?: null;
+        $address = is_array($stripeBuyer['address'] ?? null) ? $stripeBuyer['address'] : [];
+
+        $client = $email
+            ? $this->clientRepository->findOneBy(['company' => $billingCompany, 'email' => $email, 'type' => 'individual'])
+            : null;
+
+        if (!$client) {
+            $client = new Client();
+            $client->setCompany($billingCompany);
+            $client->setType('individual');
+            $client->setSource('manual');
+            $client->setName(trim((string) ($stripeBuyer['name'] ?? '')) ?: $org->getName());
+            $client->setEmail($email);
+            $client->setIsVatPayer(false);
+            $client->setCountry(!empty($address['country']) ? strtoupper($address['country']) : 'RO');
+            $this->em->persist($client);
+        }
+
+        // Fill only what is missing: never overwrite an address someone corrected by hand.
+        if (!$client->getAddress() && !empty($address['line1'])) {
+            $client->setAddress($address['line1'] . (!empty($address['line2']) ? ', ' . $address['line2'] : ''));
+        }
+        if (!$client->getCity() && !empty($address['city'])) {
+            $client->setCity($address['city']);
+        }
+        if (!$client->getCounty() && !empty($address['state'])) {
+            $client->setCounty($address['state']);
+        }
+        if (!$client->getPostalCode() && !empty($address['postal_code'])) {
+            $client->setPostalCode($address['postal_code']);
+        }
+
         $this->em->flush();
 
         return $client;

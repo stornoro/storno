@@ -135,4 +135,51 @@ class SpvDocumentTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(502);
         $this->assertSame('SPV_UNPARSEABLE', $result['code']);
     }
+
+    public function testDocumentWithoutAnafDateSortsByItsSavedDate(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $company = $em->getRepository(\App\Entity\Company::class)->find($companyId);
+        $suffix = substr(md5(uniqid('', true)), 0, 8);
+
+        // An uploaded document: saved now, no ANAF date.
+        $uploaded = (new \App\Entity\SpvDocument())
+            ->setCompany($company)
+            ->setAnafMessageId("upload-$suffix")
+            ->setMessageType('CERTIFICAT FISCAL')
+            ->setCategory(\App\Enum\SpvDocumentCategory::from('certificat'))
+            ->setSeverity(\App\Enum\SpvDocumentSeverity::cases()[0])
+            ->setDetails("fara data ANAF $suffix");
+        // A synced document dated in the past.
+        $old = (new \App\Entity\SpvDocument())
+            ->setCompany($company)
+            ->setAnafMessageId("old-$suffix")
+            ->setMessageType('CERTIFICAT FISCAL')
+            ->setCategory(\App\Enum\SpvDocumentCategory::from('certificat'))
+            ->setSeverity(\App\Enum\SpvDocumentSeverity::cases()[0])
+            ->setDetails("cu data ANAF $suffix")
+            ->setAnafCreatedAt(new \DateTimeImmutable('2020-01-01 10:00:00'));
+        $em->persist($uploaded);
+        $em->persist($old);
+        $em->flush();
+
+        try {
+            $list = $this->apiGet('/api/v1/spv/documents?limit=100&search=' . $suffix, ['X-Company' => $companyId]);
+            $this->assertResponseStatusCodeSame(200);
+            $this->assertSame(2, $list['total']);
+            $this->assertSame("upload-$suffix", $list['data'][0]['anafMessageId']);
+            $this->assertSame("old-$suffix", $list['data'][1]['anafMessageId']);
+
+            // The date filter uses the same date as the sort.
+            $recent = $this->apiGet('/api/v1/spv/documents?search=' . $suffix . '&from=' . date('Y-m-d', strtotime('-1 day')), ['X-Company' => $companyId]);
+            $this->assertSame(1, $recent['total']);
+            $this->assertSame("upload-$suffix", $recent['data'][0]['anafMessageId']);
+        } finally {
+            $em->remove($em->getRepository(\App\Entity\SpvDocument::class)->findOneBy(['anafMessageId' => "upload-$suffix"]));
+            $em->remove($em->getRepository(\App\Entity\SpvDocument::class)->findOneBy(['anafMessageId' => "old-$suffix"]));
+            $em->flush();
+        }
+    }
 }

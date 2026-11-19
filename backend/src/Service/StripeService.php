@@ -85,6 +85,14 @@ class StripeService
             ],
         ];
 
+        // Without a company the invoice goes to a person, and e-Factura needs the
+        // buyer's address. Checkout collects it and saves it on the customer, so
+        // the paid invoice carries it in customer_address.
+        if (!$companyId && $org->getCompanies()->isEmpty()) {
+            $params['billing_address_collection'] = 'required';
+            $params['customer_update'] = ['address' => 'auto', 'name' => 'auto'];
+        }
+
         // Apply early adopter bonus (50% off first payment) if eligible
         if ($this->isEarlyAdopterEligible($org)) {
             $params['discounts'] = [['coupon' => $this->earlyAdopterCouponId]];

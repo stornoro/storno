@@ -353,7 +353,7 @@ const criticalUnread = computed(() => store.items.filter(d => d.severity === 'cr
               <p v-if="summaryFor(doc)" class="text-sm mt-0.5 line-clamp-2">{{ summaryFor(doc) }}</p>
               <p class="text-xs text-muted mt-0.5 line-clamp-1">{{ doc.details || '—' }}</p>
               <div class="text-xs text-dimmed mt-1 flex gap-3 flex-wrap">
-                <span>{{ formatDate(doc.anafCreatedAt) }}</span>
+                <span>{{ formatDate(doc.anafCreatedAt ?? doc.createdAt) }}</span>
                 <span v-if="doc.hasPdf">{{ doc.fileName }} {{ formatSize(doc.fileSize) }}</span>
                 <span v-else-if="doc.purgedAt" class="italic">{{ $t('spv.filePurged') }}</span>
                 <span v-else class="italic">{{ $t('spv.filePending') }}</span>
