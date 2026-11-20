@@ -370,7 +370,7 @@ class DashboardController extends AbstractController
             $params['dateTo'] = $dateTo;
         }
 
-        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency, 'i.currency');
         $convertTotal = "CASE WHEN i.currency = :defaultCurrency THEN i.total ELSE i.total * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         $rows = $conn->fetchAllAssociative(
@@ -451,7 +451,7 @@ class DashboardController extends AbstractController
         $convertLineTotal = "CASE WHEN i.currency = :defaultCurrency THEN il.line_total ELSE il.line_total * COALESCE(i.exchange_rate, (SELECT r.rate FROM exchange_rate r WHERE r.currency_code = i.currency ORDER BY r.date DESC LIMIT 1)) / :defaultRate END";
 
         // Use the same fallback rate SQL approach as the rest of the dashboard
-        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency, 'i.currency');
         $convertLineTotal = "CASE WHEN i.currency = :defaultCurrency THEN il.line_total ELSE il.line_total * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         $rows = $conn->fetchAllAssociative(
@@ -511,7 +511,7 @@ class DashboardController extends AbstractController
             $limit = 5;
         }
 
-        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency, 'i.currency');
         $convertOutstanding = "CASE WHEN i.currency = :defaultCurrency THEN (i.total - i.amount_paid) ELSE (i.total - i.amount_paid) * COALESCE(i.exchange_rate, $fallbackRateSql) / :defaultRate END";
 
         $rows = $conn->fetchAllAssociative(
