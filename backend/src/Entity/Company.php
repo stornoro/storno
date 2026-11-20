@@ -214,6 +214,19 @@ class Company
     #[Groups(['company'])]
     private ?int $efacturaDelayHours = null;
 
+    /** Overdue invoices are chased by email, on the steps below, without anyone pressing a button. */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['company'])]
+    private bool $overdueRemindersEnabled = false;
+
+    /**
+     * The reminder steps: [{days: 3, subject: ?string, body: ?string}, ...], days counted from
+     * the due date. Null means the default steps (OverdueReminderService::DEFAULT_STEPS).
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['company'])]
+    private ?array $overdueReminderSteps = null;
+
     /**
      * The ANAF token bound to this company by an exclusive link. Only read when
      * $anafTokenExclusive is true; otherwise any token of the organization serves the company.
@@ -851,6 +864,30 @@ class Company
     public function setEfacturaDelayHours(?int $efacturaDelayHours): static
     {
         $this->efacturaDelayHours = $efacturaDelayHours;
+
+        return $this;
+    }
+
+    public function isOverdueRemindersEnabled(): bool
+    {
+        return $this->overdueRemindersEnabled;
+    }
+
+    public function setOverdueRemindersEnabled(bool $enabled): static
+    {
+        $this->overdueRemindersEnabled = $enabled;
+
+        return $this;
+    }
+
+    public function getOverdueReminderSteps(): ?array
+    {
+        return $this->overdueReminderSteps;
+    }
+
+    public function setOverdueReminderSteps(?array $steps): static
+    {
+        $this->overdueReminderSteps = $steps;
 
         return $this;
     }

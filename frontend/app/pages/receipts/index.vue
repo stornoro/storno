@@ -232,6 +232,9 @@ const popoverFilterCount = computed(() => [
   receiptStore.filters.dateTo,
 ].filter(Boolean).length)
 
+// Another user, another tab or a background job changed something: show it without a reload
+useDocumentRealtime(['receipt.'], () => fetchReceipts())
+
 async function fetchReceipts() {
   receiptStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as ReceiptStatus : null,

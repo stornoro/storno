@@ -21,7 +21,18 @@ class SpvRequestTest extends ApiTestCase
         $byType = array_column($types['types'], null, 'type');
         $this->assertSame(['an', 'luna'], $byType['D300']['params']);
         $this->assertSame(['numar_inregistrare'], $byType['Duplicat Recipisa']['params']);
-        $this->assertSame(['an', 'motiv'], $byType['Adeverinte Venit']['params']);
+        // The fixture company has a CUI: what the SPV form lists only for a CNP is left out
+        $this->assertSame('cui', $types['audience']);
+        $this->assertArrayNotHasKey('Adeverinte Venit', $byType);
+
+        // The whole catalog still carries it, marked for persons
+        $all = $this->apiGet('/api/v1/spv/requests/types?all=1', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame('all', $all['audience']);
+        $allByType = array_column($all['types'], null, 'type');
+        $this->assertSame(['an', 'motiv'], $allByType['Adeverinte Venit']['params']);
+        $this->assertSame('cnp', $allByType['Adeverinte Venit']['audience']);
+        $this->assertSame('cui', $allByType['D300']['audience']);
         $this->assertContains('Pensie', $types['incomeCertificateReasons']);
         $this->assertSame(2011, $byType['D300']['since']);
 
@@ -33,9 +44,10 @@ class SpvRequestTest extends ApiTestCase
         $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'D394', 'params' => ['an' => '2010', 'luna' => '3']], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(422);
 
-        // unknown reason for the income certificate
-        $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'Adeverinte Venit', 'params' => ['an' => '2025', 'motiv' => 'Orice']], ['X-Company' => $companyId]);
+        // the income certificate is for a person: refused for a company whatever the reason
+        $refused = $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'Adeverinte Venit', 'params' => ['an' => '2025', 'motiv' => 'Pensie']], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(422);
+        $this->assertStringContainsString('CNP', $refused['error']);
 
         // unknown type
         $this->apiPost('/api/v1/spv/requests/prepare', ['type' => 'CAF', 'params' => []], ['X-Company' => $companyId]);

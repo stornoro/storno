@@ -213,6 +213,13 @@
           </div>
           <USwitch v-model="form.affiliated" />
         </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <span class="text-sm font-medium text-(--ui-text)">{{ $t('clients.overdueRemindersDisabled') }}</span>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('clients.overdueRemindersDisabledHint') }}</p>
+          </div>
+          <USwitch v-model="form.overdueRemindersDisabled" />
+        </div>
 
         <!-- ID Number / Currency -->
         <div class="grid grid-cols-2 gap-4">
@@ -305,6 +312,7 @@ const form = reactive({
   status: 'active' as 'active' | 'warning' | 'blocked',
   creditLimit: '' as string,
   affiliated: false,
+  overdueRemindersDisabled: false,
 })
 
 const statusOptions = computed(() => [
@@ -360,6 +368,7 @@ function populateForm(c: Client) {
   form.status = c.status || 'active'
   form.creditLimit = c.creditLimit != null ? String(c.creditLimit) : ''
   form.affiliated = c.affiliated ?? false
+  form.overdueRemindersDisabled = c.overdueRemindersDisabled ?? false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -390,6 +399,7 @@ function populateFromPrefill(p: Record<string, any>) {
   form.status = p.status || 'active'
   form.creditLimit = p.creditLimit != null ? String(p.creditLimit) : ''
   form.affiliated = p.affiliated ?? false
+  form.overdueRemindersDisabled = p.overdueRemindersDisabled ?? false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false
@@ -682,6 +692,7 @@ function rulesPayload(): Record<string, any> {
     status: form.status,
     creditLimit: form.creditLimit === '' ? null : Number(form.creditLimit),
     affiliated: form.type === 'company' ? form.affiliated : false,
+    overdueRemindersDisabled: form.overdueRemindersDisabled,
   }
 }
 
@@ -708,6 +719,7 @@ function resetForm() {
   form.status = 'active'
   form.creditLimit = ''
   form.affiliated = false
+  form.overdueRemindersDisabled = false
   cifError.value = ''
   cnpError.value = ''
   anafSuccess.value = false

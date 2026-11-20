@@ -39,6 +39,9 @@ class InvoicePersister implements EntityPersisterInterface
     /** @var array<string, array{company: Company, job: mixed, markAsPaid: bool, paid: ?float, fullyPaid: bool, unpaid?: float}> */
     private array $pendingSettlement = [];
 
+    /** @var array<string, string> dedup key of a storno → number of the invoice it reverses */
+    private array $pendingStorno = [];
+
     /** The batch is full: flush before the next new invoice, never between the rows of one. */
     private bool $flushPending = false;
 
@@ -167,6 +170,14 @@ class InvoicePersister implements EntityPersisterInterface
             return;
         }
 
+        // Rows outside the period or the partners the user asked for are left out
+        if ($this->isFilteredOut($mappedData, $senderCif, $receiverCif)) {
+            $this->pendingCache[$dedupKey] = new Invoice(); // its other rows are skipped quietly
+            $result->incrementSkipped();
+
+            return;
+        }
+
         // Fast dedup check against pre-loaded invoice numbers (no DB query)
         $lowerNumber = self::numberKey(mb_strtolower($number), $this->resolveDirection($mappedData), $senderCif);
         if (isset($this->existingInvoiceNumbers[$lowerNumber])) {
@@ -234,6 +245,10 @@ class InvoicePersister implements EntityPersisterInterface
             'fullyPaid' => false,
         ];
         $this->noteCollection($dedupKey, $mappedData);
+
+        if (!empty($mappedData['_stornoOf']) && $invoice->getDirection() === InvoiceDirection::OUTGOING) {
+            $this->pendingStorno[$dedupKey] = trim((string) $mappedData['_stornoOf']);
+        }
 
         // Track for dedup
         $this->pendingCache[$dedupKey] = $invoice;
@@ -329,6 +344,89 @@ class InvoicePersister implements EntityPersisterInterface
         $this->entityManager->persist($payment);
     }
 
+    /**
+     * The import options that narrow a file down: `dateFrom` / `dateTo` (issue date, Y-m-d,
+     * inclusive) and `clientCifs` (the partners to keep, by tax code). An invoice the filter
+     * cannot judge (no date, no tax code) is left out as well: the user asked for a subset.
+     */
+    private function isFilteredOut(array $data, ?string $senderCif, ?string $receiverCif): bool
+    {
+        $options = $data['_importOptions'] ?? [];
+
+        $from = is_string($options['dateFrom'] ?? null) ? $options['dateFrom'] : '';
+        $to = is_string($options['dateTo'] ?? null) ? $options['dateTo'] : '';
+        if ($from !== '' || $to !== '') {
+            $date = null;
+            if (!empty($data['issueDate'])) {
+                try {
+                    $date = (new \DateTimeImmutable((string) $data['issueDate']))->format('Y-m-d');
+                } catch (\Exception) {
+                }
+            }
+            if ($date === null || ($from !== '' && $date < $from) || ($to !== '' && $date > $to)) {
+                return true;
+            }
+        }
+
+        $cifs = $options['clientCifs'] ?? null;
+        if (is_array($cifs) && $cifs !== []) {
+            $partner = $this->resolveDirection($data) === 'incoming' ? $senderCif : $receiverCif;
+            if ($partner === null) {
+                return true;
+            }
+            $wanted = array_map(static fn ($cif) => self::normalizeCif((string) $cif), $cifs);
+
+            return !in_array(self::normalizeCif($partner), $wanted, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Link each storno of the batch to the invoice it reverses, found among the invoices of this
+     * batch or among the company's issued invoices. The storno becomes a refund. The reversed
+     * invoice becomes "refunded" only when it is an imported record itself: an invoice issued
+     * here keeps the status its own life cycle gave it.
+     */
+    private function linkStornos(): void
+    {
+        if ($this->pendingStorno === []) {
+            return;
+        }
+
+        $byNumber = [];
+        foreach ($this->pendingCache as $candidate) {
+            if ($candidate->getNumber() !== null && $candidate->getDirection() === InvoiceDirection::OUTGOING) {
+                $byNumber[mb_strtolower($candidate->getNumber())] = $candidate;
+            }
+        }
+
+        foreach ($this->pendingStorno as $dedupKey => $parentNumber) {
+            $storno = $this->pendingCache[$dedupKey] ?? null;
+            if ($storno === null || $storno->getCompany() === null || $parentNumber === '') {
+                continue;
+            }
+            $parent = $byNumber[mb_strtolower($parentNumber)] ?? $this->invoiceRepository->findOneBy([
+                'company' => $storno->getCompany(),
+                'number' => $parentNumber,
+                'direction' => InvoiceDirection::OUTGOING,
+                'deletedAt' => null,
+            ]);
+            if ($parent === null || $parent === $storno) {
+                continue; // the reversed invoice is not in the books: the storno stays a plain record
+            }
+
+            $storno->setParentDocument($parent);
+            if ($storno->getStatus() !== DocumentStatus::CANCELLED) {
+                $storno->setStatus(DocumentStatus::REFUND);
+            }
+            if ($parent->getImportJob() !== null && $parent->getStatus() !== DocumentStatus::CANCELLED) {
+                $parent->setStatus(DocumentStatus::REFUNDED);
+            }
+        }
+        $this->pendingStorno = [];
+    }
+
     /** Tax code as an identity key: no spaces, upper case, no RO prefix. */
     private static function normalizeCif(string $cif): string
     {
@@ -367,6 +465,7 @@ class InvoicePersister implements EntityPersisterInterface
     public function flush(): void
     {
         $this->settleCollections();
+        $this->linkStornos(); // after the collections: a reversed invoice ends up "refunded", paid or not
         $this->entityManager->flush();
         $this->entityManager->clear();
         $this->pendingCache = [];
@@ -376,6 +475,7 @@ class InvoicePersister implements EntityPersisterInterface
 
     public function reset(): void
     {
+        $this->pendingStorno = [];
         $this->pendingCache = [];
         $this->clientCache = [];
         $this->supplierCache = [];

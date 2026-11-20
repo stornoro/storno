@@ -3,49 +3,75 @@
 namespace App\Service\Import\Mapper;
 
 /**
- * Column mapper for Facturis sales journal XLSX/CSV exports.
+ * Facturis sales journal (XLSX / CSV). One row per invoice line; rows sharing a "Nr. Document"
+ * are gathered into one invoice by the persister.
  *
- * Multiple rows share the same "Nr. Document" — each row represents one line
- * item on the invoice. The InvoicePersister accumulates lines with the same
- * dedup key within a batch.
- *
- * Direction: issued (company → client).
- * Distinctive columns: "Nr. Document", "Nume Client", "Cod Fiscal", "Pret fara TVA", "Cota TVA".
+ * The journal has a fixed core (the columns below), but users add or rename columns before they
+ * export: a due date, the amount still to collect, a state. Those are read by their usual names,
+ * the way a generic spreadsheet is, so the collection state and the due date come in too.
  */
-class FacturisInvoiceMapper extends AbstractInvoiceMapper
+class FacturisInvoiceMapper extends GenericInvoiceMapper
 {
-    public function getSource(): string
-    {
-        return 'facturis';
-    }
+    private const ANCHORS = ['Nr. Document', 'Nume Client', 'Cod Fiscal', 'Pret fara TVA', 'Cota TVA'];
 
-    public function getImportType(): string
+    public function __construct()
     {
-        return 'invoices_issued';
+        parent::__construct('facturis', self::TYPE_ISSUED);
     }
 
     /**
+     * The journal's own layout, used when a job has no confirmed mapping.
+     *
      * @return array<string, string>
      */
     public function getDefaultMapping(): array
     {
         return [
-            'Nr. Document'   => 'number',
-            'Nume Client'    => 'receiverName',
-            'Cod Fiscal'     => 'receiverCif',
-            'Data'           => 'issueDate',
-            'Mod de Plata'   => 'paymentMethod',
-            'Moneda'         => 'currency',
-            'Observatii 1'   => 'notes',
-            'Cod Produs'     => 'lineProductCode',
-            'Nume produs'    => 'lineDescription',
-            'UM'             => 'lineUnitOfMeasure',
-            'Cantitate'      => 'lineQuantity',
-            'Pret fara TVA'  => 'lineUnitPrice',
+            'Nr. Document'     => 'number',
+            'Nume Client'      => 'receiverName',
+            'Cod Fiscal'       => 'receiverCif',
+            'Data'             => 'issueDate',
+            'Mod de Plata'     => 'paymentMethod',
+            'Moneda'           => 'currency',
+            'Observatii 1'     => 'notes',
+            'Cod Produs'       => 'lineProductCode',
+            'Nume produs'      => 'lineDescription',
+            'UM'               => 'lineUnitOfMeasure',
+            'Cantitate'        => 'lineQuantity',
+            'Pret fara TVA'    => 'lineUnitPrice',
             'Valoare fara TVA' => 'lineTotal',
-            'TVA'            => 'lineVatAmount',
-            'Cota TVA'       => 'lineVatRate',
+            'TVA'              => 'lineVatAmount',
+            'Cota TVA'         => 'lineVatRate',
         ];
+    }
+
+    /**
+     * The fixed columns keep their meaning; every other header is recognised by its usual name.
+     *
+     * @param string[] $headers
+     * @return array<string, string>
+     */
+    public function suggestMapping(array $headers): array
+    {
+        $fixed = [];
+        foreach ($this->getDefaultMapping() as $header => $target) {
+            $fixed[mb_strtolower($header)] = $target;
+        }
+
+        $mapping = [];
+        foreach ($headers as $header) {
+            $target = $fixed[mb_strtolower(trim((string) $header))] ?? null;
+            if ($target !== null && !in_array($target, $mapping, true)) {
+                $mapping[(string) $header] = $target;
+            }
+        }
+        foreach (parent::suggestMapping($headers) as $header => $target) {
+            if (!isset($mapping[$header]) && !in_array($target, $mapping, true)) {
+                $mapping[$header] = $target;
+            }
+        }
+
+        return $mapping;
     }
 
     /**
@@ -53,40 +79,6 @@ class FacturisInvoiceMapper extends AbstractInvoiceMapper
      */
     public function detectConfidence(array $headers): float
     {
-        $anchors = [
-            'Nr. Document',
-            'Nume Client',
-            'Cod Fiscal',
-            'Pret fara TVA',
-            'Cota TVA',
-        ];
-
-        return $this->ratioFound($anchors, $headers);
-    }
-
-    /**
-     * @param array<string, string> $row
-     * @param array<string, string> $columnMapping
-     * @return array<string, mixed>
-     */
-    public function mapRow(array $row, array $columnMapping): array
-    {
-        $result = parent::mapRow($row, $columnMapping);
-
-        $result['direction'] = 'outgoing';
-        // clients missing from the nomenclature are created from the invoice's name and tax code
-        $result['_createClient'] = true;
-
-        // Compute invoice-level totals from line data (will be accumulated by persister)
-        $lines = $result['lines'] ?? [];
-        if (!empty($lines)) {
-            $lineTotal = (float) ($lines[0]['total'] ?? $lines[0]['unitPrice'] ?? 0);
-            $lineVat = (float) ($lines[0]['vatAmount'] ?? 0);
-            $result['subtotal'] = $result['subtotal'] ?? (string) $lineTotal;
-            $result['vatTotal'] = $result['vatTotal'] ?? (string) $lineVat;
-            $result['total'] = $result['total'] ?? (string) ($lineTotal + $lineVat);
-        }
-
-        return $result;
+        return max($this->ratioFound(self::ANCHORS, $headers), parent::detectConfidence($headers));
     }
 }

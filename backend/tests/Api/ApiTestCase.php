@@ -2,6 +2,7 @@
 
 namespace App\Tests\Api;
 
+use App\Service\Declaration\DukIntegratorService;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
@@ -90,6 +91,43 @@ abstract class ApiTestCase extends WebTestCase
         }
 
         return json_decode($content, true) ?? [];
+    }
+
+    /**
+     * Runs $requests against a fresh kernel in which the given services are replaced, for a
+     * call the real service would send over the network. The browser restarts the kernel
+     * before every request and a restart drops replaced services, so restarts are off while
+     * $requests runs and back on afterwards.
+     *
+     * @param array<string, object> $services service id => replacement
+     */
+    protected function withReplacedServices(array $services, callable $requests): mixed
+    {
+        $kernel = $this->client->getKernel();
+        $kernel->shutdown();
+        $kernel->boot();
+        foreach ($services as $id => $service) {
+            static::getContainer()->set($id, $service);
+        }
+
+        $this->client->disableReboot();
+        try {
+            return $requests();
+        } finally {
+            $this->client->enableReboot();
+        }
+    }
+
+    /**
+     * Skips the test when the ANAF validator (the local Java service behind DUKIntegrator) is
+     * not running, asked the same way the application asks before validating a declaration.
+     * With the service up the test runs to the end.
+     */
+    protected function skipUnlessAnafValidatorIsAvailable(): void
+    {
+        if (!static::getContainer()->get(DukIntegratorService::class)->isAvailable()) {
+            self::markTestSkipped('The ANAF validator (DUKIntegrator Java service) is not running on this machine; the declaration was built and checked up to the validation step.');
+        }
     }
 
     protected function getFirstCompanyId(): string

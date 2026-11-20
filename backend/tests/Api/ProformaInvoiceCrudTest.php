@@ -6,7 +6,8 @@ class ProformaInvoiceCrudTest extends ApiTestCase
 {
     private function createDocumentSeries(string $companyId): array
     {
-        $prefix = 'PRO' . substr(md5(uniqid()), 0, 3);
+        // A prefix is unique per company and series stay in the test database: 3 hex digits collided
+        $prefix = 'PRO' . bin2hex(random_bytes(4));
         $series = $this->apiPost('/api/v1/document-series', [
             'prefix' => $prefix,
             'type' => 'proforma',
@@ -312,14 +313,8 @@ class ProformaInvoiceCrudTest extends ApiTestCase
         $pro1 = $this->createDraftProforma($companyId, $series['id']);
         $pro2 = $this->createDraftProforma($companyId, $series['id']);
 
-        // Verify sequential numbering
-        $this->assertStringStartsWith($series['prefix'] . '-', $pro1['number']);
-        $this->assertStringStartsWith($series['prefix'] . '-', $pro2['number']);
-        $this->assertNotEquals($pro1['number'], $pro2['number']);
-
-        // Extract numbers and verify sequential
-        $num1 = (int) substr($pro1['number'], strlen($series['prefix']) + 1);
-        $num2 = (int) substr($pro2['number'], strlen($series['prefix']) + 1);
-        $this->assertEquals($num1 + 1, $num2);
+        // A number is the prefix followed by the sequence on at least 4 digits, with no separator
+        $this->assertSame($series['prefix'] . '0001', $pro1['number']);
+        $this->assertSame($series['prefix'] . '0002', $pro2['number']);
     }
 }

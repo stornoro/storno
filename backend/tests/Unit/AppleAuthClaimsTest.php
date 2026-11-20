@@ -10,6 +10,7 @@ use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
 /**
@@ -27,6 +28,7 @@ class AppleAuthClaimsTest extends TestCase
             $this->createMock(SluggerInterface::class),
             $this->createMock(LicenseValidationService::class),
             $this->createMock(MfaService::class),
+            $this->createMock(MessageBusInterface::class),
             $clientIds,
         );
     }

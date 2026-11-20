@@ -689,6 +689,33 @@
           </template>
 
           <template #emails>
+            <!-- Automatic overdue payment reminders -->
+            <div v-if="showOverdueReminders" class="mt-4 rounded-lg border border-(--ui-border) p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-sm min-w-0">
+                  <UIcon name="i-lucide-bell-ring" class="shrink-0 size-5 text-(--ui-text-muted)" />
+                  <div class="min-w-0">
+                    <p v-if="invoice.overdueRemindersDisabled">{{ $t('invoices.overdueReminders.off') }}</p>
+                    <p v-else-if="reminderRemindersEnabled">{{ $t('invoices.overdueReminders.on') }}</p>
+                    <p v-if="invoice.lastOverdueReminderDays != null" class="text-xs text-(--ui-text-muted)">
+                      {{ $t('invoices.overdueReminders.last', { days: invoice.lastOverdueReminderDays, date: formatDateTime(invoice.lastOverdueReminderAt) }) }}
+                    </p>
+                  </div>
+                </div>
+                <UButton
+                  v-if="reminderRemindersEnabled"
+                  :icon="invoice.overdueRemindersDisabled ? 'i-lucide-bell' : 'i-lucide-bell-off'"
+                  color="neutral"
+                  variant="subtle"
+                  size="sm"
+                  :loading="togglingReminders"
+                  @click="toggleOverdueReminders"
+                >
+                  {{ invoice.overdueRemindersDisabled ? $t('invoices.overdueReminders.turnOn') : $t('invoices.overdueReminders.turnOff') }}
+                </UButton>
+              </div>
+            </div>
+
             <!-- Scheduled email banner -->
             <div v-if="invoice.scheduledEmailAt" class="mt-4 rounded-lg border p-3" :class="isEmailBlocked ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'">
               <div class="flex items-center justify-between gap-3">
@@ -1220,6 +1247,30 @@ const isEmailBlocked = computed(() => {
   if (!invoice.value?.scheduledEmailAt) return false
   return !!invoice.value.anafUploadId && invoice.value.status !== 'validated'
 })
+
+const reminderRemindersEnabled = computed(() => !!companyStore.currentCompany?.overdueRemindersEnabled)
+
+const showOverdueReminders = computed(() => {
+  const inv = invoice.value
+  if (!inv || inv.direction !== 'outgoing' || ['draft', 'cancelled'].includes(inv.status)) return false
+  return reminderRemindersEnabled.value || inv.lastOverdueReminderDays != null
+})
+
+const togglingReminders = ref(false)
+
+async function toggleOverdueReminders() {
+  togglingReminders.value = true
+  const enable = !!invoice.value.overdueRemindersDisabled
+  const result = await invoiceStore.setOverdueReminders(route.params.uuid as string, enable)
+  togglingReminders.value = false
+  if (result) {
+    invoice.value = { ...invoice.value, ...result }
+    useToast().add({ title: enable ? $t('invoices.overdueReminders.turnedOn') : $t('invoices.overdueReminders.turnedOff'), color: 'success' })
+  }
+  else {
+    useToast().add({ title: $t('invoices.updateError'), description: invoiceStore.error || undefined, color: 'error' })
+  }
+}
 
 async function cancelScheduledEmail() {
   try {

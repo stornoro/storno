@@ -6,7 +6,8 @@ class InvoiceCrudTest extends ApiTestCase
 {
     private function createDocumentSeries(string $companyId): array
     {
-        $prefix = 'FAC' . substr(md5(uniqid()), 0, 3);
+        // A prefix is unique per company and series stay in the test database: 3 hex digits collided
+        $prefix = 'FAC' . bin2hex(random_bytes(4));
         $series = $this->apiPost('/api/v1/document-series', [
             'prefix' => $prefix,
             'type' => 'invoice',

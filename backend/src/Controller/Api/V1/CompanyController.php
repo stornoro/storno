@@ -288,6 +288,17 @@ class CompanyController extends AbstractController
             }
         }
 
+        if (array_key_exists('overdueReminderSteps', $data)) {
+            try {
+                $company->setOverdueReminderSteps(\App\Service\OverdueReminderService::normalizeSteps($data['overdueReminderSteps']));
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            }
+        }
+        if (array_key_exists('overdueRemindersEnabled', $data)) {
+            $company->setOverdueRemindersEnabled(filter_var($data['overdueRemindersEnabled'], FILTER_VALIDATE_BOOLEAN));
+        }
+
         if (array_key_exists('enabledModules', $data)) {
             $value = $data['enabledModules'];
             if ($value === null) {
@@ -704,6 +715,8 @@ class CompanyController extends AbstractController
             'archiveEnabled' => $company->isArchiveEnabled(),
             'archiveRetentionYears' => $company->getArchiveRetentionYears(),
             'efacturaDelayHours' => $company->getEfacturaDelayHours(),
+            'overdueRemindersEnabled' => $company->isOverdueRemindersEnabled(),
+            'overdueReminderSteps' => \App\Service\OverdueReminderService::stepsFor($company),
             'isReadOnly' => $company->isReadOnly(),
             'enabledModules' => $company->getEnabledModules(),
             'deletedAt' => $deletedAt?->format('c'),

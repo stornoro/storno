@@ -57,18 +57,52 @@ class DashboardConfigControllerTest extends TestCase
     // Catalog endpoint
     // -------------------------------------------------------------------------
 
-    public function testCatalogReturnsFifteenWidgets(): void
+    public function testCatalogReturnsEighteenWidgetsForACompany(): void
     {
-        $response = $this->controller->catalog();
+        $this->organizationContext->method('resolveCompany')->willReturn($this->company);
+
+        $response = $this->controller->catalog(new Request());
         $data = json_decode($response->getContent(), true);
 
         $this->assertArrayHasKey('widgets', $data);
-        $this->assertCount(15, $data['widgets']);
+        $this->assertCount(18, $data['widgets']);
+        $this->assertSame('company', $data['audience']);
+    }
+
+    public function testCatalogWithoutCompanyIsTheFullCatalog(): void
+    {
+        $this->organizationContext->method('resolveCompany')->willReturn(null);
+
+        $response = $this->controller->catalog(new Request());
+        $data = json_decode($response->getContent(), true);
+
+        $this->assertCount(18, $data['widgets']);
+        $this->assertSame('company', $data['audience']);
+    }
+
+    public function testCatalogForAnIndividualKeepsOnlyTheirWidgets(): void
+    {
+        $this->company->method('isIndividual')->willReturn(true);
+        $this->organizationContext->method('resolveCompany')->willReturn($this->company);
+
+        $response = $this->controller->catalog(new Request());
+        $data = json_decode($response->getContent(), true);
+        $ids = array_column($data['widgets'], 'id');
+        sort($ids);
+
+        $this->assertSame('individual', $data['audience']);
+        $this->assertSame([
+            'activity-card', 'amounts-to-pay-card', 'dosare-actions', 'expenses-card',
+            'fiscal-calendar-card', 'recent-invoices-table', 'sync-status',
+        ], $ids);
+        // The answer depends on the company header, so it must not be cached.
+        $this->assertTrue($response->headers->hasCacheControlDirective('no-store'));
+        $this->assertTrue($response->headers->hasCacheControlDirective('private'));
     }
 
     public function testCatalogContainsExpectedIds(): void
     {
-        $response = $this->controller->catalog();
+        $response = $this->controller->catalog(new Request());
         $data = json_decode($response->getContent(), true);
         $ids = array_column($data['widgets'], 'id');
 
@@ -77,6 +111,7 @@ class DashboardConfigControllerTest extends TestCase
             'amounts-to-pay-card', 'activity-card', 'due-today-card', 'cash-balance-card',
             'recent-invoices-table', 'status-breakdown-chart', 'monthly-charts',
             'sync-status', 'top-clients-revenue', 'top-products-revenue', 'top-outstanding-clients',
+            'dosare-actions', 'fiscal-calendar-card', 'expiries-card',
         ] as $expectedId) {
             $this->assertContains($expectedId, $ids, "Catalog is missing widget: $expectedId");
         }
@@ -84,17 +119,20 @@ class DashboardConfigControllerTest extends TestCase
 
     public function testCatalogSetsMaxAgeHeader(): void
     {
-        $response = $this->controller->catalog();
+        // The catalog varies with the company header, so it is cached per browser only, for an hour.
+        $response = $this->controller->catalog(new Request());
         $this->assertTrue($response->headers->hasCacheControlDirective('max-age'));
-        $this->assertSame(86400, $response->getMaxAge());
-        $this->assertTrue($response->headers->hasCacheControlDirective('public'));
+        $this->assertSame(3600, $response->getMaxAge());
+        $this->assertTrue($response->headers->hasCacheControlDirective('private'));
+        $this->assertFalse($response->headers->hasCacheControlDirective('public'));
     }
 
     public function testCatalogWidgetsHaveRequiredFields(): void
     {
-        $response = $this->controller->catalog();
+        $response = $this->controller->catalog(new Request());
         $data = json_decode($response->getContent(), true);
 
+        $this->assertNotEmpty($data['widgets']);
         foreach ($data['widgets'] as $widget) {
             $this->assertArrayHasKey('id', $widget);
             $this->assertArrayHasKey('name_key', $widget);
@@ -119,7 +157,7 @@ class DashboardConfigControllerTest extends TestCase
         $data = json_decode($response->getContent(), true);
 
         $this->assertArrayHasKey('widgets', $data);
-        $this->assertCount(15, $data['widgets']);
+        $this->assertCount(18, $data['widgets']);
     }
 
     public function testDefaultConfigNewWidgetsAreHidden(): void
@@ -131,7 +169,10 @@ class DashboardConfigControllerTest extends TestCase
         $response = $this->controller->getConfig($request);
         $data = json_decode($response->getContent(), true);
 
-        $hiddenIds = ['top-clients-revenue', 'top-products-revenue', 'top-outstanding-clients'];
+        $hiddenIds = [
+            'top-clients-revenue', 'top-products-revenue', 'top-outstanding-clients',
+            'dosare-actions', 'fiscal-calendar-card', 'expiries-card',
+        ];
         foreach ($data['widgets'] as $widget) {
             if (in_array($widget['id'], $hiddenIds, true)) {
                 $this->assertFalse($widget['visible'], "New widget {$widget['id']} should default to visible: false");

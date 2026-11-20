@@ -2,6 +2,8 @@
 
 namespace App\Tests\Api;
 
+use App\Service\Anaf\EFacturaClient;
+
 class AnafTokenTest extends ApiTestCase
 {
     public function testListTokensEmpty(): void
@@ -13,24 +15,64 @@ class AnafTokenTest extends ApiTestCase
         $this->assertIsArray($data['data']);
     }
 
+    /** ANAF's answer to "can this token read the e-Factura messages of this CIF", without the network. */
+    private function eFacturaClientAnswering(array $validation): EFacturaClient
+    {
+        $client = $this->createMock(EFacturaClient::class);
+        $client->expects($this->once())->method('validateToken')->willReturn($validation);
+
+        return $client;
+    }
+
     public function testCreateToken(): void
     {
         $this->login();
         $companyId = $this->getFirstCompanyId();
 
-        $data = $this->apiPost('/api/v1/anaf/tokens', [
-            'token' => str_repeat('a', 50),
-            'refreshToken' => str_repeat('b', 50),
-            'expiresInDays' => 90,
-            'label' => 'Test token',
-            'companyId' => $companyId,
-        ]);
+        // With a company the token is checked against ANAF before it is saved
+        $data = $this->withReplacedServices(
+            [EFacturaClient::class => $this->eFacturaClientAnswering(['valid' => true, 'error' => null, 'statusCode' => 200])],
+            fn () => $this->apiPost('/api/v1/anaf/tokens', [
+                'token' => str_repeat('a', 50),
+                'refreshToken' => str_repeat('b', 50),
+                'expiresInDays' => 90,
+                'label' => 'Test token',
+                'companyId' => $companyId,
+            ]),
+        );
 
         $this->assertResponseStatusCodeSame(201);
         $this->assertSame('ok', $data['status']);
         $this->assertArrayHasKey('data', $data);
         $this->assertSame('Test token', $data['data']['label']);
         $this->assertFalse($data['data']['isExpired']);
+        $this->assertNotEmpty($data['data']['validatedCifs']);
+
+        // The placeholder token must not stay behind as a validated token of the fixture company
+        $this->apiDelete('/api/v1/anaf/tokens/' . $data['data']['id']);
+        $this->assertResponseIsSuccessful();
+    }
+
+    public function testCreateTokenRefusedByAnafIsNotSaved(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $label = 'Refused token ' . bin2hex(random_bytes(4));
+
+        $data = $this->withReplacedServices(
+            [EFacturaClient::class => $this->eFacturaClientAnswering(['valid' => false, 'error' => 'ANAF a returnat HTTP 401.', 'statusCode' => 401])],
+            fn () => $this->apiPost('/api/v1/anaf/tokens', [
+                'token' => str_repeat('e', 50),
+                'label' => $label,
+                'companyId' => $companyId,
+            ]),
+        );
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertSame('ANAF a returnat HTTP 401.', $data['error']);
+
+        $labels = array_column($this->apiGet('/api/v1/anaf/tokens')['data'], 'label');
+        $this->assertNotContains($label, $labels);
     }
 
     public function testCreateTokenMinLength(): void

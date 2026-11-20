@@ -174,6 +174,9 @@ function onRowClick(_e: Event, row: any) {
   router.push(`/clients/${row.original.id}`)
 }
 
+// Another user, another tab or a background job changed something: show it without a reload
+useDocumentRealtime(['client.'], () => fetchClients())
+
 async function fetchClients() {
   clientsStore.search = search.value
   clientsStore.country = countryFilter.value

@@ -9,7 +9,9 @@ use App\Service\Import\Mapper\ColumnMapperInterface;
 use App\Service\Import\Mapper\GenericInvoiceMapper;
 use App\Service\Import\Mapper\HeaderAwareMappingInterface;
 use App\Service\Import\Mapper\PartnerHeaderAliases;
+use App\Service\Import\Mapper\PaymentMapper;
 use App\Service\Import\Mapper\SupplierMapperAdapter;
+use App\Service\Import\Mapper\UblInvoiceMapper;
 use App\Service\Import\Parser\FileParserInterface;
 use App\Service\Import\Persister\EntityPersisterInterface;
 use App\Service\Import\Persister\SummaryProviderInterface;
@@ -65,7 +67,16 @@ class ImportOrchestrator
                     $this->mappers[] = new GenericInvoiceMapper($mapper->getSource(), $type);
                 }
             }
+            // ... and the collections of those invoices, one row per payment
+            $this->mappers[] = new PaymentMapper($mapper->getSource());
         }
+        if (isset($own['facturis:' . GenericInvoiceMapper::TYPE_ISSUED])) {
+            $this->mappers[] = new PaymentMapper('facturis'); // an invoice journal, no client list
+        }
+
+        // e-Factura XML files (one, or a ZIP of them) as invoice history
+        $this->mappers[] = new UblInvoiceMapper(GenericInvoiceMapper::TYPE_ISSUED);
+        $this->mappers[] = new UblInvoiceMapper(GenericInvoiceMapper::TYPE_RECEIVED);
     }
 
     /**
@@ -193,9 +204,13 @@ class ImportOrchestrator
                     if ($status === 'cancelled') {
                         $persister->flush();
 
+                        // what the persister replaced must survive a cancel: revert reads it
+                        $summary = $persister instanceof SummaryProviderInterface ? $persister->getSummary() : [];
+
                         $this->entityManager->getConnection()->executeStatement(
-                            'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, processed_at = :processedAt WHERE id = :id',
+                            'UPDATE import_job SET status = :status, created_count = :created, updated_count = :updated, skipped_count = :skipped, error_count = :errors, summary = :summary, processed_at = :processedAt WHERE id = :id',
                             [
+                                'summary' => $summary === [] ? null : json_encode($summary),
                                 'status' => 'cancelled',
                                 'created' => $result->getCreatedCount(),
                                 'updated' => $result->getUpdatedCount(),
@@ -456,6 +471,7 @@ class ImportOrchestrator
             'facturis' => ['csv', 'xlsx'],
             'emag' => ['xlsx'],
             'cash_register' => ['a4200_xml', 'zip'],
+            UblInvoiceMapper::SOURCE => ['ubl_xml', 'zip'],
             default => ['csv', 'xlsx'],
         };
     }

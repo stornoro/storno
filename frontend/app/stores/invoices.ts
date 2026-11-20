@@ -404,6 +404,18 @@ export const useInvoiceStore = defineStore('invoices', () => {
     }
   }
 
+  async function setOverdueReminders(uuid: string, enabled: boolean): Promise<Invoice | null> {
+    const { post } = useApi()
+    error.value = null
+    try {
+      return await post<Invoice>(`/v1/invoices/${uuid}/overdue-reminders`, { enabled })
+    }
+    catch (err: any) {
+      error.value = err?.data?.error ? translateApiError(err.data.error) : 'Nu s-a putut actualiza reamintirea.'
+      return null
+    }
+  }
+
   async function submitInvoice(uuid: string): Promise<{ message: string; status: string } | null> {
     const { post } = useApi()
     try {
@@ -560,6 +572,7 @@ export const useInvoiceStore = defineStore('invoices', () => {
     updateInvoice,
     deleteInvoice,
     issueInvoice,
+    setOverdueReminders,
     submitInvoice,
     cancelInvoice,
     validateInvoice,

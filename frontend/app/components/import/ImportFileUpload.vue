@@ -18,7 +18,7 @@ const SOURCES_WITH_TEMPLATE = ['uber', 'bolt', 'glovo', 'tazz', 'woocommerce', '
 const acceptedFormats = computed(() => {
   if (['saga', 'smartbill', 'oblio', 'fgo', 'generic'].includes(props.source)) return '.csv,.xlsx,.xml'
   if (props.source === 'icefact') return '.csv'
-  if (props.source === 'cash_register') return '.xml,.zip'
+  if (['cash_register', 'efactura'].includes(props.source)) return '.xml,.zip'
   return '.csv,.xlsx'
 })
 

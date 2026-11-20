@@ -5,6 +5,18 @@ let centrifuge: Centrifuge | null = null
 let planGated = false
 const subscriptions = new Map<string, Subscription>()
 
+// Several components may listen on one channel (a list page and a detail page during a route
+// change, the dashboard's two composables). Each keeps its own callback; the channel is left
+// only when the last one goes.
+type ChannelCallback = (data: any) => void
+const listeners = new Map<string, Map<ChannelCallback, { resync: boolean }>>()
+
+/** Sent to listeners that asked for it when the connection came back and missed messages. */
+export const REALTIME_RESYNC = 'realtime.resync'
+
+type TokenFetcher = <T>(path: string, body?: Record<string, unknown>) => Promise<T>
+let fetchTokenRef: TokenFetcher | null = null
+
 // Batch token fetching: collect channels and resolve all tokens in a single request
 let pendingTokenRequests = new Map<string, { resolve: (token: string) => void, reject: (err: any) => void }>()
 let batchTimer: ReturnType<typeof setTimeout> | null = null
@@ -17,17 +29,13 @@ function scheduleBatchTokenFetch() {
     const pending = pendingTokenRequests
     pendingTokenRequests = new Map()
 
-    if (pending.size === 0 || !apiFetchRef) return
+    if (pending.size === 0 || !fetchTokenRef) return
 
     // Single channel — use simple endpoint for backwards compat
     if (pending.size === 1) {
       const [channel, { resolve, reject }] = [...pending.entries()][0]
       try {
-        const res = await apiFetchRef<{ token: string }>('/v1/centrifugo/subscription-token', {
-          method: 'POST',
-          body: { channel },
-          skipAuthRedirect: true,
-        })
+        const res = await fetchTokenRef<{ token: string }>('/v1/centrifugo/subscription-token', { channel })
         resolve(res.token)
       }
       catch (e) {
@@ -40,11 +48,7 @@ function scheduleBatchTokenFetch() {
     // Batch request
     const channels = [...pending.keys()]
     try {
-      const res = await apiFetchRef<{ tokens: Record<string, string> }>('/v1/centrifugo/subscription-token', {
-        method: 'POST',
-        body: { channels },
-        skipAuthRedirect: true,
-      })
+      const res = await fetchTokenRef<{ tokens: Record<string, string> }>('/v1/centrifugo/subscription-token', { channels })
       for (const [channel, { resolve }] of pending) {
         resolve(res.tokens[channel] || '')
       }
@@ -71,9 +75,29 @@ function getSubscriptionToken(channel: string): Promise<string> {
  */
 export function useCentrifugo() {
   const { apiFetch } = useApi()
+  const authStore = useAuthStore()
 
-  // Store ref for batch token fetcher
+  /**
+   * A realtime token, asked for quietly. Realtime tokens and the app session both last an
+   * hour, so a tab left open renews its realtime token just when the session has expired:
+   * the quiet call gets a 401. A normal call then renews the session and is retried.
+   */
+  async function fetchToken<T>(path: string, body?: Record<string, unknown>): Promise<T> {
+    try {
+      return await apiFetch<T>(path, { method: 'POST', body, skipAuthRedirect: true })
+    }
+    catch (e: any) {
+      const status = e?.response?.status ?? e?.statusCode
+      if (status === 401 && authStore.token) {
+        return await apiFetch<T>(path, { method: 'POST', body })
+      }
+      throw e
+    }
+  }
+
+  // Store refs for the batch token fetcher
   apiFetchRef = apiFetch
+  fetchTokenRef = fetchToken
 
   function getClient(): Centrifuge | null {
     if (!import.meta.client) return null
@@ -90,17 +114,19 @@ export function useCentrifugo() {
     centrifuge = new Centrifuge(wsUrl, {
       getToken: async () => {
         try {
-          const res = await apiFetch<{ token: string }>('/v1/centrifugo/connection-token', { method: 'POST', skipAuthRedirect: true })
+          const res = await fetchToken<{ token: string }>('/v1/centrifugo/connection-token')
           tokenFailed = false
           return res.token
         }
         catch (e: any) {
           const status = e?.response?.status ?? e?.statusCode
-          // Plan gate or not authenticated — stop retrying entirely
+          // Plan gate: stop for good. Signed out: stop now, a later subscribe starts again.
           if (status === 402 || status === 401) {
-            planGated = true
+            planGated = status === 402
             centrifuge?.disconnect()
             centrifuge = null
+            subscriptions.clear()
+            listeners.clear()
             return ''
           }
           tokenFailed = true
@@ -121,16 +147,23 @@ export function useCentrifugo() {
     return centrifuge
   }
 
-  function subscribe(channel: string, callback: (data: any) => void, options?: { recover?: boolean }): Subscription | null {
+  function subscribe(
+    channel: string,
+    callback: ChannelCallback,
+    options?: { recover?: boolean, resync?: boolean },
+  ): Subscription | null {
     const client = getClient()
     if (!client) return null
 
-    // Return existing subscription if already subscribed in our map
-    const existing = subscriptions.get(channel)
-    if (existing) {
-      existing.on('publication', (ctx: PublicationContext) => callback(ctx.data))
-      return existing
+    let callbacks = listeners.get(channel)
+    if (!callbacks) {
+      callbacks = new Map()
+      listeners.set(channel, callbacks)
     }
+    callbacks.set(callback, { resync: options?.resync ?? false })
+
+    const existing = subscriptions.get(channel)
+    if (existing) return existing
 
     // Check if the Centrifuge client already has this subscription (e.g. from a previous navigation)
     let sub = client.getSubscription(channel)
@@ -145,7 +178,27 @@ export function useCentrifugo() {
       })
     }
 
-    sub.on('publication', (ctx: PublicationContext) => callback(ctx.data))
+    const deliver = (data: any, onlyResync: boolean) => {
+      for (const [cb, opts] of [...(listeners.get(channel) ?? [])]) {
+        if (onlyResync && !opts.resync) continue
+        try {
+          cb(data)
+        }
+        catch (e) {
+          console.error(`[Centrifugo] Listener failed on ${channel}:`, e)
+        }
+      }
+    }
+
+    sub.on('publication', (ctx: PublicationContext) => deliver(ctx.data, false))
+
+    // Back after a drop (sleep, network change) with messages that could not be replayed:
+    // the pages that asked for it refetch instead of showing stale data.
+    sub.on('subscribed', (ctx) => {
+      if (ctx.wasRecovering && !ctx.recovered) {
+        deliver({ type: REALTIME_RESYNC }, true)
+      }
+    })
 
     sub.on('error', (ctx) => {
       console.error(`[Centrifugo] Subscription error on ${channel}:`, ctx)
@@ -156,7 +209,18 @@ export function useCentrifugo() {
     return sub
   }
 
-  function unsubscribe(channel: string): void {
+  /**
+   * Stop listening. With a callback, only that listener goes and the channel stays open for
+   * the others; without one, the channel is dropped for everybody.
+   */
+  function unsubscribe(channel: string, callback?: ChannelCallback): void {
+    const callbacks = listeners.get(channel)
+    if (callback && callbacks) {
+      callbacks.delete(callback)
+      if (callbacks.size > 0) return
+    }
+    listeners.delete(channel)
+
     const sub = subscriptions.get(channel)
     if (sub) {
       sub.unsubscribe()
@@ -173,6 +237,7 @@ export function useCentrifugo() {
       centrifuge?.removeSubscription(sub)
     })
     subscriptions.clear()
+    listeners.clear()
 
     if (centrifuge) {
       centrifuge.disconnect()

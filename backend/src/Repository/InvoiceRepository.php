@@ -701,6 +701,54 @@ class InvoiceRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Outgoing invoices of the company with something left to collect, whose due date falls in
+     * one of the given windows (one window per reminder step). The opt-outs on the invoice and
+     * on its client are applied here.
+     *
+     * @param list<array{0: \DateTimeImmutable, 1: \DateTimeImmutable}> $windows [from, to], both inclusive
+     * @return Invoice[]
+     */
+    public function findOverdueForReminders(Company $company, array $windows): array
+    {
+        if ($windows === []) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('i')
+            ->join('i.client', 'cl')->addSelect('cl')
+            ->where('i.company = :company')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.status IN (:statuses)')
+            ->andWhere('i.paidAt IS NULL')
+            ->andWhere('i.total > i.amountPaid')
+            ->andWhere('i.overdueRemindersDisabled = false')
+            ->andWhere('cl.overdueRemindersDisabled = false')
+            ->andWhere('cl.email IS NOT NULL')
+            ->setParameter('company', $company)
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('statuses', [
+                DocumentStatus::ISSUED,
+                DocumentStatus::SENT_TO_PROVIDER,
+                DocumentStatus::VALIDATED,
+                DocumentStatus::SYNCED,
+                DocumentStatus::PARTIALLY_PAID,
+                DocumentStatus::OVERDUE,
+            ])
+            ->orderBy('i.dueDate', 'ASC');
+
+        $ranges = [];
+        foreach ($windows as $n => [$from, $to]) {
+            $ranges[] = sprintf('(i.dueDate >= :from%1$d AND i.dueDate <= :to%1$d)', $n);
+            $qb->setParameter('from' . $n, $from->format('Y-m-d'));
+            $qb->setParameter('to' . $n, $to->format('Y-m-d'));
+        }
+        $qb->andWhere(implode(' OR ', $ranges));
+
+        return $qb->getQuery()->getResult();
+    }
+
     public function countThisMonth(Company $company): int
     {
         $firstOfMonth = new \DateTimeImmutable('first day of this month midnight');

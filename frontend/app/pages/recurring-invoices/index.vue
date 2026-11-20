@@ -166,6 +166,9 @@ function onRowClick(_e: Event, row: any) {
   router.push(`/recurring-invoices/${row.original.id}`)
 }
 
+// Another user, another tab or a background job changed something: show it without a reload
+useDocumentRealtime(['recurring_invoice.'], () => fetchData())
+
 async function fetchData() {
   store.setFilters({
     search: search.value,

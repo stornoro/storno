@@ -8,6 +8,8 @@ use App\Repository\ImportJobRepository;
 use App\Security\OrganizationContext;
 use App\Security\Permission;
 use App\Service\Import\ImportOrchestrator;
+use App\Service\Import\Mapper\UblInvoiceMapper;
+use App\Service\Import\Persister\PaymentPersister;
 use App\Service\Import\Mapper\TemplateAwareMapperInterface;
 use App\Service\LicenseManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -49,6 +51,7 @@ class ImportController extends AbstractController
         'woocommerce'     => 'WooCommerce',
         'prestashop'      => 'PrestaShop',
         'cash_register'   => 'Casă de marcat (XML A4200)',
+        'efactura'        => 'XML e-Factura (fișier sau arhivă ZIP)',
         'generic'         => 'Altul (generic)',
     ];
 
@@ -61,6 +64,7 @@ class ImportController extends AbstractController
         'recurring_invoices'   => 'Facturi recurente',
         'platform_sales'       => 'Vânzări prin platforme (Uber, Bolt, Glovo, Tazz)',
         'receipts'             => 'Bonuri fiscale (casă de marcat)',
+        'payments'             => 'Încasări (facturi emise)',
     ];
 
     public function __construct(
@@ -71,6 +75,7 @@ class ImportController extends AbstractController
         private readonly ImportJobRepository $importJobRepository,
         private readonly OrganizationContext $organizationContext,
         private readonly LicenseManager $licenseManager,
+        private readonly PaymentPersister $paymentPersister,
     ) {}
 
     /**
@@ -165,14 +170,19 @@ class ImportController extends AbstractController
             );
         }
 
-        // Determine file format from extension (an XML / ZIP from a cash register is an A4200 export)
+        // Determine file format from extension (an XML / ZIP from a cash register is an A4200
+        // export, one uploaded as e-Factura is a UBL invoice or an archive of them)
         $isCashRegister = in_array($source, self::CASH_REGISTER_SOURCES, true);
-        if ($extension === 'zip' && !$isCashRegister) {
-            return $this->json(['error' => 'ZIP archives are accepted only for cash register exports.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        $isEFactura = $source === UblInvoiceMapper::SOURCE;
+        if ($extension === 'zip' && !$isCashRegister && !$isEFactura) {
+            return $this->json(['error' => 'ZIP archives are accepted only for cash register exports and e-Factura XML files.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        if ($isEFactura && !in_array($extension, ['xml', 'zip'], true)) {
+            return $this->json(['error' => 'The e-Factura source takes an XML file or a ZIP archive of XML files.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
         $fileFormat = match ($extension) {
-            'xml'  => $isCashRegister ? 'a4200_xml' : 'saga_xml',
-            'zip'  => 'a4200_zip',
+            'xml'  => $isCashRegister ? 'a4200_xml' : ($isEFactura ? 'ubl_xml' : 'saga_xml'),
+            'zip'  => $isEFactura ? 'ubl_zip' : 'a4200_zip',
             default => $extension,
         };
 
@@ -406,7 +416,36 @@ class ImportController extends AbstractController
         // Accept optional importOptions from request body
         $data = json_decode($request->getContent(), true) ?? [];
         if (isset($data['importOptions']) && is_array($data['importOptions'])) {
-            $job->setImportOptions($data['importOptions']);
+            $options = $data['importOptions'];
+            foreach (['dateFrom', 'dateTo'] as $field) {
+                if (!isset($options[$field]) || $options[$field] === '') {
+                    unset($options[$field]);
+                    continue;
+                }
+                $date = is_string($options[$field]) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $options[$field]) : false;
+                if ($date === false || $date->format('Y-m-d') !== $options[$field]) {
+                    return $this->json(['error' => sprintf('importOptions.%s must be a date, YYYY-MM-DD.', $field)], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+            }
+            if (isset($options['dateFrom'], $options['dateTo']) && $options['dateFrom'] > $options['dateTo']) {
+                return $this->json(['error' => 'importOptions.dateFrom must not be after dateTo.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            if (array_key_exists('clientCifs', $options)) {
+                $cifs = $options['clientCifs'];
+                if (is_string($cifs)) {
+                    $cifs = preg_split('/[\s,;]+/', $cifs, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                }
+                if (!is_array($cifs) || count($cifs) > 2000 || array_filter($cifs, static fn ($cif) => !is_scalar($cif)) !== []) {
+                    return $this->json(['error' => 'importOptions.clientCifs must be a list of at most 2000 tax codes.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+                $cifs = array_values(array_unique(array_filter(array_map(static fn ($cif) => trim((string) $cif), $cifs), static fn (string $cif) => $cif !== '')));
+                if ($cifs === []) {
+                    unset($options['clientCifs']);
+                } else {
+                    $options['clientCifs'] = $cifs;
+                }
+            }
+            $job->setImportOptions($options);
         }
 
         $job->setStatus('processing');
@@ -493,6 +532,28 @@ class ImportController extends AbstractController
 
         $conn = $this->entityManager->getConnection();
         $jobId = (string) $job->getId();
+
+        // A payments import: its payments go, the placeholders it replaced come back
+        if ($job->getImportType() === 'payments') {
+            $this->paymentPersister->revertJob($job);
+        }
+
+        // Invoices of other imports that a storno of this one marked as refunded get their
+        // collection status back; links between invoices of this import are cut before the delete
+        $conn->executeStatement(
+            "UPDATE invoice p INNER JOIN invoice c ON c.parent_document_id = p.id
+             SET p.status = CASE
+                 WHEN p.total > 0 AND p.amount_paid >= p.total THEN 'paid'
+                 WHEN p.amount_paid > 0 THEN 'partially_paid'
+                 ELSE 'synced' END
+             WHERE c.import_job_id = :jobId AND p.status = 'refunded'
+               AND p.import_job_id IS NOT NULL AND p.import_job_id <> :jobId",
+            ['jobId' => $jobId]
+        );
+        $conn->executeStatement(
+            'UPDATE invoice SET parent_document_id = NULL WHERE import_job_id = :jobId AND parent_document_id IS NOT NULL',
+            ['jobId' => $jobId]
+        );
 
         // Hard delete payments created by this import
         $conn->executeStatement(
@@ -644,6 +705,10 @@ class ImportController extends AbstractController
             ],
             'receipts' => [
                 ['type' => 'bon', 'fiscalId' => 'AB00000001202609071012000012' . '0034', 'deviceSerial' => 'AB00000001', 'issueDate' => '2026-09-07', 'time' => '10:12:00', 'zReportNumber' => '12', 'receiptNumber' => '34', 'total' => '121.00', 'vatTotal' => '21.00', 'vatBreakdown' => '21:21.00', 'payments' => '3:121.00', 'customerCif' => '', 'lines' => '', 'currency' => 'RON', 'receiptCount' => ''],
+            ],
+            'payments' => [
+                ['series' => '', 'invoiceNumber' => 'FV001', 'paymentDate' => '2026-02-10', 'amount' => '500.00', 'paymentMethod' => 'transfer bancar', 'reference' => 'OP 123', 'notes' => ''],
+                ['series' => '', 'invoiceNumber' => 'FV001', 'paymentDate' => '2026-02-25', 'amount' => '710.00', 'paymentMethod' => 'numerar', 'reference' => 'Chitanta 45', 'notes' => ''],
             ],
             'recurring_invoices' => [
                 ['reference' => 'REC-001', 'clientName' => 'SC Exemplu SRL', 'clientCif' => 'RO12345678', 'currency' => 'RON', 'seriesName' => 'FV', 'description' => 'Chirie birou', 'frequency' => 'Lunar', 'isActive' => 'Da', 'nextIssuanceDate' => '2026-03-01', 'frequencyDay' => '1', 'dueDateDays' => '30', 'dueDateFixedDay' => '', 'penaltyEnabled' => 'Nu', 'penaltyPercentPerDay' => '', 'penaltyGraceDays' => '', 'autoEmailEnabled' => 'Da', 'autoEmailTime' => '09:00', 'autoEmailDayOffset' => '0', 'lineDescription' => 'Chirie birou luna curenta', 'lineProductCode' => 'SRV001', 'lineUnitOfMeasure' => 'buc', 'lineVatRate' => '19', 'lineQuantity' => '1', 'lineUnitPrice' => '2000.00', 'lineTotal' => '2000.00', 'linePriceRule' => 'fix', 'lineReferenceCurrency' => ''],

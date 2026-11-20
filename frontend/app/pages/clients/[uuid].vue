@@ -133,6 +133,12 @@
             <dt class="text-muted">{{ $t('clients.idNumber') }}</dt>
             <dd>{{ client.idNumber }}</dd>
           </div>
+          <div v-if="client.overdueRemindersDisabled">
+            <dt class="text-muted">{{ $t('clients.overdueReminders') }}</dt>
+            <dd>
+              <UBadge color="warning" variant="subtle" size="sm">{{ $t('clients.overdueRemindersOff') }}</UBadge>
+            </dd>
+          </div>
           <div v-if="client.currency">
             <dt class="text-muted">{{ $t('clients.currency') }}</dt>
             <dd>{{ client.currency }}</dd>

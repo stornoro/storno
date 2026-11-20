@@ -254,6 +254,9 @@ const popoverFilterCount = computed(() => [
   proformaStore.filters.dateTo,
 ].filter(Boolean).length)
 
+// Another user, another tab or a background job changed something: show it without a reload
+useDocumentRealtime(['proforma.'], () => fetchProformas())
+
 async function fetchProformas() {
   proformaStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as ProformaStatus : null,

@@ -170,27 +170,43 @@ class ApiTokenTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(403);
     }
 
-    public function testApiKeyAuthWithScopes(): void
+    /** A request authenticated by the raw API key alone, without the JWT of login(). */
+    private function requestWithApiKey(string $rawToken, string $uri, ?string $companyId = null): void
     {
-        // Use fixture token 1 which has settings.view scope — access api-tokens list
-        $this->client->request('GET', '/api/v1/api-tokens', [], [], [
+        $headers = [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
-            'HTTP_AUTHORIZATION' => ApiTokenFixtures::TEST_TOKEN_1,
-        ]);
+            'HTTP_AUTHORIZATION' => $rawToken,
+        ];
+        if ($companyId !== null) {
+            $headers['HTTP_X_COMPANY'] = $companyId;
+        }
 
-        // Should succeed — token has settings.view
+        $this->client->request('GET', $uri, [], [], $headers);
+    }
+
+    public function testApiKeyAuthWithScopes(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        // Fixture token 1 carries client.view: the client list answers
+        $this->requestWithApiKey(ApiTokenFixtures::TEST_TOKEN_1, '/api/v1/clients', $companyId);
         $this->assertResponseStatusCodeSame(200);
+
+        // It does not carry api_key.view, so the key list is refused although its owner is an admin
+        $this->requestWithApiKey(ApiTokenFixtures::TEST_TOKEN_1, '/api/v1/api-tokens');
+        $this->assertResponseStatusCodeSame(403);
     }
 
     public function testApiKeyAuthSetsLastUsedAt(): void
     {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $before = new \DateTimeImmutable('-2 seconds');
+
         // Authenticate with fixture token to trigger lastUsedAt update
-        $this->client->request('GET', '/api/v1/api-tokens', [], [], [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_ACCEPT' => 'application/json',
-            'HTTP_AUTHORIZATION' => ApiTokenFixtures::TEST_TOKEN_1,
-        ]);
+        $this->requestWithApiKey(ApiTokenFixtures::TEST_TOKEN_1, '/api/v1/clients', $companyId);
         $this->assertResponseStatusCodeSame(200);
 
         // Now log in as the same user via JWT and check the token's lastUsedAt
@@ -201,6 +217,8 @@ class ApiTokenTest extends ApiTestCase
             if ($t['name'] === 'Integrare ERP') {
                 $found = true;
                 $this->assertNotNull($t['lastUsedAt']);
+                // The fixture token keeps its row between runs: the stamp must be from this request
+                $this->assertGreaterThanOrEqual($before, new \DateTimeImmutable($t['lastUsedAt']));
             }
         }
         $this->assertTrue($found, 'Fixture token should exist');

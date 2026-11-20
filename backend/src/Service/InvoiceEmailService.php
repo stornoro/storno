@@ -51,6 +51,8 @@ class InvoiceEmailService
         ?array $bcc = null,
         ?EmailTemplate $template = null,
         ?User $sentBy = null,
+        string $category = 'invoice',
+        ?string $templateName = null,
     ): EmailLog {
         $invoiceNumber = $invoice->getNumber() ?? 'N/A';
         $companyName = $invoice->getCompany()?->getName() ?? '';
@@ -79,7 +81,7 @@ class InvoiceEmailService
         $this->outboundEmailGuard->assertCanSend(
             $invoice->getCompany(),
             $sentBy,
-            'invoice',
+            $category,
             $to,
             $cc,
             $bcc,
@@ -95,10 +97,10 @@ class InvoiceEmailService
         $emailLog->setToEmail($to);
         $emailLog->setSubject($subject);
         $emailLog->setSentBy($sentBy);
-        $emailLog->setTemplateUsed($template?->getName());
+        $emailLog->setTemplateUsed($templateName ?? $template?->getName());
         $emailLog->setFromEmail($this->mailFrom);
         $emailLog->setFromName($fromName);
-        $emailLog->setCategory('invoice');
+        $emailLog->setCategory($category);
 
         if ($cc) {
             $emailLog->setCcEmails($cc);
@@ -234,9 +236,23 @@ class InvoiceEmailService
             '[[balance]]' => $invoice->getBalance() ?? '0.00',
             '[[currency]]' => $invoice->getCurrency() ?? 'RON',
             '[[client_outstanding]]' => $this->calculateClientOutstanding($invoice),
+            '[[days_overdue]]' => (string) self::daysOverdue($invoice),
         ];
 
         return str_replace(array_keys($replacements), array_values($replacements), $text);
+    }
+
+    /** Whole days past the due date; 0 when the invoice is not due yet or has no due date. */
+    public static function daysOverdue(Invoice $invoice, ?\DateTimeImmutable $today = null): int
+    {
+        $due = $invoice->getDueDate();
+        if ($due === null) {
+            return 0;
+        }
+        $today = ($today ?? new \DateTimeImmutable('today'))->setTime(0, 0);
+        $dueDay = \DateTimeImmutable::createFromInterface($due)->setTime(0, 0);
+
+        return $dueDay >= $today ? 0 : (int) $dueDay->diff($today)->days;
     }
 
     private function calculateClientOutstanding(Invoice $invoice): string

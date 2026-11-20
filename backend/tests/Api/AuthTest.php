@@ -47,8 +47,39 @@ class AuthTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(400);
     }
 
+    /**
+     * Sign-up is off unless REGISTRATION_ENABLED is set, and the test environment does not set
+     * it. The controller reads the variable when it is built, so setting it before the request
+     * is enough. tearDown() removes it again.
+     */
+    private function enableRegistration(): void
+    {
+        $_ENV['REGISTRATION_ENABLED'] = $_SERVER['REGISTRATION_ENABLED'] = '1';
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_ENV['REGISTRATION_ENABLED'], $_SERVER['REGISTRATION_ENABLED']);
+        parent::tearDown();
+    }
+
+    public function testRegisterIsRefusedWhileRegistrationIsDisabled(): void
+    {
+        $this->client->request('POST', '/api/auth/register', [], [], $this->jsonHeaders(), json_encode([
+            'firstName' => 'Test',
+            'lastName' => 'User',
+            'email' => 'test-' . uniqid() . '@example.com',
+            'password' => 'securePassword123!',
+        ]));
+
+        $this->assertResponseStatusCodeSame(403);
+        $body = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertSame('Registration is temporarily disabled.', $body['error'] ?? null);
+    }
+
     public function testRegister(): void
     {
+        $this->enableRegistration();
         $uniqueEmail = 'test-' . uniqid() . '@example.com';
 
         $this->client->request('POST', '/api/auth/register', [], [], $this->jsonHeaders(), json_encode([
@@ -63,6 +94,7 @@ class AuthTest extends ApiTestCase
 
     public function testRegisterDuplicateEmail(): void
     {
+        $this->enableRegistration();
         $duplicateEmail = 'duplicate-' . uniqid() . '@example.com';
         $payload = json_encode([
             'firstName' => 'Test',

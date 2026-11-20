@@ -1063,6 +1063,31 @@ class InvoiceController extends AbstractController
         return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
     }
 
+    /**
+     * Turns the company's automatic overdue reminders off (or back on) for this invoice.
+     * Works on issued invoices too, which the regular update refuses.
+     */
+    #[Route('/invoices/{uuid}/overdue-reminders', methods: ['POST'])]
+    public function overdueReminders(string $uuid, Request $request): JsonResponse
+    {
+        $invoice = $this->findInvoice($uuid);
+        if (!$invoice) {
+            return $this->json(['error' => 'Invoice not found.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->denyAccessUnlessGranted('INVOICE_EDIT', $invoice);
+
+        $data = json_decode($request->getContent(), true) ?: [];
+        if (!array_key_exists('enabled', $data) || !is_bool($data['enabled'])) {
+            return $this->json(['error' => 'enabled is required and must be true or false.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $invoice->setOverdueRemindersDisabled(!$data['enabled']);
+        $this->entityManager->flush();
+
+        return $this->json($invoice, context: ['groups' => ['invoice:detail']]);
+    }
+
     #[Route('/invoices/{uuid}/xml', methods: ['GET'])]
     public function downloadXml(string $uuid): Response
     {

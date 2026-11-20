@@ -38,6 +38,10 @@ interface ImportSummary {
   salesInvoices?: number
   commissionInvoices?: number
   documents?: Array<{ number: string; type: string; total: string; currency: string }>
+  // payment imports (replacedPayments is internal and never shown)
+  paymentsCreated?: number
+  invoicesUpdated?: number
+  replacedPayments?: unknown[]
   // cash register files
   receiptsCreated?: number
   receiptsSkipped?: number

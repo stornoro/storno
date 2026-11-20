@@ -28,7 +28,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  */
 class OutboundEmailGuard
 {
-    public const DOCUMENT_CATEGORIES = ['invoice', 'delivery_note', 'receipt'];
+    public const DOCUMENT_CATEGORIES = ['invoice', 'delivery_note', 'receipt', 'payment_reminder'];
 
     public const MAX_RECIPIENTS = 5;
 

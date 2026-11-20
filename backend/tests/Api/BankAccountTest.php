@@ -20,10 +20,12 @@ class BankAccountTest extends ApiTestCase
     {
         $this->login();
         $companyId = $this->getFirstCompanyId();
-        $iban = 'RO49AAAA' . substr(md5(uniqid()), 0, 16);
+        // Sent in lower case with spaces: the IBAN is stored without spaces, in upper case
+        $suffix = substr(md5(uniqid()), 0, 16);
+        $iban = 'RO49AAAA' . strtoupper($suffix);
 
         $data = $this->apiPost('/api/v1/bank-accounts', [
-            'iban' => $iban,
+            'iban' => 'ro49 aaaa ' . $suffix,
             'bankName' => 'Banca Transilvania',
             'currency' => 'RON',
             'isDefault' => true,

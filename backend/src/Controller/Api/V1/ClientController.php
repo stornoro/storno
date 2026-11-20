@@ -289,6 +289,7 @@ class ClientController extends AbstractController
         $client->setBankName(!empty($data['bankName']) ? trim($data['bankName']) : null);
         $client->setBankAccount(!empty($data['bankAccount']) ? trim($data['bankAccount']) : null);
         $client->setDefaultPaymentTermDays($data['defaultPaymentTermDays'] ?? null);
+        $client->setOverdueRemindersDisabled(filter_var($data['overdueRemindersDisabled'] ?? false, FILTER_VALIDATE_BOOLEAN));
         $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
         $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);
@@ -544,6 +545,7 @@ class ClientController extends AbstractController
         if (array_key_exists('bankName', $data)) $client->setBankName(!empty($data['bankName']) ? trim($data['bankName']) : null);
         if (array_key_exists('bankAccount', $data)) $client->setBankAccount(!empty($data['bankAccount']) ? trim($data['bankAccount']) : null);
         if (array_key_exists('defaultPaymentTermDays', $data)) $client->setDefaultPaymentTermDays($data['defaultPaymentTermDays'] ?? null);
+        if (array_key_exists('overdueRemindersDisabled', $data)) $client->setOverdueRemindersDisabled(filter_var($data['overdueRemindersDisabled'], FILTER_VALIDATE_BOOLEAN));
         if (array_key_exists('contactPerson', $data)) $client->setContactPerson(!empty($data['contactPerson']) ? trim($data['contactPerson']) : null);
         if (array_key_exists('notes', $data)) $client->setNotes(!empty($data['notes']) ? trim($data['notes']) : null);
         if (array_key_exists('idNumber', $data)) $client->setIdNumber(!empty($data['idNumber']) ? trim($data['idNumber']) : null);

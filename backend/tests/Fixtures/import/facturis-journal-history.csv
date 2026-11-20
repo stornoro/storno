@@ -1,0 +1,7 @@
+Nr. Document,Nume Client,Cod Fiscal,Data,Scadenta,Mod de Plata,Moneda,Observatii 1,Cod Produs,Nume produs,UM,Cantitate,Pret fara TVA,Valoare fara TVA,TVA,Cota TVA,Rest de plata,Factura stornata
+MIG0001,Client Unu Exemplu SRL,RO10000001,15.01.2025,30.01.2025,OP,RON,,S1,Abonament lunar,buc,1,100.00,100.00,21.00,21,0.00,
+MIG0001,Client Unu Exemplu SRL,RO10000001,15.01.2025,30.01.2025,OP,RON,,S2,Mentenanta,buc,2,50.00,100.00,21.00,21,0.00,
+MIG0002,Client Unu Exemplu SRL,RO10000001,15.02.2025,28.02.2025,OP,RON,,S1,Abonament lunar,buc,1,200.00,200.00,42.00,21,142.00,
+MIG0003,Client Doi Exemplu SRL,RO10000002,10.03.2025,25.03.2025,OP,RON,,S1,Abonament lunar,buc,1,100.00,100.00,21.00,21,121.00,
+MIG0004,Client Unu Exemplu SRL,RO10000001,20.03.2025,,OP,RON,Storno,S1,Abonament lunar,buc,-1,100.00,-100.00,-21.00,21,,MIG0001
+MIG0005,Client Unu Exemplu SRL,RO10000001,10.12.2024,25.12.2024,OP,RON,,S1,Abonament lunar,buc,1,100.00,100.00,21.00,21,121.00,

@@ -272,6 +272,9 @@ const popoverFilterCount = computed(() => [
   deliveryNoteStore.filters.dateTo,
 ].filter(Boolean).length)
 
+// Another user, another tab or a background job changed something: show it without a reload
+useDocumentRealtime(['delivery_note.'], () => fetchDeliveryNotes())
+
 async function fetchDeliveryNotes() {
   deliveryNoteStore.setFilters({
     status: statusFilter.value !== 'all' ? statusFilter.value as DeliveryNoteStatus : null,

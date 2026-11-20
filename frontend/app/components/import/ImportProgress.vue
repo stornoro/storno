@@ -29,6 +29,7 @@ const progressPercent = computed(() => {
 // the daily totals of a cash register file.
 const summary = computed<any>(() => props.job?.summary ?? null)
 const documents = computed<any[]>(() => summary.value?.documents ?? [])
+const isPaymentsSummary = computed(() => summary.value?.paymentsCreated != null || summary.value?.invoicesUpdated != null)
 const days = computed<any[]>(() => summary.value?.days ?? [])
 
 const stats = computed(() => [
@@ -110,6 +111,18 @@ const stats = computed(() => [
       >
         <p class="text-2xl font-bold" :class="stat.color">{{ stat.value }}</p>
         <p class="text-sm text-(--ui-text-muted)">{{ stat.label }}</p>
+      </div>
+    </div>
+
+    <!-- What a payments import did -->
+    <div v-if="isPaymentsSummary" class="grid grid-cols-2 gap-4">
+      <div class="text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+        <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ summary.paymentsCreated ?? 0 }}</p>
+        <p class="text-sm text-(--ui-text-muted)">{{ $t('importExport.summaryPaymentsCreated') }}</p>
+      </div>
+      <div class="text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+        <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ summary.invoicesUpdated ?? 0 }}</p>
+        <p class="text-sm text-(--ui-text-muted)">{{ $t('importExport.summaryInvoicesUpdated') }}</p>
       </div>
     </div>
 

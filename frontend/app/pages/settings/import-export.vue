@@ -116,6 +116,7 @@ const sourceLabels: Record<string, string> = {
   woocommerce: 'WooCommerce',
   prestashop: 'PrestaShop',
   cash_register: 'Casa de marcat',
+  efactura: 'XML e-Factura',
   generic: 'Generic',
 }
 
@@ -127,6 +128,7 @@ const importTypeLabels: Record<string, string> = {
   recurring_invoices: 'Facturi recurente',
   platform_sales: 'Vanzari prin platforme',
   receipts: 'Bonuri fiscale',
+  payments: 'Incasari',
 }
 
 const statusColors: Record<string, string> = {

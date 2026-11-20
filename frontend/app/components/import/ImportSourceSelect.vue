@@ -29,6 +29,7 @@ const sourceBranding: Record<string, { color: string; initials: string }> = {
   woocommerce: { color: '#7F54B3', initials: 'WC' },
   prestashop: { color: '#DF0067', initials: 'PS' },
   cash_register: { color: '#0F766E', initials: 'CM' },
+  efactura: { color: '#1D4ED8', initials: 'eF' },
   generic: { color: '#9E9E9E', initials: '?' },
 }
 

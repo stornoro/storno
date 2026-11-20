@@ -56,6 +56,8 @@ class AppScheduleProvider implements ScheduleProviderInterface
             // Partner verification — re-check clients / suppliers at ANAF / VIES after 30 days
             ->add(RecurringMessage::cron('40 6 * * *', new RunCommandMessage('app:partners:verify-stale')))
             ->add(RecurringMessage::cron('0 9 * * *', new RunCommandMessage('app:notifications:due-invoices')))
+            // Overdue reminders to clients — daily at 09:30, for the companies that turned them on
+            ->add(RecurringMessage::cron('30 9 * * *', new RunCommandMessage('app:invoice:send-overdue-reminders')))
             ->add(RecurringMessage::cron('0 10 * * *', new RunCommandMessage('app:proforma:process-expiry')))
             // Monthly reports — 1st of month
             ->add(RecurringMessage::cron('0 8 1 * *', new RunCommandMessage('app:report:monthly-summary')))

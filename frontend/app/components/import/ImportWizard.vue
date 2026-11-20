@@ -19,11 +19,25 @@ const selectedSource = ref<string | null>(null)
 const selectedImportType = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const columnMapping = ref<Record<string, string>>({})
-const importOptions = ref<Record<string, any>>({ markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '' })
+const importOptions = ref<Record<string, any>>({ markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '', dateFrom: '', dateTo: '', clientCifs: '' })
 
 const isInvoiceImport = computed(() =>
   selectedImportType.value?.startsWith('invoices') ?? false,
 )
+
+// The period and client filters apply to issued and received invoices only
+const isFilterableInvoiceImport = computed(() =>
+  ['invoices_issued', 'invoices_received'].includes(selectedImportType.value ?? ''),
+)
+const filterPeriodInvalid = computed(() => {
+  const { dateFrom, dateTo } = importOptions.value
+  return !!dateFrom && !!dateTo && dateFrom > dateTo
+})
+
+/** Tax codes typed one per line, or separated by commas, semicolons or spaces. */
+function parseClientCifs(raw: string): string[] {
+  return raw.split(/[\s,;]+/).map(c => c.trim()).filter(Boolean)
+}
 
 // Statements of a platform (Uber, Bolt, Glovo, Tazz) are grouped into documents
 const isPlatformImport = computed(() => selectedImportType.value === 'platform_sales')
@@ -44,6 +58,12 @@ const groupByOptions = computed(() => [
 function collectImportOptions(): Record<string, any> | undefined {
   const opts: Record<string, any> = {}
   if (isInvoiceImport.value) opts.markAsPaid = importOptions.value.markAsPaid
+  if (isFilterableInvoiceImport.value) {
+    if (importOptions.value.dateFrom) opts.dateFrom = importOptions.value.dateFrom
+    if (importOptions.value.dateTo) opts.dateTo = importOptions.value.dateTo
+    const cifs = parseClientCifs(importOptions.value.clientCifs ?? '')
+    if (cifs.length > 0) opts.clientCifs = cifs
+  }
   if (isShopOrderImport.value) opts.includeAll = importOptions.value.includeAll
   if (isPlatformImport.value) {
     opts.groupBy = importOptions.value.groupBy
@@ -81,7 +101,7 @@ const canGoNext = computed(() => {
     case 0: return !!selectedSource.value && !!selectedImportType.value
     case 1: return !!selectedFile.value
     case 2: return Object.keys(columnMapping.value).length > 0
-    case 3: return true
+    case 3: return !filterPeriodInvalid.value
     default: return false
   }
 })
@@ -108,6 +128,9 @@ async function handleNext() {
       currentStep.value = 4
       importStore.fetchHistory()
       startProgressTracking()
+    }
+    else {
+      useToast().add({ title: importStore.error || $t('common.error'), color: 'error' })
     }
   }
   else {
@@ -181,7 +204,7 @@ function handleClose() {
   selectedImportType.value = null
   selectedFile.value = null
   columnMapping.value = {}
-  importOptions.value = { markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '' }
+  importOptions.value = { markAsPaid: false, groupBy: 'week', includeAll: false, platformName: '', platformCif: '', cashRegisterName: '', dateFrom: '', dateTo: '', clientCifs: '' }
   importStore.currentJob = null
   importStore.progress = null
   emit('update:open', false)
@@ -307,6 +330,22 @@ onUnmounted(() => {
           <UFormField :label="$t('importExport.cashRegisterName')" :help="$t('importExport.cashRegisterNameHint')">
             <UInput v-model="importOptions.cashRegisterName" class="w-full sm:w-80" />
           </UFormField>
+        </div>
+
+        <!-- Period and client filter for invoice imports -->
+        <div v-if="isFilterableInvoiceImport" class="space-y-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <UFormField :label="$t('importExport.filterDateFrom')">
+              <UInput v-model="importOptions.dateFrom" type="date" class="w-full" />
+            </UFormField>
+            <UFormField :label="$t('importExport.filterDateTo')" :error="filterPeriodInvalid ? $t('importExport.filterPeriodInvalid') : undefined">
+              <UInput v-model="importOptions.dateTo" type="date" class="w-full" />
+            </UFormField>
+          </div>
+          <UFormField :label="$t('importExport.filterClientCifs')" :help="$t('importExport.filterClientCifsHint')">
+            <UTextarea v-model="importOptions.clientCifs" :rows="3" :placeholder="$t('importExport.filterClientCifsPlaceholder')" class="w-full" />
+          </UFormField>
+          <p class="text-xs text-(--ui-text-muted)">{{ $t('importExport.filterSkippedHint') }}</p>
         </div>
 
         <!-- Mark as paid option for invoice imports -->

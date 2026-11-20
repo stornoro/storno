@@ -125,12 +125,11 @@ class D394EndToEndTest extends ApiTestCase
         self::assertStringNotContainsString('d_rec', $xmlBody);
         self::assertStringNotContainsString('nrParteneri', $xmlBody);
 
+        $this->skipUnlessAnafValidatorIsAvailable();
+
         $this->apiPost('/api/v1/declarations/' . $decl['id'] . '/validate', [], $h);
         $status = $this->client->getResponse()->getStatusCode();
         $body = $this->client->getResponse()->getContent();
-        if ($status >= 500 || str_contains((string) $body, 'Connection refused') || str_contains((string) $body, 'unavailable') || str_contains((string) $body, 'unreachable')) {
-            self::markTestSkipped('ANAF validator (Java service) not reachable: ' . substr((string) $body, 0, 200));
-        }
         self::assertSame(200, $status, 'DUK validation failed: ' . $body);
     }
 

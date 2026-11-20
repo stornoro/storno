@@ -28,6 +28,7 @@ class EmailTemplateController extends AbstractController
             '[[balance]]',
             '[[client_outstanding]]',
             '[[currency]]',
+            '[[days_overdue]]',
         ],
         'delivery_note' => [
             '[[client_name]]',

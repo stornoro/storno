@@ -220,6 +220,7 @@ php bin/console app:invoices:process-recurring  # Generate scheduled invoices
 # Notifications
 php bin/console app:notifications:due-reminders    # Send payment reminders
 php bin/console app:notifications:token-expiry     # Warn of expiring tokens
+php bin/console app:invoice:send-overdue-reminders # Email clients about overdue invoices (--dry-run, --company=<uuid>, --date=YYYY-MM-DD with --dry-run)
 
 # Backup
 php bin/console app:backup:system              # Full system backup
@@ -328,6 +329,9 @@ Add to crontab for automated operations:
 
 # Send payment reminders (daily at 9:00)
 0 9 * * * docker compose exec -T backend php bin/console app:notifications:due-reminders
+
+# Email clients about overdue invoices, for companies that turned the reminders on (daily at 9:30)
+30 9 * * * docker compose exec -T backend php bin/console app:invoice:send-overdue-reminders
 
 # Refresh ANAF tokens (daily at 3:00)
 0 3 * * * docker compose exec -T backend php bin/console app:anaf:refresh-tokens

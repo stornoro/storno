@@ -107,6 +107,11 @@ class Client
     #[Groups(['client:detail'])]
     private ?int $defaultPaymentTermDays = null;
 
+    /** The automatic overdue reminders of the company skip this client. */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['client:detail'])]
+    private bool $overdueRemindersDisabled = false;
+
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['client:list', 'client:detail'])]
     private ?string $contactPerson = null;
@@ -371,6 +376,18 @@ class Client
     public function setBankAccount(?string $bankAccount): static
     {
         $this->bankAccount = $bankAccount;
+
+        return $this;
+    }
+
+    public function isOverdueRemindersDisabled(): bool
+    {
+        return $this->overdueRemindersDisabled;
+    }
+
+    public function setOverdueRemindersDisabled(bool $disabled): static
+    {
+        $this->overdueRemindersDisabled = $disabled;
 
         return $this;
     }

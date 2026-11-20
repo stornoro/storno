@@ -101,6 +101,9 @@ services:
     App\Service\Import\Parser\A4200XmlParser:
         tags: ['app.import_parser']
 
+    App\Service\Import\Parser\UblInvoiceFileParser:
+        tags: ['app.import_parser']
+
     # Tag every ColumnMapperInterface implementation
     App\Service\Import\Mapper\GenericClientMapper:
         tags: ['app.import_mapper']
@@ -222,6 +225,9 @@ services:
         tags: ['app.import_persister']
 
     App\Service\Import\Persister\ReceiptPersister:
+        tags: ['app.import_persister']
+
+    App\Service\Import\Persister\PaymentPersister:
         tags: ['app.import_persister']
 
     # Declaration forms an AI can build through the public API (C168 today)

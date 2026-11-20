@@ -2,17 +2,162 @@
 
 namespace App\Tests\Api;
 
+use App\Entity\Company;
+use App\Entity\OrganizationMembership;
+use App\Entity\WebhookEndpoint;
+use App\Enum\OrganizationRole;
+use App\Security\Permission;
+use App\Security\RolePermissionMap;
+use App\Service\Security\OutboundUrlPolicy;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpClient\Exception\TransportException;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+
 /**
  * Tests for webhook endpoint API: /api/v1/webhooks
  *
  * Permission matrix (from RolePermissionMap):
  *   - admin@localhost.com   → ADMIN in org-1  → webhook.view + webhook.manage
- *   - contabil@localhost.com → ACCOUNTANT in org-1 → webhook.view only (no webhook.manage)
+ *   - contabil@localhost.com → ACCOUNTANT in org-1 → neither permission by role;
+ *     grantWebhookViewToAccountant() gives webhook.view alone for the view-versus-manage tests
  *   - angajat@localhost.com  → EMPLOYEE in org-1  → neither permission
  *   - user@localhost.com     → OWNER in org-2     → different org (company scoping isolation)
  */
 class WebhookTest extends ApiTestCase
 {
+    private bool $accountantPermissionsChanged = false;
+
+    private const FIXTURE_USERS = [
+        'admin@localhost.com',
+        'contabil@localhost.com',
+        'angajat@localhost.com',
+        'user@localhost.com',
+    ];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->purgeFixtureWebhooks();
+        $this->isolateFromTheNetwork();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreAccountantRolePermissions();
+        $this->purgeFixtureWebhooks();
+        parent::tearDown();
+    }
+
+    /**
+     * Endpoint URLs pass the SSRF policy only when their host resolves to a public address,
+     * and a test delivery really connects. Both are replaced here so the class needs neither
+     * DNS nor outbound HTTP: every hostname resolves to one public (documentation range)
+     * address and every delivery fails to connect. The policy still runs with its real rules
+     * (scheme, port, blocked names); its address rules are covered by OutboundUrlPolicyTest.
+     *
+     * Replaced services live in one container, so the browser no longer restarts the kernel
+     * on its own: restartKernelOffline() does it before each request and puts them back.
+     */
+    private function isolateFromTheNetwork(): void
+    {
+        $this->client->disableReboot();
+        $this->installOfflineServices();
+    }
+
+    private function restartKernelOffline(): void
+    {
+        $kernel = $this->client->getKernel();
+        $kernel->shutdown();
+        $kernel->boot();
+        $this->installOfflineServices();
+    }
+
+    private function installOfflineServices(): void
+    {
+        $container = static::getContainer();
+        $container->set(OutboundUrlPolicy::class, new OutboundUrlPolicy(
+            static fn (string $host): array => ['203.0.113.10'],
+        ));
+        $container->set(HttpClientInterface::class, new MockHttpClient(
+            static function (string $method, string $url): never {
+                throw new TransportException('No network in tests: ' . $url);
+            },
+        ));
+    }
+
+    protected function login(string $email = 'admin@localhost.com', string $password = 'password'): string
+    {
+        $this->restartKernelOffline();
+
+        return parent::login($email, $password);
+    }
+
+    /** Every request helper builds its headers right before sending: the kernel restarts here. */
+    protected function buildHeaders(array $extra = []): array
+    {
+        $this->restartKernelOffline();
+
+        return parent::buildHeaders($extra);
+    }
+
+    /**
+     * The ACCOUNTANT role carries no webhook permission. A membership with a custom permission
+     * list answers from that list alone, so the accountant gets the role's list plus
+     * webhook.view: read access without webhook.manage. tearDown() puts the role defaults back.
+     */
+    private function grantWebhookViewToAccountant(): void
+    {
+        $this->setAccountantPermissions(array_merge(
+            RolePermissionMap::getPermissions(OrganizationRole::ACCOUNTANT),
+            [Permission::WEBHOOK_VIEW],
+        ));
+        $this->accountantPermissionsChanged = true;
+    }
+
+    private function restoreAccountantRolePermissions(): void
+    {
+        if ($this->accountantPermissionsChanged) {
+            $this->setAccountantPermissions([]);
+            $this->accountantPermissionsChanged = false;
+        }
+    }
+
+    private function setAccountantPermissions(array $permissions): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $memberships = $em->createQuery(
+            'SELECT m FROM ' . OrganizationMembership::class . ' m JOIN m.user u WHERE u.email = :email'
+        )->setParameter('email', 'contabil@localhost.com')->getResult();
+
+        $this->assertNotEmpty($memberships, 'The accountant fixture has no membership.');
+        foreach ($memberships as $membership) {
+            $membership->setPermissions($permissions);
+        }
+        $em->flush();
+        $em->clear();
+    }
+
+    /**
+     * An organization may register at most 10 endpoints and the test database is kept
+     * between runs, so every test starts and ends with no endpoints in the fixture
+     * organizations. Deliveries go with their endpoint (ON DELETE CASCADE).
+     */
+    private function purgeFixtureWebhooks(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+
+        $em->createQuery(
+            'DELETE FROM ' . WebhookEndpoint::class . ' e WHERE e.company IN (
+                 SELECT c FROM ' . Company::class . ' c WHERE c.organization IN (
+                     SELECT IDENTITY(m.organization) FROM ' . OrganizationMembership::class . ' m
+                     JOIN m.user u WHERE u.email IN (:emails)
+                 )
+             )'
+        )->setParameter('emails', self::FIXTURE_USERS)->execute();
+        $em->clear();
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
@@ -125,9 +270,20 @@ class WebhookTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(403);
     }
 
-    public function testListWebhooksAsAccountant(): void
+    public function testListWebhooksAsAccountantIsDenied(): void
     {
-        // ACCOUNTANT has webhook.view
+        // The ACCOUNTANT role has no webhook permission at all
+        $this->login('contabil@localhost.com');
+        $companyId = $this->getFirstCompanyId();
+
+        $this->apiGet('/api/v1/webhooks', ['X-Company' => $companyId]);
+
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    public function testListWebhooksWithViewPermission(): void
+    {
+        $this->grantWebhookViewToAccountant();
         $this->login('contabil@localhost.com');
         $companyId = $this->getFirstCompanyId();
 
@@ -217,7 +373,7 @@ class WebhookTest extends ApiTestCase
 
     public function testCreateWebhookRequiresManagePermission(): void
     {
-        // ACCOUNTANT has webhook.view but not webhook.manage
+        // ACCOUNTANT has no webhook.manage
         $this->login('contabil@localhost.com');
         $companyId = $this->getFirstCompanyId();
 
@@ -535,7 +691,7 @@ class WebhookTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(201);
         $webhookId = $created['data']['id'];
 
-        // Attempt update as accountant (only webhook.view, not webhook.manage)
+        // Attempt update as accountant (no webhook.manage)
         $this->login('contabil@localhost.com');
         $this->apiPatch('/api/v1/webhooks/' . $webhookId, [
             'description' => 'Unauthorized update',
@@ -695,7 +851,7 @@ class WebhookTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(201);
         $webhookId = $created['data']['id'];
 
-        // Attempt as accountant (webhook.view only)
+        // Attempt as accountant (no webhook.manage)
         $this->login('contabil@localhost.com');
         $this->apiPost('/api/v1/webhooks/' . $webhookId . '/test', [], ['X-Company' => $companyId]);
 
@@ -868,9 +1024,10 @@ class WebhookTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(403);
     }
 
-    public function testListDeliveriesAsAccountant(): void
+    public function testListDeliveriesWithViewPermission(): void
     {
-        // ACCOUNTANT has webhook.view — listing deliveries should work
+        // webhook.view alone is enough to list deliveries
+        $this->grantWebhookViewToAccountant();
         $this->login();
         $companyId = $this->getFirstCompanyId();
         $created = $this->createWebhook($companyId);
@@ -1010,7 +1167,13 @@ class WebhookTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(201);
         $webhookId = $created['data']['id'];
 
-        // ACCOUNTANT (webhook.view) can list and show
+        // Without webhook.view the accountant is refused
+        $this->login('contabil@localhost.com');
+        $this->apiGet('/api/v1/webhooks/' . $webhookId, ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(403);
+
+        // With webhook.view the accountant can list and show, and still cannot manage
+        $this->grantWebhookViewToAccountant();
         $this->login('contabil@localhost.com');
 
         $list = $this->apiGet('/api/v1/webhooks', ['X-Company' => $companyId]);
@@ -1019,6 +1182,9 @@ class WebhookTest extends ApiTestCase
         $shown = $this->apiGet('/api/v1/webhooks/' . $webhookId, ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(200);
         $this->assertEquals($webhookId, $shown['data']['id']);
+
+        $this->apiPatch('/api/v1/webhooks/' . $webhookId, ['isActive' => false], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(403);
     }
 
     public function testEmployeeCannotViewWebhooks(): void
@@ -1073,10 +1239,11 @@ class WebhookTest extends ApiTestCase
 
         $allEvents = [
             'invoice.created',
+            'invoice.updated',
             'invoice.issued',
             'invoice.validated',
             'invoice.rejected',
-            'invoice.sent_to_anaf',
+            'invoice.sent_to_provider',
             'company.created',
             'company.updated',
             'company.removed',
@@ -1096,6 +1263,13 @@ class WebhookTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(201);
         $this->assertCount(count($allEvents), $data['data']['events']);
+
+        // The list above is the whole catalog: a new event type must be added here too
+        $catalog = array_column($this->apiGet('/api/v1/webhooks/events')['data'], 'event');
+        sort($catalog);
+        $expected = $allEvents;
+        sort($expected);
+        $this->assertSame($expected, $catalog);
 
         foreach ($allEvents as $event) {
             $this->assertContains($event, $data['data']['events']);

@@ -43,6 +43,9 @@ abstract class ImportSourceTestCase extends ApiTestCase
         if ($this->jobIds !== []) {
             $conn = $this->db();
             foreach ($this->jobIds as $jobId) {
+                $conn->executeStatement('DELETE FROM payment WHERE import_job_id = :j', ['j' => $jobId]);
+                $conn->executeStatement('DELETE p FROM payment p INNER JOIN invoice i ON p.invoice_id = i.id WHERE i.import_job_id = :j', ['j' => $jobId]);
+                $conn->executeStatement('UPDATE invoice SET parent_document_id = NULL WHERE import_job_id = :j', ['j' => $jobId]);
                 $conn->executeStatement('DELETE il FROM invoice_line il INNER JOIN invoice i ON il.invoice_id = i.id WHERE i.import_job_id = :j', ['j' => $jobId]);
                 $conn->executeStatement('DELETE FROM invoice WHERE import_job_id = :j', ['j' => $jobId]);
                 $conn->executeStatement('DELETE rl FROM receipt_line rl INNER JOIN receipt r ON rl.receipt_id = r.id WHERE r.import_job_id = :j', ['j' => $jobId]);
@@ -58,7 +61,9 @@ abstract class ImportSourceTestCase extends ApiTestCase
 
     protected function upload(string $source, string $importType, string $fixture): array
     {
-        $path = self::FIXTURES . $fixture;
+        // a file the test built itself is passed by its full path
+        $path = is_file($fixture) ? $fixture : self::FIXTURES . $fixture;
+        $fixture = basename($fixture);
         $copy = sys_get_temp_dir() . '/' . uniqid('import_', true) . '_' . $fixture;
         copy($path, $copy);
 

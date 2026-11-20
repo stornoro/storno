@@ -164,6 +164,10 @@ export interface Company {
   archiveEnabled: boolean
   archiveRetentionYears: number | null
   efacturaDelayHours: number | null
+  /** Automatic emails to the client of an overdue issued invoice. */
+  overdueRemindersEnabled?: boolean
+  /** Always sorted by days and never empty; null subject or body means the built-in text. */
+  overdueReminderSteps?: Array<{ days: number, subject: string | null, body: string | null }>
   /** The company uses only the ANAF token bound to it (exclusive link). */
   anafTokenExclusive?: boolean
   enabledModules?: string[] | null
@@ -319,6 +323,8 @@ export interface Client {
   efacturaRegistered: boolean | null
   verificationNotes: string | null
   affiliated: boolean
+  /** The automatic overdue payment reminders skip this client. */
+  overdueRemindersDisabled?: boolean
   status: 'active' | 'warning' | 'blocked'
   creditLimit: string | null
   createdAt: string
@@ -654,6 +660,11 @@ export interface Invoice {
   invoiceTypeCode: string | null
   scheduledSendAt: string | null
   scheduledEmailAt: string | null
+  /** Automatic overdue reminders are switched off for this invoice. */
+  overdueRemindersDisabled?: boolean
+  /** Days after the due date of the last reminder sent. */
+  lastOverdueReminderDays?: number | null
+  lastOverdueReminderAt?: string | null
   deliveryLocation: string | null
   projectReference: string | null
   // Options

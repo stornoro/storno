@@ -575,6 +575,11 @@
 
             <USeparator />
 
+            <!-- Automatic overdue payment reminders -->
+            <SettingsOverdueRemindersSettings v-if="editCompany" :company="editCompany" />
+
+            <USeparator />
+
             <!-- Danger Zone -->
             <div>
               <h4 class="text-sm font-semibold text-error uppercase tracking-wide mb-3">{{ $t('companies.dangerZone') }}</h4>

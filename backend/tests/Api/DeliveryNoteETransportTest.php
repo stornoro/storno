@@ -2,6 +2,10 @@
 
 namespace App\Tests\Api;
 
+use App\Entity\DeliveryNote;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
+
 class DeliveryNoteETransportTest extends ApiTestCase
 {
     /**
@@ -9,7 +13,8 @@ class DeliveryNoteETransportTest extends ApiTestCase
      */
     private function createDeliveryNoteSeries(string $companyId): array
     {
-        $prefix = 'AVZ' . substr(md5(uniqid()), 0, 3);
+        // A prefix is unique per company and series stay in the test database: 3 hex digits collided
+        $prefix = 'AVZ' . bin2hex(random_bytes(4));
         $series = $this->apiPost('/api/v1/document-series', [
             'prefix' => $prefix,
             'type' => 'delivery_note',
@@ -312,60 +317,93 @@ class DeliveryNoteETransportTest extends ApiTestCase
         $this->assertArrayHasKey('error', $result);
     }
 
-    public function testSubmitETransportOnIssuedNote(): void
+    /** Issues a delivery note from the e-Transport helper and returns its id. */
+    private function createIssuedDeliveryNote(string $companyId): string
     {
-        $this->login();
-        $companyId = $this->getFirstCompanyId();
-
-        // Create a series and issue the delivery note
         $series = $this->createDeliveryNoteSeries($companyId);
         $draft = $this->createDraftDeliveryNoteWithETransport($companyId, $series['id']);
 
         $this->apiPost('/api/v1/delivery-notes/' . $draft['id'] . '/issue', [], ['X-Company' => $companyId]);
         $this->assertResponseStatusCodeSame(200);
 
-        // Submit to e-Transport
+        return $draft['id'];
+    }
+
+    private function setETransportStatus(string $deliveryNoteId, string $status): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $note = $em->getRepository(DeliveryNote::class)->find(Uuid::fromString($deliveryNoteId));
+        $this->assertNotNull($note);
+        $note->setEtransportStatus($status);
+        $em->flush();
+        $em->clear();
+    }
+
+    public function testSubmitETransportOnIssuedNote(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $noteId = $this->createIssuedDeliveryNote($companyId);
+
+        // Submit to e-Transport. Outside production the message is handled within the request,
+        // so the answer already carries the outcome of the handler.
         $result = $this->apiPost(
-            '/api/v1/delivery-notes/' . $draft['id'] . '/submit-etransport',
+            '/api/v1/delivery-notes/' . $noteId . '/submit-etransport',
             [],
             ['X-Company' => $companyId]
         );
 
         $this->assertResponseStatusCodeSame(200);
-
-        // After submission the status should be 'uploaded' (async processing pending)
-        $this->assertEquals('uploaded', $result['etransportStatus']);
         $this->assertNotNull($result['etransportSubmittedAt']);
+
+        // The note has no partner and its line has no goods data, so the handler stops at its
+        // own validation and nothing is sent to ANAF.
+        $this->assertEquals('validation_failed', $result['etransportStatus']);
+        $this->assertNull($result['etransportUit']);
+
+        $stored = $this->apiGet('/api/v1/delivery-notes/' . $noteId, ['X-Company' => $companyId]);
+        $this->assertEquals('validation_failed', $stored['etransportStatus']);
+        $this->assertNotEmpty($stored['etransportErrorMessage']);
+        $this->assertMatchesRegularExpression('/^\[[A-Z0-9-]+\] /', $stored['etransportErrorMessage']);
+    }
+
+    public function testSubmitETransportCanBeRetriedAfterAFailedValidation(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+        $noteId = $this->createIssuedDeliveryNote($companyId);
+
+        $first = $this->apiPost('/api/v1/delivery-notes/' . $noteId . '/submit-etransport', [], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertEquals('validation_failed', $first['etransportStatus']);
+
+        // A note that failed validation was never sent, so it may be submitted again
+        $this->apiPost('/api/v1/delivery-notes/' . $noteId . '/submit-etransport', [], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
     }
 
     public function testSubmitETransportAlreadySubmittedRejected(): void
     {
         $this->login();
         $companyId = $this->getFirstCompanyId();
+        $noteId = $this->createIssuedDeliveryNote($companyId);
 
-        $series = $this->createDeliveryNoteSeries($companyId);
-        $draft = $this->createDraftDeliveryNoteWithETransport($companyId, $series['id']);
+        foreach (['pending', 'uploaded', 'ok'] as $status) {
+            // The state a note is in once ANAF has (or is about to have) the notification
+            $this->setETransportStatus($noteId, $status);
 
-        $this->apiPost('/api/v1/delivery-notes/' . $draft['id'] . '/issue', [], ['X-Company' => $companyId]);
-        $this->assertResponseStatusCodeSame(200);
+            $result = $this->apiPost(
+                '/api/v1/delivery-notes/' . $noteId . '/submit-etransport',
+                [],
+                ['X-Company' => $companyId]
+            );
 
-        // First submission must succeed
-        $this->apiPost(
-            '/api/v1/delivery-notes/' . $draft['id'] . '/submit-etransport',
-            [],
-            ['X-Company' => $companyId]
-        );
-        $this->assertResponseStatusCodeSame(200);
+            $this->assertResponseStatusCodeSame(422, 'status ' . $status);
+            $this->assertArrayHasKey('error', $result);
 
-        // Second submission on same note must be rejected (status is now 'uploaded')
-        $result = $this->apiPost(
-            '/api/v1/delivery-notes/' . $draft['id'] . '/submit-etransport',
-            [],
-            ['X-Company' => $companyId]
-        );
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertArrayHasKey('error', $result);
+            $stored = $this->apiGet('/api/v1/delivery-notes/' . $noteId, ['X-Company' => $companyId]);
+            $this->assertEquals($status, $stored['etransportStatus']);
+        }
     }
 
     public function testCreateWithoutETransportFieldsHasNullDefaults(): void

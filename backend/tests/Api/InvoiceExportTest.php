@@ -19,7 +19,27 @@ class InvoiceExportTest extends ApiTestCase
 
         $content = $response->getContent();
         $this->assertStringContainsString('Numar', $content);
-        $this->assertStringContainsString('UEP2026000001', $content);
+
+        // Which company comes first is not fixed, so the expected rows are read from the
+        // invoice list of that company: the export has no page limit and leaves out only
+        // cancelled invoices.
+        $list = $this->apiGet('/api/v1/invoices?limit=20', ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $numbers = [];
+        foreach ($list['data'] as $invoice) {
+            if ($invoice['status'] !== 'cancelled') {
+                $numbers[] = $invoice['number'];
+            }
+        }
+        $this->assertNotEmpty($numbers, 'The first company has no invoice to export.');
+
+        $exported = [];
+        foreach (array_slice(explode("\n", trim($content)), 1) as $line) {
+            $exported[] = str_getcsv($line, ',', '"', '')[0];
+        }
+        foreach ($numbers as $number) {
+            $this->assertContains($number, $exported);
+        }
     }
 
     public function testExportCsvWithDateFilter(): void

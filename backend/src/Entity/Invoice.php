@@ -405,6 +405,20 @@ class Invoice
     #[Groups(['invoice:detail'])]
     private bool $penaltyEnabled = false;
 
+    /** The automatic overdue reminders of the company skip this invoice. */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['invoice:detail'])]
+    private bool $overdueRemindersDisabled = false;
+
+    /** The latest reminder step sent for this invoice, in days after the due date. */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['invoice:detail'])]
+    private ?int $lastOverdueReminderDays = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    #[Groups(['invoice:detail'])]
+    private ?\DateTimeImmutable $lastOverdueReminderAt = null;
+
     #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
     #[Groups(['invoice:detail'])]
     private ?string $penaltyPercentPerDay = null;
@@ -1145,6 +1159,42 @@ class Invoice
     public function isPenaltyEnabled(): bool
     {
         return $this->penaltyEnabled;
+    }
+
+    public function isOverdueRemindersDisabled(): bool
+    {
+        return $this->overdueRemindersDisabled;
+    }
+
+    public function setOverdueRemindersDisabled(bool $disabled): static
+    {
+        $this->overdueRemindersDisabled = $disabled;
+
+        return $this;
+    }
+
+    public function getLastOverdueReminderDays(): ?int
+    {
+        return $this->lastOverdueReminderDays;
+    }
+
+    public function setLastOverdueReminderDays(?int $days): static
+    {
+        $this->lastOverdueReminderDays = $days;
+
+        return $this;
+    }
+
+    public function getLastOverdueReminderAt(): ?\DateTimeImmutable
+    {
+        return $this->lastOverdueReminderAt;
+    }
+
+    public function setLastOverdueReminderAt(?\DateTimeImmutable $at): static
+    {
+        $this->lastOverdueReminderAt = $at;
+
+        return $this;
     }
 
     public function setPenaltyEnabled(bool $penaltyEnabled): static

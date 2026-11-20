@@ -154,39 +154,62 @@ class MemberTest extends ApiTestCase
         $this->assertCount(0, $result['allowedCompanies']);
     }
 
+    /**
+     * A pending invitation blocks a second one for the same address, and the test database is
+     * kept between runs, so every run invites a fresh placeholder address.
+     */
+    private function uniqueInviteEmail(string $prefix): string
+    {
+        return sprintf('%s-%s@example.com', $prefix, bin2hex(random_bytes(5)));
+    }
+
+    /** Removes the invitation a test created, so pending invitations do not pile up. */
+    private function cancelInvitation(string $id): void
+    {
+        $this->apiDelete('/api/v1/invitations/' . $id);
+        $this->assertResponseStatusCodeSame(204);
+    }
+
     public function testCreateInvitation(): void
     {
         $this->login(); // admin@localhost.com
+        $email = $this->uniqueInviteEmail('test-invite');
         $data = $this->apiPost('/api/v1/invitations', [
-            'email' => 'test-invite@example.com',
+            'email' => $email,
             'role' => 'accountant',
         ]);
 
         $this->assertResponseStatusCodeSame(201);
         $this->assertArrayHasKey('id', $data);
-        $this->assertSame('test-invite@example.com', $data['email']);
+        $this->assertSame($email, $data['email']);
         $this->assertSame('accountant', $data['role']);
         $this->assertSame('pending', $data['status']);
+
+        $this->cancelInvitation($data['id']);
     }
 
     public function testDuplicateInvitation(): void
     {
         $this->login();
 
+        $email = $this->uniqueInviteEmail('duplicate-test');
+
         // First invitation
-        $this->apiPost('/api/v1/invitations', [
-            'email' => 'duplicate-test@example.com',
+        $first = $this->apiPost('/api/v1/invitations', [
+            'email' => $email,
             'role' => 'employee',
         ]);
         $this->assertResponseStatusCodeSame(201);
 
         // Duplicate
         $data = $this->apiPost('/api/v1/invitations', [
-            'email' => 'duplicate-test@example.com',
+            'email' => $email,
             'role' => 'employee',
         ]);
         $this->assertResponseStatusCodeSame(409);
         $this->assertSame('ALREADY_INVITED', $data['code'] ?? null);
+
+        $this->cancelInvitation($first['id']);
     }
 
     public function testInviteExistingMember(): void
@@ -226,7 +249,7 @@ class MemberTest extends ApiTestCase
 
         // Create one first
         $created = $this->apiPost('/api/v1/invitations', [
-            'email' => 'cancel-test@example.com',
+            'email' => $this->uniqueInviteEmail('cancel-test'),
             'role' => 'employee',
         ]);
         $this->assertResponseStatusCodeSame(201);
@@ -241,7 +264,7 @@ class MemberTest extends ApiTestCase
         $this->login();
 
         $created = $this->apiPost('/api/v1/invitations', [
-            'email' => 'resend-test@example.com',
+            'email' => $this->uniqueInviteEmail('resend-test'),
             'role' => 'employee',
         ]);
         $this->assertResponseStatusCodeSame(201);
@@ -249,6 +272,8 @@ class MemberTest extends ApiTestCase
         $data = $this->apiPost('/api/v1/invitations/' . $created['id'] . '/resend');
         $this->assertResponseStatusCodeSame(200);
         $this->assertArrayHasKey('expiresAt', $data);
+
+        $this->cancelInvitation($created['id']);
     }
 
     public function testAcceptInvitationValidation(): void

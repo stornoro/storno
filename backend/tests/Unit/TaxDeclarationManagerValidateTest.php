@@ -9,10 +9,14 @@ use App\Enum\DeclarationType;
 use App\Manager\TaxDeclarationManager;
 use App\Model\Declaration\DukValidationResult;
 use App\Repository\TaxDeclarationRepository;
+use App\Service\Declaration\DeclarationNamespaceResolver;
+use App\Service\Declaration\DeclarationValidator;
 use App\Service\Declaration\DeclarationXmlGeneratorInterface;
 use App\Service\Declaration\DukIntegratorService;
 use Doctrine\ORM\EntityManagerInterface;
+use League\Flysystem\FilesystemOperator;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -29,14 +33,21 @@ class TaxDeclarationManagerValidateTest extends TestCase
 
         $generators = $generator ? [$generator] : [];
 
+        // The validator and the namespace resolver are final, so the real ones run
+        // on top of the mocked DUK service.
+        $namespaces = new DeclarationNamespaceResolver();
+
         return new TaxDeclarationManager(
             $repository,
             $entityManager,
             $messageBus,
             $eventDispatcher,
             $dukService,
-            $generators, // populators
-            $generators, // generators
+            new DeclarationValidator($dukService, $namespaces, new NullLogger()),
+            $namespaces,
+            $this->createMock(FilesystemOperator::class),
+            [], // populators
+            $generators,
         );
     }
 
@@ -97,7 +108,7 @@ class TaxDeclarationManagerValidateTest extends TestCase
         $manager->validate($declaration);
     }
 
-    public function testValidateWithDukUnavailableStillValidates(): void
+    public function testValidateWithDukUnavailableIsRefused(): void
     {
         $dukService = $this->createMock(DukIntegratorService::class);
         $dukService->method('isAvailable')->willReturn(false);
@@ -107,11 +118,16 @@ class TaxDeclarationManagerValidateTest extends TestCase
         $manager = $this->createManager($dukService, $generator);
         $declaration = $this->createDeclaration();
 
-        $result = $manager->validate($declaration);
+        // The ANAF validator is mandatory: a syntax check alone never marks a declaration validated.
+        try {
+            $manager->validate($declaration);
+            $this->fail('validate() must throw when the DUK service is down.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('DUKIntegrator', $e->getMessage());
+        }
 
-        $this->assertSame(DeclarationStatus::VALIDATED, $result->getStatus());
-        // No DUK metadata when unavailable
-        $this->assertNull($result->getMetadata());
+        $this->assertSame(DeclarationStatus::DRAFT, $declaration->getStatus());
+        $this->assertNull($declaration->getMetadata());
     }
 
     public function testValidateRejectsNonDraftStatus(): void

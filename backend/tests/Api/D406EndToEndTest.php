@@ -148,6 +148,8 @@ class D406EndToEndTest extends ApiTestCase
         self::assertStringContainsString('<Payments>', $xmlBody);
         self::assertStringContainsString('<TaxCode>000000</TaxCode>', $xmlBody);
 
+        $this->skipUnlessAnafValidatorIsAvailable();
+
         // ANAF's validator applies the rules of a reporting period, which the SAF-T file does
         // not carry as an attribute: the Java service passes it as `?an=&luna=`. A service
         // that predates that sends the file through the oldest rule set, where the current
@@ -159,8 +161,9 @@ class D406EndToEndTest extends ApiTestCase
         $this->apiPost('/api/v1/declarations/' . $decl['id'] . '/validate', [], $h);
         $status = $this->client->getResponse()->getStatusCode();
         $body = $this->client->getResponse()->getContent();
-        if ($status >= 500 || str_contains((string) $body, 'Connection refused') || str_contains((string) $body, 'unavailable') || str_contains((string) $body, 'unreachable') || str_contains((string) $body, 'D406Validator')) {
-            self::markTestSkipped('ANAF D406 validator (Java service / jar) not reachable: ' . substr((string) $body, 0, 300));
+        if (str_contains((string) $body, 'D406Validator')) {
+            // The service runs but was started without the D406 validator jar
+            self::markTestSkipped('The Java validation service has no D406 validator jar: ' . substr((string) $body, 0, 300));
         }
         if (str_contains((string) $body, 'nu se afla in lista')) {
             // The validator applies the rules of the oldest reporting period it knows unless

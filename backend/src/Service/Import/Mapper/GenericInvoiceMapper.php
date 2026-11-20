@@ -39,7 +39,7 @@ class GenericInvoiceMapper extends AbstractInvoiceMapper implements HeaderAwareM
         return $this->importType;
     }
 
-    private function isIssued(): bool
+    protected function isIssued(): bool
     {
         return $this->importType !== self::TYPE_RECEIVED;
     }
@@ -67,6 +67,7 @@ class GenericInvoiceMapper extends AbstractInvoiceMapper implements HeaderAwareM
             'paidAmount'         => 'Suma incasata',
             'unpaidAmount'       => 'Rest de plata',
             'state'              => 'Stare (incasata / anulata)',
+            'stornoOf'           => 'Factura stornata (numar)',
             'paymentMethod'      => 'Metoda plata',
             'notes'              => 'Observatii',
             'lineDescription'    => 'Produs / Descriere',
@@ -116,6 +117,7 @@ class GenericInvoiceMapper extends AbstractInvoiceMapper implements HeaderAwareM
         'paidAmount'   => ['incasat', 'suma incasata', 'valoare incasata', 'achitat', 'suma achitata', 'platit', 'suma platita', 'paid', 'amount paid'],
         'unpaidAmount' => ['rest', 'rest de plata', 'rest de incasat', 'rest plata', 'sold', 'neincasat', 'de incasat', 'neachitat', 'sold factura', 'balance', 'amount due'],
         'state'        => ['stare', 'status', 'stare factura', 'status factura', 'stare incasare', 'status incasare', 'incasata', 'achitata', 'platita', 'state'],
+        'stornoOf'     => ['factura stornata', 'storno la', 'storno la factura', 'storneaza factura', 'factura initiala', 'factura originala', 'factura de referinta', 'document stornat', 'referinta storno', 'storno of'],
         'paymentMethod' => ['metoda plata', 'metoda de plata', 'mod plata', 'mod de plata', 'modalitate plata', 'modalitate de plata', 'tip plata', 'payment method'],
         'notes'        => ['txtobservatii', 'facturainformatiisuplimentare', 'observatii', 'mentiuni', 'note', 'notes', 'observatii 1', 'detalii'],
         'lineDescription'   => ['produs', 'produs serviciu', 'denumire produs', 'nume produs', 'denumire articol', 'nume articol', 'articol', 'descriere', 'denumire produs serviciu', 'denumirea produselor sau a serviciilor', 'product', 'description', 'item'],
@@ -430,6 +432,11 @@ class GenericInvoiceMapper extends AbstractInvoiceMapper implements HeaderAwareM
             if ($paid !== null) {
                 $result['_paidAmount'] = self::money(max($paid, 0.0));
             }
+        }
+
+        // A storno names the invoice it reverses: the persister links the two.
+        if (isset($v['stornoOf'])) {
+            $result['_stornoOf'] = $v['stornoOf'];
         }
 
         // Missing partners are created from the invoice itself (issued invoices only).

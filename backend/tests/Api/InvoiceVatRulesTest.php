@@ -4,6 +4,7 @@ namespace App\Tests\Api;
 
 use App\Entity\Client;
 use App\Entity\Company;
+use App\Service\Vies\ViesService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -57,17 +58,29 @@ class InvoiceVatRulesTest extends ApiTestCase
 
     private function createForeignEuClient(string $companyId, string $country = 'HU', bool $viesValid = false): string
     {
-        $response = $this->apiPost('/api/v1/clients', [
-            'name' => 'EU Client ' . $country . ' ' . substr(md5(uniqid()), 0, 6),
-            'type' => 'company',
-            'cui' => $country . rand(10000000, 99999999),
-            'vatCode' => $country . rand(10000000, 99999999),
-            'registrationNumber' => 'J' . rand(10, 40) . '/' . rand(100, 9999) . '/2020',
-            'address' => 'Test Str. 1',
-            'city' => 'Budapest',
-            'county' => 'Budapest',
-            'country' => $country,
-        ], ['X-Company' => $companyId]);
+        // Creating a foreign EU client asks VIES about its VAT code. The codes here are random,
+        // and a random 8-digit Hungarian number is a registered one often enough to flip the
+        // outcome, so VIES is replaced by the answer the test wants.
+        $vies = $this->getMockBuilder(ViesService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['validate'])
+            ->getMock();
+        $vies->method('validate')->willReturn(['valid' => $viesValid, 'name' => null, 'address' => null]);
+
+        $response = $this->withReplacedServices(
+            [ViesService::class => $vies],
+            fn () => $this->apiPost('/api/v1/clients', [
+                'name' => 'EU Client ' . $country . ' ' . substr(md5(uniqid()), 0, 6),
+                'type' => 'company',
+                'cui' => $country . rand(10000000, 99999999),
+                'vatCode' => $country . rand(10000000, 99999999),
+                'registrationNumber' => 'J' . rand(10, 40) . '/' . rand(100, 9999) . '/2020',
+                'address' => 'Test Str. 1',
+                'city' => 'Budapest',
+                'county' => 'Budapest',
+                'country' => $country,
+            ], ['X-Company' => $companyId]),
+        );
 
         $this->assertResponseStatusCodeSame(201);
         $clientId = $response['client']['id'];

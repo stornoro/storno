@@ -49,6 +49,18 @@ class CentrifugoService
     }
 
     /**
+     * Queue a publish command unless the same one is already waiting for this flush.
+     * For "something changed, refetch" events, where one per channel and type is enough.
+     */
+    public function queueOnce(string $channel, array $data): void
+    {
+        $command = ['publish' => ['channel' => $channel, 'data' => $data]];
+        if (!in_array($command, $this->buffer, false)) {
+            $this->buffer[] = $command;
+        }
+    }
+
+    /**
      * Queue a broadcast command (same data to multiple channels) to be sent in a batch on flush().
      *
      * @param string[] $channels
@@ -119,6 +131,8 @@ class CentrifugoService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => $payload,
+                'timeout' => 2,
+                'max_duration' => 4,
             ]);
 
             $result = $response->toArray();
@@ -210,6 +224,9 @@ class CentrifugoService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => $params,
+                // realtime is best effort: a slow or absent server must not hold a PHP worker
+                'timeout' => 2,
+                'max_duration' => 4,
             ]);
 
             return $response->toArray();
