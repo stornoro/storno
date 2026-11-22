@@ -152,6 +152,95 @@ final class OverdueReminderTest extends ApiTestCase
         self::assertCount(1, $this->remindersOf($onStep));
     }
 
+    public function testBacklogIsMailedOncePerClientAndOnlyOnRequest(): void
+    {
+        $this->login();
+        $this->companyId = $this->getFirstCompanyId();
+        $headers = ['X-Company' => $this->companyId];
+        $uri = '/api/v1/companies/' . $this->companyId . '/overdue-reminders/backlog';
+
+        $this->apiPost($uri, ['dryRun' => true]);
+        self::assertSame(422, $this->client->getResponse()->getStatusCode(), 'reminders are off');
+
+        $this->apiPatch('/api/v1/companies/' . $this->companyId, ['overdueRemindersEnabled' => true, 'overdueReminderSteps' => null]);
+
+        $clientId = $this->newClient('Restant');
+        $excludedClientId = $this->newClient('RestantExclus');
+        $this->apiPatch('/api/v1/clients/' . $excludedClientId, ['overdueRemindersDisabled' => true], $headers);
+
+        $old = $this->createIssuedInvoice($clientId, 60);
+        $older = $this->createIssuedInvoice($clientId, 115);
+        $betweenSteps = $this->createIssuedInvoice($clientId, 10);
+        $inGrace = $this->createIssuedInvoice($clientId, 4);
+        $optedOut = $this->createIssuedInvoice($clientId, 40);
+        $this->apiPost('/api/v1/invoices/' . $optedOut . '/overdue-reminders', ['enabled' => false], $headers);
+        $ofExcludedClient = $this->createIssuedInvoice($excludedClientId, 40);
+
+        // the daily run leaves all of them alone, except the one still inside its step
+        $this->runCommand();
+        self::assertCount(0, $this->remindersOf($old));
+        self::assertCount(0, $this->remindersOf($betweenSteps));
+        self::assertCount(1, $this->remindersOf($inGrace));
+
+        $this->apiPost($uri, ['dryRun' => 'yes']);
+        self::assertSame(400, $this->client->getResponse()->getStatusCode());
+
+        $preview = $this->apiPost($uri, ['dryRun' => true]);
+        self::assertSame(200, $this->client->getResponse()->getStatusCode(), json_encode($preview));
+        self::assertTrue($preview['dryRun']);
+        $mine = $this->entryFor($preview, $clientId);
+        self::assertSame('would_send', $mine['status']);
+        self::assertSame(3, $mine['invoices'], 'three invoices passed a step; the opted-out and the in-grace one stay out');
+        self::assertSame('3000.00', $mine['balance']);
+        self::assertNull($this->entryFor($preview, $excludedClientId));
+        self::assertGreaterThanOrEqual(2, ($preview['skipped']['invoice_excluded'] ?? 0) + ($preview['skipped']['client_excluded'] ?? 0));
+        self::assertNull($this->lastReminderDays($old), 'a dry run marks nothing');
+        self::assertSame(0, $this->statementsTo($clientId));
+
+        $sent = $this->apiPost($uri, []);
+        self::assertSame(200, $this->client->getResponse()->getStatusCode(), json_encode($sent));
+        self::assertFalse($sent['dryRun']);
+        self::assertSame('sent', $this->entryFor($sent, $clientId)['status'], json_encode($sent));
+        self::assertSame(1, $this->statementsTo($clientId), 'one email for the three invoices');
+        self::assertSame(14, $this->lastReminderDays($old));
+        self::assertSame(14, $this->lastReminderDays($older));
+        self::assertSame(7, $this->lastReminderDays($betweenSteps), 'the 14-day step still comes from the daily run');
+        self::assertSame(3, $this->lastReminderDays($inGrace));
+        self::assertNull($this->lastReminderDays($optedOut));
+        self::assertNull($this->lastReminderDays($ofExcludedClient));
+
+        $again = $this->apiPost($uri, []);
+        self::assertNull($this->entryFor($again, $clientId), 'a second request sends nothing to the same client');
+        self::assertSame(1, $this->statementsTo($clientId));
+    }
+
+    /** @return array<string, mixed>|null */
+    private function entryFor(array $response, string $clientId): ?array
+    {
+        foreach ($response['results'] as $entry) {
+            if ($entry['clientId'] === $clientId) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    private function lastReminderDays(string $invoiceId): ?int
+    {
+        $value = $this->db()->fetchOne('SELECT last_overdue_reminder_days FROM invoice WHERE id = :id', ['id' => $invoiceId]);
+
+        return $value === null ? null : (int) $value;
+    }
+
+    private function statementsTo(string $clientId): int
+    {
+        return (int) $this->db()->fetchOne(
+            "SELECT COUNT(*) FROM email_log l INNER JOIN client c ON c.email = l.to_email WHERE c.id = :id AND l.category = 'statement' AND l.status = 'sent'",
+            ['id' => $clientId],
+        );
+    }
+
     private function newClient(string $label): string
     {
         $suffix = $label . '-' . uniqid();

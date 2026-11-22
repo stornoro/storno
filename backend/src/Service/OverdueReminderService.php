@@ -2,10 +2,16 @@
 
 namespace App\Service;
 
+use App\Entity\Client;
 use App\Entity\Company;
 use App\Entity\EmailLog;
 use App\Entity\Invoice;
+use App\Entity\User;
+use App\Exception\EmailSendBlockedException;
 use App\Repository\EmailUnsubscribeRepository;
+use App\Repository\InvoiceRepository;
+use App\Service\Client\ClientStatementEmailService;
+use App\Service\Client\ClientStatementService;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -14,7 +20,8 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * A step is sent only in the days right after it falls due (GRACE_DAYS). Turning the feature on,
  * or importing years of history, therefore never mails clients about invoices that passed their
- * steps long ago.
+ * steps long ago. Those older invoices are the backlog: sendBacklog() mails them on request,
+ * one statement per client.
  */
 class OverdueReminderService
 {
@@ -38,6 +45,9 @@ class OverdueReminderService
         private readonly InvoiceEmailService $invoiceEmailService,
         private readonly EmailUnsubscribeRepository $emailUnsubscribeRepository,
         private readonly EntityManagerInterface $entityManager,
+        private readonly InvoiceRepository $invoiceRepository,
+        private readonly ClientStatementService $statementService,
+        private readonly ClientStatementEmailService $statementEmailService,
     ) {}
 
     /**
@@ -172,6 +182,145 @@ class OverdueReminderService
         }
 
         return $candidate;
+    }
+
+    /**
+     * The step this invoice passed without a reminder and can no longer get from the daily run
+     * (it is beyond the grace days), or null. Later steps still come from the daily run.
+     *
+     * @return array{days: int, subject: ?string, body: ?string}|null
+     */
+    public static function missedStep(Invoice $invoice, ?\DateTimeImmutable $today = null): ?array
+    {
+        $company = $invoice->getCompany();
+        if ($company === null) {
+            return null;
+        }
+        $overdue = InvoiceEmailService::daysOverdue($invoice, $today);
+
+        $candidate = null;
+        foreach (self::stepsFor($company) as $step) {
+            if ($step['days'] <= $overdue) {
+                $candidate = $step;
+            }
+        }
+        if ($candidate === null || $overdue - $candidate['days'] <= self::GRACE_DAYS) {
+            return null;
+        }
+        $last = $invoice->getLastOverdueReminderDays();
+        if ($last !== null && $last >= $candidate['days']) {
+            return null;
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * Mails the backlog: overdue invoices that passed a step before the daily run could send it
+     * (the feature was off, or the invoice was imported). One statement email per client, listing
+     * that client's backlog invoices. Each invoice is then marked with the step it missed, so a
+     * second call sends nothing and the daily run carries on with the later steps.
+     *
+     * @return array{dryRun: bool, clients: int, invoices: int, sent: int, failed: int, skipped: array<string, int>, stoppedReason: ?string, results: list<array<string, mixed>>}
+     */
+    public function sendBacklog(Company $company, ?User $sentBy = null, bool $dryRun = false, ?\DateTimeImmutable $today = null): array
+    {
+        $today = ($today ?? new \DateTimeImmutable('today'))->setTime(0, 0);
+        $firstStep = self::stepsFor($company)[0]['days'];
+        $candidates = $this->invoiceRepository->findOverdueBacklogForReminders(
+            $company,
+            $today->modify(sprintf('-%d days', $firstStep + self::GRACE_DAYS)),
+        );
+
+        /** @var array<string, array{client: Client, items: list<array{0: Invoice, 1: array}>}> $byClient */
+        $byClient = [];
+        $skipped = [];
+        foreach ($candidates as $invoice) {
+            $step = self::missedStep($invoice, $today);
+            if ($step === null) {
+                continue;
+            }
+            $reason = $this->skipReason($invoice);
+            if ($reason !== null) {
+                $skipped[$reason] = ($skipped[$reason] ?? 0) + 1;
+                continue;
+            }
+            $client = $invoice->getClient();
+            $key = (string) $client->getId();
+            $byClient[$key] ??= ['client' => $client, 'items' => []];
+            $byClient[$key]['items'][] = [$invoice, $step];
+        }
+
+        $results = [];
+        $sent = 0;
+        $failed = 0;
+        $invoiceCount = 0;
+        $stopped = null;
+
+        foreach ($byClient as $group) {
+            $client = $group['client'];
+            $invoices = array_column($group['items'], 0);
+            $invoiceCount += count($invoices);
+            $statement = $this->statementService->statementFromInvoices($client, $invoices, $today);
+            $entry = [
+                'clientId' => (string) $client->getId(),
+                'clientName' => $client->getName(),
+                'email' => $client->getEmail(),
+                'invoices' => count($invoices),
+                'balance' => $statement['balance'],
+                'currency' => $statement['currency'],
+                'status' => $dryRun ? 'would_send' : 'sent',
+                'reason' => null,
+            ];
+
+            if ($dryRun) {
+                $sent++;
+                $results[] = $entry;
+                continue;
+            }
+            if ($stopped !== null) {
+                $entry['status'] = 'skipped';
+                $entry['reason'] = $stopped;
+                $results[] = $entry;
+                continue;
+            }
+
+            try {
+                $log = $this->statementEmailService->send($client, $today, (string) $client->getEmail(), null, $sentBy, $statement);
+                $entry['emailLogId'] = (string) $log->getId();
+                $now = new \DateTimeImmutable();
+                foreach ($group['items'] as [$invoice, $step]) {
+                    $invoice->setLastOverdueReminderDays($step['days']);
+                    $invoice->setLastOverdueReminderAt($now);
+                }
+                $this->entityManager->flush();
+                $sent++;
+            } catch (EmailSendBlockedException $e) {
+                $entry['status'] = 'failed';
+                $entry['reason'] = $e->errorCode;
+                $failed++;
+                if (in_array($e->errorCode, [EmailSendBlockedException::CODE_DAILY_LIMIT, EmailSendBlockedException::CODE_RATE_LIMIT, EmailSendBlockedException::CODE_PLAN_LIMIT], true)) {
+                    $stopped = $e->errorCode;
+                }
+            } catch (\Throwable $e) {
+                $entry['status'] = 'failed';
+                $entry['reason'] = 'send_failed';
+                $entry['error'] = mb_substr($e->getMessage(), 0, 255);
+                $failed++;
+            }
+            $results[] = $entry;
+        }
+
+        return [
+            'dryRun' => $dryRun,
+            'clients' => count($byClient),
+            'invoices' => $invoiceCount,
+            'sent' => $sent,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'stoppedReason' => $stopped,
+            'results' => $results,
+        ];
     }
 
     /** Why this invoice gets no reminder at all, or null when it may get one. */

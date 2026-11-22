@@ -749,6 +749,39 @@ class InvoiceRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
+    /**
+     * Unpaid issued invoices due on or before $dueBefore, the candidates for the reminder backlog.
+     *
+     * @return Invoice[]
+     */
+    public function findOverdueBacklogForReminders(Company $company, \DateTimeImmutable $dueBefore): array
+    {
+        return $this->createQueryBuilder('i')
+            ->join('i.client', 'cl')->addSelect('cl')
+            ->where('i.company = :company')
+            ->andWhere('i.deletedAt IS NULL')
+            ->andWhere('cl.deletedAt IS NULL')
+            ->andWhere('i.direction = :direction')
+            ->andWhere('i.status IN (:statuses)')
+            ->andWhere('i.paidAt IS NULL')
+            ->andWhere('i.total > i.amountPaid')
+            ->andWhere('i.dueDate < :dueBefore')
+            ->setParameter('company', $company)
+            ->setParameter('direction', InvoiceDirection::OUTGOING)
+            ->setParameter('statuses', [
+                DocumentStatus::ISSUED,
+                DocumentStatus::SENT_TO_PROVIDER,
+                DocumentStatus::VALIDATED,
+                DocumentStatus::SYNCED,
+                DocumentStatus::PARTIALLY_PAID,
+                DocumentStatus::OVERDUE,
+            ])
+            ->setParameter('dueBefore', $dueBefore->format('Y-m-d'))
+            ->orderBy('i.dueDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function countThisMonth(Company $company): int
     {
         $firstOfMonth = new \DateTimeImmutable('first day of this month midnight');

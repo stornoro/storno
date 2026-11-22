@@ -152,6 +152,51 @@ function save() {
 function resetToDefault() {
   send(null, true)
 }
+
+// ── Backlog: overdue invoices that passed a step before the daily run could send it ──
+interface BacklogEntry { clientId: string, clientName: string | null, invoices: number, balance: string, currency: string }
+interface BacklogResult { clients: number, invoices: number, sent: number, failed: number, results: BacklogEntry[] }
+
+const backlogOpen = ref(false)
+const backlogChecking = ref(false)
+const backlogSending = ref(false)
+const backlogPreview = ref<BacklogResult | null>(null)
+
+async function openBacklog() {
+  backlogPreview.value = null
+  backlogOpen.value = true
+  backlogChecking.value = true
+  try {
+    const { post } = useApi()
+    backlogPreview.value = await post<BacklogResult>(`/v1/companies/${props.company.id}/overdue-reminders/backlog`, { dryRun: true })
+  }
+  catch (err: any) {
+    backlogOpen.value = false
+    toast.add({ title: err?.data?.error || $t('common.error'), color: 'error' })
+  }
+  finally {
+    backlogChecking.value = false
+  }
+}
+
+async function sendBacklog() {
+  backlogSending.value = true
+  try {
+    const { post } = useApi()
+    const res = await post<BacklogResult>(`/v1/companies/${props.company.id}/overdue-reminders/backlog`, {})
+    backlogOpen.value = false
+    toast.add({
+      title: $t('companies.overdueReminders.backlogDone', { sent: res.sent ?? 0, failed: res.failed ?? 0 }),
+      color: (res.failed ?? 0) > 0 ? 'warning' : 'success',
+    })
+  }
+  catch (err: any) {
+    toast.add({ title: err?.data?.error || $t('common.error'), color: 'error' })
+  }
+  finally {
+    backlogSending.value = false
+  }
+}
 </script>
 
 <template>
@@ -248,6 +293,54 @@ function resetToDefault() {
           @click="resetToDefault"
         />
       </div>
+
+      <div class="rounded-lg border border-(--ui-border) px-3 py-2 mt-3">
+        <p class="text-sm font-medium">{{ $t('companies.overdueReminders.backlogTitle') }}</p>
+        <p class="text-xs text-(--ui-text-muted) mt-1 mb-2">{{ $t('companies.overdueReminders.backlogHelp') }}</p>
+        <UButton
+          icon="i-lucide-mail-warning"
+          size="xs"
+          variant="outline"
+          color="neutral"
+          :label="$t('companies.overdueReminders.backlogButton')"
+          :loading="backlogChecking"
+          @click="openBacklog"
+        />
+      </div>
     </div>
+
+    <UModal v-model:open="backlogOpen" :title="$t('companies.overdueReminders.backlogTitle')">
+      <template #body>
+        <div v-if="backlogChecking" class="text-sm text-(--ui-text-muted)">{{ $t('companies.overdueReminders.backlogChecking') }}</div>
+        <div v-else-if="backlogPreview" class="space-y-3">
+          <p v-if="backlogPreview.clients === 0" class="text-sm">{{ $t('companies.overdueReminders.backlogEmpty') }}</p>
+          <template v-else>
+            <p class="text-sm font-medium">
+              {{ $t('companies.overdueReminders.backlogSummary', { clients: backlogPreview.clients, invoices: backlogPreview.invoices }) }}
+            </p>
+            <ul class="text-sm divide-y divide-(--ui-border) max-h-64 overflow-y-auto">
+              <li v-for="entry in backlogPreview.results" :key="entry.clientId" class="flex items-center justify-between gap-3 py-1.5">
+                <span class="truncate">{{ entry.clientName }}</span>
+                <span class="shrink-0 text-(--ui-text-muted) tabular-nums">
+                  {{ $t('companies.overdueReminders.backlogInvoices', entry.invoices) }}, {{ entry.balance }} {{ entry.currency }}
+                </span>
+              </li>
+            </ul>
+            <p class="text-xs text-(--ui-text-muted)">{{ $t('companies.overdueReminders.backlogNote') }}</p>
+          </template>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton :label="$t('common.cancel')" variant="ghost" color="neutral" @click="backlogOpen = false" />
+          <UButton
+            :label="$t('companies.overdueReminders.backlogConfirm', { count: backlogPreview?.clients ?? 0 })"
+            :loading="backlogSending"
+            :disabled="backlogChecking || backlogSending || !backlogPreview || backlogPreview.clients === 0"
+            @click="sendBacklog"
+          />
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
