@@ -11,6 +11,7 @@ use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: NotificationRepository::class)]
+#[ORM\Index(name: 'idx_notification_user_read_sent', columns: ['user_id', 'is_read', 'sent_at'])]
 class Notification
 {
     use AuditableTrait;

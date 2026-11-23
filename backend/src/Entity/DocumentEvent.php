@@ -9,6 +9,7 @@ use App\Doctrine\Type\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
+#[ORM\Index(name: 'idx_document_event_created', columns: ['created_at'])]
 #[ORM\Index(name: 'idx_document_event_invoice_created', columns: ['invoice_id', 'created_at'])]
 class DocumentEvent
 {

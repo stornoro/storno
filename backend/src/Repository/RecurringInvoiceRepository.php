@@ -70,25 +70,64 @@ class RecurringInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
-     * Find recurring invoices that are due for processing.
+     * Ids of the active templates due on or before the date, oldest first.
      *
-     * @return RecurringInvoice[]
+     * @return list<string>
      */
-    public function findDueForProcessing(\DateTimeInterface $date, int $limit = 100): array
+    public function findDueIds(\DateTimeInterface $date, ?int $limit = null): array
     {
-        return $this->createQueryBuilder('ri')
-            ->leftJoin('ri.client', 'c')->addSelect('c')
-            ->leftJoin('ri.lines', 'ril')->addSelect('ril')
-            ->leftJoin('ri.company', 'co')->addSelect('co')
-            ->leftJoin('ri.documentSeries', 'ds')->addSelect('ds')
+        $qb = $this->createQueryBuilder('ri')
+            ->select('ri.id')
             ->where('ri.isActive = true')
             ->andWhere('ri.deletedAt IS NULL')
             ->andWhere('ri.nextIssuanceDate <= :date')
             ->andWhere('ri.stopDate IS NULL OR ri.stopDate >= :date')
             ->setParameter('date', $date)
             ->orderBy('ri.nextIssuanceDate', 'ASC')
-            ->setMaxResults($limit)
+            ->addOrderBy('ri.id', 'ASC');
+        if ($limit !== null) {
+            $qb->setMaxResults($limit);
+        }
+
+        return array_map(static fn (array $row): string => (string) $row['id'], $qb->getQuery()->getScalarResult());
+    }
+
+    /**
+     * The templates with these ids, with client, lines, company and series loaded.
+     *
+     * @param list<string> $ids
+     *
+     * @return RecurringInvoice[]
+     */
+    public function findForProcessing(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('ri')
+            ->leftJoin('ri.client', 'c')->addSelect('c')
+            ->leftJoin('ri.lines', 'ril')->addSelect('ril')
+            ->leftJoin('ri.company', 'co')->addSelect('co')
+            ->leftJoin('ri.documentSeries', 'ds')->addSelect('ds')
+            ->where('ri.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->orderBy('ri.nextIssuanceDate', 'ASC')
+            ->addOrderBy('ri.id', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * The templates due on or before the date, oldest first.
+     *
+     * The limit counts templates. The ids are selected first because a row limit on a query
+     * that joins the lines would cut the last template off with part of its lines.
+     *
+     * @return RecurringInvoice[]
+     */
+    public function findDueForProcessing(\DateTimeInterface $date, int $limit = 100): array
+    {
+        return $this->findForProcessing($this->findDueIds($date, $limit));
     }
 }

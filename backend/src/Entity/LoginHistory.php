@@ -13,6 +13,7 @@ use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: LoginHistoryRepository::class)]
+#[ORM\Index(name: 'idx_login_history_date', columns: ['date'])]
 #[ApiResource(
     routePrefix: '/v1',
     openapiContext: ['security' => [['JWT' => []]]],

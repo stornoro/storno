@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Command\Support\CommandProgress;
 use App\Entity\Invoice;
 use App\Entity\Organization;
 use App\Message\SendFirstInvoiceCreatedEmailMessage;
@@ -22,6 +23,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 class SendFirstInvoiceCreatedEmailCommand extends Command
 {
     private const SETTING_KEY = 'first_invoice_created_sent';
+    private const BATCH_SIZE = 200;
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -49,9 +51,45 @@ class SendFirstInvoiceCreatedEmailCommand extends Command
         $window = new \DateTimeImmutable('-24 hours');
         $dispatched = 0;
 
-        $orgs = $this->entityManager->getRepository(Organization::class)->findAll();
+        // Only an organization whose invoice was created inside the window can qualify: the email
+        // goes out for the first and only invoice, and that invoice must be less than 24 hours old.
+        // This lists those organizations in SQL instead of counting invoices for every organization
+        // that has not been flagged yet.
+        $orgIds = $this->entityManager->createQueryBuilder()
+            ->select('DISTINCT o.id')
+            ->from(Invoice::class, 'i')
+            ->join('i.company', 'c')
+            ->join('c.organization', 'o')
+            ->where('i.deletedAt IS NULL')
+            ->andWhere('i.createdAt >= :window')
+            ->setParameter('window', $window)
+            ->getQuery()
+            ->getSingleColumnResult();
 
+        $progress = new CommandProgress($output, 'first-invoice-email', count($orgIds));
+        $progress->start(sprintf('%d organizations with an invoice created since %s', count($orgIds), $window->format('Y-m-d H:i')));
+
+        foreach (array_chunk($orgIds, self::BATCH_SIZE) as $chunk) {
+            $orgs = $this->entityManager->getRepository(Organization::class)->findBy(['id' => $chunk]);
+            $this->processOrganizations($orgs, $window, $dryRun, $io, $progress, $dispatched);
+            $this->entityManager->clear();
+        }
+        $progress->finish();
+
+        if ($dryRun) {
+            $io->note(sprintf('Dry run: %d first-invoice-created emails would be dispatched.', $dispatched));
+        } else {
+            $io->success(sprintf('Dispatched %d first-invoice-created email(s).', $dispatched));
+        }
+
+        return Command::SUCCESS;
+    }
+
+    /** @param Organization[] $orgs */
+    private function processOrganizations(array $orgs, \DateTimeImmutable $window, bool $dryRun, SymfonyStyle $io, CommandProgress $progress, int &$dispatched): void
+    {
         foreach ($orgs as $org) {
+            $progress->advance();
             $settings = $org->getSettings();
 
             if (!empty($settings[self::SETTING_KEY])) {
@@ -101,14 +139,7 @@ class SendFirstInvoiceCreatedEmailCommand extends Command
             }
 
             $dispatched++;
+            $progress->count('dispatched');
         }
-
-        if ($dryRun) {
-            $io->note(sprintf('Dry run: %d first-invoice-created emails would be dispatched.', $dispatched));
-        } else {
-            $io->success(sprintf('Dispatched %d first-invoice-created email(s).', $dispatched));
-        }
-
-        return Command::SUCCESS;
     }
 }

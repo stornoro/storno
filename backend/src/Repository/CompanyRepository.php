@@ -7,7 +7,10 @@ use App\Entity\Organization;
 use App\Entity\OrganizationMembership;
 use App\Enum\OrganizationRole;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
+use App\Doctrine\Type\UuidType;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * @extends ServiceEntityRepository<Company>
@@ -55,5 +58,23 @@ class CompanyRepository extends ServiceEntityRepository
             ->setParameter('companies', $allowedCompanies->toArray())
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Query builder for one id-ordered batch of companies (alias "c"), starting after $afterId.
+     * Callers add their own conditions, run it, remember the last id and clear the entity
+     * manager between batches. Soft-deleted companies are excluded by the soft_delete filter.
+     */
+    public function createBatchQueryBuilder(?Uuid $afterId, int $limit): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('c')
+            ->orderBy('c.id', 'ASC')
+            ->setMaxResults($limit);
+
+        if ($afterId !== null) {
+            $qb->andWhere('c.id > :afterId')->setParameter('afterId', $afterId, UuidType::NAME);
+        }
+
+        return $qb;
     }
 }

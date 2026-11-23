@@ -72,7 +72,7 @@ class ProductController extends AbstractController
     }
 
     #[Route('/export/csv', methods: ['GET'])]
-    public function exportCsv(Request $request): Response
+    public function exportCsv(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->resolveCompany($request);
         if (!$company) {
@@ -83,42 +83,37 @@ class ProductController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $products = $this->productRepository->findAllByCompany($company);
+        // Read in batches and streamed, so the number of products does not bound the export.
+        $products = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateProducts($company));
+        $rows = (static function () use ($products): \Generator {
+            foreach ($products as $product) {
+                yield [
+                    $product->getName(),
+                    $product->getCode(),
+                    $product->getDescription(),
+                    $product->getUnitOfMeasure(),
+                    $product->getDefaultPrice(),
+                    $product->getCurrency(),
+                    $product->getVatRate(),
+                    $product->getVatCategoryCode(),
+                    $product->isService() ? 'Da' : 'Nu',
+                    $product->isActive() ? 'Da' : 'Nu',
+                    $product->getUsage(),
+                    $product->getNcCode(),
+                    $product->getCpvCode(),
+                ];
+            }
+        })();
 
-        $handle = fopen('php://temp', 'r+');
-        fwrite($handle, "\xEF\xBB\xBF");
-        fputcsv($handle, ['Denumire', 'Cod', 'Descriere', 'UM', 'Pret', 'Moneda', 'Cota TVA', 'Categorie TVA', 'Serviciu', 'Activ', 'Utilizare', 'Cod NC', 'Cod CPV']);
-
-        foreach ($products as $product) {
-            fputcsv($handle, [
-                $product->getName(),
-                $product->getCode(),
-                $product->getDescription(),
-                $product->getUnitOfMeasure(),
-                $product->getDefaultPrice(),
-                $product->getCurrency(),
-                $product->getVatRate(),
-                $product->getVatCategoryCode(),
-                $product->isService() ? 'Da' : 'Nu',
-                $product->isActive() ? 'Da' : 'Nu',
-                $product->getUsage(),
-                $product->getNcCode(),
-                $product->getCpvCode(),
-            ]);
-        }
-
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return new Response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="produse-%s.csv"', date('Y-m-d')),
-        ]);
+        return $streamedExport->csv(
+            sprintf('produse-%s.csv', date('Y-m-d')),
+            ['Denumire', 'Cod', 'Descriere', 'UM', 'Pret', 'Moneda', 'Cota TVA', 'Categorie TVA', 'Serviciu', 'Activ', 'Utilizare', 'Cod NC', 'Cod CPV'],
+            $rows,
+        );
     }
 
     #[Route('/export/saga-xml', methods: ['GET'])]
-    public function exportSagaXml(Request $request): Response
+    public function exportSagaXml(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->resolveCompany($request);
         if (!$company) {
@@ -129,13 +124,12 @@ class ProductController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $products = $this->productRepository->findAllByCompany($company);
-        $xml = $this->sagaXmlExportService->generateProductsXml($products);
+        $products = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateProducts($company));
 
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="ART_%s.xml"', date('Y-m-d')),
-        ]);
+        return $streamedExport->xml(
+            sprintf('ART_%s.xml', date('Y-m-d')),
+            fn () => $this->sagaXmlExportService->streamProductsXml($products),
+        );
     }
 
     #[Route('', methods: ['POST'])]

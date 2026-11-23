@@ -14,6 +14,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: EmailLogRepository::class)]
+#[ORM\Index(name: 'idx_emaillog_sent', columns: ['sent_at'])]
 #[ORM\Index(name: 'idx_emaillog_company_sent', columns: ['company_id', 'sent_at'])]
 #[ORM\Index(name: 'idx_emaillog_invoice_sent', columns: ['invoice_id', 'sent_at'])]
 #[ORM\Index(name: 'idx_emaillog_ses_msg_id', columns: ['ses_message_id'])]

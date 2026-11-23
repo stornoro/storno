@@ -86,6 +86,10 @@ abstract class ApiTestCase extends WebTestCase
     protected function decodeResponse(): array
     {
         $content = $this->client->getResponse()->getContent();
+        if ($content === false) {
+            // A streamed response has no content of its own; the browser captured what it sent.
+            $content = $this->client->getInternalResponse()->getContent();
+        }
         if (empty($content)) {
             return [];
         }

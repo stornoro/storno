@@ -13,6 +13,7 @@ use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: PaymentRepository::class)]
+#[ORM\Index(name: 'idx_payment_company_date', columns: ['company_id', 'payment_date'])]
 class Payment
 {
     use AuditableTrait;

@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Service\Cache\CompanyStatsCache;
 use Doctrine\DBAL\Connection;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
@@ -22,11 +23,18 @@ class ExchangeRateService
     private const ECB_URL = 'https://data-api.ecb.europa.eu/service/data/EXR/D.%s.EUR.SP00.A';
     private const ECB_WINDOW_DAYS = 7; // publication gap the dated lookup bridges (weekends, holidays)
 
+    /**
+     * Whole-company aggregates live until the company's next write moves the cache version; the
+     * TTL only bounds writes that bypass the ORM.
+     */
+    private const STATS_TTL = 600;
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly CacheInterface $cache,
         private readonly CacheItemPoolInterface $cachePool,
         private readonly LoggerInterface $logger,
+        private readonly ?CompanyStatsCache $statsCache = null,
     ) {}
 
     /**
@@ -400,34 +408,86 @@ class ExchangeRateService
      * Build a SQL CASE expression that resolves a BNR fallback rate for each distinct
      * currency in a company table. Used as the COALESCE fallback when exchange_rate is NULL.
      *
+     * The list of currencies comes from the company stats cache; the rates are read fresh on
+     * every call because they change daily.
+     *
      * @param string $currencyColumn Column/alias referencing the currency (e.g. 'currency', 'i.currency')
      * @param string $table          Source table to scan for distinct currencies
      */
     public function buildFallbackRateSql(Connection $conn, string $companyId, string $defaultCurrency, string $currencyColumn = 'currency', string $table = 'invoice'): string
     {
+        try {
+            $currencies = $table === 'invoice'
+                ? array_values(array_unique(array_merge([], ...array_values($this->getInvoiceCurrencies($conn, $companyId, $defaultCurrency)))))
+                : $this->cachedStat($companyId, 'currencies|' . $table . '|' . $defaultCurrency, fn () => $conn->fetchFirstColumn(
+                    "SELECT DISTINCT currency FROM $table WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency",
+                    ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
+                ));
+        } catch (\Throwable) {
+            return '1';
+        }
+
+        return $this->buildFallbackRateSqlForCurrencies($currencies, $currencyColumn);
+    }
+
+    /**
+     * The CASE expression of buildFallbackRateSql() for a list of currencies the caller
+     * already holds, so a caller that needs it for two column aliases reads the list once.
+     *
+     * @param string[] $currencies
+     */
+    public function buildFallbackRateSqlForCurrencies(array $currencies, string $currencyColumn = 'currency'): string
+    {
         $fallbackRateSql = '1';
         try {
-            $distinctCurrencies = $conn->fetchFirstColumn(
-                "SELECT DISTINCT currency FROM $table WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency",
-                ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
-            );
-            if ($distinctCurrencies) {
-                $cases = [];
-                foreach ($distinctCurrencies as $cur) {
-                    $bnrRate = $this->getRate($cur);
-                    if ($bnrRate !== null) {
-                        $cases[] = sprintf("WHEN %s = '%s' THEN %s", $currencyColumn, addslashes($cur), $bnrRate);
-                    }
-                }
-                if ($cases) {
-                    $fallbackRateSql = 'CASE ' . implode(' ', $cases) . ' ELSE 1 END';
+            $cases = [];
+            foreach ($currencies as $cur) {
+                $bnrRate = $this->getRate($cur);
+                if ($bnrRate !== null) {
+                    $cases[] = sprintf("WHEN %s = '%s' THEN %s", $currencyColumn, addslashes($cur), $bnrRate);
                 }
             }
+            if ($cases) {
+                $fallbackRateSql = 'CASE ' . implode(' ', $cases) . ' ELSE 1 END';
+            }
         } catch (\Throwable) {
-            // BNR unavailable — fall back to 1 (no conversion)
+            // BNR unavailable: fall back to 1 (no conversion)
         }
 
         return $fallbackRateSql;
+    }
+
+    /**
+     * Currencies other than $defaultCurrency on the company's live invoices, grouped by
+     * direction ('' for invoices without one). Cached per company until its next write.
+     *
+     * @return array<string, string[]>
+     */
+    public function getInvoiceCurrencies(Connection $conn, string $companyId, string $defaultCurrency): array
+    {
+        return $this->cachedStat($companyId, 'currencies|invoice|' . $defaultCurrency, static function () use ($conn, $companyId, $defaultCurrency): array {
+            $rows = $conn->fetchAllAssociative(
+                'SELECT DISTINCT direction, currency FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND currency != :defaultCurrency',
+                ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency]
+            );
+            $byDirection = [];
+            foreach ($rows as $row) {
+                $byDirection[(string) $row['direction']][] = (string) $row['currency'];
+            }
+
+            return $byDirection;
+        });
+    }
+
+    /** Whether any live invoice of the given direction is in a currency other than $defaultCurrency. */
+    public function hasForeignCurrencies(Connection $conn, string $companyId, string $defaultCurrency, string $direction): bool
+    {
+        return !empty($this->getInvoiceCurrencies($conn, $companyId, $defaultCurrency)[$direction]);
+    }
+
+    private function cachedStat(string $companyId, string $key, callable $compute): mixed
+    {
+        return $this->statsCache !== null ? $this->statsCache->get($companyId, $key, $compute, self::STATS_TTL) : $compute();
     }
 
     /**

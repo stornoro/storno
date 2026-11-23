@@ -4,7 +4,9 @@ namespace App\Repository;
 
 use App\Entity\Client;
 use App\Entity\Company;
+use App\Service\Cache\CompanyStatsCache;
 use App\Service\ExchangeRateService;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -18,6 +20,7 @@ class ClientRepository extends ServiceEntityRepository
     public function __construct(
         ManagerRegistry $registry,
         private readonly ExchangeRateService $exchangeRateService,
+        private readonly CompanyStatsCache $statsCache,
     ) {
         parent::__construct($registry, Client::class);
     }
@@ -48,13 +51,30 @@ class ClientRepository extends ServiceEntityRepository
     /**
      * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool, distinctCountries: string[]}
      */
+    /** The trailing id breaks ties on created_at, so consecutive pages never overlap. */
     private const CLIENT_SORT_MAP = [
-        'recent'         => 'c.created_at DESC',
-        'mostInvoiced'   => 'invoiceTotal DESC, c.created_at DESC',
-        'mostInvoices'   => 'invoiceCount DESC, c.created_at DESC',
-        'recentActivity' => 'lastInvoiceDate DESC, c.created_at DESC',
-        'name'           => 'c.name ASC',
+        'recent'         => 'c.created_at DESC, c.id DESC',
+        'mostInvoiced'   => 'invoiceTotal DESC, c.created_at DESC, c.id DESC',
+        'mostInvoices'   => 'invoiceCount DESC, c.created_at DESC, c.id DESC',
+        'recentActivity' => 'lastInvoiceDate DESC, c.created_at DESC, c.id DESC',
+        'name'           => 'c.name ASC, c.id ASC',
     ];
+
+    /**
+     * Whole-company aggregates live until the company's next write moves the cache version; the
+     * TTL only bounds writes that bypass the ORM.
+     */
+    private const STATS_TTL = 600;
+
+    /** Sort keys that order by an invoice statistic, so the page can only be cut after aggregating. */
+    private const CLIENT_STAT_SORTS = ['mostInvoiced', 'mostInvoices', 'recentActivity'];
+
+    private const CLIENT_COLUMNS = '
+        c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
+        c.address, c.city, c.email, c.country, c.vies_valid AS viesValid, c.source,
+        c.status, c.credit_limit AS creditLimit, c.affiliated, c.inactive,
+        c.vat_registered AS vatRegistered, c.vat_on_collection AS vatOnCollection,
+        c.efactura_registered AS efacturaRegistered, c.vat_status_checked_at AS vatStatusCheckedAt';
 
     /**
      * @param array{search?: ?string, country?: ?string, sort?: ?string, vatPayer?: ?string, hasInvoices?: ?string, source?: ?string} $filters
@@ -88,72 +108,110 @@ class ClientRepository extends ServiceEntityRepository
             $innerClauses[] = 'c.source = :source';
             $innerParams['source'] = $filters['source'];
         }
-        $innerWhere = $innerClauses ? ' AND ' . implode(' AND ', $innerClauses) : '';
-
-        $hasInvoicesClause = '';
-        if (!empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true)) {
-            $hasInvoicesClause = $filters['hasInvoices'] === 'active'
-                ? ' AND COALESCE(s.invoice_count, 0) > 0'
-                : ' AND COALESCE(s.invoice_count, 0) = 0';
+        // "Has invoices" probes invoice.client_id once per client instead of aggregating the totals.
+        // A scalar subquery with LIMIT 1 keeps it a per-row index probe: MariaDB rewrites EXISTS
+        // into a semi-join that materializes every outgoing invoice of the company first.
+        $filtersByInvoices = !empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true);
+        $hasInvoices = $filtersByInvoices ? $filters['hasInvoices'] : null;
+        if ($filtersByInvoices) {
+            $innerClauses[] = "(
+                SELECT 1 FROM invoice hi
+                WHERE hi.client_id = c.id AND hi.company_id = :companyId AND hi.deleted_at IS NULL AND hi.direction = 'outgoing'
+                LIMIT 1
+            ) IS " . ($hasInvoices === 'active' ? 'NOT NULL' : 'NULL');
         }
+        $innerWhere = $innerClauses ? ' AND ' . implode(' AND ', $innerClauses) : '';
 
         $sortKey = is_string($filters['sort'] ?? null) ? $filters['sort'] : 'recent';
         $orderBy = self::CLIENT_SORT_MAP[$sortKey] ?? self::CLIENT_SORT_MAP['recent'];
+        $sortsByStat = in_array($sortKey, self::CLIENT_STAT_SORTS, true);
 
-        $hasForeignCurrencies = (bool) $conn->fetchOne(
-            'SELECT 1 FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND direction = :outgoing AND currency != :defaultCurrency LIMIT 1',
-            ['companyId' => $companyId, 'outgoing' => 'outgoing', 'defaultCurrency' => $defaultCurrency],
-        );
+        $hasForeignCurrencies = $this->exchangeRateService->hasForeignCurrencies($conn, $companyId, $defaultCurrency, 'outgoing');
 
-        $distinctCountriesRows = $conn->fetchFirstColumn(
+        $distinctCountriesRows = $this->statsCache->get($companyId, 'clients.countries', fn () => $conn->fetchFirstColumn(
             'SELECT DISTINCT c.country FROM client c WHERE c.company_id = :companyId AND c.deleted_at IS NULL AND c.country IS NOT NULL AND c.country != \'\' ORDER BY c.country ASC',
             ['companyId' => $companyId],
-        );
-
-        // Stats are aggregated per client_id (FK) — not per receiver_cif — so
-        // multiple contacts under the same VAT each get their own counts.
-        $sql = "
-            SELECT
-                c.id, c.type, c.name, c.cui, c.cnp, c.vat_code AS vatCode, c.is_vat_payer AS isVatPayer,
-                c.address, c.city, c.email, c.country, c.vies_valid AS viesValid, c.source,
-                c.status, c.credit_limit AS creditLimit, c.affiliated, c.inactive,
-                c.vat_registered AS vatRegistered, c.vat_on_collection AS vatOnCollection,
-                c.efactura_registered AS efacturaRegistered, c.vat_status_checked_at AS vatStatusCheckedAt,
-                COALESCE(s.invoice_count, 0) AS invoiceCount,
-                COALESCE(s.invoice_total, 0) AS invoiceTotal,
-                s.last_invoice_date AS lastInvoiceDate,
-                c.created_at AS groupCreatedAt
-            FROM client c
-            LEFT JOIN (
-                SELECT client_id,
-                       COUNT(*) AS invoice_count,
-                       SUM($convertTotalSql) AS invoice_total,
-                       MAX(issue_date) AS last_invoice_date
-                FROM invoice
-                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing' AND client_id IS NOT NULL
-                GROUP BY client_id
-            ) s ON s.client_id = c.id
-            WHERE c.company_id = :companyId AND c.deleted_at IS NULL
-            $innerWhere
-            $hasInvoicesClause
-            ORDER BY $orderBy
-            LIMIT :pageLimit OFFSET :pageOffset
-        ";
+        ), self::STATS_TTL);
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([
-            'companyId'       => $companyId,
-            'defaultCurrency' => $defaultCurrency,
-            'defaultRate'     => $defaultRate,
-            'pageLimit'       => $limit,
-            'pageOffset'      => $offset,
-        ], $innerParams);
-        $types = [
+        $pageTypes = [
             'pageLimit'  => ParameterType::INTEGER,
             'pageOffset' => ParameterType::INTEGER,
         ];
+        $statParams = ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate];
 
-        $rows = $conn->fetchAllAssociative($sql, $params, $types);
+        if ($sortsByStat) {
+            // Ordering by a statistic needs it for every client, so this path aggregates the whole
+            // company. The result is cached until the company's next write.
+            $cacheKey = 'clients.page|' . json_encode([$page, $limit, $innerParams, $hasInvoices, $sortKey, $defaultCurrency, $defaultRate, date('Y-m-d')]);
+            $rows = $this->statsCache->get($companyId, $cacheKey, fn () => $conn->fetchAllAssociative(
+                'SELECT ' . self::CLIENT_COLUMNS . ",
+                    COALESCE(s.invoice_count, 0) AS invoiceCount,
+                    COALESCE(s.invoice_total, 0) AS invoiceTotal,
+                    s.last_invoice_date AS lastInvoiceDate,
+                    c.created_at AS groupCreatedAt
+                FROM client c
+                LEFT JOIN (
+                    SELECT client_id,
+                           COUNT(*) AS invoice_count,
+                           SUM($convertTotalSql) AS invoice_total,
+                           MAX(issue_date) AS last_invoice_date
+                    FROM invoice
+                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing' AND client_id IS NOT NULL
+                    GROUP BY client_id
+                ) s ON s.client_id = c.id
+                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
+                $innerWhere
+                ORDER BY $orderBy
+                LIMIT :pageLimit OFFSET :pageOffset",
+                array_merge($statParams, ['pageLimit' => $limit, 'pageOffset' => $offset], $innerParams),
+                $pageTypes,
+            ), self::STATS_TTL);
+        } else {
+            // Cut the page from the client table alone, then aggregate invoices only for its ids
+            // through the invoice.client_id index.
+            $clients = $conn->fetchAllAssociative(
+                'SELECT ' . self::CLIENT_COLUMNS . ", c.created_at AS groupCreatedAt
+                FROM client c
+                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
+                $innerWhere
+                ORDER BY $orderBy
+                LIMIT :pageLimit OFFSET :pageOffset",
+                array_merge(['companyId' => $companyId, 'pageLimit' => $limit, 'pageOffset' => $offset], $innerParams),
+                $pageTypes,
+            );
+
+            $stats = [];
+            if ($clients) {
+                $statRows = $conn->fetchAllAssociative(
+                    "SELECT client_id,
+                            COUNT(*) AS invoice_count,
+                            SUM($convertTotalSql) AS invoice_total,
+                            MAX(issue_date) AS last_invoice_date
+                     FROM invoice
+                     WHERE client_id IN (:clientIds) AND company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing'
+                     GROUP BY client_id",
+                    array_merge($statParams, ['clientIds' => array_column($clients, 'id')]),
+                    ['clientIds' => ArrayParameterType::STRING],
+                );
+                foreach ($statRows as $statRow) {
+                    $stats[$statRow['client_id']] = $statRow;
+                }
+            }
+
+            // Same keys, in the same order, as the aggregated query above.
+            $rows = [];
+            foreach ($clients as $client) {
+                $createdAt = $client['groupCreatedAt'];
+                unset($client['groupCreatedAt']);
+                $stat = $stats[$client['id']] ?? null;
+                $client['invoiceCount'] = $stat['invoice_count'] ?? 0;
+                $client['invoiceTotal'] = $stat['invoice_total'] ?? 0;
+                $client['lastInvoiceDate'] = $stat['last_invoice_date'] ?? null;
+                $client['groupCreatedAt'] = $createdAt;
+                $rows[] = $client;
+            }
+        }
 
         foreach ($rows as &$row) {
             $row['isVatPayer'] = (bool) $row['isVatPayer'];
@@ -165,25 +223,16 @@ class ClientRepository extends ServiceEntityRepository
             $row['invoiceCount'] = (int) $row['invoiceCount'];
             $row['invoiceTotal'] = round((float) $row['invoiceTotal'], 2);
         }
+        unset($row);
 
-        $countSql = "
-            SELECT COUNT(*) FROM (
-                SELECT c.id, COALESCE(s.invoice_count, 0) AS invoice_count
-                FROM client c
-                LEFT JOIN (
-                    SELECT client_id, COUNT(*) AS invoice_count
-                    FROM invoice
-                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'outgoing' AND client_id IS NOT NULL
-                    GROUP BY client_id
-                ) s ON s.client_id = c.id
-                WHERE c.company_id = :companyId AND c.deleted_at IS NULL
-                $innerWhere
-                $hasInvoicesClause
-            ) grouped
-        ";
-
+        $countSql = "SELECT COUNT(*) FROM client c WHERE c.company_id = :companyId AND c.deleted_at IS NULL $innerWhere";
         $countParams = array_merge(['companyId' => $companyId], $innerParams);
-        $total = (int) $conn->fetchOne($countSql, $countParams);
+        if ($filtersByInvoices) {
+            // The filter probes the invoices of every client of the company, so its count is cached.
+            $total = (int) $this->statsCache->get($companyId, 'clients.count|' . json_encode([$countParams, $hasInvoices]), fn () => $conn->fetchOne($countSql, $countParams), self::STATS_TTL);
+        } else {
+            $total = (int) $conn->fetchOne($countSql, $countParams);
+        }
 
         return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies, 'distinctCountries' => $distinctCountriesRows];
     }

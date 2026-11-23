@@ -37,34 +37,66 @@ class RecurringInvoiceProcessor
         private readonly LicenseManager $licenseManager,
     ) {}
 
+    /** Templates loaded and issued per batch. */
+    private const BATCH_SIZE = 50;
+
     /**
      * Process all recurring invoices due on or before the given date.
      *
-     * @return array{processed: int, errors: int, invoices: string[]}
+     * The due templates are listed once, then issued in batches, so each template is issued at
+     * most once per run even when it is several periods behind (it stays due after one issue).
+     * $limit caps the number of templates, null means all of them. $afterBatch runs after each
+     * batch with the counts of that batch; a long-running caller clears the entity manager there.
+     *
+     * @param (callable(int $processed, int $errors): void)|null $afterBatch
+     *
+     * @return array{processed: int, errors: int, invoices: string[], due: int}
      */
-    public function processRecurringInvoices(\DateTimeInterface $date, int $limit = 100, bool $dryRun = false): array
+    public function processRecurringInvoices(\DateTimeInterface $date, ?int $limit = null, bool $dryRun = false, ?callable $afterBatch = null, ?callable $onStart = null): array
     {
         // Global lock prevents concurrent cron runs from double-processing
         $lock = $this->lockFactory->createLock('recurring-invoices-processing', 600);
         if (!$lock->acquire()) {
             $this->logger->warning('Recurring invoice processing already in progress, skipping.');
-            return ['processed' => 0, 'errors' => 0, 'invoices' => []];
+            return ['processed' => 0, 'errors' => 0, 'invoices' => [], 'due' => 0];
         }
 
         try {
-            return $this->doProcess($date, $limit, $dryRun);
+            $ids = $this->recurringInvoiceRepository->findDueIds($date, $limit);
+            if ($onStart !== null) {
+                $onStart(count($ids));
+            }
+
+            $totals = ['processed' => 0, 'errors' => 0, 'invoices' => [], 'due' => count($ids)];
+            foreach (array_chunk($ids, self::BATCH_SIZE) as $chunk) {
+                $result = $this->processBatch($this->recurringInvoiceRepository->findForProcessing($chunk), $date, $dryRun);
+                $totals['processed'] += $result['processed'];
+                $totals['errors'] += $result['errors'];
+                $totals['invoices'] = array_merge($totals['invoices'], $result['invoices']);
+
+                if ($afterBatch !== null) {
+                    $afterBatch($result['processed'], $result['errors']);
+                }
+                if (!$this->entityManager->isOpen()) {
+                    $this->logger->error('Recurring invoice processing stopped: the entity manager was closed by a database error.');
+                    break;
+                }
+                $lock->refresh();
+            }
+
+            return $totals;
         } finally {
             $lock->release();
         }
     }
 
     /**
+     * @param RecurringInvoice[] $dueItems
+     *
      * @return array{processed: int, errors: int, invoices: string[]}
      */
-    private function doProcess(\DateTimeInterface $date, int $limit, bool $dryRun): array
+    private function processBatch(array $dueItems, \DateTimeInterface $date, bool $dryRun): array
     {
-        $dueItems = $this->recurringInvoiceRepository->findDueForProcessing($date, $limit);
-
         $processed = 0;
         $errors = 0;
         $invoiceNumbers = [];

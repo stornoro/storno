@@ -12,6 +12,7 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: SupplierRepository::class)]
+#[ORM\Index(name: 'idx_supplier_company_created', columns: ['company_id', 'deleted_at', 'created_at'])]
 #[ORM\Index(name: 'idx_supplier_company_cif', columns: ['company_id', 'cif', 'deleted_at'])]
 #[ORM\Index(name: 'idx_supplier_company_name', columns: ['company_id', 'name', 'deleted_at'])]
 class Supplier

@@ -15,7 +15,9 @@ use App\Service\LicenseManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedJsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Uid\Uuid;
 
@@ -39,7 +41,7 @@ class ClientStatementController extends AbstractController
     ) {}
 
     #[Route('/statements', methods: ['GET'], priority: 10)]
-    public function statements(Request $request): JsonResponse
+    public function statements(Request $request, LoggerInterface $logger): Response
     {
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
@@ -54,7 +56,36 @@ class ClientStatementController extends AbstractController
             return $this->json(['error' => 'Invalid asOf date, expected YYYY-MM-DD.'], Response::HTTP_BAD_REQUEST);
         }
 
-        return $this->json($this->statementService->statementsForCompany($company, $asOf));
+        // The totals and the client order are computed here, before the response starts; the
+        // statements themselves are built 500 clients at a time while the JSON is streamed.
+        // The response has no pagination: a large company gets every open invoice row.
+        $overview = $this->statementService->streamStatementsForCompany($company, $asOf);
+        $overview['statements'] = $this->logStreamFailure($overview['statements'], $logger, (string) $company->getId());
+
+        return new StreamedJsonResponse($overview);
+    }
+
+    /**
+     * A streamed response cannot turn into an error once the first byte is out, so a failure
+     * while building statements is logged and the JSON stops where it was.
+     */
+    private function logStreamFailure(\Generator $statements, LoggerInterface $logger, string $companyId): \Generator
+    {
+        $sent = 0;
+        try {
+            foreach ($statements as $statement) {
+                yield $statement;
+                if (++$sent % 500 === 0) {
+                    flush();
+                }
+            }
+        } catch (\Throwable $e) {
+            $logger->error('Client statements failed while streaming; the client received truncated JSON.', [
+                'company' => $companyId,
+                'statementsSent' => $sent,
+                'exception' => $e,
+            ]);
+        }
     }
 
     #[Route('/statements/email', methods: ['POST'], priority: 10)]

@@ -9,6 +9,7 @@ use App\Entity\Invoice;
 use App\Enum\DocumentStatus;
 use App\Enum\InvoiceDirection;
 use App\Repository\BankAccountRepository;
+use App\Repository\Export\ClientStatementQueries;
 use App\Repository\InvoiceRepository;
 
 /**
@@ -24,6 +25,10 @@ use App\Repository\InvoiceRepository;
  * The statement is expressed in the company's default currency; invoices in
  * other currencies are listed with their own currency and summarised in
  * `otherCurrencies` but do not enter the balance or the aging bands.
+ *
+ * The company-wide list does not hydrate invoices: the totals, the aging and the
+ * order of the clients come from SQL aggregates (ClientStatementQueries), and the
+ * statements are built 500 clients at a time from plain invoice rows.
  */
 class ClientStatementService
 {
@@ -38,9 +43,12 @@ class ClientStatementService
         'over180' => ['min' => 181, 'max' => null],
     ];
 
+    private const CLIENT_BATCH = 500;
+
     public function __construct(
         private readonly InvoiceRepository $invoiceRepository,
         private readonly BankAccountRepository $bankAccountRepository,
+        private readonly ?ClientStatementQueries $statementQueries = null,
     ) {}
 
     public function statement(Client $client, \DateTimeImmutable $asOf): array
@@ -71,7 +79,7 @@ class ClientStatementService
             && !\in_array($i->getStatus(), [DocumentStatus::DRAFT, DocumentStatus::CANCELLED, DocumentStatus::CONVERTED], true)
             && ($i->getIssueDate() === null || $i->getIssueDate() <= $asOf->setTime(23, 59, 59)));
 
-        return $this->buildStatement($company, $client, array_values($invoices), $asOf);
+        return $this->buildStatement($company, $this->clientRow($client), array_map($this->invoiceRow(...), array_values($invoices)), $asOf);
     }
 
     /**
@@ -80,51 +88,60 @@ class ClientStatementService
      */
     public function statementsForCompany(Company $company, \DateTimeImmutable $asOf): array
     {
-        $byClient = [];
-        $clients = [];
-        foreach ($this->findOpenInvoices($company, $asOf) as $invoice) {
-            $client = $invoice->getClient();
-            if (!$client || $client->getDeletedAt() !== null) {
-                continue;
-            }
-            $key = (string) $client->getId();
-            $clients[$key] = $client;
-            $byClient[$key][] = $invoice;
+        $overview = $this->streamStatementsForCompany($company, $asOf);
+        $overview['statements'] = iterator_to_array($overview['statements'], false);
+
+        return $overview;
+    }
+
+    /**
+     * Same keys and values as statementsForCompany(), with `statements` as a generator for a
+     * streamed JSON response. The totals, aging and client count are computed by SQL before
+     * the first statement is built.
+     *
+     * @return array{company: array, asOf: string, currency: string, clientCount: int, totals: array, aging: array, statements: \Generator<int, array>}
+     */
+    public function streamStatementsForCompany(Company $company, \DateTimeImmutable $asOf): array
+    {
+        if ($this->statementQueries === null) {
+            throw new \LogicException('ClientStatementQueries is required for the company-wide statements.');
         }
 
         $currency = $company->getDefaultCurrency() ?: 'RON';
-        $statements = [];
-        $aging = $this->emptyAging();
-        $totals = ['invoiced' => '0.00', 'paid' => '0.00', 'outstanding' => '0.00', 'credits' => '0.00', 'balance' => '0.00', 'count' => 0];
-
-        foreach ($byClient as $key => $invoices) {
-            $statement = $this->buildStatement($company, $clients[$key], $invoices, $asOf, includeBankAccounts: false);
-            if (bccomp($statement['balance'], '0.00', 2) <= 0) {
-                continue;
-            }
-            $statements[] = $statement;
-
-            foreach (self::AGING_BANDS as $band => $_) {
-                $aging[$band]['amount'] = bcadd($aging[$band]['amount'], $statement['aging'][$band]['amount'], 2);
-                $aging[$band]['count'] += $statement['aging'][$band]['count'];
-            }
-            foreach (['invoiced', 'paid', 'outstanding', 'credits', 'balance'] as $field) {
-                $totals[$field] = bcadd($totals[$field], $statement['totals'][$field] ?? $statement[$field], 2);
-            }
-            $totals['count'] += $statement['totals']['count'];
-        }
-
-        usort($statements, static fn (array $a, array $b) => bccomp($b['balance'], $a['balance'], 2));
+        $summary = $this->statementQueries->companyTotals($company, $asOf, $currency);
+        $clientIds = $this->statementQueries->orderedClientIds($company, $asOf, $currency);
 
         return [
             'company' => ['id' => (string) $company->getId(), 'name' => $company->getName()],
             'asOf' => $asOf->format('Y-m-d'),
             'currency' => $currency,
-            'clientCount' => \count($statements),
-            'totals' => $totals,
-            'aging' => $aging,
-            'statements' => $statements,
+            'clientCount' => $summary['clientCount'],
+            'totals' => $summary['totals'],
+            'aging' => $summary['aging'],
+            'statements' => $this->statementsInOrder($company, $asOf, $clientIds),
         ];
+    }
+
+    /**
+     * @param string $packedIds client ids, 36 bytes each, in output order
+     *
+     * @return \Generator<int, array>
+     */
+    private function statementsInOrder(Company $company, \DateTimeImmutable $asOf, string $packedIds): \Generator
+    {
+        $chunk = self::CLIENT_BATCH * 36;
+        for ($offset = 0, $length = \strlen($packedIds); $offset < $length; $offset += $chunk) {
+            $ids = str_split(substr($packedIds, $offset, $chunk), 36);
+            $clients = $this->statementQueries->clients($ids);
+            $invoices = $this->statementQueries->openInvoicesByClient($company, $asOf, $ids);
+
+            foreach ($ids as $id) {
+                if (!isset($clients[$id])) {
+                    continue;
+                }
+                yield $this->buildStatement($company, $clients[$id], $invoices[$id] ?? [], $asOf, includeBankAccounts: false);
+            }
+        }
     }
 
     /**
@@ -133,7 +150,11 @@ class ClientStatementService
      */
     public function daysOverdue(Invoice $invoice, \DateTimeImmutable $asOf): int
     {
-        $due = $invoice->getDueDate() ?? $invoice->getIssueDate();
+        return $this->daysOverdueFrom($invoice->getDueDate() ?? $invoice->getIssueDate(), $asOf);
+    }
+
+    private function daysOverdueFrom(?\DateTimeInterface $due, \DateTimeImmutable $asOf): int
+    {
         if (!$due) {
             return 0;
         }
@@ -157,9 +178,10 @@ class ClientStatementService
     }
 
     /**
-     * @param Invoice[] $invoices
+     * @param array<string, mixed>       $client   see clientRow()
+     * @param list<array<string, mixed>> $invoices see invoiceRow()
      */
-    private function buildStatement(Company $company, Client $client, array $invoices, \DateTimeImmutable $asOf, bool $includeBankAccounts = true): array
+    private function buildStatement(Company $company, array $client, array $invoices, \DateTimeImmutable $asOf, bool $includeBankAccounts = true): array
     {
         $currency = $company->getDefaultCurrency() ?: 'RON';
         $aging = $this->emptyAging();
@@ -171,32 +193,38 @@ class ClientStatementService
         $credits = '0.00';
         $count = 0;
 
-        usort($invoices, static function (Invoice $a, Invoice $b): int {
-            $da = $a->getDueDate() ?? $a->getIssueDate();
-            $db = $b->getDueDate() ?? $b->getIssueDate();
+        $date = static fn (?string $d): ?\DateTimeImmutable => $d === null || $d === '' ? null : new \DateTimeImmutable($d);
+        foreach ($invoices as $k => $invoice) {
+            $invoices[$k]['_issue'] = $date($invoice['issueDate']);
+            $invoices[$k]['_due'] = $date($invoice['dueDate']);
+        }
 
-            return ($da?->getTimestamp() ?? 0) <=> ($db?->getTimestamp() ?? 0) ?: strcmp((string) $a->getNumber(), (string) $b->getNumber());
+        usort($invoices, static function (array $a, array $b): int {
+            $da = $a['_due'] ?? $a['_issue'];
+            $db = $b['_due'] ?? $b['_issue'];
+
+            return ($da?->getTimestamp() ?? 0) <=> ($db?->getTimestamp() ?? 0) ?: strcmp((string) $a['number'], (string) $b['number']);
         });
 
         foreach ($invoices as $invoice) {
-            $balance = $invoice->getBalance();
+            $balance = bcsub($invoice['total'], $invoice['amountPaid'], 2);
             if (bccomp($balance, '0.00', 2) === 0) {
                 continue;
             }
 
-            $days = $this->daysOverdue($invoice, $asOf);
+            $days = $this->daysOverdueFrom($invoice['_due'] ?? $invoice['_issue'], $asOf);
             $band = bccomp($balance, '0.00', 2) > 0 ? $this->bandFor($days) : null;
-            $invoiceCurrency = $invoice->getCurrency() ?: 'RON';
+            $invoiceCurrency = $invoice['currency'] ?: 'RON';
 
             $rows[] = [
-                'id' => (string) $invoice->getId(),
-                'number' => $invoice->getNumber(),
-                'status' => $invoice->getStatus()->value,
-                'issueDate' => $invoice->getIssueDate()?->format('Y-m-d'),
-                'dueDate' => $invoice->getDueDate()?->format('Y-m-d'),
+                'id' => $invoice['id'],
+                'number' => $invoice['number'],
+                'status' => $invoice['status'],
+                'issueDate' => $invoice['_issue']?->format('Y-m-d'),
+                'dueDate' => $invoice['_due']?->format('Y-m-d'),
                 'currency' => $invoiceCurrency,
-                'total' => $invoice->getTotal(),
-                'paid' => $invoice->getAmountPaid(),
+                'total' => $invoice['total'],
+                'paid' => $invoice['amountPaid'],
                 'outstanding' => $balance,
                 'daysOverdue' => max(0, $days),
                 'band' => $invoiceCurrency === $currency ? $band : null,
@@ -210,8 +238,8 @@ class ClientStatementService
             }
 
             $count++;
-            $invoiced = bcadd($invoiced, $invoice->getTotal(), 2);
-            $paid = bcadd($paid, $invoice->getAmountPaid(), 2);
+            $invoiced = bcadd($invoiced, $invoice['total'], 2);
+            $paid = bcadd($paid, $invoice['amountPaid'], 2);
             if ($band !== null) {
                 $outstanding = bcadd($outstanding, $balance, 2);
                 $aging[$band]['amount'] = bcadd($aging[$band]['amount'], $balance, 2);
@@ -231,16 +259,16 @@ class ClientStatementService
 
         $statement = [
             'client' => [
-                'id' => (string) $client->getId(),
-                'name' => $client->getName(),
-                'type' => $client->getType(),
-                'cui' => $client->getCui(),
-                'cnp' => $client->getCnp(),
-                'email' => $client->getEmail(),
-                'address' => $client->getAddress(),
-                'city' => $client->getCity(),
-                'county' => $client->getCounty(),
-                'country' => $client->getCountry(),
+                'id' => $client['id'],
+                'name' => $client['name'],
+                'type' => $client['type'],
+                'cui' => $client['cui'],
+                'cnp' => $client['cnp'],
+                'email' => $client['email'],
+                'address' => $client['address'],
+                'city' => $client['city'],
+                'county' => $client['county'],
+                'country' => $client['country'],
             ],
             'company' => ['id' => (string) $company->getId(), 'name' => $company->getName()],
             'asOf' => $asOf->format('Y-m-d'),
@@ -270,6 +298,46 @@ class ClientStatementService
         }
 
         return $statement;
+    }
+
+    /**
+     * The client fields a statement shows, in the shape of a client table row.
+     *
+     * @return array<string, mixed>
+     */
+    private function clientRow(Client $client): array
+    {
+        return [
+            'id' => (string) $client->getId(),
+            'name' => $client->getName(),
+            'type' => $client->getType(),
+            'cui' => $client->getCui(),
+            'cnp' => $client->getCnp(),
+            'email' => $client->getEmail(),
+            'address' => $client->getAddress(),
+            'city' => $client->getCity(),
+            'county' => $client->getCounty(),
+            'country' => $client->getCountry(),
+        ];
+    }
+
+    /**
+     * The invoice fields a statement uses, in the shape ClientStatementQueries returns.
+     *
+     * @return array{id: string, number: ?string, status: string, issueDate: ?string, dueDate: ?string, currency: ?string, total: string, amountPaid: string}
+     */
+    private function invoiceRow(Invoice $invoice): array
+    {
+        return [
+            'id' => (string) $invoice->getId(),
+            'number' => $invoice->getNumber(),
+            'status' => $invoice->getStatus()->value,
+            'issueDate' => $invoice->getIssueDate()?->format('Y-m-d'),
+            'dueDate' => $invoice->getDueDate()?->format('Y-m-d'),
+            'currency' => $invoice->getCurrency(),
+            'total' => $invoice->getTotal(),
+            'amountPaid' => $invoice->getAmountPaid(),
+        ];
     }
 
     /**

@@ -1342,8 +1342,11 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoices/export/csv', methods: ['GET'])]
-    public function exportCsv(Request $request): Response
-    {
+    public function exportCsv(
+        Request $request,
+        \App\Repository\Export\InvoiceExportQueries $exportQueries,
+        \App\Service\Export\StreamedExportFactory $streamedExport,
+    ): Response {
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
@@ -1356,20 +1359,23 @@ class InvoiceController extends AbstractController
         $filters = $this->normalizeDateFilters($request->query->all());
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
-        // No limit: exports must contain every invoice in range, not a page.
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
+        // No limit: exports must contain every invoice in range, not a page. The rows are
+        // read in batches and streamed; priming runs the first query before the response starts.
+        $invoices = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterate($company, $filters));
 
-        $csv = $this->csvExportService->generate($invoices);
-
-        return new Response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="facturi-%s.csv"', date('Y-m-d')),
-        ]);
+        return $streamedExport->csv(
+            sprintf('facturi-%s.csv', date('Y-m-d')),
+            CsvExportService::CSV_HEADERS,
+            $this->csvExportService->rows($invoices),
+        );
     }
 
     #[Route('/invoices/export/saga-xml', methods: ['GET'])]
-    public function exportSagaXml(Request $request): Response
-    {
+    public function exportSagaXml(
+        Request $request,
+        \App\Repository\Export\InvoiceExportQueries $exportQueries,
+        \App\Service\Export\StreamedExportFactory $streamedExport,
+    ): Response {
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
@@ -1382,22 +1388,21 @@ class InvoiceController extends AbstractController
         $filters = $this->normalizeDateFilters($request->query->all());
         unset($filters['status']);
         $filters['excludeCancelled'] = true;
-        // No limit: exports must contain every invoice in range, not a page.
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
+        // No limit: exports must contain every invoice in range, not a page. The file name
+        // needs the first and last issue date before the body, so they come from an aggregate.
+        $range = array_filter($exportQueries->issueDateRange($company, $filters));
+        $filename = $this->buildSagaFilename('F', $range, fn (\DateTimeInterface $d) => $d);
+        $invoices = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterate($company, $filters));
 
-        $xml = $this->sagaXmlExportService->generateInvoicesXml($invoices, $company);
-
-        $filename = $this->buildSagaFilename('F', $invoices, fn (Invoice $i) => $i->getIssueDate());
-
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
-        ]);
+        return $streamedExport->xml($filename, fn () => $this->sagaXmlExportService->streamInvoicesXml($invoices, $company));
     }
 
     #[Route('/invoices/export/receipts-saga-xml', methods: ['GET'])]
-    public function exportReceiptsSagaXml(Request $request): Response
-    {
+    public function exportReceiptsSagaXml(
+        Request $request,
+        \App\Repository\Export\PaymentExportQueries $paymentExportQueries,
+        \App\Service\Export\StreamedExportFactory $streamedExport,
+    ): Response {
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
@@ -1408,21 +1413,20 @@ class InvoiceController extends AbstractController
         }
 
         [$dateFrom, $dateTo] = $this->exportDateRange($request);
-        $payments = $this->paymentRepository->findByCompanyAndDirectionFiltered($company, InvoiceDirection::OUTGOING, $dateFrom, $dateTo);
-        [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
-        $xml = $this->sagaXmlExportService->generateReceiptsXml($payments, $accountMap);
+        // Called with no payments, this only resolves the account map and the currency filter.
+        [, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, []);
+        $prepared = $paymentExportQueries->prepare($company, InvoiceDirection::OUTGOING, $dateFrom, $dateTo, $currencyTag);
+        $filename = $this->buildSagaFilename('I', array_filter([$prepared['minDate'], $prepared['maxDate']]), fn (\DateTimeInterface $d) => $d, $currencyTag);
 
-        $filename = $this->buildSagaFilename('I', $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
-
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
-        ]);
+        return $streamedExport->xml($filename, fn () => $this->sagaXmlExportService->streamReceiptsXml($paymentExportQueries->iterate($prepared['ids']), $accountMap));
     }
 
     #[Route('/invoices/export/payments-saga-xml', methods: ['GET'])]
-    public function exportPaymentsSagaXml(Request $request): Response
-    {
+    public function exportPaymentsSagaXml(
+        Request $request,
+        \App\Repository\Export\PaymentExportQueries $paymentExportQueries,
+        \App\Service\Export\StreamedExportFactory $streamedExport,
+    ): Response {
         $company = $this->resolveCompany($request);
         if (!$company) {
             return $this->json(['error' => 'Company not found.'], Response::HTTP_NOT_FOUND);
@@ -1433,16 +1437,12 @@ class InvoiceController extends AbstractController
         }
 
         [$dateFrom, $dateTo] = $this->exportDateRange($request);
-        $payments = $this->paymentRepository->findByCompanyAndDirectionFiltered($company, InvoiceDirection::INCOMING, $dateFrom, $dateTo);
-        [$payments, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, $payments);
-        $xml = $this->sagaXmlExportService->generatePaymentsXml($payments, $accountMap);
+        // Called with no payments, this only resolves the account map and the currency filter.
+        [, $accountMap, $currencyTag] = $this->filterPaymentsByCurrency($request, $company, []);
+        $prepared = $paymentExportQueries->prepare($company, InvoiceDirection::INCOMING, $dateFrom, $dateTo, $currencyTag);
+        $filename = $this->buildSagaFilename('P', array_filter([$prepared['minDate'], $prepared['maxDate']]), fn (\DateTimeInterface $d) => $d, $currencyTag);
 
-        $filename = $this->buildSagaFilename('P', $payments, fn (\App\Entity\Payment $p) => $p->getPaymentDate(), $currencyTag);
-
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
-        ]);
+        return $streamedExport->xml($filename, fn () => $this->sagaXmlExportService->streamPaymentsXml($paymentExportQueries->iterate($prepared['ids']), $accountMap));
     }
 
     #[Route('/invoices/export/zip', methods: ['POST'])]
@@ -1485,7 +1485,7 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoices/export/efactura-zip', methods: ['POST'])]
-    public function exportEfacturaZip(Request $request): Response
+    public function exportEfacturaZip(Request $request, \App\Repository\Export\InvoiceExportQueries $exportQueries): Response
     {
         $company = $this->resolveCompany($request);
         if (!$company) {
@@ -1513,21 +1513,22 @@ class InvoiceController extends AbstractController
             $filters['dateTo'] = $dateTo;
         }
 
-        // No limit: exports must contain every invoice in range, not a page.
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $filters, null);
+        // No limit: exports must contain every invoice in range, not a page. Queue versus
+        // inline is decided on a COUNT, so no invoice is hydrated to count it.
+        $total = $exportQueries->count($company, $filters);
 
-        if (empty($invoices)) {
+        if ($total === 0) {
             return $this->json(['error' => 'No invoices found for the selected period.', 'messageKey' => MessageKey::ERR_NO_INVOICES_FOR_PERIOD], Response::HTTP_NOT_FOUND);
         }
 
         // For large batches, dispatch async
-        if (count($invoices) > 100) {
+        if ($total > 100) {
             $user = $this->getUser();
             if (!$user) {
                 return $this->json(['error' => 'Authentication required.'], Response::HTTP_UNAUTHORIZED);
             }
 
-            $ids = array_map(fn ($inv) => (string) $inv->getId(), $invoices);
+            $ids = $exportQueries->ids($company, $filters);
 
             $this->messageBus->dispatch(new GenerateZipExportMessage(
                 companyId: (string) $company->getId(),
@@ -1537,20 +1538,22 @@ class InvoiceController extends AbstractController
 
             return $this->json([
                 'message' => 'Export-ul este in curs de procesare. Vei primi o notificare cand este gata.',
-                'count' => count($invoices),
+                'count' => count($ids),
             ], Response::HTTP_ACCEPTED);
         }
 
-        // Synchronous ZIP generation
-        $zipContent = $this->zipExportService->generate($invoices);
+        // Synchronous ZIP generation, written to a temporary file that is streamed and then deleted.
+        $zipFile = $this->zipExportService->generateToFile($exportQueries->iterate($company, $filters));
         $label = $direction === 'outgoing' ? 'clienti' : 'furnizori';
         $dateSuffix = date('Y-m-d');
 
-        return new Response($zipContent, 200, [
+        $response = new \Symfony\Component\HttpFoundation\BinaryFileResponse($zipFile, 200, [
             'Content-Type' => 'application/zip',
             'Content-Disposition' => sprintf('attachment; filename="efactura-%s_%s.zip"', $label, $dateSuffix),
-            'Content-Length' => strlen($zipContent),
-        ]);
+        ], false, null, false, false);
+        $response->deleteFileAfterSend(true);
+
+        return $response;
     }
 
     #[Route('/invoices/{uuid}/email', methods: ['POST'])]

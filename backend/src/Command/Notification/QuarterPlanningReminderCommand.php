@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Command\Notification;
 
-use App\Entity\Company;
+use App\Command\Support\CommandProgress;
+use App\Repository\CompanyRepository;
 use App\Repository\OrganizationMembershipRepository;
 use App\Service\Balance\BalanceAnalysisService;
 use App\Service\NotificationService;
@@ -30,9 +31,11 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 final class QuarterPlanningReminderCommand extends Command
 {
     private const DAYS_BEFORE = [21, 7];
+    private const BATCH_SIZE = 200;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly CompanyRepository $companyRepository,
         private readonly BalanceAnalysisService $balanceAnalysis,
         private readonly OrganizationMembershipRepository $memberships,
         private readonly NotificationService $notifications,
@@ -67,68 +70,84 @@ final class QuarterPlanningReminderCommand extends Command
         }
 
         $sent = 0;
-        /** @var Company[] $companies */
-        $companies = $this->em->getRepository(Company::class)->findBy(['deletedAt' => null]);
-        foreach ($companies as $company) {
-            if (!$company->isVatPayer() && $company->getType() !== 'company') {
-                continue; // natural persons do not pay profit tax
+        // Natural persons do not pay profit tax: only VAT payers and legal entities are read, in
+        // id-ordered batches so memory stays flat.
+        $candidates = static fn ($qb) => $qb->andWhere("c.vatPayer = true OR c.type = 'company'");
+        $total = (int) $candidates($this->companyRepository->createQueryBuilder('c')->select('COUNT(c.id)'))->getQuery()->getSingleScalarResult();
+        $progress = new CommandProgress($output, 'quarter-planning', $total);
+        $progress->start(sprintf('%d companies, Q%d %d, %d days to the quarter end', $total, $quarter, $year, $daysLeft));
+
+        $afterId = null;
+        do {
+            $batch = $candidates($this->companyRepository->createBatchQueryBuilder($afterId, self::BATCH_SIZE))->getQuery()->getResult();
+            if ($batch === []) {
+                break;
             }
-            $estimate = $this->balanceAnalysis->profitTaxEstimate($company, $year);
-            if (empty($estimate['hasData'])) {
-                continue;
-            }
-            $current = null;
-            foreach ($estimate['quarters'] as $q) {
-                if ((int) $q['quarter'] === $quarter) {
-                    $current = $q;
+            $afterId = end($batch)->getId();
+
+            foreach ($batch as $company) {
+                $progress->advance();
+                $estimate = $this->balanceAnalysis->profitTaxEstimate($company, $year);
+                if (empty($estimate['hasData'])) {
+                    continue;
                 }
-            }
-            if ($current === null || (float) $current['revenue'] <= 0) {
-                continue;
-            }
-            $sponsorship = '0.00';
-            $maxInvestment = '0.00';
-            foreach ($estimate['tips'] as $tip) {
-                if ($tip['code'] === 'sponsorship') {
-                    $sponsorship = $tip['params']['headroom'];
+                $current = null;
+                foreach ($estimate['quarters'] as $q) {
+                    if ((int) $q['quarter'] === $quarter) {
+                        $current = $q;
+                    }
                 }
-                if ($tip['code'] === 'reinvested_profit') {
-                    $maxInvestment = $tip['params']['maxInvestment'];
+                if ($current === null || (float) $current['revenue'] <= 0) {
+                    continue;
                 }
-            }
-            $fmt = static fn (string $v): string => number_format((float) $v, 0, ',', '.');
-            $users = $this->memberships->findActiveUsersByCompany($company);
-            foreach ($users as $user) {
-                $locale = $user->getLocale() ?? 'ro';
-                $params = [
-                    '%company%' => $company->getName() ?? '—',
-                    '%days%' => (string) $daysLeft,
-                    '%quarter%' => sprintf('T%d %d', $quarter, $year),
-                    '%tax%' => $fmt($current['estimatedProfitTax']),
-                    '%date%' => $quarterEnd->format('d.m.Y'),
-                    '%maxInvestment%' => $fmt($maxInvestment),
-                    '%sponsorship%' => $fmt($sponsorship),
-                    '%year%' => (string) $year,
-                ];
-                $title = $this->translator->trans('notification.report.quarter_planning.title', $params, 'notifications', $locale);
-                $message = $this->translator->trans('notification.report.quarter_planning.message', $params, 'notifications', $locale);
-                if ($dryRun) {
-                    $io->text(sprintf('  [DRY RUN] → %s: %s — %s', $user->getEmail(), $title, $message));
-                } else {
-                    $this->notifications->createNotification($user, 'report.monthly_summary', $title, $message, [
-                        'companyId' => $company->getId()?->toRfc4122(),
-                        'companyName' => $company->getName(),
-                        'quarter' => sprintf('%04d-Q%d', $year, $quarter),
-                        'daysLeft' => $daysLeft,
-                        'estimatedProfitTax' => $current['estimatedProfitTax'],
-                        'maxInvestment' => $maxInvestment,
-                        'sponsorshipHeadroom' => $sponsorship,
-                        'url' => '/reports/balances',
-                    ]);
+                $sponsorship = '0.00';
+                $maxInvestment = '0.00';
+                foreach ($estimate['tips'] as $tip) {
+                    if ($tip['code'] === 'sponsorship') {
+                        $sponsorship = $tip['params']['headroom'];
+                    }
+                    if ($tip['code'] === 'reinvested_profit') {
+                        $maxInvestment = $tip['params']['maxInvestment'];
+                    }
                 }
-                $sent++;
+                $fmt = static fn (string $v): string => number_format((float) $v, 0, ',', '.');
+                $users = $this->memberships->findActiveUsersByCompany($company);
+                foreach ($users as $user) {
+                    $locale = $user->getLocale() ?? 'ro';
+                    $params = [
+                        '%company%' => $company->getName() ?? '—',
+                        '%days%' => (string) $daysLeft,
+                        '%quarter%' => sprintf('T%d %d', $quarter, $year),
+                        '%tax%' => $fmt($current['estimatedProfitTax']),
+                        '%date%' => $quarterEnd->format('d.m.Y'),
+                        '%maxInvestment%' => $fmt($maxInvestment),
+                        '%sponsorship%' => $fmt($sponsorship),
+                        '%year%' => (string) $year,
+                    ];
+                    $title = $this->translator->trans('notification.report.quarter_planning.title', $params, 'notifications', $locale);
+                    $message = $this->translator->trans('notification.report.quarter_planning.message', $params, 'notifications', $locale);
+                    if ($dryRun) {
+                        $io->text(sprintf('  [DRY RUN] → %s: %s — %s', $user->getEmail(), $title, $message));
+                    } else {
+                        $this->notifications->createNotification($user, 'report.monthly_summary', $title, $message, [
+                            'companyId' => $company->getId()?->toRfc4122(),
+                            'companyName' => $company->getName(),
+                            'quarter' => sprintf('%04d-Q%d', $year, $quarter),
+                            'daysLeft' => $daysLeft,
+                            'estimatedProfitTax' => $current['estimatedProfitTax'],
+                            'maxInvestment' => $maxInvestment,
+                            'sponsorshipHeadroom' => $sponsorship,
+                            'url' => '/reports/balances',
+                        ]);
+                    }
+                    $sent++;
+                }
+
             }
-        }
+            $this->em->clear();
+        } while (count($batch) === self::BATCH_SIZE);
+        $progress->count('sent', $sent);
+        $progress->finish();
 
         $io->success(sprintf('%d reminder(s) %s for Q%d %d (%d days left).', $sent, $dryRun ? 'would be sent' : 'sent', $quarter, $year, $daysLeft));
 

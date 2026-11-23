@@ -2,6 +2,7 @@
 
 namespace App\Command\Efactura;
 
+use App\Command\Support\CommandProgress;
 use App\Entity\DocumentEvent;
 use App\Enum\DocumentStatus;
 use App\Event\Invoice\InvoiceRejectedEvent;
@@ -20,6 +21,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[AsCommand(
@@ -37,6 +40,7 @@ class CheckAnafUploadsCommand extends Command
         private readonly NotificationService $notificationService,
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly LockFactory $lockFactory,
     ) {
         parent::__construct();
     }
@@ -45,6 +49,23 @@ class CheckAnafUploadsCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
+        // The schedule fires every 5 minutes; a slow ANAF must not let two runs check the same invoices.
+        // The TTL is renewed while the run goes on, so a crashed run frees the lock within 10 minutes.
+        $lock = $this->lockFactory->createLock('efactura-check-status', 600);
+        if (!$lock->acquire()) {
+            $io->note('Another status check is still running, skipping.');
+            return Command::SUCCESS;
+        }
+
+        try {
+            return $this->check($io, $output, $lock);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function check(SymfonyStyle $io, OutputInterface $output, LockInterface $lock): int
+    {
         $invoices = $this->invoiceRepository->findBy(
             ['status' => DocumentStatus::SENT_TO_PROVIDER],
             ['createdAt' => 'ASC'],
@@ -59,8 +80,15 @@ class CheckAnafUploadsCommand extends Command
         $io->text(sprintf('Checking %d invoices...', count($invoices)));
         $updated = 0;
         $batchCount = 0;
+        $progress = new CommandProgress($output, 'efactura:check-status', count($invoices));
+        $progress->start(sprintf('checking %d invoices sent to ANAF, oldest first', count($invoices)));
+        $checked = 0;
 
         foreach ($invoices as $invoice) {
+            $progress->advance();
+            if (++$checked % 20 === 0) {
+                $lock->refresh();
+            }
             $uploadId = $invoice->getAnafUploadId();
             if (!$uploadId) {
                 continue;
@@ -193,6 +221,8 @@ class CheckAnafUploadsCommand extends Command
         }
 
         $this->entityManager->flush();
+        $progress->count('updated', $updated);
+        $progress->finish();
         $io->success(sprintf('Updated %d invoices.', $updated));
 
         return Command::SUCCESS;

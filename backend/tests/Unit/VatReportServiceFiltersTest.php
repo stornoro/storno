@@ -3,10 +3,7 @@
 namespace App\Tests\Unit;
 
 use App\Entity\Company;
-use App\Entity\Invoice;
-use App\Entity\InvoiceLine;
 use App\Enum\DocumentStatus;
-use App\Enum\InvoiceDirection;
 use App\Repository\InvoiceRepository;
 use App\Service\ExchangeRateService;
 use App\Service\Report\VatReportService;
@@ -16,43 +13,46 @@ use PHPUnit\Framework\TestCase;
 class VatReportServiceFiltersTest extends TestCase
 {
     private array $lastFilters = [];
+    private ?string $lastVatRate = null;
 
-    private function invoice(InvoiceDirection $dir, DocumentStatus $status, string $currency, array $lines): Invoice
-    {
-        $inv = (new Invoice())->setDirection($dir)->setStatus($status)->setCurrency($currency);
-        $sub = '0.00'; $vat = '0.00';
-        foreach ($lines as [$rate, $base, $vatAmount]) {
-            $inv->addLine((new InvoiceLine())->setDescription('x')->setQuantity('1')->setUnitPrice($base)->setVatRate($rate)->setLineTotal($base)->setVatAmount($vatAmount));
-            $sub = bcadd($sub, $base, 2); $vat = bcadd($vat, $vatAmount, 2);
-        }
-        $inv->setSubtotal($sub)->setVatTotal($vat)->setTotal(bcadd($sub, $vat, 2));
-
-        return $inv;
-    }
-
-    private function service(array $invoices): VatReportService
+    /**
+     * The repository sums in SQL (covered against the database in InvoiceFilteredQueryTest).
+     * Here it returns a fixed summary, so these tests cover what the service still does: the
+     * filters it passes down and the report it assembles from the sums.
+     */
+    private function service(array $summary): VatReportService
     {
         $repo = $this->createMock(InvoiceRepository::class);
-        $repo->method('findByCompanyFiltered')->willReturnCallback(function (Company $c, array $filters) use ($invoices) {
+        $repo->method('summarizeVatByCompanyFiltered')->willReturnCallback(function (Company $c, array $filters, ?string $vatRate) use ($summary) {
             $this->lastFilters = $filters;
-            return $invoices;
+            $this->lastVatRate = $vatRate;
+
+            return $summary;
         });
 
         return new VatReportService($repo, $this->createMock(ExchangeRateService::class));
     }
 
-    private function invoices(): array
+    /** Two outgoing invoices (one a draft) in RON and one incoming in EUR. */
+    private function summary(): array
     {
         return [
-            $this->invoice(InvoiceDirection::OUTGOING, DocumentStatus::ISSUED, 'RON', [['21', '100.00', '21.00'], ['9', '50.00', '4.50']]),
-            $this->invoice(InvoiceDirection::OUTGOING, DocumentStatus::DRAFT, 'RON', [['21', '10.00', '2.10']]),
-            $this->invoice(InvoiceDirection::INCOMING, DocumentStatus::VALIDATED, 'EUR', [['21', '200.00', '42.00']]),
+            'outgoing' => [
+                'rates' => ['21.00' => ['taxableBase' => '110.00', 'vatAmount' => '23.10'], '9' => ['taxableBase' => '50.00', 'vatAmount' => '4.50']],
+                'totals' => ['taxableBase' => '160.00', 'vatAmount' => '27.60', 'total' => '187.60', 'count' => 2],
+                'currencies' => ['RON'],
+            ],
+            'incoming' => [
+                'rates' => ['21.00' => ['taxableBase' => '200.00', 'vatAmount' => '42.00']],
+                'totals' => ['taxableBase' => '200.00', 'vatAmount' => '42.00', 'total' => '242.00', 'count' => 1],
+                'currencies' => ['eur', null],
+            ],
         ];
     }
 
     public function testPeriodAndRepositoryFiltersArePassedThrough(): void
     {
-        $report = $this->service($this->invoices())->generateFor(new Company(), [
+        $report = $this->service($this->summary())->generateFor(new Company(), [
             'from' => new \DateTimeImmutable('2026-07-01'),
             'to' => new \DateTimeImmutable('2026-09-30'),
             'period' => '2026-Q3',
@@ -72,12 +72,14 @@ class VatReportServiceFiltersTest extends TestCase
         self::assertSame('RON', $this->lastFilters['currency']);
         self::assertSame('invoice', $this->lastFilters['type']);
         self::assertTrue($this->lastFilters['excludeCancelled']);
+        self::assertArrayNotHasKey('excludeStatuses', $this->lastFilters);
+        self::assertNull($this->lastVatRate);
         self::assertSame('outgoing', $report['filters']['direction']);
     }
 
-    public function testDefaultsKeepDraftsAndSumInvoiceTotals(): void
+    public function testReportIsAssembledFromTheSums(): void
     {
-        $report = $this->service($this->invoices())->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30')]);
+        $report = $this->service($this->summary())->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30')]);
 
         self::assertSame('2026-09-01..2026-09-30', $report['period']);
         self::assertSame('160.00', $report['totals']['outgoing']['taxableBase']);
@@ -85,32 +87,28 @@ class VatReportServiceFiltersTest extends TestCase
         self::assertSame('110.00', $report['outgoing']['21.00']['taxableBase']);
         self::assertSame('23.10', $report['outgoing']['21.00']['vatAmount']);
         self::assertSame('4.50', $report['outgoing']['9.00']['vatAmount']);
+        self::assertSame('0.00', $report['outgoing']['5.00']['vatAmount']);
         self::assertSame('42.00', $report['totals']['incoming']['vatAmount']);
         self::assertSame('-14.40', $report['netVat']);
         self::assertSame(['outgoing' => 2, 'incoming' => 1], $report['invoiceCount']);
         self::assertSame(['EUR', 'RON'], $report['currencies']);
     }
 
-    public function testFinalOnlyLeavesDraftsOut(): void
+    public function testFinalOnlyExcludesDraftsInTheQuery(): void
     {
-        $report = $this->service($this->invoices())->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30'), 'finalOnly' => true]);
+        $report = $this->service($this->summary())->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30'), 'finalOnly' => true]);
 
-        self::assertSame('150.00', $report['totals']['outgoing']['taxableBase']);
-        self::assertSame(1, $report['invoiceCount']['outgoing']);
+        self::assertSame([DocumentStatus::DRAFT, DocumentStatus::REJECTED, DocumentStatus::CONVERTED], $this->lastFilters['excludeStatuses']);
         self::assertTrue($report['filters']['finalOnly']);
     }
 
-    public function testVatRateFilterCountsOnlyTheLinesAtThatRate(): void
+    public function testVatRateFilterIsNormalizedAndPassedDown(): void
     {
-        $report = $this->service($this->invoices())->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30'), 'vatRate' => '9']);
+        $report = $this->service([])->generateFor(new Company(), ['from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30'), 'vatRate' => '9']);
 
+        self::assertSame('9.00', $this->lastVatRate);
         self::assertSame('9.00', $report['filters']['vatRate']);
-        self::assertSame('50.00', $report['totals']['outgoing']['taxableBase']);
-        self::assertSame('4.50', $report['totals']['outgoing']['vatAmount']);
-        self::assertSame('54.50', $report['totals']['outgoing']['total']);
-        self::assertSame('0.00', $report['outgoing']['21.00']['vatAmount']);
-        self::assertSame('0.00', $report['totals']['incoming']['vatAmount']);
-        self::assertSame(['outgoing' => 1, 'incoming' => 0], $report['invoiceCount']);
+        self::assertSame(['outgoing' => 0, 'incoming' => 0], $report['invoiceCount']);
     }
 
     public function testMonthlyShortcutIsUnchanged(): void

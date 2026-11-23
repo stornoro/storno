@@ -2,6 +2,7 @@
 
 namespace App\Command\Notification;
 
+use App\Command\Support\CommandProgress;
 use App\Entity\Company;
 use App\Entity\User;
 use App\Enum\MessageKey;
@@ -10,12 +11,14 @@ use App\Repository\NotificationRepository;
 use App\Repository\OrganizationMembershipRepository;
 use App\Service\Calendar\FiscalCalendarService;
 use App\Service\NotificationService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -35,6 +38,7 @@ class FiscalDeadlineReminderCommand extends Command
     public const REMIND_DAYS_BEFORE = [7, 3, 1];
     /** Every unfiled deadline this many days ahead is listed in the digest, not only the ones on a reminder day. */
     public const WINDOW_DAYS = 7;
+    private const BATCH_SIZE = 200;
 
     public function __construct(
         private readonly CompanyRepository $companyRepository,
@@ -43,6 +47,7 @@ class FiscalDeadlineReminderCommand extends Command
         private readonly OrganizationMembershipRepository $membershipRepository,
         private readonly NotificationService $notificationService,
         private readonly TranslatorInterface $translator,
+        private readonly EntityManagerInterface $entityManager,
     ) {
         parent::__construct();
     }
@@ -60,35 +65,52 @@ class FiscalDeadlineReminderCommand extends Command
         $dryRun = (bool) $input->getOption('dry-run');
         $today = new \DateTimeImmutable(($input->getOption('date') ?: 'today') . ' 00:00:00');
 
-        /** @var array<string, array{user: User, trigger: bool, companies: array<string, array{companyId: string, companyName: string, items: list<array<string, mixed>>}>}> $digests */
+        /** @var array<string, array{userId: string, trigger: bool, companies: array<string, array{companyId: string, companyName: string, items: list<array<string, mixed>>}>}> $digests */
         $digests = [];
         $skippedCompanies = 0;
 
-        foreach ($this->companyRepository->findAll() as $company) {
-            if ($company->getDeletedAt() !== null || !$company->getOrganization()?->isActive()) {
-                continue;
-            }
-            $items = $this->dueItems($company, $today);
-            if ($items === []) {
-                continue;
-            }
-            $active = array_values(array_filter($items, fn (array $item) => $this->calendar->hasActivity($company, $item)));
-            if ($active === []) {
-                $skippedCompanies++;
-                continue;
-            }
-            $trigger = array_filter($active, static fn (array $item) => in_array($item['daysLeft'], self::REMIND_DAYS_BEFORE, true)) !== [];
-            $companyId = $company->getId()->toRfc4122();
-            $companyName = $company->getName() ?? '—';
-            $entries = array_map(fn (array $item) => $this->entry($item), $active);
+        // Companies of active organizations, in id-ordered batches. The digests keep user ids, not
+        // entities, because the entity manager is cleared between batches; users are loaded again
+        // when the digests go out.
+        $activeOrg = static fn ($qb) => $qb->join('c.organization', 'o')->andWhere('o.isActive = true');
+        $total = (int) $activeOrg($this->companyRepository->createQueryBuilder('c')->select('COUNT(c.id)'))->getQuery()->getSingleScalarResult();
+        $progress = new CommandProgress($output, 'fiscal-deadlines', $total);
+        $progress->start(sprintf('%d companies of active organizations, digest for %s', $total, $today->format('Y-m-d')));
 
-            foreach ($this->membershipRepository->findActiveUsersByCompany($company) as $user) {
-                $userId = (string) $user->getId();
-                $digests[$userId] ??= ['user' => $user, 'trigger' => false, 'companies' => []];
-                $digests[$userId]['trigger'] = $digests[$userId]['trigger'] || $trigger;
-                $digests[$userId]['companies'][$companyId] = ['companyId' => $companyId, 'companyName' => $companyName, 'items' => $entries];
+        $afterId = null;
+        do {
+            $batch = $activeOrg($this->companyRepository->createBatchQueryBuilder($afterId, self::BATCH_SIZE))->getQuery()->getResult();
+            if ($batch === []) {
+                break;
             }
-        }
+            $afterId = end($batch)->getId();
+
+            foreach ($batch as $company) {
+                $progress->advance();
+                $items = $this->dueItems($company, $today);
+                if ($items === []) {
+                    continue;
+                }
+                $active = array_values(array_filter($items, fn (array $item) => $this->calendar->hasActivity($company, $item)));
+                if ($active === []) {
+                    $skippedCompanies++;
+                    continue;
+                }
+                $trigger = array_filter($active, static fn (array $item) => in_array($item['daysLeft'], self::REMIND_DAYS_BEFORE, true)) !== [];
+                $companyId = $company->getId()->toRfc4122();
+                $companyName = $company->getName() ?? '—';
+                $entries = array_map(fn (array $item) => $this->entry($item), $active);
+
+                foreach ($this->membershipRepository->findActiveUsersByCompany($company) as $user) {
+                    $userId = (string) $user->getId();
+                    $digests[$userId] ??= ['userId' => $userId, 'trigger' => false, 'companies' => []];
+                    $digests[$userId]['trigger'] = $digests[$userId]['trigger'] || $trigger;
+                    $digests[$userId]['companies'][$companyId] = ['companyId' => $companyId, 'companyName' => $companyName, 'items' => $entries];
+                }
+            }
+            $this->entityManager->clear();
+        } while (count($batch) === self::BATCH_SIZE);
+        $progress->finish();
 
         $sent = 0;
         $key = 'digest:' . $today->format('Y-m-d');
@@ -96,7 +118,10 @@ class FiscalDeadlineReminderCommand extends Command
             if (!$digest['trigger']) {
                 continue;
             }
-            $user = $digest['user'];
+            $user = $this->entityManager->find(User::class, Uuid::fromString($digest['userId']));
+            if ($user === null) {
+                continue;
+            }
             if ($this->alreadySentToday($user, $key, $today)) {
                 continue;
             }
@@ -134,6 +159,9 @@ class FiscalDeadlineReminderCommand extends Command
                 'messageKey' => MessageKey::MSG_FISCAL_DEADLINE_DIGEST,
                 'messageParams' => $params,
             ]);
+            if ($sent % self::BATCH_SIZE === 0) {
+                $this->entityManager->clear(); // each digest loads its user again
+            }
         }
 
         if ($dryRun) {

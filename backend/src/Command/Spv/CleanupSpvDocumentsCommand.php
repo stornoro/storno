@@ -2,7 +2,10 @@
 
 namespace App\Command\Spv;
 
+use App\Command\Support\CommandProgress;
 use App\Entity\Company;
+use App\Entity\SpvDocument;
+use App\Repository\CompanyRepository;
 use App\Repository\SpvDocumentRepository;
 use App\Service\Spv\SpvDocumentIngestionService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -34,6 +37,7 @@ class CleanupSpvDocumentsCommand extends Command
         private readonly SpvDocumentRepository $repository,
         private readonly SpvDocumentIngestionService $ingestion,
         private readonly LoggerInterface $logger,
+        private readonly CompanyRepository $companyRepository,
     ) {
         parent::__construct();
     }
@@ -49,46 +53,83 @@ class CleanupSpvDocumentsCommand extends Command
         $dryRun = (bool) $input->getOption('dry-run');
         $purged = 0;
 
-        /** @var Company[] $companies */
-        $companies = $this->entityManager->getRepository(Company::class)->findAll();
+        // Companies that keep their PDFs for a limited time and still hold a PDF that is not purged,
+        // in id-ordered batches so memory stays flat.
+        $candidates = static fn ($qb) => $qb
+            ->andWhere('c.archiveRetentionYears IS NULL OR c.archiveRetentionYears > 0')
+            ->andWhere('EXISTS (SELECT 1 FROM ' . SpvDocument::class . ' sd WHERE sd.company = c AND sd.pdfPath IS NOT NULL AND sd.purgedAt IS NULL)');
+        $total = (int) $candidates($this->companyRepository->createQueryBuilder('c')->select('COUNT(c.id)'))->getQuery()->getSingleScalarResult();
+        $progress = new CommandProgress($output, 'spv:cleanup', $total);
+        $progress->start(sprintf('%d companies with SPV PDFs to check%s', $total, $dryRun ? ' (dry-run)' : ''));
 
-        foreach ($companies as $company) {
-            $years = $company->getArchiveRetentionYears() ?? self::DEFAULT_RETENTION_YEARS;
-            if ($years <= 0) {
-                continue; // explicit "keep forever"
+        $afterId = null;
+        do {
+            $companies = $candidates($this->companyRepository->createBatchQueryBuilder($afterId, self::BATCH_SIZE))->getQuery()->getResult();
+            if ($companies === []) {
+                break;
             }
-            $cutoff = new \DateTimeImmutable("-{$years} years");
+            $afterId = end($companies)->getId();
+            $companyIds = array_map(static fn (Company $c) => $c->getId(), $companies);
+            $this->entityManager->clear();
 
-            do {
-                $batch = $this->repository->findExpiredPdfs($company, $cutoff, self::BATCH_SIZE);
-                foreach ($batch as $doc) {
-                    $path = $doc->getPdfPath();
-                    if ($dryRun) {
-                        $io->text(sprintf('[dry-run] %s %s (%s)', $company->getCif(), $doc->getMessageType(), $path));
-                        $purged++;
-                        continue;
-                    }
-                    try {
-                        $storage = $this->ingestion->storageFor($doc);
-                        if ($path && $storage->fileExists($path)) {
-                            $storage->delete($path);
-                        }
-                    } catch (\Throwable $e) {
-                        $this->logger->warning('SPV cleanup: could not delete file', ['path' => $path, 'error' => $e->getMessage()]);
-                        continue;
-                    }
-                    $doc->setPdfPath(null);
-                    $doc->setPurgedAt(new \DateTimeImmutable());
-                    $purged++;
-                }
-                if (!$dryRun) {
-                    $this->entityManager->flush();
-                }
-            } while (!$dryRun && count($batch) === self::BATCH_SIZE);
-        }
+            foreach ($companyIds as $companyId) {
+                $progress->advance();
+                $n = $this->purgeCompany($io, $companyId, $dryRun);
+                $purged += $n;
+                $progress->count('purged', $n);
+            }
+        } while (count($companies) === self::BATCH_SIZE);
+        $progress->finish();
 
         $io->success(sprintf('%s%d SPV PDF(s) purged', $dryRun ? '[dry-run] ' : '', $purged));
 
         return Command::SUCCESS;
+    }
+
+    private function purgeCompany(SymfonyStyle $io, $companyId, bool $dryRun): int
+    {
+        $purged = 0;
+        $company = $this->entityManager->find(Company::class, $companyId);
+        if ($company === null) {
+            return 0;
+        }
+        $years = $company->getArchiveRetentionYears() ?? self::DEFAULT_RETENTION_YEARS;
+        if ($years <= 0) {
+            return 0; // explicit "keep forever"
+        }
+        $cutoff = new \DateTimeImmutable("-{$years} years");
+
+        do {
+            $before = $purged;
+            $batch = $this->repository->findExpiredPdfs($company, $cutoff, self::BATCH_SIZE);
+            foreach ($batch as $doc) {
+                $path = $doc->getPdfPath();
+                if ($dryRun) {
+                    $io->text(sprintf('[dry-run] %s %s (%s)', $company->getCif(), $doc->getMessageType(), $path));
+                    $purged++;
+                    continue;
+                }
+                try {
+                    $storage = $this->ingestion->storageFor($doc);
+                    if ($path && $storage->fileExists($path)) {
+                        $storage->delete($path);
+                    }
+                } catch (\Throwable $e) {
+                    $this->logger->warning('SPV cleanup: could not delete file', ['path' => $path, 'error' => $e->getMessage()]);
+                    continue;
+                }
+                $doc->setPdfPath(null);
+                $doc->setPurgedAt(new \DateTimeImmutable());
+                $purged++;
+            }
+            if (!$dryRun) {
+                $this->entityManager->flush();
+                $this->entityManager->clear();
+                $company = $this->entityManager->find(Company::class, $companyId);
+            }
+        } while (!$dryRun && count($batch) === self::BATCH_SIZE && $company !== null && $purged > $before);
+        $this->entityManager->clear();
+
+        return $purged;
     }
 }

@@ -13,6 +13,7 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: ClientRepository::class)]
+#[ORM\Index(name: 'idx_client_company_created', columns: ['company_id', 'deleted_at', 'created_at'])]
 #[ORM\Index(name: 'idx_client_company_cui', columns: ['company_id', 'cui', 'deleted_at'])]
 #[ORM\Index(name: 'idx_client_company_name', columns: ['company_id', 'name', 'deleted_at'])]
 class Client

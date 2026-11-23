@@ -10,6 +10,7 @@ use App\Enum\DocumentStatus;
 use App\Enum\DocumentType;
 use App\Enum\EInvoiceSubmissionStatus;
 use App\Enum\InvoiceDirection;
+use App\Service\Cache\CompanyStatsCache;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Doctrine\Persistence\ManagerRegistry;
@@ -21,6 +22,7 @@ class InvoiceRepository extends ServiceEntityRepository
 {
     public function __construct(
         ManagerRegistry $registry,
+        private readonly CompanyStatsCache $statsCache,
     ) {
         parent::__construct($registry, Invoice::class);
     }
@@ -105,41 +107,61 @@ class InvoiceRepository extends ServiceEntityRepository
         $qb->setFirstResult(($page - 1) * $limit)
             ->setMaxResults($limit);
 
-        $paginator = new Paginator($qb);
+        // The only join is the to-one client, so LIMIT counts invoices and the page needs no
+        // DISTINCT id subquery.
+        $data = $qb->getQuery()->getResult();
+
+        // Count, totals and currencies read every filtered invoice of the company. They are
+        // cached per company and filter set; any write to the company's records drops them.
+        $companyId = $company->getId()?->toRfc4122() ?? '';
+        $filterKey = $this->listFilterKey($filters);
+
+        $total = $this->statsCache->get($companyId, 'invoice_list_count|' . $filterKey, function () use ($company, $filters): int {
+            $countQb = $this->createQueryBuilder('i')
+                ->select('COUNT(i.id)')
+                ->leftJoin('i.client', 'c')
+                ->where('i.company = :company')
+                ->setParameter('company', $company);
+            $this->applyFilters($countQb, $filters);
+
+            return (int) $countQb->getQuery()->getSingleScalarResult();
+        });
 
         // Aggregated totals across all filtered results (same currency, no conversion).
         // Exclude cancelled invoices — they're fiscally void and must not appear in
         // receivable/payable summaries or the subtotal/VAT/total ribbon above the list.
-        $totalsQb = $this->createQueryBuilder('t')
-            ->select(
-                'COALESCE(SUM(t.subtotal), 0) AS totalExcluding',
-                'COALESCE(SUM(t.vatTotal), 0) AS totalVat',
-                'COALESCE(SUM(t.total), 0) AS totalIncluding',
-                "COALESCE(SUM(CASE WHEN t.direction = 'outgoing' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalReceivable",
-                "COALESCE(SUM(CASE WHEN t.direction = 'incoming' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalPayable",
-            )
-            ->leftJoin('t.client', 'c')
-            ->where('t.company = :company')
-            ->andWhere('t.status != :cancelledStatus')
-            ->setParameter('company', $company)
-            ->setParameter('cancelledStatus', DocumentStatus::CANCELLED);
+        $totals = $this->statsCache->get($companyId, 'invoice_list_totals|' . $filterKey, function () use ($company, $filters): array {
+            $totalsQb = $this->createQueryBuilder('t')
+                ->select(
+                    'COALESCE(SUM(t.subtotal), 0) AS totalExcluding',
+                    'COALESCE(SUM(t.vatTotal), 0) AS totalVat',
+                    'COALESCE(SUM(t.total), 0) AS totalIncluding',
+                    "COALESCE(SUM(CASE WHEN t.direction = 'outgoing' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalReceivable",
+                    "COALESCE(SUM(CASE WHEN t.direction = 'incoming' AND t.paidAt IS NULL THEN (t.total - t.amountPaid) ELSE 0 END), 0) AS totalPayable",
+                )
+                ->leftJoin('t.client', 'c')
+                ->where('t.company = :company')
+                ->andWhere('t.status != :cancelledStatus')
+                ->setParameter('company', $company)
+                ->setParameter('cancelledStatus', DocumentStatus::CANCELLED);
 
-        $this->applyFilters($totalsQb, $filters);
+            $this->applyFilters($totalsQb, $filters);
 
-        $totals = $totalsQb->getQuery()->getSingleResult();
+            return $totalsQb->getQuery()->getSingleResult();
+        });
 
         // Distinct currencies for this company
-        $distinctCurrencies = $this->createQueryBuilder('dc')
+        $distinctCurrencies = $this->statsCache->get($companyId, 'invoice_currencies', fn (): array => $this->createQueryBuilder('dc')
             ->select('DISTINCT dc.currency')
             ->where('dc.company = :company')
             ->andWhere('dc.deletedAt IS NULL')
             ->setParameter('company', $company)
             ->getQuery()
-            ->getSingleColumnResult();
+            ->getSingleColumnResult());
 
         return [
-            'data' => iterator_to_array($paginator),
-            'total' => count($paginator),
+            'data' => $data,
+            'total' => $total,
             'page' => $page,
             'limit' => $limit,
             'currency' => $currency,
@@ -152,6 +174,20 @@ class InvoiceRepository extends ServiceEntityRepository
                 'payable' => $totals['totalPayable'] ?? '0.00',
             ],
         ];
+    }
+
+    /** Cache key part for the filters applyFilters() reads; sort and paging do not change the aggregates. */
+    private function listFilterKey(array $filters): string
+    {
+        $keys = ['currency', 'type', 'status', 'direction', 'clientId', 'search', 'dateFrom', 'dateTo', 'isDuplicate', 'isLateSubmission', 'isPaid', 'isOverdue', 'supplierId', 'vatTotalMin', 'vatTotalMax', 'totalMin', 'totalMax'];
+        $normalized = [];
+        foreach ($keys as $key) {
+            if (isset($filters[$key])) {
+                $normalized[$key] = is_scalar($filters[$key]) ? (string) $filters[$key] : $filters[$key];
+            }
+        }
+
+        return hash('xxh128', json_encode($normalized, JSON_THROW_ON_ERROR));
     }
 
     private function applyFilters(\Doctrine\ORM\QueryBuilder $qb, array $filters): void
@@ -350,18 +386,246 @@ class InvoiceRepository extends ServiceEntityRepository
             ->setParameter('to', $to);
     }
 
+    /**
+     * Invoices matching the export filters, newest first, each with its lines and client loaded.
+     *
+     * The limit counts invoices. The ids of the page are selected first, then those invoices are
+     * loaded with their lines, so an invoice never comes back with part of its lines.
+     *
+     * @return Invoice[]
+     */
     public function findByCompanyFiltered(Company $company, array $filters = [], ?int $limit = 500): array
     {
-        $qb = $this->createQueryBuilder('i')
+        if ($limit === null) {
+            $qb = $this->filteredQueryBuilder($company, $filters)
+                ->leftJoin('i.lines', 'il')->addSelect('il')
+                ->addSelect('c');
+
+            return $qb->getQuery()->getResult();
+        }
+
+        $ids = $this->filteredIdPage($company, $filters, $limit, null);
+
+        return $this->loadWithLines(array_column($ids, 'id'));
+    }
+
+    /**
+     * Same invoices and order as findByCompanyFiltered(), without a limit, loaded one batch at a
+     * time. Pagination is by keyset on (issueDate, id). Each batch is detached from the entity
+     * manager once the caller has moved past it, so memory stays at about one batch. What gets
+     * detached: the batch's invoices and lines, and the clients, suppliers and products that
+     * entered the entity manager while the batch was open. Entities managed before the batch
+     * (the request's Company and User, an invoice the caller already loaded) stay managed.
+     *
+     * @return \Generator<int, Invoice>
+     */
+    public function iterateByCompanyFiltered(Company $company, array $filters = [], int $batchSize = 500): \Generator
+    {
+        $batchSize = max(1, $batchSize);
+        $cursor = null;
+        $em = $this->getEntityManager();
+
+        do {
+            $page = $this->filteredIdPage($company, $filters, $batchSize, $cursor);
+            if ($page === []) {
+                return;
+            }
+            $last = $page[array_key_last($page)];
+            $cursor = ['issueDate' => $last['issueDate'], 'id' => $last['id']];
+
+            // Invoices the caller already had in the entity manager stay managed, so their
+            // pending changes are not lost.
+            $uow = $em->getUnitOfWork();
+            $alreadyManaged = [];
+            foreach ($page as $row) {
+                if ($uow->tryGetById($row['id'], Invoice::class) !== false) {
+                    $alreadyManaged[$row['id']] = true;
+                }
+            }
+
+            $related = [\App\Entity\Client::class, \App\Entity\Supplier::class, \App\Entity\Product::class];
+            $before = [];
+            foreach ($related as $class) {
+                $before[$class] = $uow->getIdentityMap()[$class] ?? [];
+            }
+
+            $invoices = $this->loadWithLines(array_column($page, 'id'));
+            foreach ($invoices as $invoice) {
+                yield $invoice;
+            }
+
+            foreach ($invoices as $invoice) {
+                if (isset($alreadyManaged[$invoice->getId()?->toRfc4122() ?? ''])) {
+                    continue;
+                }
+                foreach ($invoice->getLines() as $line) {
+                    if ($em->contains($line)) {
+                        $em->detach($line);
+                    }
+                }
+                if ($em->contains($invoice)) {
+                    $em->detach($invoice);
+                }
+            }
+            unset($invoices);
+
+            // One client and product per invoice would otherwise stay in the identity map for
+            // the whole run.
+            foreach ($related as $class) {
+                foreach (array_diff_key($uow->getIdentityMap()[$class] ?? [], $before[$class]) as $entity) {
+                    $em->detach($entity);
+                }
+            }
+            unset($before);
+        } while (count($page) === $batchSize);
+    }
+
+    /**
+     * The VAT figures of the invoices matching the export filters, summed in SQL.
+     *
+     * Returns per direction value (`outgoing`, `incoming`, or '' when the invoice has none):
+     * - `rates`: line sums grouped by VAT rate, [rate => [taxableBase, vatAmount]]
+     * - `totals`: [taxableBase, vatAmount, total, count]. Without a rate these are the invoice
+     *   subtotal, VAT total and total, counted over every matching invoice (an invoice without
+     *   lines still counts with its own amounts). With a rate they are the sums of the lines at
+     *   that rate, counted over the invoices that have such a line.
+     * - `currencies`: the currencies of the counted invoices, as stored.
+     *
+     * @return array<string, array{rates: array<string, array{taxableBase: string, vatAmount: string}>, totals: array{taxableBase: string, vatAmount: string, total: string, count: int}, currencies: list<string|null>}>
+     */
+    public function summarizeVatByCompanyFiltered(Company $company, array $filters = [], ?string $vatRate = null): array
+    {
+        $result = [];
+        $bucket = static function (array &$result, string $dir): void {
+            $result[$dir] ??= [
+                'rates' => [],
+                'totals' => ['taxableBase' => '0.00', 'vatAmount' => '0.00', 'total' => '0.00', 'count' => 0],
+                'currencies' => [],
+            ];
+        };
+        $dirKey = static fn (mixed $d) => $d instanceof InvoiceDirection ? $d->value : (string) $d;
+
+        $lineQb = $this->filteredQueryBuilder($company, $filters)
+            ->innerJoin('i.lines', 'l')
+            ->select('i.direction AS direction', 'l.vatRate AS vatRate', 'COALESCE(SUM(l.lineTotal), 0) AS taxableBase', 'COALESCE(SUM(l.vatAmount), 0) AS vatAmount')
+            ->groupBy('i.direction', 'l.vatRate')
+            ->resetDQLPart('orderBy')
+            ->orderBy('l.vatRate', 'DESC');
+        if ($vatRate !== null) {
+            $lineQb->andWhere('l.vatRate = :vatRate')->setParameter('vatRate', $vatRate);
+        }
+        foreach ($lineQb->getQuery()->getArrayResult() as $row) {
+            $dir = $dirKey($row['direction']);
+            $bucket($result, $dir);
+            $result[$dir]['rates'][(string) $row['vatRate']] = ['taxableBase' => (string) $row['taxableBase'], 'vatAmount' => (string) $row['vatAmount']];
+        }
+
+        if ($vatRate === null) {
+            $totalsQb = $this->filteredQueryBuilder($company, $filters)
+                ->select('i.direction AS direction', 'COALESCE(SUM(i.subtotal), 0) AS taxableBase', 'COALESCE(SUM(i.vatTotal), 0) AS vatAmount', 'COALESCE(SUM(i.total), 0) AS total', 'COUNT(i.id) AS cnt')
+                ->groupBy('i.direction')
+                ->resetDQLPart('orderBy');
+            $currencyQb = $this->filteredQueryBuilder($company, $filters)
+                ->select('i.direction AS direction', 'i.currency AS currency')
+                ->distinct()
+                ->resetDQLPart('orderBy');
+        } else {
+            $totalsQb = $this->filteredQueryBuilder($company, $filters)
+                ->innerJoin('i.lines', 'l')
+                ->andWhere('l.vatRate = :vatRate')->setParameter('vatRate', $vatRate)
+                ->select('i.direction AS direction', 'COALESCE(SUM(l.lineTotal), 0) AS taxableBase', 'COALESCE(SUM(l.vatAmount), 0) AS vatAmount', 'COALESCE(SUM(l.lineTotal + l.vatAmount), 0) AS total', 'COUNT(DISTINCT i.id) AS cnt')
+                ->groupBy('i.direction')
+                ->resetDQLPart('orderBy');
+            $currencyQb = $this->filteredQueryBuilder($company, $filters)
+                ->innerJoin('i.lines', 'l')
+                ->andWhere('l.vatRate = :vatRate')->setParameter('vatRate', $vatRate)
+                ->select('i.direction AS direction', 'i.currency AS currency')
+                ->distinct()
+                ->resetDQLPart('orderBy');
+        }
+
+        foreach ($totalsQb->getQuery()->getArrayResult() as $row) {
+            $dir = $dirKey($row['direction']);
+            $bucket($result, $dir);
+            $result[$dir]['totals'] = [
+                'taxableBase' => (string) $row['taxableBase'],
+                'vatAmount' => (string) $row['vatAmount'],
+                'total' => (string) $row['total'],
+                'count' => (int) $row['cnt'],
+            ];
+        }
+        foreach ($currencyQb->getQuery()->getArrayResult() as $row) {
+            $dir = $dirKey($row['direction']);
+            $bucket($result, $dir);
+            $result[$dir]['currencies'][] = $row['currency'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * One page of ids (with their issue date, for the keyset cursor) in the export order:
+     * issueDate DESC, id DESC.
+     *
+     * @param array{issueDate: \DateTimeInterface, id: string}|null $after
+     *
+     * @return list<array{id: string, issueDate: \DateTimeInterface}>
+     */
+    private function filteredIdPage(Company $company, array $filters, int $limit, ?array $after): array
+    {
+        $qb = $this->filteredQueryBuilder($company, $filters)
+            ->select('i.id AS id', 'i.issueDate AS issueDate')
+            ->setMaxResults($limit);
+
+        if ($after !== null) {
+            $qb->andWhere('i.issueDate < :afterDate OR (i.issueDate = :afterDate AND i.id < :afterId)')
+                ->setParameter('afterDate', $after['issueDate'], \Doctrine\DBAL\Types\Types::DATE_MUTABLE)
+                ->setParameter('afterId', $after['id']);
+        }
+
+        return array_map(static fn (array $row) => [
+            'id' => $row['id'] instanceof \Symfony\Component\Uid\Uuid ? $row['id']->toRfc4122() : (string) $row['id'],
+            'issueDate' => $row['issueDate'],
+        ], $qb->getQuery()->getArrayResult());
+    }
+
+    /**
+     * @param list<string> $ids
+     *
+     * @return Invoice[] in the export order
+     */
+    private function loadWithLines(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('i')
             ->leftJoin('i.lines', 'il')->addSelect('il')
             ->leftJoin('i.client', 'c')->addSelect('c')
+            ->where('i.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->orderBy('i.issueDate', 'DESC')
+            ->addOrderBy('i.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * The filters shared by findByCompanyFiltered(), iterateByCompanyFiltered() and the VAT
+     * summary. The root alias is `i` and the client is left-joined as `c` (not selected).
+     *
+     * Besides the list filters it takes `excludeCancelled` (bool) and `excludeStatuses`
+     * (list of DocumentStatus or their values).
+     */
+    private function filteredQueryBuilder(Company $company, array $filters): \Doctrine\ORM\QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('i')
+            ->leftJoin('i.client', 'c')
             ->where('i.company = :company')
             ->setParameter('company', $company)
-            ->orderBy('i.issueDate', 'DESC');
-
-        if ($limit !== null) {
-            $qb->setMaxResults($limit);
-        }
+            ->orderBy('i.issueDate', 'DESC')
+            ->addOrderBy('i.id', 'DESC');
 
         if (isset($filters['type'])) {
             $qb->andWhere('i.documentType = :type')
@@ -376,6 +640,14 @@ class InvoiceRepository extends ServiceEntityRepository
         if (isset($filters['excludeCancelled']) && filter_var($filters['excludeCancelled'], FILTER_VALIDATE_BOOLEAN)) {
             $qb->andWhere('i.status != :cancelledStatus')
                 ->setParameter('cancelledStatus', DocumentStatus::CANCELLED);
+        }
+
+        if (!empty($filters['excludeStatuses'])) {
+            $qb->andWhere('i.status NOT IN (:excludedStatuses)')
+                ->setParameter('excludedStatuses', array_map(
+                    static fn (DocumentStatus|string $s) => $s instanceof DocumentStatus ? $s->value : $s,
+                    $filters['excludeStatuses'],
+                ));
         }
 
         if (isset($filters['direction'])) {
@@ -432,7 +704,7 @@ class InvoiceRepository extends ServiceEntityRepository
                 ->setParameter('currency', strtoupper((string) $filters['currency']));
         }
 
-        return $qb->getQuery()->getResult();
+        return $qb;
     }
 
     /**

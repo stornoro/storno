@@ -4,7 +4,9 @@ namespace App\Repository;
 
 use App\Entity\Company;
 use App\Entity\Supplier;
+use App\Service\Cache\CompanyStatsCache;
 use App\Service\ExchangeRateService;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -18,6 +20,7 @@ class SupplierRepository extends ServiceEntityRepository
     public function __construct(
         ManagerRegistry $registry,
         private readonly ExchangeRateService $exchangeRateService,
+        private readonly CompanyStatsCache $statsCache,
     ) {
         parent::__construct($registry, Supplier::class);
     }
@@ -78,14 +81,30 @@ class SupplierRepository extends ServiceEntityRepository
     /**
      * @return array{data: array<array<string, mixed>>, total: int, hasForeignCurrencies: bool}
      */
-    /** Allowed sort keys → SQL ORDER BY fragments. */
+    /** Allowed sort keys → SQL ORDER BY fragments. The trailing id breaks ties so pages never overlap. */
     private const SORT_MAP = [
-        'recent'         => 's.created_at DESC',
-        'mostInvoiced'   => 'invoiceTotal DESC, s.created_at DESC',
-        'mostInvoices'   => 'invoiceCount DESC, s.created_at DESC',
-        'recentActivity' => 'lastInvoiceDate DESC, s.created_at DESC',
-        'name'           => 's.name ASC',
+        'recent'         => 's.created_at DESC, s.id DESC',
+        'mostInvoiced'   => 'invoiceTotal DESC, s.created_at DESC, s.id DESC',
+        'mostInvoices'   => 'invoiceCount DESC, s.created_at DESC, s.id DESC',
+        'recentActivity' => 'lastInvoiceDate DESC, s.created_at DESC, s.id DESC',
+        'name'           => 's.name ASC, s.id ASC',
     ];
+
+    /**
+     * Whole-company aggregates live until the company's next write moves the cache version; the
+     * TTL only bounds writes that bypass the ORM.
+     */
+    private const STATS_TTL = 600;
+
+    /** Sort keys that order by an invoice statistic, so the page can only be cut after aggregating. */
+    private const STAT_SORTS = ['mostInvoiced', 'mostInvoices', 'recentActivity'];
+
+    private const SUPPLIER_COLUMNS = '
+        s.id, s.name, s.cif, s.vat_code AS vatCode, s.is_vat_payer AS isVatPayer,
+        s.address, s.city, s.email, s.last_synced_at AS lastSyncedAt, s.source,
+        s.affiliated, s.inactive, s.vat_registered AS vatRegistered, s.vat_on_collection AS vatOnCollection,
+        s.efactura_registered AS efacturaRegistered, s.vies_valid AS viesValid, s.vat_status_checked_at AS vatStatusCheckedAt,
+        s.created_at AS createdAt';
 
     /**
      * @param array{search?: ?string, sort?: ?string, vatPayer?: ?string, hasInvoices?: ?string, source?: ?string} $filters
@@ -116,63 +135,101 @@ class SupplierRepository extends ServiceEntityRepository
             $clauses[] = 's.source = :source';
             $extraParams['source'] = $filters['source'];
         }
-        $hasInvoicesClause = '';
-        if (!empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true)) {
-            $hasInvoicesClause = $filters['hasInvoices'] === 'active'
-                ? ' AND COALESCE(inv.invoice_count, 0) > 0'
-                : ' AND COALESCE(inv.invoice_count, 0) = 0';
+        // "Has invoices" probes (invoice.company_id, invoice.sender_cif) once per supplier instead of
+        // aggregating the totals. A scalar subquery with LIMIT 1 keeps it a per-row index probe:
+        // MariaDB rewrites EXISTS into a semi-join that materializes every incoming invoice first.
+        $filtersByInvoices = !empty($filters['hasInvoices']) && in_array($filters['hasInvoices'], ['active', 'dormant'], true);
+        $hasInvoices = $filtersByInvoices ? $filters['hasInvoices'] : null;
+        if ($filtersByInvoices) {
+            $clauses[] = "(
+                SELECT 1 FROM invoice hi
+                WHERE hi.company_id = :companyId AND hi.sender_cif = s.cif AND hi.deleted_at IS NULL AND hi.direction = 'incoming'
+                LIMIT 1
+            ) IS " . ($hasInvoices === 'active' ? 'NOT NULL' : 'NULL');
         }
         $whereExtra = $clauses ? ' AND ' . implode(' AND ', $clauses) : '';
 
         $sortKey = is_string($filters['sort'] ?? null) ? $filters['sort'] : 'recent';
         $orderBy = self::SORT_MAP[$sortKey] ?? self::SORT_MAP['recent'];
 
-        $hasForeignCurrencies = (bool) $conn->fetchOne(
-            'SELECT 1 FROM invoice WHERE company_id = :companyId AND deleted_at IS NULL AND direction = :incoming AND currency != :defaultCurrency LIMIT 1',
-            ['companyId' => $companyId, 'incoming' => 'incoming', 'defaultCurrency' => $defaultCurrency],
-        );
-
-        $sql = "
-            SELECT
-                s.id, s.name, s.cif, s.vat_code AS vatCode, s.is_vat_payer AS isVatPayer,
-                s.address, s.city, s.email, s.last_synced_at AS lastSyncedAt, s.source,
-                s.affiliated, s.inactive, s.vat_registered AS vatRegistered, s.vat_on_collection AS vatOnCollection,
-                s.efactura_registered AS efacturaRegistered, s.vies_valid AS viesValid, s.vat_status_checked_at AS vatStatusCheckedAt,
-                s.created_at AS createdAt,
-                COALESCE(inv.invoice_count, 0) AS invoiceCount,
-                COALESCE(inv.invoice_total, 0) AS invoiceTotal,
-                inv.last_invoice_date AS lastInvoiceDate
-            FROM supplier s
-            LEFT JOIN (
-                SELECT sender_cif AS cif,
-                       COUNT(*) AS invoice_count,
-                       SUM($convertTotalSql) AS invoice_total,
-                       MAX(issue_date) AS last_invoice_date
-                FROM invoice
-                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'incoming'
-                GROUP BY sender_cif
-            ) inv ON inv.cif = s.cif
-            WHERE s.company_id = :companyId AND s.deleted_at IS NULL
-            $whereExtra
-            $hasInvoicesClause
-            ORDER BY $orderBy
-            LIMIT :pageLimit OFFSET :pageOffset
-        ";
+        $hasForeignCurrencies = $this->exchangeRateService->hasForeignCurrencies($conn, $companyId, $defaultCurrency, 'incoming');
 
         $offset = ($page - 1) * $limit;
-        $params = array_merge([
-            'companyId'       => $companyId,
-            'defaultCurrency' => $defaultCurrency,
-            'defaultRate'     => $defaultRate,
-            'pageLimit'       => $limit,
-            'pageOffset'      => $offset,
-        ], $extraParams);
-        $types = [
+        $pageTypes = [
             'pageLimit'  => ParameterType::INTEGER,
             'pageOffset' => ParameterType::INTEGER,
         ];
+        $statParams = ['companyId' => $companyId, 'defaultCurrency' => $defaultCurrency, 'defaultRate' => $defaultRate];
 
-        $rows = $conn->fetchAllAssociative($sql, $params, $types);
+        if (in_array($sortKey, self::STAT_SORTS, true)) {
+            // Ordering by a statistic needs it for every supplier, so this path aggregates the
+            // whole company. The result is cached until the company's next write.
+            $cacheKey = 'suppliers.page|' . json_encode([$page, $limit, $extraParams, $hasInvoices, $sortKey, $defaultCurrency, $defaultRate, date('Y-m-d')]);
+            $rows = $this->statsCache->get($companyId, $cacheKey, fn () => $conn->fetchAllAssociative(
+                'SELECT ' . self::SUPPLIER_COLUMNS . ",
+                    COALESCE(inv.invoice_count, 0) AS invoiceCount,
+                    COALESCE(inv.invoice_total, 0) AS invoiceTotal,
+                    inv.last_invoice_date AS lastInvoiceDate
+                FROM supplier s
+                LEFT JOIN (
+                    SELECT sender_cif AS cif,
+                           COUNT(*) AS invoice_count,
+                           SUM($convertTotalSql) AS invoice_total,
+                           MAX(issue_date) AS last_invoice_date
+                    FROM invoice
+                    WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'incoming'
+                    GROUP BY sender_cif
+                ) inv ON inv.cif = s.cif
+                WHERE s.company_id = :companyId AND s.deleted_at IS NULL
+                $whereExtra
+                ORDER BY $orderBy
+                LIMIT :pageLimit OFFSET :pageOffset",
+                array_merge($statParams, ['pageLimit' => $limit, 'pageOffset' => $offset], $extraParams),
+                $pageTypes,
+            ), self::STATS_TTL);
+        } else {
+            // Cut the page from the supplier table alone, then aggregate invoices only for its
+            // CIFs through the (company_id, sender_cif) index.
+            $suppliers = $conn->fetchAllAssociative(
+                'SELECT ' . self::SUPPLIER_COLUMNS . "
+                FROM supplier s
+                WHERE s.company_id = :companyId AND s.deleted_at IS NULL
+                $whereExtra
+                ORDER BY $orderBy
+                LIMIT :pageLimit OFFSET :pageOffset",
+                array_merge(['companyId' => $companyId, 'pageLimit' => $limit, 'pageOffset' => $offset], $extraParams),
+                $pageTypes,
+            );
+
+            $cifs = array_values(array_unique(array_filter(array_column($suppliers, 'cif'), static fn ($cif) => $cif !== null)));
+            $stats = [];
+            if ($cifs) {
+                $statRows = $conn->fetchAllAssociative(
+                    "SELECT sender_cif AS cif,
+                            COUNT(*) AS invoice_count,
+                            SUM($convertTotalSql) AS invoice_total,
+                            MAX(issue_date) AS last_invoice_date
+                     FROM invoice
+                     WHERE company_id = :companyId AND sender_cif IN (:cifs) AND deleted_at IS NULL AND direction = 'incoming'
+                     GROUP BY sender_cif",
+                    array_merge($statParams, ['cifs' => $cifs]),
+                    ['cifs' => ArrayParameterType::STRING],
+                );
+                foreach ($statRows as $statRow) {
+                    $stats[self::cifKey($statRow['cif'])] = $statRow;
+                }
+            }
+
+            // Same keys, in the same order, as the aggregated query above.
+            $rows = [];
+            foreach ($suppliers as $supplier) {
+                $stat = $supplier['cif'] !== null ? ($stats[self::cifKey($supplier['cif'])] ?? null) : null;
+                $supplier['invoiceCount'] = $stat['invoice_count'] ?? 0;
+                $supplier['invoiceTotal'] = $stat['invoice_total'] ?? 0;
+                $supplier['lastInvoiceDate'] = $stat['last_invoice_date'] ?? null;
+                $rows[] = $supplier;
+            }
+        }
 
         foreach ($rows as &$row) {
             $row['isVatPayer'] = (bool) $row['isVatPayer'];
@@ -183,29 +240,27 @@ class SupplierRepository extends ServiceEntityRepository
             $row['invoiceCount'] = (int) $row['invoiceCount'];
             $row['invoiceTotal'] = round((float) $row['invoiceTotal'], 2);
         }
+        unset($row);
 
-        // Total has to mirror the same WHERE chain as the page query, so that
-        // pagination shows the correct count after filters are applied. We
-        // re-run the JOIN so the hasInvoices filter remains accurate.
-        $countSql = "
-            SELECT COUNT(*)
-            FROM supplier s
-            LEFT JOIN (
-                SELECT sender_cif AS cif, COUNT(*) AS invoice_count
-                FROM invoice
-                WHERE company_id = :companyId AND deleted_at IS NULL AND direction = 'incoming'
-                GROUP BY sender_cif
-            ) inv ON inv.cif = s.cif
-            WHERE s.company_id = :companyId AND s.deleted_at IS NULL
-            $whereExtra
-            $hasInvoicesClause
-        ";
-
+        // Same WHERE chain as the page query so the total matches the filters.
+        $countSql = "SELECT COUNT(*) FROM supplier s WHERE s.company_id = :companyId AND s.deleted_at IS NULL $whereExtra";
         $countParams = array_merge(['companyId' => $companyId], $extraParams);
-        $total = (int) $conn->fetchOne($countSql, $countParams);
+        if ($filtersByInvoices) {
+            // The filter probes the invoices of every supplier of the company, so its count is cached.
+            $total = (int) $this->statsCache->get($companyId, 'suppliers.count|' . json_encode([$countParams, $hasInvoices]), fn () => $conn->fetchOne($countSql, $countParams), self::STATS_TTL);
+        } else {
+            $total = (int) $conn->fetchOne($countSql, $countParams);
+        }
 
         return ['data' => $rows, 'total' => $total, 'hasForeignCurrencies' => $hasForeignCurrencies];
     }
+
+    /** CIFs compare case- and trailing-space-insensitively in MySQL; the stats lookup must too. */
+    private static function cifKey(string $cif): string
+    {
+        return mb_strtolower(rtrim($cif));
+    }
+
     /**
      * Partners whose registry check is missing or older than `$since`: companies
      * with an identifier (CUI / VAT code), never individuals.

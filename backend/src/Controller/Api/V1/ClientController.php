@@ -98,7 +98,7 @@ class ClientController extends AbstractController
     }
 
     #[Route('/export/csv', methods: ['GET'])]
-    public function exportCsv(Request $request): Response
+    public function exportCsv(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->resolveCompany($request);
         if (!$company) {
@@ -109,49 +109,44 @@ class ClientController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $clients = $this->clientRepository->findAllByCompany($company);
+        // Read in batches and streamed, so the number of clients does not bound the export.
+        $clients = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateClients($company));
+        $rows = (static function () use ($clients): \Generator {
+            foreach ($clients as $client) {
+                yield CsvCell::neutralizeRow([
+                    $client->getType(),
+                    $client->getName(),
+                    $client->getCui(),
+                    $client->getCnp(),
+                    $client->getVatCode(),
+                    $client->isVatPayer() ? 'Da' : 'Nu',
+                    $client->getRegistrationNumber(),
+                    $client->getAddress(),
+                    $client->getCity(),
+                    $client->getCounty(),
+                    $client->getCountry(),
+                    $client->getPostalCode(),
+                    $client->getEmail(),
+                    $client->getPhone(),
+                    $client->getBankName(),
+                    $client->getBankAccount(),
+                    $client->getContactPerson(),
+                    $client->getDefaultPaymentTermDays(),
+                    $client->getIdNumber(),
+                    $client->getCurrency(),
+                ]);
+            }
+        })();
 
-        $handle = fopen('php://temp', 'r+');
-        fwrite($handle, "\xEF\xBB\xBF");
-        fputcsv($handle, ['Tip', 'Denumire', 'CUI', 'CNP', 'Cod TVA', 'Platitor TVA', 'Nr. Reg. Com.', 'Adresa', 'Oras', 'Judet', 'Tara', 'Cod Postal', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Persoana contact', 'Termen plata (zile)', 'Nr. identificare', 'Moneda']);
-
-        foreach ($clients as $client) {
-            fputcsv($handle, CsvCell::neutralizeRow([
-                $client->getType(),
-                $client->getName(),
-                $client->getCui(),
-                $client->getCnp(),
-                $client->getVatCode(),
-                $client->isVatPayer() ? 'Da' : 'Nu',
-                $client->getRegistrationNumber(),
-                $client->getAddress(),
-                $client->getCity(),
-                $client->getCounty(),
-                $client->getCountry(),
-                $client->getPostalCode(),
-                $client->getEmail(),
-                $client->getPhone(),
-                $client->getBankName(),
-                $client->getBankAccount(),
-                $client->getContactPerson(),
-                $client->getDefaultPaymentTermDays(),
-                $client->getIdNumber(),
-                $client->getCurrency(),
-            ]));
-        }
-
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return new Response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="clienti-%s.csv"', date('Y-m-d')),
-        ]);
+        return $streamedExport->csv(
+            sprintf('clienti-%s.csv', date('Y-m-d')),
+            ['Tip', 'Denumire', 'CUI', 'CNP', 'Cod TVA', 'Platitor TVA', 'Nr. Reg. Com.', 'Adresa', 'Oras', 'Judet', 'Tara', 'Cod Postal', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Persoana contact', 'Termen plata (zile)', 'Nr. identificare', 'Moneda'],
+            $rows,
+        );
     }
 
     #[Route('/export/saga-xml', methods: ['GET'])]
-    public function exportSagaXml(Request $request): Response
+    public function exportSagaXml(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->resolveCompany($request);
         if (!$company) {
@@ -162,13 +157,12 @@ class ClientController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $clients = $this->clientRepository->findAllByCompany($company);
-        $xml = $this->sagaXmlExportService->generateClientsXml($clients);
+        $clients = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateClients($company));
 
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="CLI_%s.xml"', date('Y-m-d')),
-        ]);
+        return $streamedExport->xml(
+            sprintf('CLI_%s.xml', date('Y-m-d')),
+            fn () => $this->sagaXmlExportService->streamClientsXml($clients),
+        );
     }
 
     #[Route('/vies-lookup', methods: ['GET'])]

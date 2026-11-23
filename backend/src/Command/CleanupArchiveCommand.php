@@ -2,6 +2,9 @@
 
 namespace App\Command;
 
+use App\Command\Support\CommandProgress;
+use App\Doctrine\Type\UuidType;
+use App\Entity\Company;
 use App\Repository\CompanyRepository;
 use App\Repository\InvoiceRepository;
 use App\Service\Anaf\InvoiceArchiver;
@@ -20,7 +23,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class CleanupArchiveCommand extends Command
 {
+    /** Invoices read, deleted and flushed per round. */
     private const BATCH_SIZE = 50;
+    private const COMPANY_BATCH_SIZE = 200;
 
     public function __construct(
         private readonly CompanyRepository $companyRepository,
@@ -46,71 +51,106 @@ class CleanupArchiveCommand extends Command
             $io->note('Running in dry-run mode — no files will be deleted.');
         }
 
-        $companies = $this->companyRepository->findBy(['archiveEnabled' => true]);
+        // Companies with an archive and a finite retention (null = never delete), in id-ordered
+        // batches so memory stays flat.
+        $candidates = static fn ($qb) => $qb
+            ->andWhere('c.archiveEnabled = true')
+            ->andWhere('c.archiveRetentionYears IS NOT NULL');
+        $total = (int) $candidates($this->companyRepository->createQueryBuilder('c')->select('COUNT(c.id)'))->getQuery()->getSingleScalarResult();
+        $progress = new CommandProgress($output, 'archive:cleanup', $total);
+        $progress->start(sprintf('%d companies with a finite archive retention%s', $total, $dryRun ? ' (dry-run)' : ''));
+
         $totalDeleted = 0;
         $totalRetained = 0;
         $totalErrors = 0;
-
-        foreach ($companies as $company) {
-            $retentionYears = $company->getArchiveRetentionYears();
-
-            // null = never delete
-            if ($retentionYears === null) {
-                $io->text(sprintf('  %s: retention = never, skipping.', $company->getName()));
-                continue;
+        $afterId = null;
+        do {
+            $companies = $candidates($this->companyRepository->createBatchQueryBuilder($afterId, self::COMPANY_BATCH_SIZE))->getQuery()->getResult();
+            if ($companies === []) {
+                break;
             }
+            $afterId = end($companies)->getId();
+            $companyIds = array_map(static fn ($c) => $c->getId(), $companies);
+            $this->entityManager->clear();
 
-            $cutoffDate = new \DateTimeImmutable("-{$retentionYears} years");
-
-            $io->section(sprintf('%s (CIF %s) — retention: %d years, cutoff: %s',
-                $company->getName(),
-                $company->getCif(),
-                $retentionYears,
-                $cutoffDate->format('Y-m-d'),
-            ));
-
-            $expiredInvoices = $this->invoiceRepository->findExpiredArchived($company, $cutoffDate);
-            $activeCount = $this->invoiceRepository->countActiveArchived($company, $cutoffDate);
-            $totalRetained += $activeCount;
-
-            if (empty($expiredInvoices)) {
-                $io->text('  No expired archived invoices.');
-                continue;
-            }
-
-            $batchCount = 0;
-            foreach ($expiredInvoices as $invoice) {
-                if ($dryRun) {
-                    $io->text(sprintf('  [DRY-RUN] Would delete: %s (issued %s)',
-                        $invoice->getAnafMessageId(),
-                        $invoice->getIssueDate()->format('Y-m-d'),
-                    ));
-                    $totalDeleted++;
+            foreach ($companyIds as $companyId) {
+                $progress->advance();
+                $company = $this->entityManager->find(Company::class, $companyId);
+                if ($company === null) {
                     continue;
                 }
+                $retentionYears = $company->getArchiveRetentionYears();
+                $cutoffDate = new \DateTimeImmutable("-{$retentionYears} years");
+                $companyName = $company->getName();
+                $companyCif = $company->getCif();
 
-                try {
-                    $this->invoiceArchiver->delete($invoice);
-                    $totalDeleted++;
-                    $batchCount++;
+                $totalRetained += $this->invoiceRepository->countActiveArchived($company, $cutoffDate);
 
-                    if ($batchCount % self::BATCH_SIZE === 0) {
+                $io->section(sprintf('%s (CIF %s) — retention: %d years, cutoff: %s', $companyName, $companyCif, $retentionYears, $cutoffDate->format('Y-m-d')));
+
+                $deleted = 0;
+                $lastInvoiceId = null;
+                $found = false;
+                do {
+                    $qb = $this->invoiceRepository->createQueryBuilder('i')
+                        ->where('i.company = :company')
+                        ->andWhere('i.xmlPath IS NOT NULL')
+                        ->andWhere('i.issueDate < :cutoff')
+                        ->setParameter('company', $company)
+                        ->setParameter('cutoff', $cutoffDate)
+                        ->orderBy('i.id', 'ASC')
+                        ->setMaxResults(self::BATCH_SIZE);
+                    if ($lastInvoiceId !== null) {
+                        $qb->andWhere('i.id > :after')->setParameter('after', $lastInvoiceId, UuidType::NAME);
+                    }
+                    $expiredInvoices = $qb->getQuery()->getResult();
+                    if ($expiredInvoices === []) {
+                        break;
+                    }
+                    $lastInvoiceId = end($expiredInvoices)->getId();
+
+                    $found = true;
+
+                    foreach ($expiredInvoices as $invoice) {
+                        if ($dryRun) {
+                            $io->text(sprintf('  [DRY-RUN] Would delete: %s (issued %s)',
+                                $invoice->getAnafMessageId(),
+                                $invoice->getIssueDate()->format('Y-m-d'),
+                            ));
+                            $totalDeleted++;
+                            $deleted++;
+                            continue;
+                        }
+
+                        try {
+                            $this->invoiceArchiver->delete($invoice);
+                            $totalDeleted++;
+                            $deleted++;
+                        } catch (\Throwable $e) {
+                            $totalErrors++;
+                            $this->logger->error('Failed to delete archived invoice', [
+                                'invoiceId' => (string) $invoice->getId(),
+                                'error' => $e->getMessage(),
+                            ]);
+                            $io->warning(sprintf('  Error deleting %s: %s', $invoice->getAnafMessageId(), $e->getMessage()));
+                        }
+                    }
+
+                    if (!$dryRun) {
                         $this->entityManager->flush();
                     }
-                } catch (\Throwable $e) {
-                    $totalErrors++;
-                    $this->logger->error('Failed to delete archived invoice', [
-                        'invoiceId' => (string) $invoice->getId(),
-                        'error' => $e->getMessage(),
-                    ]);
-                    $io->warning(sprintf('  Error deleting %s: %s', $invoice->getAnafMessageId(), $e->getMessage()));
-                }
-            }
+                    $this->entityManager->clear();
+                    $company = $this->entityManager->find(Company::class, $companyId);
+                } while (count($expiredInvoices) === self::BATCH_SIZE && $company !== null);
 
-            if (!$dryRun) {
-                $this->entityManager->flush();
+                if (!$found) {
+                    $io->text('  No expired archived invoices.');
+                }
+                $progress->count('deleted', $deleted);
+                $this->entityManager->clear();
             }
-        }
+        } while (count($companies) === self::COMPANY_BATCH_SIZE);
+        $progress->finish();
 
         $io->newLine();
         $io->definitionList(

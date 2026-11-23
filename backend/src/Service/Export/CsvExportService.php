@@ -6,7 +6,7 @@ use App\Entity\Invoice;
 
 class CsvExportService
 {
-    private const CSV_HEADERS = [
+    public const CSV_HEADERS = [
         'Numar',
         'Data emitere',
         'Data scadenta',
@@ -39,8 +39,28 @@ class CsvExportService
 
         fputcsv($handle, self::CSV_HEADERS);
 
+        foreach ($this->rows($invoices) as $row) {
+            fputcsv($handle, $row);
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv;
+    }
+
+    /**
+     * One CSV row per invoice, for StreamedExportFactory::csv().
+     *
+     * @param iterable<Invoice> $invoices
+     *
+     * @return \Generator<int, array<int, mixed>>
+     */
+    public function rows(iterable $invoices): \Generator
+    {
         foreach ($invoices as $invoice) {
-            fputcsv($handle, CsvCell::neutralizeRow([
+            yield CsvCell::neutralizeRow([
                 $invoice->getNumber(),
                 $invoice->getIssueDate()?->format('Y-m-d'),
                 $invoice->getDueDate()?->format('Y-m-d'),
@@ -59,13 +79,7 @@ class CsvExportService
                 $invoice->getPaymentMethod(),
                 $invoice->isDuplicate() ? 'Da' : 'Nu',
                 $invoice->isLateSubmission() ? 'Da' : 'Nu',
-            ]));
+            ]);
         }
-
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return $csv;
     }
 }

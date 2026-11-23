@@ -3,7 +3,6 @@
 namespace App\Service\Report;
 
 use App\Entity\Company;
-use App\Entity\Invoice;
 use App\Enum\DocumentStatus;
 use App\Enum\InvoiceDirection;
 use App\Repository\InvoiceRepository;
@@ -222,10 +221,8 @@ class VatReportService
             $repoFilters['type'] = $options['documentType'];
         }
 
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, $repoFilters, 10000);
         if ($finalOnly) {
-            $excluded = [DocumentStatus::DRAFT, DocumentStatus::REJECTED, DocumentStatus::CONVERTED];
-            $invoices = array_values(array_filter($invoices, static fn (Invoice $i) => !in_array($i->getStatus(), $excluded, true)));
+            $repoFilters['excludeStatuses'] = [DocumentStatus::DRAFT, DocumentStatus::REJECTED, DocumentStatus::CONVERTED];
         }
 
         $summary = [
@@ -251,39 +248,24 @@ class VatReportService
         $counts = ['outgoing' => 0, 'incoming' => 0];
         $currencies = [];
 
-        foreach ($invoices as $invoice) {
-            $dir = $invoice->getDirection() === InvoiceDirection::OUTGOING ? 'outgoing' : 'incoming';
-            $matched = false;
+        // Summed in SQL over every matching invoice, so the figures hold for a period of any size.
+        // An invoice without a direction counts as incoming.
+        foreach ($this->invoiceRepository->summarizeVatByCompanyFiltered($company, $repoFilters, $vatRate) as $dirValue => $data) {
+            $dir = $dirValue === InvoiceDirection::OUTGOING->value ? 'outgoing' : 'incoming';
 
-            // Break down by VAT rate from invoice lines
-            foreach ($invoice->getLines() as $line) {
-                $rate = $this->normalizeRate($line->getVatRate());
-                if ($vatRate !== null && $rate !== $vatRate) {
-                    continue;
-                }
-                $matched = true;
-                if (!isset($summary[$dir][$rate])) {
-                    $summary[$dir][$rate] = ['taxableBase' => '0.00', 'vatAmount' => '0.00'];
-                }
-                $summary[$dir][$rate]['taxableBase'] = bcadd($summary[$dir][$rate]['taxableBase'], $line->getLineTotal(), 2);
-                $summary[$dir][$rate]['vatAmount'] = bcadd($summary[$dir][$rate]['vatAmount'], $line->getVatAmount(), 2);
-                if ($vatRate !== null) {
-                    // Filtered by rate: the totals are the sums of the matching lines
-                    $summary['totals'][$dir]['taxableBase'] = bcadd($summary['totals'][$dir]['taxableBase'], $line->getLineTotal(), 2);
-                    $summary['totals'][$dir]['vatAmount'] = bcadd($summary['totals'][$dir]['vatAmount'], $line->getVatAmount(), 2);
-                    $summary['totals'][$dir]['total'] = bcadd($summary['totals'][$dir]['total'], bcadd($line->getLineTotal(), $line->getVatAmount(), 2), 2);
-                }
+            foreach ($data['rates'] as $rawRate => $sums) {
+                $rate = $this->normalizeRate((string) $rawRate);
+                $summary[$dir][$rate] ??= ['taxableBase' => '0.00', 'vatAmount' => '0.00'];
+                $summary[$dir][$rate]['taxableBase'] = bcadd($summary[$dir][$rate]['taxableBase'], $sums['taxableBase'], 2);
+                $summary[$dir][$rate]['vatAmount'] = bcadd($summary[$dir][$rate]['vatAmount'], $sums['vatAmount'], 2);
             }
 
-            if ($vatRate === null) {
-                $matched = true;
-                $summary['totals'][$dir]['taxableBase'] = bcadd($summary['totals'][$dir]['taxableBase'], $invoice->getSubtotal(), 2);
-                $summary['totals'][$dir]['vatAmount'] = bcadd($summary['totals'][$dir]['vatAmount'], $invoice->getVatTotal(), 2);
-                $summary['totals'][$dir]['total'] = bcadd($summary['totals'][$dir]['total'], $invoice->getTotal(), 2);
+            foreach (['taxableBase', 'vatAmount', 'total'] as $field) {
+                $summary['totals'][$dir][$field] = bcadd($summary['totals'][$dir][$field], $data['totals'][$field], 2);
             }
-            if ($matched) {
-                $counts[$dir]++;
-                $currencies[strtoupper($invoice->getCurrency() ?: 'RON')] = true;
+            $counts[$dir] += $data['totals']['count'];
+            foreach ($data['currencies'] as $currency) {
+                $currencies[strtoupper($currency ?: 'RON')] = true;
             }
         }
 

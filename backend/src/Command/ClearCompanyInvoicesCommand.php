@@ -19,6 +19,7 @@ class ClearCompanyInvoicesCommand extends Command
 {
     public function __construct(
         private readonly Connection $connection,
+        private readonly \App\Service\Cache\CompanyStatsCache $statsCache,
     ) {
         parent::__construct();
     }
@@ -92,6 +93,8 @@ class ClearCompanyInvoicesCommand extends Command
             $deleted = $this->deleteAll($companyId);
 
             $this->connection->commit();
+            // The rows were deleted with plain SQL, which the ORM listener does not see.
+            $this->statsCache->invalidate((string) $companyId);
 
             $io->newLine();
             $io->table(

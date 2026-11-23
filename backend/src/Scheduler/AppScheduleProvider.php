@@ -3,6 +3,7 @@
 namespace App\Scheduler;
 
 use Symfony\Component\Console\Messenger\RunCommandMessage;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Scheduler\Attribute\AsSchedule;
 use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
@@ -14,6 +15,7 @@ class AppScheduleProvider implements ScheduleProviderInterface
 {
     public function __construct(
         private CacheInterface $cache,
+        private LockFactory $lockFactory,
     ) {
     }
 
@@ -21,11 +23,17 @@ class AppScheduleProvider implements ScheduleProviderInterface
     {
         return (new Schedule())
             ->stateful($this->cache)
+            // One scheduler consumer at a time: a second app replica waits on the shared lock instead of
+            // running every job twice. LOCK_DSN must be the shared Redis store in prod (.env.prod).
+            ->lock($this->lockFactory->createLock('scheduler_default'))
+            // After a restart run each missed job once, not once per missed slot.
+            ->processOnlyLastMissedRun(true)
             // e-Factura — every 5 minutes
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:check-status')))
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:efactura:submit-scheduled')))
             ->add(RecurringMessage::cron('*/5 * * * *', new RunCommandMessage('app:invoice:send-scheduled-emails')))
-            ->add(RecurringMessage::cron('*/30 * * * *', new RunCommandMessage('app:efactura:sync')))
+            // Every 30 minutes: --async queues one message per company that can sync, the workers do the syncing
+            ->add(RecurringMessage::cron('*/30 * * * *', new RunCommandMessage('app:efactura:sync --async')))
             // ANAF token refresh — every 12 hours (tokens last ~7 days, refresh when < 5 days remaining)
             ->add(RecurringMessage::cron('0 */12 * * *', new RunCommandMessage('app:anaf:refresh-tokens')))
             ->add(RecurringMessage::cron('15 4 * * 0', new RunCommandMessage('app:anaf:update-validators')))
@@ -69,6 +77,11 @@ class AppScheduleProvider implements ScheduleProviderInterface
             ->add(RecurringMessage::cron('30 3 * * *', new RunCommandMessage('app:notifications:cleanup')))
             // Monthly audit log purge — 1st of month
             ->add(RecurringMessage::cron('0 4 1 * *', new RunCommandMessage('app:audit-log:purge')))
+            // app:logs:purge (retention for webhook deliveries, telemetry, login history, lifecycle
+            // email logs) is not scheduled: it deletes rows for good, so it runs only once the
+            // retention periods are agreed. Run it by hand, or add it here at a quiet hour.
+            // Expired OAuth2 codes and tokens — daily
+            ->add(RecurringMessage::cron('10 4 * * *', new RunCommandMessage('app:oauth2:cleanup')))
             // Monthly EU VAT rates refresh from GitHub — 1st of month
             ->add(RecurringMessage::cron('0 5 1 * *', new RunCommandMessage('app:vat-rates:sync')))
             // Lifecycle emails — SaaS only; all commands self-gate via EditionService

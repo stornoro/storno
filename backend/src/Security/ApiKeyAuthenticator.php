@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Psr\Log\LoggerInterface;
@@ -65,11 +66,16 @@ class ApiKeyAuthenticator extends AbstractAuthenticator
             'ip' => $request->getClientIp(),
         ]);
 
-        $limiter = $this->authenticatedApiLimiter->create($rawToken);
-        $limiter->consume(0)->ensureAccepted();
-
         if (null === $rawToken) {
             throw new CustomUserMessageAuthenticationException('No API token provided');
+        }
+
+        // One token per request. Keyed by the token hash so the raw key never reaches the limiter store.
+        $limit = $this->authenticatedApiLimiter->create(hash('sha256', $rawToken))->consume(1);
+        if (!$limit->isAccepted()) {
+            $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());
+
+            throw new TooManyRequestsHttpException($retryAfter, 'Rate limit exceeded. Retry after ' . $retryAfter . ' seconds.');
         }
 
         // Hash the incoming token and look up by hash
@@ -89,9 +95,14 @@ class ApiKeyAuthenticator extends AbstractAuthenticator
             }
         }
 
-        // Update lastUsedAt
-        $apiToken->setLastUsedAt(new \DateTimeImmutable());
-        $this->entityManager->flush();
+        // lastUsedAt is informative, minute precision is enough. Writing it on every request
+        // turns a busy integration key into one row update per call.
+        $now = new \DateTimeImmutable();
+        $lastUsedAt = $apiToken->getLastUsedAt();
+        if ($lastUsedAt === null || $now->getTimestamp() - $lastUsedAt->getTimestamp() >= 60) {
+            $apiToken->setLastUsedAt($now);
+            $this->entityManager->flush();
+        }
 
         // Store ApiToken on request for scope enforcement
         $request->attributes->set('_api_token', $apiToken);

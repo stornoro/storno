@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
+#[ORM\Index(name: 'idx_telemetry_created', columns: ['created_at'])]
 #[ORM\Index(columns: ['company_id', 'event', 'created_at'], name: 'idx_telemetry_company_event')]
 #[ORM\Index(columns: ['user_id', 'created_at'], name: 'idx_telemetry_user')]
 class TelemetryEvent

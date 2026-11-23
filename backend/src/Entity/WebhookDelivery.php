@@ -10,6 +10,7 @@ use App\Doctrine\Type\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: WebhookDeliveryRepository::class)]
+#[ORM\Index(name: 'idx_webhook_delivery_triggered', columns: ['triggered_at'])]
 #[ORM\Index(name: 'idx_webhook_delivery_endpoint_triggered', columns: ['endpoint_id', 'triggered_at'])]
 #[ORM\Index(name: 'idx_webhook_delivery_status_retry', columns: ['status', 'next_retry_at'])]
 class WebhookDelivery

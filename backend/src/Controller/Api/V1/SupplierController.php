@@ -67,7 +67,7 @@ class SupplierController extends AbstractController
     }
 
     #[Route('/suppliers/export/csv', methods: ['GET'])]
-    public function exportCsv(Request $request): Response
+    public function exportCsv(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
@@ -78,42 +78,37 @@ class SupplierController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $suppliers = $this->supplierRepository->findAllByCompany($company);
+        // Read in batches and streamed, so the number of suppliers does not bound the export.
+        $suppliers = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateSuppliers($company));
+        $rows = (static function () use ($suppliers): \Generator {
+            foreach ($suppliers as $supplier) {
+                yield [
+                    $supplier->getName(),
+                    $supplier->getCif(),
+                    $supplier->getVatCode(),
+                    $supplier->isVatPayer() ? 'Da' : 'Nu',
+                    $supplier->getAddress(),
+                    $supplier->getCity(),
+                    $supplier->getCounty(),
+                    $supplier->getCountry(),
+                    $supplier->getEmail(),
+                    $supplier->getPhone(),
+                    $supplier->getBankName(),
+                    $supplier->getBankAccount(),
+                    $supplier->getNotes(),
+                ];
+            }
+        })();
 
-        $handle = fopen('php://temp', 'r+');
-        fwrite($handle, "\xEF\xBB\xBF");
-        fputcsv($handle, ['Denumire', 'CIF', 'Cod TVA', 'Platitor TVA', 'Adresa', 'Oras', 'Judet', 'Tara', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Note']);
-
-        foreach ($suppliers as $supplier) {
-            fputcsv($handle, [
-                $supplier->getName(),
-                $supplier->getCif(),
-                $supplier->getVatCode(),
-                $supplier->isVatPayer() ? 'Da' : 'Nu',
-                $supplier->getAddress(),
-                $supplier->getCity(),
-                $supplier->getCounty(),
-                $supplier->getCountry(),
-                $supplier->getEmail(),
-                $supplier->getPhone(),
-                $supplier->getBankName(),
-                $supplier->getBankAccount(),
-                $supplier->getNotes(),
-            ]);
-        }
-
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return new Response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="furnizori-%s.csv"', date('Y-m-d')),
-        ]);
+        return $streamedExport->csv(
+            sprintf('furnizori-%s.csv', date('Y-m-d')),
+            ['Denumire', 'CIF', 'Cod TVA', 'Platitor TVA', 'Adresa', 'Oras', 'Judet', 'Tara', 'Email', 'Telefon', 'Banca', 'Cont bancar', 'Note'],
+            $rows,
+        );
     }
 
     #[Route('/suppliers/export/saga-xml', methods: ['GET'])]
-    public function exportSagaXml(Request $request): Response
+    public function exportSagaXml(Request $request, \App\Repository\Export\PartyExportQueries $exportQueries, \App\Service\Export\StreamedExportFactory $streamedExport): Response
     {
         $company = $this->organizationContext->resolveCompany($request);
         if (!$company) {
@@ -124,13 +119,12 @@ class SupplierController extends AbstractController
             return $this->json(['error' => 'Permission denied.'], Response::HTTP_FORBIDDEN);
         }
 
-        $suppliers = $this->supplierRepository->findAllByCompany($company);
-        $xml = $this->sagaXmlExportService->generateSuppliersXml($suppliers);
+        $suppliers = \App\Service\Export\StreamedExportFactory::prime($exportQueries->iterateSuppliers($company));
 
-        return new Response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="FRN_%s.xml"', date('Y-m-d')),
-        ]);
+        return $streamedExport->xml(
+            sprintf('FRN_%s.xml', date('Y-m-d')),
+            fn () => $this->sagaXmlExportService->streamSuppliersXml($suppliers),
+        );
     }
 
     #[Route('/suppliers/bulk-delete', methods: ['POST'])]

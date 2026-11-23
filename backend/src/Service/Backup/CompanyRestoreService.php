@@ -79,6 +79,7 @@ class CompanyRestoreService
     public function __construct(
         private readonly FilesystemOperator $defaultStorage,
         private readonly LoggerInterface $logger,
+        private readonly \App\Service\Cache\CompanyStatsCache $statsCache,
     ) {}
 
     /**
@@ -228,6 +229,8 @@ class CompanyRestoreService
             }
 
             $conn->commit();
+            // The rows were written with plain SQL, which the ORM listener does not see.
+            $this->statsCache->invalidate($targetCompanyId);
 
             $this->reportProgress($progressCallback, $totalSteps, $totalSteps, 'Complete');
         } catch (\Throwable $e) {

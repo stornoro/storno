@@ -28,35 +28,15 @@ class SagaXmlExportService
      */
     public function generateClientsXml(array $clients): string
     {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
+        return $this->render('Clienti', $clients, $this->clientLine(...));
+    }
 
-        $root = $dom->createElement('Clienti');
-        $dom->appendChild($root);
-
-        foreach ($clients as $client) {
-            $node = $dom->createElement('Linie');
-
-            $this->addElement($dom, $node, 'Cod', $this->resolveClientCode($client));
-            $this->addElement($dom, $node, 'Denumire', $client->getName() ?? '');
-            $this->addElement($dom, $node, 'Cod_fiscal', $client->getVatCode() ?: ($client->getCui() ?? ''));
-            $this->addElement($dom, $node, 'Reg_com', $client->getRegistrationNumber() ?? '');
-            $this->addElement($dom, $node, 'Tara', $client->getCountry());
-            $this->addElement($dom, $node, 'Judet', $client->getCountry() === 'RO' ? ($client->getCounty() ?? '') : '');
-            $this->addElement($dom, $node, 'Localitate', $client->getCity() ?? '');
-            $this->addElement($dom, $node, 'Adresa', $client->getAddress() ?? '');
-            $this->addElement($dom, $node, 'Cont_banca', $client->getBankAccount() ?? '');
-            $this->addElement($dom, $node, 'Banca', $client->getBankName() ?? '');
-            $this->addElement($dom, $node, 'Tel', $client->getPhone() ?? '');
-            $this->addElement($dom, $node, 'Email', $client->getEmail() ?? '');
-            $this->addElement($dom, $node, 'Discount', '');
-            $this->addElement($dom, $node, 'Informatii', $client->getNotes() ?? '');
-            $this->addElement($dom, $node, 'Guid_cod', $client->getId()?->toRfc4122() ?? '');
-
-            $root->appendChild($node);
-        }
-
-        return $dom->saveXML();
+    /**
+     * @param iterable<Client> $clients
+     */
+    public function streamClientsXml(iterable $clients): void
+    {
+        $this->stream('Clienti', $clients, $this->clientLine(...));
     }
 
     /**
@@ -66,32 +46,15 @@ class SagaXmlExportService
      */
     public function generateSuppliersXml(array $suppliers): string
     {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
+        return $this->render('Furnizori', $suppliers, $this->supplierLineWriter());
+    }
 
-        $root = $dom->createElement('Furnizori');
-        $dom->appendChild($root);
-
-        foreach ($suppliers as $index => $supplier) {
-            $node = $dom->createElement('Linie');
-
-            $this->addElement($dom, $node, 'Cod', (string) ($index + 1));
-            $this->addElement($dom, $node, 'Denumire', $supplier->getName() ?? '');
-            $this->addElement($dom, $node, 'Cod_fiscal', $supplier->getVatCode() ?: ($supplier->getCif() ?? ''));
-            $this->addElement($dom, $node, 'Tara', $supplier->getCountry());
-            $this->addElement($dom, $node, 'Localitate', $supplier->getCity() ?? '');
-            $this->addElement($dom, $node, 'Adresa', $supplier->getAddress() ?? '');
-            $this->addElement($dom, $node, 'Cont_banca', $supplier->getBankAccount() ?? '');
-            $this->addElement($dom, $node, 'Banca', $supplier->getBankName() ?? '');
-            $this->addElement($dom, $node, 'Tel', $supplier->getPhone() ?? '');
-            $this->addElement($dom, $node, 'Email', $supplier->getEmail() ?? '');
-            $this->addElement($dom, $node, 'Informatii', $supplier->getNotes() ?? '');
-            $this->addElement($dom, $node, 'Guid_cod', $supplier->getId()?->toRfc4122() ?? '');
-
-            $root->appendChild($node);
-        }
-
-        return $dom->saveXML();
+    /**
+     * @param iterable<Supplier> $suppliers
+     */
+    public function streamSuppliersXml(iterable $suppliers): void
+    {
+        $this->stream('Furnizori', $suppliers, $this->supplierLineWriter());
     }
 
     /**
@@ -101,57 +64,230 @@ class SagaXmlExportService
      */
     public function generateProductsXml(array $products): string
     {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
+        return $this->render('Articole', $products, $this->productLine(...));
+    }
 
-        $root = $dom->createElement('Articole');
-        $dom->appendChild($root);
-
-        foreach ($products as $product) {
-            $node = $dom->createElement('Linie');
-
-            $this->addElement($dom, $node, 'Cod', $product->getCode() ?? '');
-            $this->addElement($dom, $node, 'Denumire', $product->getName() ?? '');
-            $this->addElement($dom, $node, 'Cod_NC', $product->getNcCode() ?? '');
-            $this->addElement($dom, $node, 'Cod_CPV', $product->getCpvCode() ?? '');
-            $this->addElement($dom, $node, 'UM', $product->getUnitOfMeasure());
-            $this->addElement($dom, $node, 'Tip', $product->isService() ? 'Serviciu' : 'Marfa');
-            $this->addElement($dom, $node, 'TVA', $product->getVatRate());
-            $this->addElement($dom, $node, 'Pret', $product->getDefaultPrice());
-            // Pret_TVA = price with VAT included
-            $vatMultiplier = bcadd('1', bcdiv($product->getVatRate(), '100', 6), 6);
-            $pretTva = bcmul($product->getDefaultPrice(), $vatMultiplier, 2);
-            $this->addElement($dom, $node, 'Pret_TVA', $pretTva);
-            $this->addElement($dom, $node, 'Cod_bare', '');
-            $this->addElement($dom, $node, 'Informatii', $product->getDescription() ?? '');
-            $this->addElement($dom, $node, 'Guid_cod', $product->getId()?->toRfc4122() ?? '');
-
-            $root->appendChild($node);
-        }
-
-        return $dom->saveXML();
+    /**
+     * @param iterable<Product> $products
+     */
+    public function streamProductsXml(iterable $products): void
+    {
+        $this->stream('Articole', $products, $this->productLine(...));
     }
 
     /**
      * SAGA Facturi: root <Facturi>, children <Factura>.
      *
-     * Streamed with XMLWriter (constant memory, no DOM tree) — large invoice
-     * sets used to build a full DOMDocument before serialising, which was the
-     * bottleneck of the accounting export.
-     *
      * @param Invoice[] $invoices
      */
     public function generateInvoicesXml(array $invoices, Company $company, bool $includeDiscount = false): string
     {
+        return $this->render('Facturi', $invoices, $this->invoiceWriter($company, $includeDiscount));
+    }
+
+    /**
+     * @param iterable<Invoice> $invoices
+     */
+    public function streamInvoicesXml(iterable $invoices, Company $company, bool $includeDiscount = false): void
+    {
+        $this->stream('Facturi', $invoices, $this->invoiceWriter($company, $includeDiscount));
+    }
+
+    /**
+     * SAGA Incasari (receipts on outgoing invoices): root <Incasari>, children <Linie>
+     *
+     * @param Payment[] $payments
+     * @param array     $accountMap  Optional overrides: ['cash'=>'...','bank_transfer'=>'...','card'=>'...']
+     */
+    public function generateReceiptsXml(array $payments, array $accountMap = []): string
+    {
+        return $this->render('Incasari', $payments, $this->paymentLineWriter($accountMap, true));
+    }
+
+    /**
+     * @param iterable<Payment> $payments
+     */
+    public function streamReceiptsXml(iterable $payments, array $accountMap = []): void
+    {
+        $this->stream('Incasari', $payments, $this->paymentLineWriter($accountMap, true));
+    }
+
+    /**
+     * SAGA Plati (payments on incoming invoices): root <Plati>, children <Linie>
+     *
+     * @param Payment[] $payments
+     * @param array     $accountMap  Optional overrides: ['cash'=>'...','bank_transfer'=>'...','card'=>'...']
+     */
+    public function generatePaymentsXml(array $payments, array $accountMap = []): string
+    {
+        return $this->render('Plati', $payments, $this->paymentLineWriter($accountMap, false));
+    }
+
+    /**
+     * @param iterable<Payment> $payments
+     */
+    public function streamPaymentsXml(iterable $payments, array $accountMap = []): void
+    {
+        $this->stream('Plati', $payments, $this->paymentLineWriter($accountMap, false));
+    }
+
+    /**
+     * Builds the whole document in memory. Kept for the accounting ZIP export, which needs
+     * each file as a string.
+     *
+     * @param callable(\XMLWriter, mixed): void $writeItem
+     */
+    private function render(string $root, iterable $items, callable $writeItem): string
+    {
         $w = new \XMLWriter();
         $w->openMemory();
+        $this->writeDocument($w, $root, $items, $writeItem, false);
+
+        return $w->outputMemory();
+    }
+
+    /**
+     * Writes the document to php://output, flushing the writer every 200 items so memory
+     * does not grow with the number of rows.
+     *
+     * @param callable(\XMLWriter, mixed): void $writeItem
+     */
+    private function stream(string $root, iterable $items, callable $writeItem): void
+    {
+        $w = new \XMLWriter();
+        if (!$w->openUri('php://output')) {
+            throw new \RuntimeException('Cannot open php://output for the XML export.');
+        }
+        $this->writeDocument($w, $root, $items, $writeItem, true);
+        $w->flush();
+    }
+
+    /**
+     * Two-space indentation and the UTF-8 declaration: the same bytes DOMDocument produced
+     * with formatOutput, which the former implementation used.
+     *
+     * @param callable(\XMLWriter, mixed): void $writeItem
+     */
+    private function writeDocument(\XMLWriter $w, string $root, iterable $items, callable $writeItem, bool $flush): void
+    {
         $w->setIndent(true);
         $w->setIndentString('  ');
         $w->startDocument('1.0', 'UTF-8');
+        $w->startElement($root);
 
-        $w->startElement('Facturi');
+        $written = 0;
+        foreach ($items as $item) {
+            $writeItem($w, $item);
+            if ($flush && ++$written % 200 === 0) {
+                $w->flush();
+                flush();
+            }
+        }
 
-        foreach ($invoices as $invoice) {
+        $w->endElement();
+        $w->endDocument();
+    }
+
+    private function clientLine(\XMLWriter $w, Client $client): void
+    {
+        $w->startElement('Linie');
+        $this->writeText($w, 'Cod', $this->resolveClientCode($client));
+        $this->writeText($w, 'Denumire', $client->getName() ?? '');
+        $this->writeText($w, 'Cod_fiscal', $client->getVatCode() ?: ($client->getCui() ?? ''));
+        $this->writeText($w, 'Reg_com', $client->getRegistrationNumber() ?? '');
+        $this->writeText($w, 'Tara', $client->getCountry());
+        $this->writeText($w, 'Judet', $client->getCountry() === 'RO' ? ($client->getCounty() ?? '') : '');
+        $this->writeText($w, 'Localitate', $client->getCity() ?? '');
+        $this->writeText($w, 'Adresa', $client->getAddress() ?? '');
+        $this->writeText($w, 'Cont_banca', $client->getBankAccount() ?? '');
+        $this->writeText($w, 'Banca', $client->getBankName() ?? '');
+        $this->writeText($w, 'Tel', $client->getPhone() ?? '');
+        $this->writeText($w, 'Email', $client->getEmail() ?? '');
+        $this->writeText($w, 'Discount', '');
+        $this->writeText($w, 'Informatii', $client->getNotes() ?? '');
+        $this->writeText($w, 'Guid_cod', $client->getId()?->toRfc4122() ?? '');
+        $w->endElement();
+    }
+
+    /**
+     * <Cod> is the 1-based position of the supplier in the file.
+     */
+    private function supplierLineWriter(): \Closure
+    {
+        $position = 0;
+
+        return function (\XMLWriter $w, Supplier $supplier) use (&$position): void {
+            $position++;
+            $w->startElement('Linie');
+            $this->writeText($w, 'Cod', (string) $position);
+            $this->writeText($w, 'Denumire', $supplier->getName() ?? '');
+            $this->writeText($w, 'Cod_fiscal', $supplier->getVatCode() ?: ($supplier->getCif() ?? ''));
+            $this->writeText($w, 'Tara', $supplier->getCountry());
+            $this->writeText($w, 'Localitate', $supplier->getCity() ?? '');
+            $this->writeText($w, 'Adresa', $supplier->getAddress() ?? '');
+            $this->writeText($w, 'Cont_banca', $supplier->getBankAccount() ?? '');
+            $this->writeText($w, 'Banca', $supplier->getBankName() ?? '');
+            $this->writeText($w, 'Tel', $supplier->getPhone() ?? '');
+            $this->writeText($w, 'Email', $supplier->getEmail() ?? '');
+            $this->writeText($w, 'Informatii', $supplier->getNotes() ?? '');
+            $this->writeText($w, 'Guid_cod', $supplier->getId()?->toRfc4122() ?? '');
+            $w->endElement();
+        };
+    }
+
+    private function productLine(\XMLWriter $w, Product $product): void
+    {
+        $w->startElement('Linie');
+        $this->writeText($w, 'Cod', $product->getCode() ?? '');
+        $this->writeText($w, 'Denumire', $product->getName() ?? '');
+        $this->writeText($w, 'Cod_NC', $product->getNcCode() ?? '');
+        $this->writeText($w, 'Cod_CPV', $product->getCpvCode() ?? '');
+        $this->writeText($w, 'UM', $product->getUnitOfMeasure());
+        $this->writeText($w, 'Tip', $product->isService() ? 'Serviciu' : 'Marfa');
+        $this->writeText($w, 'TVA', $product->getVatRate());
+        $this->writeText($w, 'Pret', $product->getDefaultPrice());
+        // Pret_TVA = price with VAT included
+        $vatMultiplier = bcadd('1', bcdiv($product->getVatRate(), '100', 6), 6);
+        $pretTva = bcmul($product->getDefaultPrice(), $vatMultiplier, 2);
+        $this->writeText($w, 'Pret_TVA', $pretTva);
+        $this->writeText($w, 'Cod_bare', '');
+        $this->writeText($w, 'Informatii', $product->getDescription() ?? '');
+        $this->writeText($w, 'Guid_cod', $product->getId()?->toRfc4122() ?? '');
+        $w->endElement();
+    }
+
+    /**
+     * Receipts (outgoing invoices) take the partner CIF from the invoice receiver,
+     * payments (incoming invoices) from the invoice sender.
+     */
+    private function paymentLineWriter(array $accountMap, bool $receipts): \Closure
+    {
+        return function (\XMLWriter $w, Payment $payment) use ($accountMap, $receipts): void {
+            $invoice = $payment->getInvoice();
+            $invoiceNumber = $invoice?->getNumber() ?? '';
+            $paymentDate = $payment->getPaymentDate()?->format('d.m.Y') ?? '';
+            $explicatie = $payment->getNotes()
+                ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
+            $partnerCif = $receipts ? $invoice?->getReceiverCif() : $invoice?->getSenderCif();
+
+            $method = $payment->getPaymentMethod();
+            $w->startElement('Linie');
+            $this->writeText($w, 'TipDocument', $this->mapPaymentMethodToTipDocument($method));
+            $this->writeText($w, 'Data', $paymentDate);
+            $this->writeText($w, 'Numar', $payment->getReference() ?: '-');
+            $this->writeText($w, 'Suma', $payment->getAmount());
+            $this->writeText($w, 'Cont', $this->mapPaymentMethodToAccount($method, $accountMap));
+            $this->writeText($w, 'Explicatie', $explicatie);
+            $this->writeText($w, 'FacturaNumar', $invoiceNumber);
+            $this->writeText($w, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
+            $this->writeText($w, 'CodFiscal', $this->codFiscalForReceipt($method, $partnerCif));
+            $w->endElement();
+        };
+    }
+
+    private function invoiceWriter(Company $company, bool $includeDiscount): \Closure
+    {
+        return function (\XMLWriter $w, Invoice $invoice) use ($company, $includeDiscount): void {
             $w->startElement('Factura');
 
             // ── Antet ──
@@ -240,90 +376,7 @@ class SagaXmlExportService
             $this->writeEl($w, 'FacturaID', preg_replace('/[^0-9]/', '', $invoice->getNumber() ?? ''));
 
             $w->endElement(); // Factura
-        }
-
-        $w->endElement(); // Facturi
-        $w->endDocument();
-
-        return $w->outputMemory();
-    }
-
-    /**
-     * SAGA Incasari (receipts on outgoing invoices): root <Incasari>, children <Linie>
-     *
-     * @param Payment[] $payments
-     * @param array     $accountMap  Optional overrides: ['cash'=>'...','bank_transfer'=>'...','card'=>'...']
-     */
-    public function generateReceiptsXml(array $payments, array $accountMap = []): string
-    {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
-
-        $root = $dom->createElement('Incasari');
-        $dom->appendChild($root);
-
-        foreach ($payments as $payment) {
-            $node = $dom->createElement('Linie');
-            $invoice = $payment->getInvoice();
-            $invoiceNumber = $invoice?->getNumber() ?? '';
-            $paymentDate = $payment->getPaymentDate()?->format('d.m.Y') ?? '';
-            $explicatie = $payment->getNotes()
-                ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
-
-            $method = $payment->getPaymentMethod();
-            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($method));
-            $this->addElement($dom, $node, 'Data', $paymentDate);
-            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
-            $this->addElement($dom, $node, 'Suma', $payment->getAmount());
-            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($method, $accountMap));
-            $this->addElement($dom, $node, 'Explicatie', $explicatie);
-            $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
-            $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
-            $this->addElement($dom, $node, 'CodFiscal', $this->codFiscalForReceipt($method, $invoice?->getReceiverCif()));
-
-            $root->appendChild($node);
-        }
-
-        return $dom->saveXML();
-    }
-
-    /**
-     * SAGA Plati (payments on incoming invoices): root <Plati>, children <Linie>
-     *
-     * @param Payment[] $payments
-     * @param array     $accountMap  Optional overrides: ['cash'=>'...','bank_transfer'=>'...','card'=>'...']
-     */
-    public function generatePaymentsXml(array $payments, array $accountMap = []): string
-    {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true;
-
-        $root = $dom->createElement('Plati');
-        $dom->appendChild($root);
-
-        foreach ($payments as $payment) {
-            $node = $dom->createElement('Linie');
-            $invoice = $payment->getInvoice();
-            $invoiceNumber = $invoice?->getNumber() ?? '';
-            $paymentDate = $payment->getPaymentDate()?->format('d.m.Y') ?? '';
-            $explicatie = $payment->getNotes()
-                ?: trim(sprintf('contravaloarea facturii %s%s', $invoiceNumber, $paymentDate !== '' ? ' din data de ' . $paymentDate : ''));
-
-            $method = $payment->getPaymentMethod();
-            $this->addElement($dom, $node, 'TipDocument', $this->mapPaymentMethodToTipDocument($method));
-            $this->addElement($dom, $node, 'Data', $paymentDate);
-            $this->addElement($dom, $node, 'Numar', $payment->getReference() ?: '-');
-            $this->addElement($dom, $node, 'Suma', $payment->getAmount());
-            $this->addElement($dom, $node, 'Cont', $this->mapPaymentMethodToAccount($method, $accountMap));
-            $this->addElement($dom, $node, 'Explicatie', $explicatie);
-            $this->addElement($dom, $node, 'FacturaNumar', $invoiceNumber);
-            $this->addElement($dom, $node, 'FacturaID', preg_replace('/[^0-9]/', '', $invoiceNumber));
-            $this->addElement($dom, $node, 'CodFiscal', $this->codFiscalForReceipt($method, $invoice?->getSenderCif()));
-
-            $root->appendChild($node);
-        }
-
-        return $dom->saveXML();
+        };
     }
 
     /**
@@ -450,6 +503,22 @@ class SagaXmlExportService
             $w->text('');
         } else {
             $w->writeRaw(str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $value));
+        }
+        $w->endElement();
+    }
+
+    /**
+     * Leaf element for the formats that DOMDocument used to write (clients, suppliers,
+     * products, receipts, payments). Same escaping as a DOM text node: & < > and a carriage
+     * return as &#13;, quotes left raw. An empty value gives <Name></Name>.
+     */
+    private function writeText(\XMLWriter $w, string $name, string $value): void
+    {
+        $w->startElement($name);
+        if ($value === '') {
+            $w->text('');
+        } else {
+            $w->writeRaw(str_replace(['&', '<', '>', "\r"], ['&amp;', '&lt;', '&gt;', '&#13;'], $value));
         }
         $w->endElement();
     }

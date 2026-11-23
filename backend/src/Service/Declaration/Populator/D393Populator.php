@@ -33,11 +33,12 @@ class D393Populator implements DeclarationDataPopulatorInterface
         $dateFrom = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
         $dateTo = (clone $dateFrom)->modify('last day of this month');
 
-        $invoices = $this->invoiceRepository->findByCompanyFiltered($company, [
+        // Every invoice of the period, read in batches so memory stays flat for any volume.
+        $invoices = $this->invoiceRepository->iterateByCompanyFiltered($company, [
             'dateFrom' => $dateFrom->format('Y-m-d'),
             'dateTo' => $dateTo->format('Y-m-d'),
             'excludeCancelled' => true,
-        ], 10000);
+        ]);
 
         $operations = [];
         $totals = ['nrOPI' => 0, 'bazaP' => '0', 'bazaS' => '0', 'totalBaza' => '0'];

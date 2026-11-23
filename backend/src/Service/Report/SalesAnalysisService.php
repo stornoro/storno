@@ -3,24 +3,46 @@
 namespace App\Service\Report;
 
 use App\Entity\Company;
+use App\Service\Cache\CompanyStatsCache;
 use App\Service\ExchangeRateService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class SalesAnalysisService
 {
+    /**
+     * Whole-company aggregates live until the company's next write moves the cache version; the
+     * TTL only bounds writes that bypass the ORM.
+     */
+    private const STATS_TTL = 600;
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly ExchangeRateService $exchangeRateService,
+        private readonly ?CompanyStatsCache $statsCache = null,
     ) {}
 
     public function generate(Company $company, string $dateFrom, string $dateTo): array
     {
-        $conn = $this->entityManager->getConnection();
         $companyId = (string) $company->getId();
         $defaultCurrency = $company->getDefaultCurrency() ?? 'RON';
         $defaultRate = $this->exchangeRateService->getRate($defaultCurrency) ?? 1.0;
-        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency);
-        $fallbackRateSqlI = $this->exchangeRateService->buildFallbackRateSql($conn, $companyId, $defaultCurrency, 'i.currency');
+
+        if ($this->statsCache === null) {
+            return $this->compute($companyId, $dateFrom, $dateTo, $defaultCurrency, $defaultRate);
+        }
+
+        // The fallback rates change daily, so the day is part of the key.
+        $key = 'sales.analysis|' . json_encode([$dateFrom, $dateTo, $defaultCurrency, $defaultRate, date('Y-m-d')]);
+
+        return $this->statsCache->get($companyId, $key, fn () => $this->compute($companyId, $dateFrom, $dateTo, $defaultCurrency, $defaultRate), self::STATS_TTL);
+    }
+
+    private function compute(string $companyId, string $dateFrom, string $dateTo, string $defaultCurrency, float $defaultRate): array
+    {
+        $conn = $this->entityManager->getConnection();
+        $currencies = array_values(array_unique(array_merge([], ...array_values($this->exchangeRateService->getInvoiceCurrencies($conn, $companyId, $defaultCurrency)))));
+        $fallbackRateSql = $this->exchangeRateService->buildFallbackRateSqlForCurrencies($currencies);
+        $fallbackRateSqlI = $this->exchangeRateService->buildFallbackRateSqlForCurrencies($currencies, 'i.currency');
 
         // SQL conversion expressions
         $convertTotal = "CASE WHEN currency = :defaultCurrency THEN total ELSE total * COALESCE(exchange_rate, $fallbackRateSql) / :defaultRate END";
@@ -39,20 +61,21 @@ class SalesAnalysisService
         $currentYear = (int) substr($dateTo, 0, 4);
         $prevYear = $currentYear - 1;
 
+        // Year bounds as a date range, so the (company_id, issue_date) index applies.
         $annualCurrent = $conn->fetchAssociative(
             "SELECT COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
              WHERE {$baseWhere}
-               AND YEAR(issue_date) = :year AND issue_date <= :dateTo",
-            array_merge($amountBase, ['year' => $currentYear, 'dateTo' => $dateTo])
+               AND issue_date >= :yearStart AND issue_date < :yearEnd AND issue_date <= :dateTo",
+            array_merge($amountBase, ['yearStart' => $currentYear . '-01-01', 'yearEnd' => ($currentYear + 1) . '-01-01', 'dateTo' => $dateTo])
         );
 
         $annualPrev = $conn->fetchAssociative(
             "SELECT COALESCE(SUM($convertTotal), 0) AS amount
              FROM invoice
              WHERE {$baseWhere}
-               AND YEAR(issue_date) = :year",
-            array_merge($amountBase, ['year' => $prevYear])
+               AND issue_date >= :yearStart AND issue_date < :yearEnd",
+            array_merge($amountBase, ['yearStart' => $prevYear . '-01-01', 'yearEnd' => $currentYear . '-01-01'])
         );
 
         // Period invoiced

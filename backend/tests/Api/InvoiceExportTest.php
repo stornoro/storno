@@ -17,7 +17,8 @@ class InvoiceExportTest extends ApiTestCase
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
 
-        $content = $response->getContent();
+        // The export is a streamed response: its body is on the browser's internal response.
+        $content = $this->client->getInternalResponse()->getContent();
         $this->assertStringContainsString('Numar', $content);
 
         // Which company comes first is not fixed, so the expected rows are read from the
@@ -61,7 +62,7 @@ class InvoiceExportTest extends ApiTestCase
         $this->client->request('GET', '/api/v1/invoices/export/csv?from=2000-01-01&to=2000-01-31', [], [], $this->buildHeaders(['X-Company' => $companyId]));
 
         $this->assertResponseStatusCodeSame(200);
-        $this->assertStringNotContainsString('UEP2026000001', $this->client->getResponse()->getContent());
+        $this->assertStringNotContainsString('UEP2026000001', $this->client->getInternalResponse()->getContent());
     }
 
     public function testExportSagaXmlFiltersByDateRange(): void
@@ -73,7 +74,7 @@ class InvoiceExportTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(200);
         $this->assertStringContainsString('application/xml', $this->client->getResponse()->headers->get('Content-Type'));
-        $this->assertStringNotContainsString('UEP2026000001', $this->client->getResponse()->getContent());
+        $this->assertStringNotContainsString('UEP2026000001', $this->client->getInternalResponse()->getContent());
     }
 
     public function testReceiptsAndPaymentsSagaXmlAcceptDateRange(): void
@@ -85,7 +86,7 @@ class InvoiceExportTest extends ApiTestCase
             $this->client->request('GET', "/api/v1/invoices/export/$endpoint?from=2000-01-01&to=2000-01-31", [], [], $this->buildHeaders(['X-Company' => $companyId]));
             $this->assertResponseStatusCodeSame(200);
             $this->assertStringContainsString('application/xml', $this->client->getResponse()->headers->get('Content-Type'));
-            $this->assertStringNotContainsString('<Linie>', $this->client->getResponse()->getContent(), "$endpoint: no document should fall in January 2000");
+            $this->assertStringNotContainsString('<Linie>', $this->client->getInternalResponse()->getContent(), "$endpoint: no document should fall in January 2000");
         }
     }
 

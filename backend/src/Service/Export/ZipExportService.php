@@ -20,7 +20,25 @@ class ZipExportService
      */
     public function generate(array $invoices): string
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), 'invoice_export_') . '.zip';
+        $tmpFile = $this->generateToFile($invoices);
+
+        $content = file_get_contents($tmpFile);
+        unlink($tmpFile);
+
+        return $content === false ? '' : $content;
+    }
+
+    /**
+     * Writes the archive to a temporary file and returns its path, so a caller can stream
+     * it instead of holding it in memory. The caller deletes the file.
+     *
+     * @param iterable<Invoice> $invoices
+     */
+    public function generateToFile(iterable $invoices): string
+    {
+        $base = tempnam(sys_get_temp_dir(), 'invoice_export_');
+        $tmpFile = $base . '.zip';
+        @unlink($base);
         $zip = new \ZipArchive();
 
         if ($zip->open($tmpFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
@@ -51,14 +69,12 @@ class ZipExportService
 
         $zip->close();
 
+        // ZipArchive writes nothing for an archive without entries.
         if (!file_exists($tmpFile)) {
-            return '';
+            touch($tmpFile);
         }
 
-        $content = file_get_contents($tmpFile);
-        unlink($tmpFile);
-
-        return $content;
+        return $tmpFile;
     }
 
     private function getXmlContent(Invoice $invoice): ?string

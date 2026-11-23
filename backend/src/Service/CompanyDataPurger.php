@@ -15,6 +15,7 @@ class CompanyDataPurger
 {
     public function __construct(
         private readonly LoggerInterface $logger,
+        private readonly \App\Service\Cache\CompanyStatsCache $statsCache,
     ) {}
 
     /**
@@ -98,6 +99,9 @@ class CompanyDataPurger
                 [$companyId]
             );
         }
+
+        // The rows were deleted with plain SQL, which the ORM listener does not see.
+        $this->statsCache->invalidate($companyId);
 
         $this->logger->info('CompanyDataPurger: Purge completed.', ['companyId' => $companyId]);
     }

@@ -209,13 +209,18 @@ Processed via Symfony Messenger:
 
 ```bash
 # e-Factura
-php bin/console app:efactura:sync              # Sync invoices from ANAF
+php bin/console app:efactura:sync              # Sync invoices from ANAF (--async: one queue message per company, as the scheduler runs it; --company=<uuid>, --days=N)
 php bin/console app:efactura:submit-scheduled   # Submit pending invoices
 php bin/console app:efactura:check-uploads      # Check submission status
 php bin/console app:anaf:refresh-tokens         # Refresh OAuth tokens
 
 # Recurring Invoices
-php bin/console app:invoices:process-recurring  # Generate scheduled invoices
+php bin/console app:invoice:process-recurring   # Generate scheduled invoices: everything due, each template at most once per run, in batches of 50 (--limit=N caps a manual run, --dry-run, --date=YYYY-MM-DD)
+
+# Retention
+php bin/console app:logs:purge                  # Not scheduled, run by hand. Old webhook deliveries, lifecycle emails, telemetry, login history, processed Stripe events (--dry-run, --batch-size, per-table --*-days)
+php bin/console app:audit-log:purge [-6 months] # Audit log, deleted in batches (--batch-size)
+php bin/console app:oauth2:cleanup              # Expired OAuth2 codes and tokens
 
 # Notifications
 php bin/console app:notifications:due-reminders    # Send payment reminders
@@ -321,11 +326,11 @@ docker compose exec backend php bin/console app:user:create   # Create admin
 Add to crontab for automated operations:
 
 ```cron
-# Sync invoices from ANAF (every 15 minutes)
-*/15 * * * * docker compose exec -T backend php bin/console app:efactura:sync
+# Sync invoices from ANAF (every 15 minutes, one queue message per company)
+*/15 * * * * docker compose exec -T backend php bin/console app:efactura:sync --async
 
 # Process recurring invoices (daily at 6:00)
-0 6 * * * docker compose exec -T backend php bin/console app:invoices:process-recurring
+0 6 * * * docker compose exec -T backend php bin/console app:invoice:process-recurring
 
 # Send payment reminders (daily at 9:00)
 0 9 * * * docker compose exec -T backend php bin/console app:notifications:due-reminders
