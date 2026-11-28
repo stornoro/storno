@@ -604,13 +604,25 @@ class InvoiceManager
         $invoice->setReceiverName($client->getName());
         $invoice->setReceiverCif($client->getCui() ?? $client->getCnp());
         $invoice->snapshotBuyer($client);
-
-        // Reapply VAT rules based on updated client data
-        $this->applyVatRules($invoice, $client, $company);
-        $this->recalculateTotals($invoice);
         // Invalidate cached files — both XML and PDF embed the buyer identity
         $invoice->setXmlPath(null);
         $invoice->setPdfPath(null);
+
+        // A synced document (file import, ANAF sync) was issued elsewhere and its
+        // amounts are the source's. Imported lines can carry lineTotal 0.00 next
+        // to a correct header total, so summing them here wiped the invoice to 0.
+        // Only the buyer identity follows the client.
+        if ($invoice->getStatus() === DocumentStatus::SYNCED) {
+            return;
+        }
+
+        // Reapply VAT rules based on updated client data, then recompute each line:
+        // the header totals are a sum of the lines' stored lineTotal / vatAmount.
+        $this->applyVatRules($invoice, $client, $company);
+        foreach ($invoice->getLines() as $line) {
+            $this->calculateLineTotals($line);
+        }
+        $this->recalculateTotals($invoice);
     }
 
     public function delete(Invoice $invoice): void

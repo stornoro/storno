@@ -76,6 +76,45 @@ class ClientSyncInvoicesTest extends ApiTestCase
         $this->assertSame(substr($newCui, 2), $detail['buyerSnapshot']['cui'] ?? null);
     }
 
+    /**
+     * An imported invoice keeps its header totals even when its lines were stored
+     * with lineTotal 0.00. Syncing it with the client used to sum those lines and
+     * rewrite the invoice to 0.
+     */
+    public function testSyncKeepsAmountsOfSyncedInvoice(): void
+    {
+        $this->login();
+        $companyId = $this->getFirstCompanyId();
+
+        $oldCui = 'RO' . rand(10000000, 99999999);
+        $newCui = 'RO' . rand(10000000, 99999999);
+        $clientId = $this->createTestClient($companyId, $oldCui);
+        $invoice = $this->createPastMonthDraftInvoice($companyId, $clientId);
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $entity = $em->find(\App\Entity\Invoice::class, \Symfony\Component\Uid\Uuid::fromString($invoice['id']));
+        $entity->setStatus(\App\Enum\DocumentStatus::SYNCED);
+        foreach ($entity->getLines() as $line) {
+            $line->setLineTotal('0.00');
+            $line->setVatAmount('0.00');
+        }
+        $em->flush();
+        $em->clear();
+        $stored = $this->apiGet('/api/v1/invoices/' . $invoice['id'], ['X-Company' => $companyId]);
+        $this->assertSame('synced', $stored['status']);
+        $this->assertSame('0.00', $stored['lines'][0]['lineTotal']);
+
+        $this->apiPatch('/api/v1/clients/' . $clientId, ['cui' => $newCui], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+
+        $synced = $this->apiPost('/api/v1/invoices/' . $invoice['id'] . '/sync-client', [], ['X-Company' => $companyId]);
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame(substr($newCui, 2), $synced['receiverCif']);
+        $this->assertSame($invoice['subtotal'], $synced['subtotal']);
+        $this->assertSame($invoice['vatTotal'], $synced['vatTotal']);
+        $this->assertSame($invoice['total'], $synced['total']);
+    }
+
     public function testSyncSingleInvoiceWithClientData(): void
     {
         $this->login();
