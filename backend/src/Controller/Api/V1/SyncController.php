@@ -218,10 +218,7 @@ class SyncController extends AbstractController
             if ($status) {
                 $qb->andWhere('i.status = :status')->setParameter('status', $status);
             }
-            if ($search !== '') {
-                $qb->andWhere('i.number LIKE :search OR i.senderName LIKE :search OR i.receiverName LIKE :search OR i.senderCif LIKE :search OR i.receiverCif LIKE :search')
-                    ->setParameter('search', '%' . $search . '%');
-            }
+            \App\Util\SearchTerms::applyTo($qb, $search, ['i.number', 'i.senderName', 'i.receiverName', 'i.senderCif', 'i.receiverCif']);
         };
 
         $qb = $this->invoiceRepository->createQueryBuilder('i')

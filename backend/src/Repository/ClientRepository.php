@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Client;
 use App\Entity\Company;
 use App\Service\Cache\CompanyStatsCache;
@@ -37,10 +38,7 @@ class ClientRepository extends ServiceEntityRepository
             ->setParameter('company', $company)
             ->orderBy('c.createdAt', 'DESC');
 
-        if ($search) {
-            $qb->andWhere('c.name LIKE :search OR c.cui LIKE :search OR c.cnp LIKE :search OR c.email LIKE :search OR c.idNumber LIKE :search')
-                ->setParameter('search', '%' . $search . '%');
-        }
+        SearchTerms::applyTo($qb, $search, ['c.name', 'c.cui', 'c.cnp', 'c.vatCode', 'c.email', 'c.idNumber', 'c.registrationNumber', 'c.clientCode', 'c.contactPerson']);
 
         $qb->setFirstResult(($page - 1) * $limit)
             ->setMaxResults($limit);
@@ -92,9 +90,9 @@ class ClientRepository extends ServiceEntityRepository
 
         $innerClauses = [];
         $innerParams = [];
-        if ($search) {
-            $innerClauses[] = '(c.name LIKE :search OR c.cui LIKE :search OR c.cnp LIKE :search OR c.email LIKE :search OR c.id_number LIKE :search OR c.vat_code LIKE :search)';
-            $innerParams['search'] = "%$search%";
+        $searchClause = SearchTerms::sqlClause($search, ['c.name', 'c.cui', 'c.cnp', 'c.vat_code', 'c.email', 'c.id_number', 'c.registration_number', 'c.client_code', 'c.contact_person'], $innerParams);
+        if ($searchClause !== null) {
+            $innerClauses[] = $searchClause;
         }
         if ($country) {
             $innerClauses[] = 'c.country = :country';

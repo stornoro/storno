@@ -340,10 +340,12 @@ const bottomLinks = [{
   target: '_blank',
 }]
 
-// Search groups for Cmd+K modal
-const searchGroups = computed(() => [{
+// Search groups for Cmd+K modal: matching records first, then the pages
+const { searchTerm: globalSearchTerm, loading: globalSearchLoading, groups: recordGroups } = useGlobalSearch()
+
+const searchGroups = computed(() => [...recordGroups.value, {
   id: 'navigation',
-  label: $t('nav.dashboard'),
+  label: $t('globalSearch.groups.pages'),
   items: links.value.flat().map(item => ({
     ...item,
     kbds: navKbds[item.to as string],
@@ -433,7 +435,12 @@ const searchGroups = computed(() => [{
       </template>
     </UDashboardSidebar>
 
-    <UDashboardSearch :groups="searchGroups" />
+    <UDashboardSearch
+      v-model:search-term="globalSearchTerm"
+      :groups="searchGroups"
+      :loading="globalSearchLoading"
+      :placeholder="$t('globalSearch.placeholder')"
+    />
 
     <div :key="companyStore.currentCompanyId || ''" class="min-h-svh min-w-0 flex-1 flex flex-col">
       <AppImpersonationBanner />

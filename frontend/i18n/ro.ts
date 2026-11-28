@@ -86,6 +86,26 @@ export default defineI18nLocale(async () => {
       search: 'Cautare',
     },
 
+    // ── Search (Cmd+K and list search boxes) ──────────────────────
+    globalSearch: {
+      placeholder: 'Cauta facturi, clienti, furnizori dupa nume, numar sau CUI',
+      draft: 'Ciorna',
+      documentPlaceholder: 'Numar, client sau CUI',
+      partyPlaceholder: 'Nume, CUI sau email',
+      direction: {
+        incoming: 'Primita',
+        outgoing: 'Emisa',
+      },
+      groups: {
+        invoices: 'Facturi',
+        proformas: 'Proforme',
+        clients: 'Clienti',
+        suppliers: 'Furnizori',
+        products: 'Produse',
+        pages: 'Pagini',
+      },
+    },
+
     // ── Common labels ─────────────────────────────────────────────
     common: {
       add: 'Adauga',

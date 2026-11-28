@@ -50,9 +50,22 @@ const statusFilter = ref((route.query.status as string) || 'all')
 const activeDirection = ref((route.query.direction as string) || 'all')
 const paidFilter = ref((route.query.paid as string) || 'all')
 const currencyFilter = ref((route.query.currency as string) || defaultCurrency)
-const dateFrom = ref((route.query.dateFrom as string) || thisMonth.from)
-const dateTo = ref((route.query.dateTo as string) || thisMonth.to)
-const activeDatePreset = ref((route.query.datePreset as string) || 'thisMonth')
+// The list opens on the current month, except when the URL asks for every period or carries a
+// search without dates: a search looks in every period (see alignDatesWithSearch).
+function datesFromQuery(q: typeof route.query) {
+  const explicit = !!(q.dateFrom || q.dateTo || q.datePreset)
+  const preset = (q.datePreset as string) || (q.search && !explicit ? 'all' : 'thisMonth')
+  const everyPeriod = preset === 'all'
+  return {
+    preset,
+    from: (q.dateFrom as string) || (everyPeriod ? '' : thisMonth.from),
+    to: (q.dateTo as string) || (everyPeriod ? '' : thisMonth.to),
+  }
+}
+const initialDates = datesFromQuery(route.query)
+const dateFrom = ref(initialDates.from)
+const dateTo = ref(initialDates.to)
+const activeDatePreset = ref(initialDates.preset)
 const vatTotalMin = ref((route.query.vatTotalMin as string) || '')
 const vatTotalMax = ref((route.query.vatTotalMax as string) || '')
 const totalMin = ref((route.query.totalMin as string) || '')
@@ -128,6 +141,28 @@ function onDateManualChange() {
   activeDatePreset.value = 'custom'
 }
 
+// Typing a search while the list still shows its default month widens it to every period,
+// otherwise an invoice from another month looks missing. Clearing the search brings the month
+// back. A period the user picked is left alone. Returns true when the dates changed, in which
+// case the filter watcher reloads the list.
+let widenedForSearch = false
+function alignDatesWithSearch(): boolean {
+  const searching = search.value.trim() !== ''
+  if (searching && activeDatePreset.value === 'thisMonth') {
+    widenedForSearch = true
+    applyDatePreset(datePresets.value.find(p => p.value === 'all')!)
+    return true
+  }
+  if (!searching && widenedForSearch) {
+    widenedForSearch = false
+    if (activeDatePreset.value === 'all') {
+      applyDatePreset(datePresets.value.find(p => p.value === 'thisMonth')!)
+      return true
+    }
+  }
+  return false
+}
+
 // ── Active filters (for chips) ────────────────────────────────────
 interface ActiveFilter {
   key: string
@@ -162,7 +197,7 @@ const activeFilters = computed<ActiveFilter[]>(() => {
     chips.push({
       key: 'search',
       label: `${$t('common.search')}: "${search.value}"`,
-      clear: () => { search.value = ''; fetchInvoices() },
+      clear: () => { search.value = ''; if (!alignDatesWithSearch()) fetchInvoices() },
     })
   }
   if (dateFrom.value || dateTo.value) {
@@ -199,6 +234,7 @@ function resetAllFilters() {
   vatTotalMax.value = ''
   totalMin.value = ''
   totalMax.value = ''
+  widenedForSearch = false
   applyDatePreset(datePresets.value.find(p => p.value === 'thisMonth')!)
   page.value = 1
   syncFiltersToUrl()
@@ -776,6 +812,7 @@ function statusColor(status: string): BadgeColor {
 
 const onSearchInput = useDebounceFn(() => {
   page.value = 1
+  if (alignDatesWithSearch()) return
   syncFiltersToUrl()
   fetchInvoices()
 }, 300)
@@ -884,9 +921,10 @@ watch(() => route.query, (q) => {
   activeDirection.value = (q.direction as string) || 'all'
   paidFilter.value = (q.paid as string) || 'all'
   currencyFilter.value = (q.currency as string) || defaultCurrency
-  dateFrom.value = (q.dateFrom as string) || thisMonth.from
-  dateTo.value = (q.dateTo as string) || thisMonth.to
-  activeDatePreset.value = (q.datePreset as string) || 'thisMonth'
+  const dates = datesFromQuery(q)
+  dateFrom.value = dates.from
+  dateTo.value = dates.to
+  activeDatePreset.value = dates.preset
   vatTotalMin.value = (q.vatTotalMin as string) || ''
   vatTotalMax.value = (q.vatTotalMax as string) || ''
   totalMin.value = (q.totalMin as string) || ''
@@ -960,7 +998,7 @@ onUnmounted(() => {
           <!-- Row 1: Tabs + Search -->
           <div class="flex flex-wrap items-center gap-2">
             <UTabs v-model="activeDirection" :items="directionTabs" size="xs" class="mr-auto" />
-            <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-full sm:w-56" @update:model-value="onSearchInput" />
+            <UInput v-model="search" :placeholder="$t('globalSearch.documentPlaceholder')" icon="i-lucide-search" class="w-full sm:w-64" @update:model-value="onSearchInput" />
           </div>
 
           <!-- Row 2: Quick date presets + Date pickers + Filters -->

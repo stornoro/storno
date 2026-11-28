@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Company;
 use App\Entity\RecurringInvoice;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -41,9 +42,8 @@ class RecurringInvoiceRepository extends ServiceEntityRepository
             ->setParameter('company', $company)
             ->orderBy('ri.createdAt', 'DESC');
 
-        if (isset($filters['search']) && $filters['search'] !== '') {
-            $qb->andWhere('ri.reference LIKE :search OR c.name LIKE :search')
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], ['ri.reference', 'c.name', 'c.cui', 'c.cnp', 'c.vatCode']);
         }
 
         if (isset($filters['isActive'])) {

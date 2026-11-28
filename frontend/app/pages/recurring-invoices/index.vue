@@ -230,7 +230,7 @@ onMounted(() => {
 
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+        <UInput v-model="search" :placeholder="$t('globalSearch.documentPlaceholder')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
         <div class="flex flex-wrap items-center gap-1.5">
           <USelectMenu v-model="activeFilter" :items="activeOptions" value-key="value" :placeholder="$t('common.status')" class="w-36" />
           <USelectMenu v-model="frequencyFilter" :items="frequencyOptions" value-key="value" :placeholder="$t('recurringInvoices.frequency')" class="w-36" />

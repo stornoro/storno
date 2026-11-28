@@ -348,7 +348,7 @@ onMounted(() => {
 
       <UDashboardToolbar>
         <div class="flex flex-wrap items-center gap-2 w-full">
-          <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="w-full sm:w-56" @update:model-value="onSearchInput" />
+          <UInput v-model="search" :placeholder="$t('globalSearch.documentPlaceholder')" icon="i-lucide-search" class="w-full sm:w-64" @update:model-value="onSearchInput" />
           <USelectMenu v-model="statusFilter" :items="statusOptions" value-key="value" :placeholder="$t('deliveryNotes.status')" class="w-full sm:w-44" />
 
           <UPopover>

@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Company;
 use App\Entity\Supplier;
 use App\Service\Cache\CompanyStatsCache;
@@ -60,9 +61,8 @@ class SupplierRepository extends ServiceEntityRepository
             ->setParameter('company', $company)
             ->orderBy('s.createdAt', 'DESC');
 
-        if (isset($filters['search'])) {
-            $qb->andWhere('s.name LIKE :search OR s.cif LIKE :search')
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], ['s.name', 's.cif', 's.vatCode', 's.email', 's.registrationNumber']);
         }
 
         $qb->setFirstResult(($page - 1) * $limit)
@@ -123,9 +123,9 @@ class SupplierRepository extends ServiceEntityRepository
 
         $clauses = [];
         $extraParams = [];
-        if ($search) {
-            $clauses[] = '(s.name LIKE :search OR s.cif LIKE :search OR s.vat_code LIKE :search)';
-            $extraParams['search'] = "%$search%";
+        $searchClause = SearchTerms::sqlClause($search, ['s.name', 's.cif', 's.vat_code', 's.email', 's.registration_number'], $extraParams);
+        if ($searchClause !== null) {
+            $clauses[] = $searchClause;
         }
         if (!empty($filters['vatPayer']) && in_array($filters['vatPayer'], ['yes', 'no'], true)) {
             $clauses[] = 's.is_vat_payer = :vatPayer';

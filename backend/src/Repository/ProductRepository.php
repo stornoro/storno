@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Company;
 use App\Entity\Product;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -48,10 +49,7 @@ class ProductRepository extends ServiceEntityRepository
             ->where('p.company = :company')
             ->setParameter('company', $company);
 
-        if ($search) {
-            $qb->andWhere('p.name LIKE :search OR p.code LIKE :search')
-                ->setParameter('search', '%' . $search . '%');
-        }
+        SearchTerms::applyTo($qb, $search, ['p.name', 'p.code']);
 
         if (!empty($filters['type']) && in_array($filters['type'], ['product', 'service'], true)) {
             $qb->andWhere('p.isService = :isService')

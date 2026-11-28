@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Company;
 use App\Entity\DeliveryNote;
 use App\Enum\DeliveryNoteStatus;
@@ -145,9 +146,8 @@ class DeliveryNoteRepository extends ServiceEntityRepository
                 ->setParameter('status', DeliveryNoteStatus::from($filters['status']));
         }
 
-        if (isset($filters['search'])) {
-            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search")
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], ["$a.number", 'c.name', 'c.cui', 'c.cnp', 'c.vatCode']);
         }
 
         if (isset($filters['dateFrom'])) {

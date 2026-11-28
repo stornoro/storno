@@ -86,6 +86,26 @@ export default defineI18nLocale(async () => {
       search: 'Search',
     },
 
+    // ── Search (Cmd+K and list search boxes) ──────────────────────
+    globalSearch: {
+      placeholder: 'Search invoices, clients, suppliers by name, number or tax ID',
+      draft: 'Draft',
+      documentPlaceholder: 'Number, client or tax ID',
+      partyPlaceholder: 'Name, tax ID or email',
+      direction: {
+        incoming: 'Received',
+        outgoing: 'Issued',
+      },
+      groups: {
+        invoices: 'Invoices',
+        proformas: 'Proformas',
+        clients: 'Clients',
+        suppliers: 'Suppliers',
+        products: 'Products',
+        pages: 'Pages',
+      },
+    },
+
     // ── Common labels ─────────────────────────────────────────────
     common: {
       add: 'Add',

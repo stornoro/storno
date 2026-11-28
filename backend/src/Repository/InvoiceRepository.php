@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\AnafToken;
 use App\Entity\Company;
 use App\Entity\EInvoiceSubmission;
@@ -190,6 +191,17 @@ class InvoiceRepository extends ServiceEntityRepository
         return hash('xxh128', json_encode($normalized, JSON_THROW_ON_ERROR));
     }
 
+    /**
+     * Where the search box looks: the number, both parties as written on the invoice and the
+     * linked client `c`, whose tax id can differ from the snapshot on an older invoice.
+     *
+     * @return list<string>
+     */
+    public static function searchColumns(string $a): array
+    {
+        return ["$a.number", "$a.senderName", "$a.receiverName", "$a.senderCif", "$a.receiverCif", 'c.name', 'c.cui', 'c.cnp', 'c.vatCode'];
+    }
+
     private function applyFilters(\Doctrine\ORM\QueryBuilder $qb, array $filters): void
     {
         $a = $qb->getRootAliases()[0];
@@ -219,9 +231,8 @@ class InvoiceRepository extends ServiceEntityRepository
                 ->setParameter('clientId', $filters['clientId']);
         }
 
-        if (isset($filters['search'])) {
-            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search OR $a.senderName LIKE :search OR $a.receiverName LIKE :search OR $a.senderCif LIKE :search OR $a.receiverCif LIKE :search")
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], self::searchColumns($a));
         }
 
         if (isset($filters['dateFrom'])) {
@@ -655,9 +666,8 @@ class InvoiceRepository extends ServiceEntityRepository
                 ->setParameter('direction', InvoiceDirection::from($filters['direction']));
         }
 
-        if (isset($filters['search'])) {
-            $qb->andWhere('i.number LIKE :search OR c.name LIKE :search OR i.senderName LIKE :search OR i.receiverName LIKE :search')
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], self::searchColumns('i'));
         }
 
         if (isset($filters['dateFrom'])) {

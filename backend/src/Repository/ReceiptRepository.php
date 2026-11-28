@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Util\SearchTerms;
 use App\Entity\Company;
 use App\Entity\Receipt;
 use App\Enum\ReceiptStatus;
@@ -145,9 +146,8 @@ class ReceiptRepository extends ServiceEntityRepository
                 ->setParameter('status', ReceiptStatus::from($filters['status']));
         }
 
-        if (isset($filters['search'])) {
-            $qb->andWhere("$a.number LIKE :search OR c.name LIKE :search OR $a.customerName LIKE :search OR $a.fiscalNumber LIKE :search")
-                ->setParameter('search', '%' . $filters['search'] . '%');
+        if (isset($filters['search']) && is_string($filters['search'])) {
+            SearchTerms::applyTo($qb, $filters['search'], ["$a.number", "$a.customerName", "$a.customerCif", "$a.fiscalNumber", 'c.name', 'c.cui', 'c.cnp', 'c.vatCode']);
         }
 
         if (isset($filters['dateFrom'])) {

@@ -312,7 +312,7 @@ onMounted(() => fetchClients())
 
     <template #body>
       <div class="flex flex-wrap items-center gap-1.5">
-        <UInput v-model="search" :placeholder="$t('common.search')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
+        <UInput v-model="search" :placeholder="$t('globalSearch.partyPlaceholder')" icon="i-lucide-search" class="max-w-sm" @update:model-value="onSearchInput" />
 
         <USelectMenu
           v-model="clientsStore.sort"
